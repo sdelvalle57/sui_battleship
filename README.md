@@ -57,7 +57,7 @@ Players can create game requests by staking SUI coins. Another player may accept
 ## Development Roadmap
 
 1. **Module Design & Resource Definitions:**
-   - Define the House resource (including fee settings) and implement the HouseCap for administrative functions.
+   - ~~Define the House resource (including fee settings) and implement the HouseCap for administrative functions~~.
    - Design the Game resource with its state transitions and player mappings.
    - Outline the Escrow mechanism to handle bet token locking and fund distribution.
 
