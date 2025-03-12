@@ -58,12 +58,12 @@ Players can create game requests by staking SUI coins. Another player may accept
 
 1. **Module Design & Resource Definitions:**
    - ~~Define the House resource (including fee settings) and implement the HouseCap for administrative functions~~.
-   - Design the Game resource with its state transitions and player mappings.
-   - Outline the Escrow mechanism to handle bet token locking and fund distribution.
+   - ~~Design the Game resource with its state transitions and player mappings.~~
+   - ~~Outline the Escrow mechanism to handle bet token locking and fund distribution.~~
 
 2. **Implement the House Module:**
-   - Create the House resource and associated HouseCap.
-   - Implement functions for updating game rules and withdrawing fees.
+   - ~~Create the House resource and associated HouseCap~~.
+   - ~~Implement functions for updating game rules and withdrawing fees~~.
 
 3. **Implement the Game Module:**
    - Develop game request initiation, acceptance, cancellation, and resolution functions.
