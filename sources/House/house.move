@@ -20,6 +20,8 @@ public struct House has key {
     fee_rate: u16, // Fee rate in basis points (1 basis point = 0.01%)
     fees_collected: Balance<SUI>,
     admin: address,
+    max_bet: u64,
+    min_bet: u64,
 }
 
 /// The HouseCap grants admin privileges.
@@ -50,6 +52,8 @@ public fun initialize_house(house_cap: HouseCap, initial_fee_rate: u16, ctx: &mu
         fee_rate: initial_fee_rate,
         fees_collected: balance::zero(),
         admin: ctx.sender(),
+        max_bet: 50_000_000_000, // 50 SUI, 1 SUI = 10^9.
+        min_bet: 1_000_000, // 0.001 SUI.
     };
 
     // HouseCap is consumed after initialization

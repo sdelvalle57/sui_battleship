@@ -15,6 +15,8 @@ This document outlines the detailed steps required to implement the Game Module.
   - Create a new game request with a unique identifier.
   - Set the initial game state to `pending`.
   - Record essential details such as player IDs, timestamp, and game metadata.
+  - **Pool Management:**  
+    Add the new request to a pool of **initiated game requests**.
 
 ### 1.2. Accept Game Request
 - **Function Name:** `acceptGameRequest`
@@ -22,9 +24,12 @@ This document outlines the detailed steps required to implement the Game Module.
   - Game request ID
   - Accepting player ID
 - **Responsibilities:**
-  - Validate that the game request is in the `pending` state.
+  - Validate that the game request is in the `pending` state.  
+    *Example Error Message:* "Error: Only games in a pending state can be accepted."
   - Update the game status to `active` upon successful acceptance.
   - Optionally, assign player roles or any other game-specific configurations.
+  - **Pool Management:**  
+    Move the game request from the initiated pool to the pool of **ongoing games**.
 
 ### 1.3. Cancel Game Request
 - **Function Name:** `cancelGameRequest`
@@ -32,19 +37,25 @@ This document outlines the detailed steps required to implement the Game Module.
   - Game request ID
   - Requesting player ID (initiator or opponent)
 - **Responsibilities:**
-  - Ensure the game request is still in a cancellable state (`pending`).
+  - Ensure the game request is still in a cancellable state (`pending`).  
+    *Example Error Message:* "Error: Cannot cancel a game that is not in a pending state."
   - Mark the game request as `cancelled`.
   - Inform all involved players about the cancellation.
+  - **Pool Management:**  
+    Move the game request from the initiated pool (or ongoing games if applicable) to the pool of **canceled games**.
 
 ### 1.4. Resolve Game Request
 - **Function Name:** `resolveGameRequest`
 - **Inputs:**
   - Game request ID
 - **Responsibilities:**
-  - Check that the game is in an `active` state.
+  - Check that the game is in an `active` state.  
+    *Example Error Message:* "Error: Only active games can be resolved."
   - Invoke the mock coinflip mechanism to simulate a game outcome.
   - Record the result (e.g., win/loss) and update the game status to `resolved`.
   - Optionally, update player statistics or any game logs.
+  - **Pool Management:**  
+    Move the game from the ongoing games pool to the pool of **finished games**.
 
 ---
 
@@ -77,17 +88,18 @@ This document outlines the detailed steps required to implement the Game Module.
 
 ## 4. Additional Implementation Considerations
 
-- **Error Handling:**
-  - Validate game state transitions (e.g., accepting a game that is not pending, or cancelling an already resolved game).
-  - Provide meaningful error messages for unauthorized actions or invalid state transitions.
+- **Game State Pools:**
+  - Maintain distinct pools for each game state:
+    - **Initiated Game Requests:** Newly created and pending game requests.
+    - **Ongoing Games:** Active games that have been accepted and are currently in progress.
+    - **Canceled Games:** Games that have been canceled before starting or during initiation.
+    - **Finished Games:** Games that have been resolved (completed with a win/loss outcome).
 
-- **Notifications:**
-  - Optionally integrate a notification system to update players about changes (e.g., game started, cancelled, resolved).
+- **State Transition Validation:**
+  - Implement checks to ensure that:
+    - Only games in the `pending` state can be accepted.
+    - Only games that are still pending can be canceled.
+    - Only games in the `active` state can be resolved.
+  - **Error Handling:**  
+    Provide meaningful error messages for unauthorized actions or invalid state transitions, ensuring that users understand why an action failed.
 
-- **Testing:**
-  - Write comprehensive unit tests for each function (initiation, acceptance, cancellation, resolution, and coinflip).
-  - Test concurrent game handling to ensure isolation between sessions.
-
-- **Scalability & Maintainability:**
-  - Document the code for each function to ease future modifications.
-  - Structure the module to support potential future enhancements (e.g., advanced game logic replacing the coinflip mechanism).

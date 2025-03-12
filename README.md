@@ -67,6 +67,7 @@ Players can create game requests by staking SUI coins. Another player may accept
 
 3. **Implement the Game Module:**
    - Develop game request initiation, acceptance, cancellation, and resolution functions.
+   - Create shared pooled objects defining the game transition from initiated, ongoing, canceled and finished, resolution and finished with resolution
    - Integrate a mock coinflip mechanism as a placeholder for full battleship logic.
    - Allow support for direct invitations and multiple concurrent games per player.
 
