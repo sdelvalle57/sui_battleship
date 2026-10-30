@@ -14,7 +14,7 @@ NUNCA haces commits, pushes ni publicaciones (`sui client publish`/`upgrade`). I
 ## Arranque de sesión (siempre)
 
 1. Lee `agents.md`, `documents/STATUS.md`, `documents/DECISIONES.md`, `documents/ESTANDARES.md`, el README del área y el `HANDOFF` completo.
-2. Verifica branch (`git status -sb`), versión de la CLI (`sui --version`) y Node 22 (`nvm use 22`).
+2. Verifica branch (`git status -sb`), versión de la CLI (`sui --version`) y Node (`nvm use`, lee `.nvmrc`).
 3. Lee TODO el código relacionado antes de escribir una línea. "Replicar, no reinventar".
 4. El handoff es tu contrato: implementas exactamente eso.
 

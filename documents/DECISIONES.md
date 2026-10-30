@@ -12,6 +12,12 @@
 
 ## Recientes
 
+### D-20261030-10 — Reestructura a monorepo: legado fuera y Node 26 (STOPs de #2)
+- **Decisión:** (1) `sources/battleship.move` se **borra** (STOP-1 a); recuperable con `git show f063a0e:sources/battleship.move` para #18. (2) `sources/House/README.md` y `sources/Game/README.md` (diseño 2025) se **borran** (STOP-2 a); recuperables con `git show f063a0e:`. (3) El proyecto usa **Node 26** (Active LTS, EOL 2029-04) en `.nvmrc` y PROY-17, en lugar de Node 22 (STOP-3 b); confirma `contracts/`, `app/` y npm workspaces de D-20261030-03.
+- **Alternativa descartada:** mover o arreglar `battleship.move` (publicaría y congelaría layouts sin uso, PROY-10); mover los READMEs a `contracts/docs/`; Node 22 (EOL 2027-04-30) o Node 24.
+- **Motivo:** recomendaciones del plan v1.1 de #2 aprobadas por el MAYOR (`documents/PLAN_MONOREPO.md`).
+- **Aprobado por:** usuario ("sí a todo lo recomendado", 2026-10-30). **Fecha:** 2026-10-30.
+
 ### D-20261030-09 — El orquestador también mergea (amplía D-20261030-05)
 - **Decisión:** el orquestador mergea los PRs contra `master` con merge commit (no squash: conserva los SHAs citados en STATUS y reportes) cuando la revisión de integración del MAYOR no tiene 🔴 BLOCKER ni 🟠 MAJOR abiertos, la CI está en verde (cuando exista, PROY-18) y no queda ningún STOP sin decidir. Tras el merge hace el housekeeping (FLUJO §9) en un PR propio que también mergea. Publicar o upgradear en testnet sigue requiriendo autorización explícita por publicación; mainnet nunca sin decisión registrada.
 - **Alternativa descartada:** que el usuario mergee cada PR (D-20261030-05).
@@ -21,7 +27,7 @@
 - **Decisión:** (1) `Move.toml` en el formato del sistema de paquetes de la CLI ≥ 1.63: `std`/`sui` implícitas, sin `[addresses]`/`[dev-addresses]`; el framework queda fijado por `Move.lock`, regenerado por la CLI con `-e testnet` y nunca a mano. PROY-11 se reescribe con la redacción de `documents/PLAN_TOOLCHAIN.md` (Decisión 1). (2) Sui CLI del canal testnet (`1.83.0` vía `suiup`).
 - **Alternativa descartada:** dependencia `Sui` explícita con `rev` a un tag (solo posible en el formato viejo, que la CLI pide migrar); CLI del canal mainnet.
 - **Motivo:** es el formato vigente de la CLI instalada (la plantilla de `sui move new` 1.83 deja `[dependencies]` vacío) y testnet es la red del MVP.
-- **Aprobado por:** MAYOR en la revisión del plan de #1 (`documents/REVISION_PLAN_TOOLCHAIN.md`); decisiones técnicas de tooling sin STOP de usuario según el issue #1. **Fecha:** 2026-10-30.
+- **Aprobado por:** MAYOR en la revisión del plan de #1 (`git show e1849c6:documents/REVISION_PLAN_TOOLCHAIN.md`) y **ratificado por el usuario** ("sí a todo lo recomendado", 2026-10-30; hallazgo 🟡 1 de la revisión de integración de #20). **Fecha:** 2026-10-30.
 
 ### D-20261030-07 — Config de la Sui CLI sin claves para correr gates (STOP-1 de #1)
 - **Decisión:** opción (d) de `documents/PLAN_TOOLCHAIN.md` §STOP-1: `~/.sui/sui_config/client.yaml` sin claves (`active_env: testnet`, `active_address: ~`, keystore vacío). Lo escribe el DEV con autorización del usuario para escribir en `~/.sui/`. Los gates corren con `-e testnet`. La clave publicadora la agrega el owner en #8 desde su propia terminal, sin agentes.

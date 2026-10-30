@@ -1,11 +1,11 @@
 # Estándares del Proyecto — Arquitectura, Seguridad y Limpieza (Sui Battleship)
 
-> **Versión:** 1.1 · **Fecha:** 2026-10-30 (adaptado de Cancerbero — D-20261030-01)
+> **Versión:** 1.2 · **Fecha:** 2026-10-30 (adaptado de Cancerbero — D-20261030-01; PROY-17: `.nvmrc` = 26 por D-20261030-10)
 > Fuente única de verdad. El DEV implementa contra estas reglas; el MID y el MAYOR revisan contra ellas.
 > Toda regla tiene ID: los hallazgos se citan como `SEG-4 violado en contracts/sources/game.move:120`.
 > §4 (reglas PROY) tiene prioridad sobre §1–§3.
-> **Código legado:** el código de 2025-03 (`house.move`, `game.move`, `battleship.move`) no cumple varias
-> reglas (STATUS §Hallazgos). Las reglas aplican a todo código **nuevo o tocado**.
+> **Código legado:** el código de 2025-03 que sigue en el árbol (`house.move`) no cumple varias reglas (STATUS §Hallazgos);
+> `game.move` y `battleship.move` se retiraron en #2. Las reglas aplican a todo código **nuevo o tocado**.
 
 ---
 
@@ -80,7 +80,7 @@
 
 ### Proceso
 
-- **PROY-17 — Toolchain.** Node 22 (`.nvmrc`) y npm workspaces desde la raíz; Sui CLI instalada con `suiup`, versión registrada en STATUS.
+- **PROY-17 — Toolchain.** Node 26 (`.nvmrc`) y npm workspaces desde la raíz; Sui CLI instalada con `suiup`, versión registrada en STATUS.
 - **PROY-18 — CI.** Cuando exista el workflow, el gate local y el de CI son el mismo; un rojo de CI bloquea el merge.
 - **PROY-19 — Antes de entregar:** gate completo del área tocada con output pegado (agents.md §3). Rojos conocidos (STATUS.md) se reportan con su número, nunca como verdes.
 - **PROY-20 — Docs viven con el código.** Si el cambio toca arquitectura, layout, comandos, contrato on-chain o tests, se actualizan README del área, `agents.md` y `documents/STATUS.md` en el mismo PR.

@@ -1,5 +1,20 @@
-build/*
-traces/*
+# Paquete Move (contracts/) — plantilla de `sui move new` 1.83 adaptada al monorepo
+contracts/build/
+contracts/traces/
 .trace
 .coverage*
 Pub.*.toml
+contracts/deployments/localnet.json
+
+# Node / app
+node_modules/
+app/dist/
+
+# Entorno: nunca valores reales en el repo (SEG-3)
+.env
+.env.*
+!.env.example
+
+# Varios
+*.log
+.DS_Store

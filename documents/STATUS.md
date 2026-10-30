@@ -12,9 +12,9 @@ del orquestador sobre `master`:
 |---|---|
 | 1. Diseño de recursos | 🚧 House y Game esbozados; Escrow sin diseño |
 | 2. House module | 🔍 implementado, con hallazgos H3–H5 |
-| 3. Game module | ⛔ recién empezado; **no compila** (H6) |
+| 3. Game module | ⬜ stub retirado en #2; se crea en #5 |
 | 4. Escrow module | ⬜ no existe (se propone absorberlo en Game: fondos como `Balance<SUI>` de la partida) |
-| 5. Tests | ⬜ el único archivo de tests está comentado |
+| 5. Tests | ⬜ sin tests (el archivo comentado se retiró en #2) |
 | 6. Docs y despliegue | ⬜ |
 | UI React | ⬜ no existe (D-20261030-03) |
 
@@ -25,19 +25,19 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 | Ítem | Valor |
 |---|---|
 | Sui CLI | `sui 1.83.0-16d2dc1e05ed` (release `testnet`), `suiup 0.1.1`, binarios en `~/.local/bin` |
-| Node | `v22.23.4` tras `nvm use 22` |
+| Node | `v26.13.0` tras `nvm use` (`.nvmrc` = 26, D-20261030-10) |
 | Prerrequisito de `sui move` | `~/.sui/sui_config/client.yaml` **sin claves** con `active_env: testnet` y `active_address: ~` (D-20261030-07). Sin ese archivo la CLI crea una clave e imprime su frase (H11). Nunca va al repo ni a logs; su contenido no se pega |
-| Framework | `std`/`sui` implícitas; fijados por `Move.lock` v4 a `719fb2960ccfbf9f4d33041f8ea5146d30671696`, el piso de la versión de protocolo **139** de testnet (verificado 2026-10-30) |
+| Framework | `std`/`sui` implícitas; fijados por `Move.lock` v4 a `719fb2960ccfbf9f4d33041f8ea5146d30671696`, el piso de la PV **139**; testnet en **140** desde la época 1269 (2026-10-30 21:24 UTC) → H13. Sin repin en #2 (rename puro) |
 | Entornos del lock | `Move.lock` v4 solo pinea `testnet`. Un gate con otro `-e` crearía una sección `[pinned.<env>]` nueva, y ese delta del lock hay que declararlo (PROY-11) |
-| Gates | Siempre con `-e testnet`, con la respuesta `n` a la CLI por stdin (`printf 'n\n'` en pipe), ver agents.md §3 |
+| Gates | Siempre desde `contracts/` (`cd contracts && …`), con `-e testnet`, con la respuesta `n` a la CLI por stdin (`printf 'n\n'` en pipe), ver agents.md §3 |
 
 ## Baselines de gates
 
 | Área @ ref | Gate | Resultado |
 |---|---|---|
-| contracts (raíz) @ `master` (`e1849c6`, merge de #20; medido en `b0fb54e`, mismo código de contratos), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🔴 exit 1, compilación. **7 errores:** 6 × `EC04016` en `sources/Game/game.move:55-59` (H6) y 1 × `EC06002` en `sources/battleship.move:62` (H8). **Warnings:** 16 `WC09009`, **como mínimo** (9 en `battleship.move`, 7 en `Game/game.move`, 0 en `House/house.move`); la compilación aborta y pueden faltar pasos posteriores. `tests/battleship_tests.move`: 0 diagnósticos (está entero dentro de `/* */`). Las subcarpetas `sources/Game/` y `sources/House/` sí se compilan |
-| | `sui move build -e testnet --lint` | 🔴 exit 1. Mismos 7 errores y 16 `WC09009`, más **1 lint de Sui**, **como mínimo**: `WSL06010` (`prefer_mut_tx_context`) en `sources/House/house.move:67` (`update_fee_rate` con `&TxContext`). Puede haber lints de los módulos que no compilan que aún no se emiten |
-| | `sui move test -e testnet` | 🔴 exit 1. No compila: mismos 7 errores y 16 `WC09009`. **0 tests** ejecutados |
+| contracts/ @ `8325126` (branch de #2 con TASK-1 y TASK-2; `master` tras el merge de #2, mismo código de contratos que `f4b437c`), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🟢 exit 0. **0 errores, 0 warnings** de compilación. Único módulo: `contracts/sources/house.move` |
+| | `sui move build -e testnet --lint` | 🟢 exit 0. 0 errores, 0 warnings; **1 lint de Sui:** `WSL06010` (`prefer_mut_tx_context`) en `contracts/sources/house.move:67` (`update_fee_rate` con `&TxContext`, H12 → #4) |
+| | `sui move test -e testnet` | 🟢 exit 0. 0 errores, 0 warnings. **0 tests** (`Test result: OK. Total tests: 0`) |
 | app | — | ⬜ no existe |
 | CI | — | ⬜ no existe |
 
@@ -53,13 +53,14 @@ mismos conteos por archivo.
 | H3 | house | `initialize_house` destruye el `HouseCap`; admin validado por `ctx.sender() == house.admin` y fees pagadas a `house.admin` (`house.move:47-81`). | Requerir `&HouseCap` (PROY-3) |
 | H4 | house | `EInsufficientBalance` se usa para el fee y para fees = 0 (`house.move:48,69,78`). | Abort code propio (LIM-8) |
 | H5 | house | Sin `add_fees` para Game, sin accessors/setters de `min_bet`/`max_bet`, sin eventos. | `public(package) add_fees`, accessors, eventos (PROY-4, PROY-7) |
-| H6 | game | `start_game` construye `GameRequest` sin la mayoría de campos: no compila (`game.move:55-59`). | Rediseño del Game module |
-| H7 | game | `GamePool` con `vector<GameRequest>` compartido; `escrow: u64` sin custodia; `TurnCap` sin uso; estados `Finished`/`Resolution`/`Resolved` solapados. | Objeto compartido por partida con `Balance<SUI>`, estados `Pending/Active/Resolved/Cancelled` (PROY-6, PROY-8, SEG-4) |
-| H8 | legado | `sources/battleship.move` (tablero/barcos) sin uso; `new_game` usa `player1` tras moverlo. | Decidir: mover fuera del paquete o borrar hasta la fase de batalla naval real |
-| H9 | tests | `tests/battleship_tests.move` comentado entero. | Suite con `test_scenario` por módulo (PROY-9) |
+| H6 | game | `start_game` construye `GameRequest` sin la mayoría de campos: no compila (`game.move:55-59`). | ✅ 2026-10-30 (#2): archivo retirado; `battleship::game` se crea desde cero en #5 |
+| H7 | game | `GamePool` con `vector<GameRequest>` compartido; `escrow: u64` sin custodia; `TurnCap` sin uso; estados `Finished`/`Resolution`/`Resolved` solapados. | → #5 (diseño 2025 retirado con el archivo; `git show f063a0e:sources/Game/game.move`) |
+| H8 | legado | Borrador 2025 de tablero/barcos sin uso; `new_game` usaba `player1` tras moverlo (no compilaba). | ✅ 2026-10-30 (#2): borrado (D-20261030-10); se recupera con `git show f063a0e:sources/battleship.move` (#18) |
+| H9 | tests | El único archivo de tests estaba comentado entero. | 🚧 parcial (#2): el test comentado se retiró (`git show f063a0e:tests/battleship_tests.move`); suites en #4–#6 |
 | H10 | docs | README dice "2 vs 2"; el diseño es 1 vs 1. Roadmap marca el Escrow como diseñado. | Actualizar README en el issue de docs |
 | H11 | toolchain | `sui move` exige `client.yaml`. Sin él, la CLI crea una clave e imprime su frase (`sui_commands.rs:584, 1630-1648` @ `testnet-v1.83.0`), y `-e` no lo evita. | ✅ 2026-10-30: resuelto con una config sin claves (D-20261030-07). **#3:** escribir la misma config en `$RUNNER_TEMP` con `SUI_CONFIG_DIR`; `--warnings-are-errors` existe en `sui move build` y en `sui move test`. **#7:** al publicar, la CLI escribe `Published.toml` (se commitea) y `Pub.*.toml` efímeros (ignorados en `.gitignore`). `Published.toml` se superpone con `contracts/deployments/<red>.json` (D-20261030-03, ARQ-6): #7 define cuál es la fuente del `packageId` y cuál se deriva. **#8:** el owner agrega su clave a este mismo `client.yaml` desde su terminal, sin agentes |
-| H12 | house | Lint `WSL06010` (`prefer_mut_tx_context`): `update_fee_rate` es `public` y recibe `&TxContext` (`house.move:67`); tras publicar, la firma ya no podría pasar a `&mut` (PROY-10). Detectado por el baseline de #1. | #4: al migrar a `&HouseCap` (H3) quitar `ctx` si deja de usarse, o usar `&mut TxContext`; criterio: `sui move build -e testnet --lint` sin lints en `house.move` |
+| H12 | house | Lint `WSL06010` (`prefer_mut_tx_context`): `update_fee_rate` es `public` y recibe `&TxContext` (`contracts/sources/house.move:67`); tras publicar, la firma ya no podría pasar a `&mut` (PROY-10). Detectado por el baseline de #1. | #4: al migrar a `&HouseCap` (H3) quitar `ctx` si deja de usarse, o usar `&mut TxContext`; criterio: `sui move build -e testnet --lint` sin lints en `house.move` |
+| H13 | toolchain | testnet en PV `140` (medida 2026-10-30, época 1269; `05ad86a3e86c522deea116f80dc2bf2309a53363` para 140) y el lock en el piso de 139 (`719fb29…`). La CLI no repinea ni avisa por sí sola (solo con `update-deps`, al cambiar las dependencias del manifest, con un digest de dependencia distinto o con otro `-e`; publish solo compara la CLI con la red). | Pre-vuelo de #8 (comentado en el issue): (1) CLI del canal testnet con PV máxima ≥ PV de testnet (si no, `suiup` y registrar en Toolchain); (2) `cd contracts && printf 'n\n' \| sui move update-deps -e testnet`; (3) delta del lock declarado y gates re-medidos |
 
 ## Ciclo activo — backlog para terminar el MVP
 
@@ -105,7 +106,6 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 ## Pendientes del usuario
 
-- Ratificar D-20261030-08 (framework fijado por `Move.lock` + CLI canal testnet), hallazgo 🟡 de la revisión de integración de #20.
 - Resolver los STOP de los planes a medida que lleguen (el más pesado que queda: #4 D1). #5 D1/D2/D5/D7 y #4 D3 ya resueltas (D-20261030-06).
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
