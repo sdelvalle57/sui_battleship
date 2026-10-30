@@ -12,6 +12,12 @@
 
 ## Recientes
 
+### D-20261030-07 — Config de la Sui CLI sin claves para correr gates (STOP-1 de #1)
+- **Decisión:** opción (d) de `documents/PLAN_TOOLCHAIN.md` §STOP-1: `~/.sui/sui_config/client.yaml` sin claves (`active_env: testnet`, `active_address: ~`, keystore vacío). Lo escribe el DEV con autorización del usuario para escribir en `~/.sui/`. Los gates corren con `-e testnet`. La clave publicadora la agrega el owner en #8 desde su propia terminal, sin agentes.
+- **Alternativa descartada:** (a) inicializar ya `sui client` con clave real; (b) config desechable con clave descartable (la frase pasa por stdout); (c) `-e testnet` sin config (refutada: la CLI pide crear la config antes de leer `-e`).
+- **Motivo:** ninguna clave ni recovery phrase pasa por agentes ni logs (SEG-3); el mismo mecanismo sirve para CI (#3).
+- **Aprobado por:** usuario ("opción d, la crea el dev, yo te doy el permiso", 2026-10-30). **Fecha:** 2026-10-30.
+
 ### D-20261030-06 — Reglas de producto de partidas y del `HouseCap` (adelantadas a los planes de #4 y #5)
 - **Decisión:**
   1. **Resolución atómica al aceptar** (#5 D1 = a): aceptar ejecuta el coinflip en la misma transacción; `Pending → Resolved | Cancelled`, sin estado `Active` persistente.

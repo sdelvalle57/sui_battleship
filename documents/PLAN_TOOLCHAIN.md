@@ -3,7 +3,9 @@
 > Autor: MID · Estado: v1 **aprobado con cambios** por el MAYOR (`documents/REVISION_PLAN_TOOLCHAIN.md`);
 > v2 aplica los MAJOR #1–#3, los MINOR #4–#8 y las sugerencias #9–#10. Decisiones 1 y 2 aprobadas.
 > v3 aplica N1–N4 de la "Revisión v2" (solo comandos de TASK-1 y del bloque de STOP-1 (d)).
-> **STOP abierto: 1** (STOP-1, lo decide el usuario). Ningún task arranca sin esa decisión.
+> **STOP-1 resuelto:** opción (d); el `client.yaml` sin claves lo escribe el DEV (autorizado).
+>
+> Decisión (2026-10-30): se optó por STOP-1 (d) sobre (a)/(b) porque ninguna clave ni frase pasa por agentes ni logs — aprobado por el usuario (D-20261030-07).
 
 ## Historia de usuario
 
