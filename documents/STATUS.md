@@ -75,7 +75,8 @@ mismos conteos por archivo.
 | #1 (toolchain) | ✅ 2026-10-30 | PR #20 mergeado (`e1849c6`); MAYOR APPROVE. Artefactos del ciclo borrados en el housekeeping (`git show e1849c6:documents/PLAN_TOOLCHAIN.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_TOOLCHAIN.md`) |
 | #2 (monorepo) | ✅ 2026-10-30 | PR #22 mergeado (`48df3b4`); MAYOR APPROVE; primer baseline verde. Artefactos borrados en el housekeeping (`git show 48df3b4:documents/PLAN_MONOREPO.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_MONOREPO.md`) |
 | #4 (House) | ✅ 2026-10-30 | PR #24 mergeado (`68d1afe`); MAYOR APPROVE. 26 tests, coverage 100 %. Artefactos borrados en el housekeeping (`git show 68d1afe:documents/PLAN_HOUSE.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_HOUSE.md`) |
-| Siguiente | ⏳ | #5 (Game: crear/cancelar); antes, decidir la licencia (Pendientes del usuario). #3 (CI) puede ir en paralelo |
+| Licencia | ✅ 2026-10-30 | Apache-2.0 (D-20261030-14): `LICENSE` en la raíz y cabecera `// Copyright (c) 2025-2026 sdelvalle57` + SPDX en los fuentes Move |
+| Siguiente | ⏳ | #3 (CI) en curso; #5 (Game: crear/cancelar) desbloqueado |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -112,9 +113,8 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 ## Pendientes del usuario
 
-- Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06).
+- Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #3 resuelto (D-20261030-13; protección de `master` y settings de Actions tras su merge); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06).
 - **Post-publicación (#8):** `update_fee_rate` antes de anunciar el juego (fee por defecto 0, D-20261030-11): las partidas creadas antes quedan con comisión 0 para siempre.
-- **Licencia del repo:** cabecera placeholder `// Copyright (c) Your Project` + SPDX Apache-2.0 en `contracts/sources/house.move:1-2`, sin `LICENSE` en el repo; decidir antes de #5 (Apache-2.0 / otra / quitar la cabecera), en un PR propio.
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
 ## Mergeadas (histórico)
