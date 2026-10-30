@@ -1,6 +1,6 @@
 # Estándares del Proyecto — Arquitectura, Seguridad y Limpieza (Sui Battleship)
 
-> **Versión:** 1.3 · **Fecha:** 2026-10-30 (adaptado de Cancerbero — D-20261030-01; PROY-17: `.nvmrc` = 26 por D-20261030-10; SEG-2, PROY-9 y PROY-10 por D-20261030-11, #4)
+> **Versión:** 1.3 · **Fecha:** 2026-10-30 (adaptado de Cancerbero — D-20261030-01; PROY-17: `.nvmrc` = 26 por D-20261030-10; SEG-2 y PROY-9 por D-20261030-11; PROY-10 por D-20261030-11 y D-20261030-12, #4)
 > Fuente única de verdad. El DEV implementa contra estas reglas; el MID y el MAYOR revisan contra ellas.
 > Toda regla tiene ID: los hallazgos se citan como `SEG-4 violado en contracts/sources/game.move:120`.
 > §4 (reglas PROY) tiene prioridad sobre §1–§3.

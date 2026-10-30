@@ -35,7 +35,7 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 
 | Área @ ref | Gate | Resultado |
 |---|---|---|
-| contracts/ @ `040f3c0` (TASK-1 de #4, branch `feature/issue-4-house`), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🟢 exit 0. **0 errores, 0 warnings** de compilación. Único módulo: `contracts/sources/house.move` |
+| contracts/ @ `master` (`68d1afe`, merge de #24; medido en `040f3c0`, mismo código), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🟢 exit 0. **0 errores, 0 warnings** de compilación. Único módulo: `contracts/sources/house.move` |
 | | `sui move build -e testnet --lint` | 🟢 exit 0. **0 lints** (delta −1: `WSL06010` cerrado, H12) |
 | | `sui move test -e testnet` | 🟢 exit 0. 0 warnings. **26 tests PASS** (`contracts/tests/house_tests.move`) |
 | | `sui move test -e testnet --coverage` + `sui move coverage summary -e testnet` | Informativo: **100 %** de `battleship::house`. Artefactos `contracts/.coverage_map.mvcov` y `contracts/traces/`, ya ignorados por `.coverage*` y `contracts/traces/` en `.gitignore` (sin cambios) |
@@ -74,8 +74,8 @@ mismos conteos por archivo.
 | Issues del backlog en GitHub | ✅ 2026-10-30 | #1–#18 redactados por el MAYOR y creados por el orquestador |
 | #1 (toolchain) | ✅ 2026-10-30 | PR #20 mergeado (`e1849c6`); MAYOR APPROVE. Artefactos del ciclo borrados en el housekeeping (`git show e1849c6:documents/PLAN_TOOLCHAIN.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_TOOLCHAIN.md`) |
 | #2 (monorepo) | ✅ 2026-10-30 | PR #22 mergeado (`48df3b4`); MAYOR APPROVE; primer baseline verde. Artefactos borrados en el housekeeping (`git show 48df3b4:documents/PLAN_MONOREPO.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_MONOREPO.md`) |
-| #4 (House) | 🚧 2026-10-30 | Plan v1.1 aprobado; STOPs resueltos (D-20261030-11). TASK-1 (contracts) MID PASA, commit `040f3c0`; TASK-2 (docs: `contracts/README.md`, `agents.md`, `ESTANDARES.md`, este archivo) en revisión; luego PR contra `master` |
-| Siguiente | ⏳ | #5 (Game: crear/cancelar) tras el merge de #4; antes, decidir la licencia (Pendientes del usuario). #3 (CI) puede ir en paralelo |
+| #4 (House) | ✅ 2026-10-30 | PR #24 mergeado (`68d1afe`); MAYOR APPROVE. 26 tests, coverage 100 %. Artefactos borrados en el housekeeping (`git show 68d1afe:documents/PLAN_HOUSE.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_HOUSE.md`) |
+| Siguiente | ⏳ | #5 (Game: crear/cancelar); antes, decidir la licencia (Pendientes del usuario). #3 (CI) puede ir en paralelo |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -124,3 +124,4 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 | Docs del flujo multi-agente (D-20261030-01) | #19 → `2b088b5` | 2026-10-30 |
 | #1 Toolchain, manifest pineado, primer baseline | #20 → `e1849c6` | 2026-10-30 |
 | #2 Monorepo (`contracts/`), legado retirado, Node 26 | #22 → `48df3b4` | 2026-10-30 |
+| #4 House: `HouseCap`, límites, `add_fees`, eventos, versionado, 26 tests | #24 → `68d1afe` | 2026-10-30 |
