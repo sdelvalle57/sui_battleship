@@ -26,7 +26,8 @@ contenido propio (issues, planes, handoffs, código o revisiones); sí opera git
 - **Branches, commits, pushes y PRs** (D-20261030-05): el orquestador crea
   `feature/issue-<N>-<slug>` desde `master`; tras cada revisión MID PASA commitea el task con el
   mensaje del MID (staging parcial si el working tree mezcla tasks); pushea y abre el PR con el body
-  del MID. **Nunca mergea** ni publica en testnet sin autorización explícita.
+  del MID. Mergea con merge commit según D-20261030-09 (MAYOR sin BLOCKER/MAJOR, CI verde, sin STOP
+  abierto) y hace el housekeeping. **Nunca** publica en testnet sin autorización explícita.
 - **Reintentos:** un reporte incompleto vuelve al DEV una vez con la lista de faltantes; un segundo
   reporte incompleto o un DEV cortado a mitad de task se eleva al usuario con el estado del diff.
 
@@ -38,7 +39,7 @@ contenido propio (issues, planes, handoffs, código o revisiones); sí opera git
 - Ante cualquier STOP (`FLUJO_AGENTES.md` §4) detiene el pipeline afectado y lo eleva al usuario
   con la evidencia y las opciones que entregó el agente. Los pipelines no afectados siguen.
 - No ejecuta gates ni reinterpreta sus resultados: transmite el output del DEV tal cual.
-- Pasos que requieren al usuario (wallet, keystore, publicación, faucet con su cuenta, merges) se
+- Pasos que requieren al usuario (wallet, keystore, publicación, faucet con su cuenta, ratificaciones) se
   listan al final de cada ronda como pendientes del usuario.
 
 ## Arranque de sesión

@@ -11,8 +11,8 @@
 | **MAYOR** | Senior revisor: redacta issues de GitHub, aprueba planes/handoffs (exige HU), hace la **revisión de integración** del PR final de cada issue (§7). No ejecuta gates (D-20261030-02). |
 | **MID** | Del issue genera **plan** y **handoffs** (sin paso de spec), cada uno con historia de usuario. Revisa cada reporte de task del DEV contra `documents/ESTANDARES.md` antes de autorizar el siguiente handoff. No ejecuta gates. Genera el doc de smoke cuando aplica (§M5 de `agentes/AGENTE_MID.md`). |
 | **DEV** | Implementa tasks según handoffs, ejecuta los gates (es el único que corre `sui move build/test`, lint, Vitest, build), reporta con la plantilla §5. |
-| **Orquestador** | Sesión principal de Claude Code (`agentes/ORQUESTADOR.md`): pasa artefactos entre roles, crea branches, commitea, pushea y abre PRs. |
-| **Usuario (owner)** | Mergea, decide STOPs y escalaciones, custodia keystore/`HouseCap`/`UpgradeCap`, publica en testnet (o autoriza cada publicación), corre los pasos de smoke que exigen su wallet. |
+| **Orquestador** | Sesión principal de Claude Code (`agentes/ORQUESTADOR.md`): pasa artefactos entre roles, crea branches, commitea, pushea, abre PRs y los mergea (D-20261030-09). |
+| **Usuario (owner)** | Decide STOPs y escalaciones, custodia keystore/`HouseCap`/`UpgradeCap`, publica en testnet (o autoriza cada publicación), corre los pasos de smoke que exigen su wallet. |
 
 | Acción | MAYOR | MID | DEV | Orquestador | Usuario |
 |---|---|---|---|---|---|
@@ -21,7 +21,7 @@
 | Escribir planes/handoffs | revisa y aprueba | ✅ | ⬜ | ⬜ | revisa |
 | Escribir código | ⬜ | ⬜ | ✅ | ⬜ | ⬜ |
 | Branches / commits / pushes / PRs | ⬜ | propone mensajes y body | ⬜ | ✅ (D-20261030-05) | ✅ |
-| Merges | ⬜ | ⬜ | ⬜ | ⬜ | ✅ |
+| Merges | ⬜ | ⬜ | ⬜ | ✅ (D-20261030-09) | ✅ |
 | Publicar en testnet | ⬜ | ⬜ | ⬜ | solo con autorización explícita | ✅ |
 | Aprobar plan / PR | ✅ | ⬜ | ⬜ | ⬜ | ✅ |
 
@@ -52,7 +52,7 @@ issue #N (GitHub) → plan (documents/PLAN_<TEMA>.md)
 
 ## 3. Pipeline
 
-MAYOR redacta issue → orquestador lo crea → MID genera plan → MAYOR revisa plan (itera hasta aprobar) → MID genera handoffs → DEV implementa task + reporte (§5) → MID revisa vs ESTANDARES (§5) → orquestador commitea → ¿más tasks? → siguiente handoff → smoke si aplica (§6) → orquestador pushea + PR → MAYOR revisión de integración (§7) → usuario mergea + housekeeping (§9).
+MAYOR redacta issue → orquestador lo crea → MID genera plan → MAYOR revisa plan (itera hasta aprobar) → MID genera handoffs → DEV implementa task + reporte (§5) → MID revisa vs ESTANDARES (§5) → orquestador commitea → ¿más tasks? → siguiente handoff → smoke si aplica (§6) → orquestador pushea + PR → MAYOR revisión de integración (§7) → orquestador mergea (D-20261030-09) + housekeeping (§9).
 
 ## 4. Parar vs. actuar y reportar
 
@@ -88,7 +88,7 @@ Sin reporte completo el MID no inicia revisión — **incluidos los tasks solo-U
 
 ### Tests y gates (output pegado, por área tocada)
 - Agregados/modificados: (lista)
-- Contracts: sui --version / sui move build (warnings) / sui move test (N tests, PASS/FAIL)
+- Contracts: sui --version / sui move build (warnings) / sui move test (N tests, PASS/FAIL) — forma canónica de los gates (con `-e testnet` y el guard `printf 'n\n' |`) en `agents.md` §3
 - App: npm run lint / typecheck / npm test (archivos y tests) / npm run build
 - Tablas de contrato (contracts/README.md) y app/src/sui/ sincronizados: sí / no aplica
 

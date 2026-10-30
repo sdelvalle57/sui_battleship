@@ -12,6 +12,11 @@
 
 ## Recientes
 
+### D-20261030-09 — El orquestador también mergea (amplía D-20261030-05)
+- **Decisión:** el orquestador mergea los PRs contra `master` con merge commit (no squash: conserva los SHAs citados en STATUS y reportes) cuando la revisión de integración del MAYOR no tiene 🔴 BLOCKER ni 🟠 MAJOR abiertos, la CI está en verde (cuando exista, PROY-18) y no queda ningún STOP sin decidir. Tras el merge hace el housekeeping (FLUJO §9) en un PR propio que también mergea. Publicar o upgradear en testnet sigue requiriendo autorización explícita por publicación; mainnet nunca sin decisión registrada.
+- **Alternativa descartada:** que el usuario mergee cada PR (D-20261030-05).
+- **Aprobado por:** usuario ("encárgate de los merges también", 2026-10-30). **Fecha:** 2026-10-30.
+
 ### D-20261030-08 — Framework por dependencias implícitas y CLI del canal testnet (#1)
 - **Decisión:** (1) `Move.toml` en el formato del sistema de paquetes de la CLI ≥ 1.63: `std`/`sui` implícitas, sin `[addresses]`/`[dev-addresses]`; el framework queda fijado por `Move.lock`, regenerado por la CLI con `-e testnet` y nunca a mano. PROY-11 se reescribe con la redacción de `documents/PLAN_TOOLCHAIN.md` (Decisión 1). (2) Sui CLI del canal testnet (`1.83.0` vía `suiup`).
 - **Alternativa descartada:** dependencia `Sui` explícita con `rev` a un tag (solo posible en el formato viejo, que la CLI pide migrar); CLI del canal mainnet.
@@ -37,7 +42,7 @@
 - **Aprobado por:** usuario (2026-10-30). **Fecha:** 2026-10-30. Los planes de #4 y #5 aplican estas decisiones sin reabrirlas; las demás decisiones abiertas de esos issues siguen siendo STOP.
 
 ### D-20261030-05 — El orquestador commitea, pushea y abre PRs; el usuario mergea
-- **Decisión:** el orquestador commitea un commit por task tras la revisión MID PASA (solo los archivos/hunks del task, mensaje del MID con `Co-Authored-By`), pushea la branch y abre el PR contra `master` con el body del MID. También commitea los docs de `documents/` y `agents.md`. **El merge es del usuario.** Publicar en testnet sigue requiriendo autorización explícita por publicación.
+- **Decisión:** el orquestador commitea un commit por task tras la revisión MID PASA (solo los archivos/hunks del task, mensaje del MID con `Co-Authored-By`), pushea la branch y abre el PR contra `master` con el body del MID. También commitea los docs de `documents/` y `agents.md`. **El merge es del usuario** (reemplazado por D-20261030-09: mergea el orquestador). Publicar en testnet sigue requiriendo autorización explícita por publicación.
 - **Alternativa descartada:** que el usuario commitee y pushee cada task.
 - **Aprobado por:** usuario ("haz tú todos los pendientes", 2026-10-30, sobre la propuesta P-1). **Fecha:** 2026-10-30.
 
