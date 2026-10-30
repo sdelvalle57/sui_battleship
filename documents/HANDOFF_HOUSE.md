@@ -1,6 +1,6 @@
 # HANDOFF_HOUSE
 > Plan: PLAN_HOUSE v1.1 (APROBADO por el MAYOR, "Revisión v1.1" en `documents/REVISION_PLAN_HOUSE.md`) | Issue: #4 |
-> Branch: `feature/issue-4-house` | Versión: v1.1 | Fecha: 2026-10-30 | Autor: MID
+> Branch: `feature/issue-4-house` | Versión: v1.2 | Fecha: 2026-10-30 | Autor: MID
 > Aplica las decisiones del usuario (D-20261030-11) y los MINOR N1 (D7 b ⇒ 6 tests más, total ≥ 20) y N2
 > (alcance incluye `agents.md` §13 y SEG-2/PROY-9 de `ESTANDARES.md`) de la revisión v1.1.
 > **v1.1:** aplica la revisión del MAYOR sobre el handoff v1 (M1 opción a, m1, m2, m3); ver §Changelog al final.
@@ -365,7 +365,9 @@ PROY-3 no cambia (D3 c no usa `store`).
 de baseline de contracts (build 0 warnings, lint 0, N tests) con el SHA del commit de TASK-1 que indique el
 orquestador; resultado del gancho de coverage (nombres reales de los artefactos y si `.gitignore` los
 cubre); en "Pendientes del usuario" o en el backlog de #8: "post-publicación: `update_fee_rate` antes de
-anunciar (fee por defecto 0, D-20261030-11)"; fila del ciclo activo.
+anunciar (fee por defecto 0, D-20261030-11)"; en "Pendientes del usuario" también: "licencia del repo: cabecera
+placeholder `// Copyright (c) Your Project` + SPDX Apache-2.0 en `contracts/sources/house.move:1-2`, sin `LICENSE`
+en el repo; decidir antes de #5"; fila del ciclo activo. Baseline TASK-1 = build 0 warnings, lint 0, **26** tests.
 
 **`.gitignore`:** solo si TASK-1 reportó un artefacto de coverage sin cubrir, con el patrón aprobado por el MID.
 
@@ -413,6 +415,9 @@ Issue #4 → `documents/PLAN_HOUSE.md` v1.1 (APROBADO) → este handoff → TASK
 TASK-2. "CI verde": si #3 se mergea antes del PR, la CI gatea el PR; #4 no crea CI.
 
 ## Changelog
+
+- **v1.2 (2026-10-30):** revisión MID de TASK-1 (PASA, commit de TASK-1 en la branch): TASK-2 suma a "Pendientes del
+  usuario" la licencia del repo (cabecera de `house.move:1-2`) y fija el baseline en 26 tests. Línea transcrita por el orquestador.
 
 - **v1.1 (2026-10-30)**, revisión del MAYOR sobre el handoff v1:
   - M1 (opción a): `fee_rate`, `fees_collected`, `min_bet`, `max_bet` validan la versión; `version()` no.
