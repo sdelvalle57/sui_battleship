@@ -74,3 +74,46 @@ Detalle:
 ### Preguntas al MID/usuario (solo las que bloquean)
 
 Ninguna. Los STOPs ya están decididos (D-20261030-13). Ningún hallazgo reabre una decisión del usuario.
+
+---
+
+## Revisión v1.1
+
+## Veredicto: ✅ APROBADO (0 🔴 · 0 🟠 · 1 🟡 nuevo · 2 🔵 nuevos): el MID puede generar `HANDOFF_CI.md`; el 🟡 N1 se corrige en el handoff
+
+> Revisión MAYOR, solo del delta · 2026-10-30 · `documents/PLAN_CI.md` **v1.1** en `feature/issue-3-ci` @ `342606f`
+> (padre `c454ede` = esta revisión v1, sobre `master` @ `c2a1e42`). Mismas reglas: no ejecuté gates, no toqué
+> `~/.sui/` ni publiqué nada. El `documents/PLAN_GAME.md` sin trackear que pueda aparecer es de otro ciclo y no lo revisé.
+
+### Hallazgos de v1: estado
+
+| # | Estado | Evidencia en v1.1 |
+|---|---|---|
+| 1 🟠 | ✅ Resuelto | Encabezado `:3-4` (al día con `c2a1e42`; `git log` lo confirma: `342606f` → `c454ede` → `c2a1e42`). "Decisiones resueltas", `:127-149`, con una línea `> Decisión … (D-20261030-13)` por STOP. TASK-2 cita D-13 y numera las nuevas desde D-15 (`:480-481`). El grep de `:494` evita IDs duplicados. |
+| 2 🟡 | ✅ | El texto de D-13 (3)(4) aparece en `:22-23`, `:92`, `:131`, `:149`, `:470-476` y `:515-516`. |
+| 3 🟡 | ✅ | `:195-199`: grupo `pr-<N>` / `github.sha`. Con grupo único por commit, un push a `master` nunca comparte grupo, así que ni se cancela ni se descarta un run pendiente. El comentario quedó corregido. |
+| 4 🟡 | ✅ | `:239`: `tar -xzf "$asset" -C sui-release ./sui` (en v1 verifiqué que el miembro se llama `./sui`). |
+| 5 🟡 | ✅ | `:223-252`: `actions/cache/restore` + `actions/cache/save`, con el mismo SHA `55cc834…`. Verificado en ese SHA: `restore/action.yml` y `save/action.yml` existen con `node24`, y `restore` expone `cache-hit` y `cache-primary-key` (`restore/action.yml:27-29`). `save` corre después de `Verify`, así que nunca guarda un binario no verificado. Si la clave ya existe (dos PRs en paralelo), `saveImpl.ts` solo registra un *warning* (`:75-93`) y el job no falla. Con `if: cache-hit != 'true'` no hace falta `always()`: un install fallido no guarda nada, que es lo correcto. Los greps pasan de 4 a 5 `uses:` y la regex de `:437` es correcta. |
+| 6 🟡 | ✅ con observación (N1) | `:355-411`: el contenido de los commits rojos está escrito literal en el plan; el DEV los verifica en una copia fuera del repo; el orquestador trabaja en un worktree aparte, espera a que termine cada run y el commit de lint hace `git rm ci_red_check.move`. Lo que espera el criterio de aceptación es correcto: Build `success`, Lint `failure`, Test `skipped`. |
+| 7 🟡 | ✅ | `:319-328`: `timeout-minutes: 3` y `continue-on-error` en el step, más `continue-on-error` en el job. "CI verde" queda con dos comandos exactos (`:112-117`). `gh pr checks --required` existe en gh 2.46. |
+| 8 🟡 | ✅ | `:341-348`: compara contra la clave del manifest más alta que sea ≤ PV de testnet, y avisa solo si `LOCK_REV != EXPECTED_REV`. `CLI_MAX_PV` sale de `crates/sui-protocol-config/src/lib.rs:41` @ `testnet-v1.83.0`, que dice `const MAX_PROTOCOL_VERSION: u64 = 140;` (verificado; la regex `^const MAX_PROTOCOL_VERSION: u64 = ([0-9]+);` matchea esa línea tal cual). Hoy da LOCK 139 frente a EXPECTED 140, con aviso de repin y sin aviso de CLI atrasada (140 ≤ 140), que coincide con el criterio de aceptación 3. |
+| 9 🟡 | ✅ | `:461-481` suma `AGENTE_DEV.md:50`, `FLUJO_AGENTES.md:91`, `agents.md:52-54` y `agents.md:87`. Los greps de `:490-494` cubren esos archivos. |
+| 10–13 🔵 | ✅ | `--retry-all-errors` (`:235`, `:333`); `SUI_BIN_SHA256` = `29e1beb9…48fa` (`:208`), el mismo valor que medí sobre el `./sui` del archivo, verificado en cada run (`:244-245`); `test ! -e "$HOME/.sui"` (`:310-311`); `SUI_VERSION` en la clave de `~/.move/git` (`:286`). |
+
+### Hallazgos nuevos
+
+| # | Severidad | Regla | Líneas | Problema | Escenario de falla | Corrección esperada |
+|---|---|---|---|---|---|---|
+| N1 | 🟡 MINOR | Evidencia / limpieza (D-20261030-05) | `:408-410` | El orden de la limpieza falla. En gh 2.46, `pr close --delete-branch` borra **primero la branch local** y recién después la remota (`pkg/cmd/pr/close/close.go` @ `v2.46.0`), y si falla el borrado local corta con error. Si se ejecuta desde el worktree principal mientras `ci/red-check-issue-3` sigue checkouteada en el worktree secundario, `git branch -D` falla ("checked out at …"): el PR queda cerrado pero la **branch remota no se borra**, y el `git branch -D` de después vuelve a fallar. Si se ejecuta desde el worktree secundario, gh hace checkout de `master` dentro de ese worktree y el `git branch -D` final falla porque la branch ya no existe. | Queda una branch remota huérfana o salen errores que el orquestador tiene que interpretar a mano. | En el handoff, cambiar el orden: (1) `git worktree remove /home/santiago/Projects/Battleship-ci-red-check`; (2) **desde el worktree principal**, `gh pr close <N> --delete-branch`, que borra la local y la remota; (3) verificar que `git ls-remote --heads origin ci/red-check-issue-3`, `git branch --list ci/red-check-issue-3` y `git worktree prune --dry-run` no devuelven nada, y que `git worktree list` muestra 1 worktree. Sacar el `git branch -D` aparte. |
+| N2 | 🔵 SUGGESTION | H13 (aviso que se pierde sin ruido) | `:326`, `:333` | El presupuesto de tiempo de `framework-drift` no alcanza. Son 3 descargas (GraphQL, manifest, `lib.rs`) con `--max-time 20 --retry 3`; en el peor caso cada una tarda unos 80-90 s (4 intentos más las esperas entre ellos), unos 260 s en total, más que los 180 s de `timeout-minutes: 3`. | Con la red degradada, el step se mata por timeout: `continue-on-error` deja el job en verde pero **sin** `::warning` ni resumen, y el aviso de H13 desaparece sin que nadie lo note. | Agregar `--retry-max-time 40` a cada `curl`, o subir el step a 5 min y el job a 7. Opcional: un `trap` que escriba un `::warning title=H13::chequeo incompleto` si el script no llega al final. |
+| N3 | 🔵 SUGGESTION | `agents.md` §3 (guarda `printf`) | `:360-364`, `:434` | La verificación de la copia roja que hace el DEV no escribe los comandos literales. No queda explícito que se corren **desde** la copia (`cd "$SCRATCH/red-check"`) y con `printf 'n\n' |`. | Un comando lanzado desde `contracts/` del repo mediría la feature y no la copia. | En el handoff, escribir los 3 comandos literales (`cd "$SCRATCH/red-check" && printf 'n\n' \| sui move build -e testnet --warnings-are-errors; echo "exit=$?"`, etc.) y pedir `ls sources/` en cada estado. |
+
+### Validado del delta (con evidencia)
+
+- **Concurrencia:** con la expresión `github.event_name == 'pull_request' && format('pr-{0}', …) || github.sha`, un PR siempre da un string no vacío, así que nunca cae en `github.sha`. `cancel-in-progress` es `true` solo en PRs. El procedimiento de rojos (esperar cada run) evita perder evidencia por cancelación.
+- **Los runs rojos no ensucian `master` ni la feature:** los archivos `ci_*_check.move` existen solo en la copia del DEV y en la branch desechable (`:102`, `:368`). El worktree vive fuera del repo principal. El PR borrador se cierra sin merge. Pushea el orquestador y el DEV no hace commits ni pushes (`:355`), conforme a D-20261030-05. El PR desechable corre el `ci.yml` de la feature porque `pull_request` usa el workflow de la merge ref.
+- **Seguridad sin cambios respecto de v1:** permisos `contents: read`, sin `secrets.*` ni `GITHUB_TOKEN`, la guarda `printf 'n\n' |` en las 4 invocaciones, keystore `[]`, y ahora además el binario verificado en cada run y `~/.sui` ausente.
+
+### Recomendación
+
+El plan v1.1 queda **aprobado**. El MID incorpora N1 (y, si quiere, N2 y N3) en `HANDOFF_CI.md`. No queda ningún STOP abierto: D-20261030-13 se mantiene.
