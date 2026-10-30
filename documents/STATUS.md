@@ -35,7 +35,7 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 
 | Área @ ref | Gate | Resultado |
 |---|---|---|
-| contracts/ @ `8325126` (branch de #2 con TASK-1 y TASK-2; `master` tras el merge de #2, mismo código de contratos que `f4b437c`), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🟢 exit 0. **0 errores, 0 warnings** de compilación. Único módulo: `contracts/sources/house.move` |
+| contracts/ @ `master` (`48df3b4`, merge de #22; medido en `8325126`, mismo código de contratos que `f4b437c`), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🟢 exit 0. **0 errores, 0 warnings** de compilación. Único módulo: `contracts/sources/house.move` |
 | | `sui move build -e testnet --lint` | 🟢 exit 0. 0 errores, 0 warnings; **1 lint de Sui:** `WSL06010` (`prefer_mut_tx_context`) en `contracts/sources/house.move:67` (`update_fee_rate` con `&TxContext`, H12 → #4) |
 | | `sui move test -e testnet` | 🟢 exit 0. 0 errores, 0 warnings. **0 tests** (`Test result: OK. Total tests: 0`) |
 | app | — | ⬜ no existe |
@@ -69,7 +69,8 @@ mismos conteos por archivo.
 | Docs del flujo adaptados (`agents.md`, `documents/`) | ✅ 2026-10-30 | D-20261030-01; PR #19 mergeado (`2b088b5`) |
 | Issues del backlog en GitHub | ✅ 2026-10-30 | #1–#18 redactados por el MAYOR y creados por el orquestador |
 | #1 (toolchain) | ✅ 2026-10-30 | PR #20 mergeado (`e1849c6`); MAYOR APPROVE. Artefactos del ciclo borrados en el housekeeping (`git show e1849c6:documents/PLAN_TOOLCHAIN.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_TOOLCHAIN.md`) |
-| Siguiente | ⏳ | #2 (monorepo, `contracts/`, retiro del legado) → plan del MID |
+| #2 (monorepo) | ✅ 2026-10-30 | PR #22 mergeado (`48df3b4`); MAYOR APPROVE; primer baseline verde. Artefactos borrados en el housekeeping (`git show 48df3b4:documents/PLAN_MONOREPO.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_MONOREPO.md`) |
+| Siguiente | ⏳ | #4 (House: `HouseCap` transferible por D-20261030-06, H3–H5, H12, gancho de coverage) → plan del MID; STOPs abiertos D1, D2, D4, D5, D6. #3 (CI) puede ir en paralelo |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -115,3 +116,4 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 |---|---|---|
 | Docs del flujo multi-agente (D-20261030-01) | #19 → `2b088b5` | 2026-10-30 |
 | #1 Toolchain, manifest pineado, primer baseline | #20 → `e1849c6` | 2026-10-30 |
+| #2 Monorepo (`contracts/`), legado retirado, Node 26 | #22 → `48df3b4` | 2026-10-30 |
