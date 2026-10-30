@@ -4,7 +4,12 @@
 > (aplica `documents/REVISION_PLAN_HOUSE.md`: MAJOR 1, MINOR 2-7, S1-S4; cambios en §Changelog al final)
 > Decisiones aplicadas sin reabrir: D-20261030-06 (§5: `HouseCap` transferible; §3: el `Game` copia el
 > `fee_rate` al crear; §1: resolución atómica al aceptar), -07 (config sin claves), -08 (framework por
-> `Move.lock`), -10 (monorepo). **STOP pendientes:** D1, D2, D3-mecanismo, D4, D5, D6, D7 (§Decisiones abiertas).
+> `Move.lock`), -10 (monorepo). **STOPs resueltos (D-20261030-11):** D1 (a) con **fee por defecto 0 bps**,
+> D2 (a), D3 (c), D4 (a), D5 (a), D6 mantener, **D7 (b) con `version`**. Difieren de lo que asume el cuerpo del
+> plan: el fee por defecto (0 en vez de 200 bps) y D7 (b en vez de a); el handoff aplica las variantes "si el
+> usuario elige…" de cada uno, más N1/N2 de la "Revisión v1.1".
+>
+> Decisión (2026-10-30): se optó por D1 a + fee 0, D2 a, D3 c, D4 a, D5 a, D6 mantener y D7 b — aprobado por el usuario.
 
 ## Historia de usuario
 
