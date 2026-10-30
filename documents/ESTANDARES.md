@@ -1,11 +1,11 @@
 # Estándares del Proyecto — Arquitectura, Seguridad y Limpieza (Sui Battleship)
 
-> **Versión:** 1.2 · **Fecha:** 2026-10-30 (adaptado de Cancerbero — D-20261030-01; PROY-17: `.nvmrc` = 26 por D-20261030-10)
+> **Versión:** 1.3 · **Fecha:** 2026-10-30 (adaptado de Cancerbero — D-20261030-01; PROY-17: `.nvmrc` = 26 por D-20261030-10; SEG-2, PROY-9 y PROY-10 por D-20261030-11, #4)
 > Fuente única de verdad. El DEV implementa contra estas reglas; el MID y el MAYOR revisan contra ellas.
 > Toda regla tiene ID: los hallazgos se citan como `SEG-4 violado en contracts/sources/game.move:120`.
 > §4 (reglas PROY) tiene prioridad sobre §1–§3.
-> **Código legado:** el código de 2025-03 que sigue en el árbol (`house.move`) no cumple varias reglas (STATUS §Hallazgos);
-> `game.move` y `battleship.move` se retiraron en #2. Las reglas aplican a todo código **nuevo o tocado**.
+> **Código legado:** no queda código de 2025-03 en el árbol: `game.move` y `battleship.move` se retiraron en #2 y
+> `house.move` se reescribió en #4 conforme a estas reglas. Las reglas aplican a todo código **nuevo o tocado**.
 
 ---
 
@@ -26,7 +26,7 @@
 ## 2. SEGURIDAD (SEG)
 
 - **SEG-1 — Validación en el contrato.** Toda función de entrada valida sus argumentos con `assert!` y un abort code propio: montos dentro de `[min_bet, max_bet]`, monto exacto al aceptar, estado esperado, oponente ≠ creador. La validación de la UI es cortesía; el contrato es la verdad.
-- **SEG-2 — AuthZ en cada función.** Toda función `public`/`entry` define quién puede llamarla y lo verifica: admin ⇒ `&HouseCap`; creador/invitado ⇒ comparación de `ctx.sender()` con la dirección guardada. Denegar por defecto. Cada regla tiene un test `expected_failure` del caso denegado.
+- **SEG-2 — AuthZ en cada función.** Toda función `public`/`entry` define quién puede llamarla y lo verifica: admin ⇒ `&HouseCap`; creador/invitado ⇒ comparación de `ctx.sender()` con la dirección guardada. Denegar por defecto. Cada regla tiene un test `expected_failure` del caso denegado; con authZ por capability (`&HouseCap`) el caso denegado no se puede armar como transacción, y se cubre verificando la custodia del cap (dónde está antes y después de transferirlo, y que el nuevo titular administra).
 - **SEG-3 — Secretos.** Repo público: jamás claves privadas, mnemonics, keystore (`~/.sui/sui_config/`), tokens de API ni `.env` con valores reales en código, docs, issues, logs o capturas. Un secreto en el diff = BLOCKER + rotación.
 - **SEG-4 — Fondos.** Los SUI se custodian como `Balance<SUI>` dentro del objeto dueño; `Coin` solo en la frontera (entrada/salida). Todo camino que recibe fondos tiene un camino de salida (cancelar, resolver); ninguno deja SUI bloqueado ni crea/destruye valor. Conservación verificada en tests (balances antes/después de cada actor y de la House).
 - **SEG-5 — Aleatoriedad.** Solo `sui::random::Random` (objeto `0x8`) con `RandomGenerator` creado dentro de la función. La función que consume aleatoriedad es `entry` **no `public`** (otro paquete no puede componerla y abortar si pierde) y su camino perdedor no consume más gas que el ganador. Nunca `ctx.epoch()`, timestamps ni IDs como fuente de azar.
@@ -47,7 +47,7 @@
 - **LIM-5 — Sin duplicación.** Dos veces = candidata a extraer; tres veces = obligatorio.
 - **LIM-6 — Sin magia.** Límites, denominador de basis points, fee máximo y montos van en constantes nombradas.
 - **LIM-7 — Comentarios para el POR QUÉ.** `///` doc comments en toda función/struct pública; los comentarios internos explican restricciones no obvias (por qué `entry`, por qué ese redondeo).
-- **LIM-8 — Errores específicos.** Un abort code por condición; nunca reutilizar un código para otra causa (hoy `EInsufficientBalance` se usa para el fee: STATUS H4). En TS, nada de `catch` que trague errores.
+- **LIM-8 — Errores específicos.** Un abort code por condición; nunca reutilizar un código para otra causa. En TS, nada de `catch` que trague errores.
 - **LIM-9 — Sin warnings nuevos.** `sui move build` sin warnings nuevos; ESLint y `tsc` estricto en la app. Con un rojo conocido, el criterio es **cero delta**.
 - **LIM-10 — TODOs con dueño.** Todo `TODO`/`FIXME` nuevo referencia un issue (`// TODO(#12): ...`) o se elimina.
 - **LIM-11 — Tests legibles y deterministas.** Nombre del test = comportamiento verificado (`test_accept_rejects_wrong_amount`). Sin red real, sin orden implícito, aleatoriedad con semilla de test.
@@ -66,8 +66,8 @@
 - **PROY-6 — Un objeto por partida.** Cada partida es su propio objeto compartido con su estado; sin `GamePool` ni vectores globales. Las listas para la UI salen de eventos.
 - **PROY-7 — Eventos.** Toda transición (`created`, `accepted`, `cancelled`, `resolved`) y toda operación de admin emiten un evento `has copy, drop` con el ID del objeto y los datos que la UI necesita (direcciones, montos, ganador). Cambiar un evento = cambio de contrato.
 - **PROY-8 — Estados explícitos.** Estados como `enum` Move; cada función verifica el estado de entrada con un abort code propio. Un objeto terminal (cancelado/resuelto) no retiene `Balance` > 0.
-- **PROY-9 — Tests de contrato.** `sui::test_scenario` con varias direcciones; por cada función: happy path, cada abort (`#[expected_failure(abort_code = battleship::<modulo>::E…)]`), authZ denegada y conservación de fondos. Todo fix: primero el test que reproduce el bug.
-- **PROY-10 — Upgrades.** Tras la primera publicación, todo cambio se evalúa contra la compatibilidad de upgrade de Sui; si rompe, STOP (upgrade vs republicación). `UpgradeCap` y `HouseCap` los custodia el owner.
+- **PROY-9 — Tests de contrato.** `sui::test_scenario` con varias direcciones; por cada función: happy path, cada abort (`#[expected_failure(abort_code = battleship::<modulo>::E…)]`), authZ denegada (con capability: verificando la custodia del cap, no con `expected_failure`; ver SEG-2) y conservación de fondos. Todo fix: primero el test que reproduce el bug.
+- **PROY-10 — Upgrades.** Tras la primera publicación, todo cambio se evalúa contra la compatibilidad de upgrade de Sui; si rompe, STOP (upgrade vs republicación). `UpgradeCap` y `HouseCap` los custodia el owner. La House compartida lleva `version` + `EWrongVersion` + `entry migrate` con `&HouseCap` (D-20261030-11). Invariante SEG-4 para los objetos que custodian fondos de jugadores (`Game`, #5): un camino de reembolso (cancelar/rechazar) nunca puede quedar bloqueado por la versión; la mecánica de versionado de `Game` la decide el plan de #5.
 - **PROY-11 — Manifest.** `Move.toml` en el formato del sistema de paquetes de la CLI registrada en STATUS (≥ 1.63): `std`/`sui` implícitas (sin entrada `Sui` git ni `implicit-dependencies = false`), sin `[addresses]`/`[dev-addresses]`; deps git de terceros con `rev` = SHA de 40 caracteres. El framework queda fijado por `Move.lock` (regenerado por la CLI con `-e testnet`, nunca a mano, commiteado); todo cambio de `Move.lock` en un diff se declara y justifica en el reporte. `edition` declarada. Direcciones publicadas en `Published.toml` (commiteado); `Pub.*.toml` nunca se commitea.
 
 ### App (`app/` — Vite / React / TS)
