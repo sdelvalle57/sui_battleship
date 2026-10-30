@@ -1,6 +1,6 @@
 # Estándares del Proyecto — Arquitectura, Seguridad y Limpieza (Sui Battleship)
 
-> **Versión:** 1.0 · **Fecha:** 2026-10-30 (adaptado de Cancerbero — D-20261030-01)
+> **Versión:** 1.1 · **Fecha:** 2026-10-30 (adaptado de Cancerbero — D-20261030-01)
 > Fuente única de verdad. El DEV implementa contra estas reglas; el MID y el MAYOR revisan contra ellas.
 > Toda regla tiene ID: los hallazgos se citan como `SEG-4 violado en contracts/sources/game.move:120`.
 > §4 (reglas PROY) tiene prioridad sobre §1–§3.
@@ -68,7 +68,7 @@
 - **PROY-8 — Estados explícitos.** Estados como `enum` Move; cada función verifica el estado de entrada con un abort code propio. Un objeto terminal (cancelado/resuelto) no retiene `Balance` > 0.
 - **PROY-9 — Tests de contrato.** `sui::test_scenario` con varias direcciones; por cada función: happy path, cada abort (`#[expected_failure(abort_code = battleship::<modulo>::E…)]`), authZ denegada y conservación de fondos. Todo fix: primero el test que reproduce el bug.
 - **PROY-10 — Upgrades.** Tras la primera publicación, todo cambio se evalúa contra la compatibilidad de upgrade de Sui; si rompe, STOP (upgrade vs republicación). `UpgradeCap` y `HouseCap` los custodia el owner.
-- **PROY-11 — Manifest.** `Move.toml` con el framework fijado a la versión de la CLI instalada (no branches móviles); `Move.lock` commiteado; `edition` declarada.
+- **PROY-11 — Manifest.** `Move.toml` en el formato del sistema de paquetes de la CLI registrada en STATUS (≥ 1.63): `std`/`sui` implícitas (sin entrada `Sui` git ni `implicit-dependencies = false`), sin `[addresses]`/`[dev-addresses]`; deps git de terceros con `rev` = SHA de 40 caracteres. El framework queda fijado por `Move.lock` (regenerado por la CLI con `-e testnet`, nunca a mano, commiteado); todo cambio de `Move.lock` en un diff se declara y justifica en el reporte. `edition` declarada. Direcciones publicadas en `Published.toml` (commiteado); `Pub.*.toml` nunca se commitea.
 
 ### App (`app/` — Vite / React / TS)
 
