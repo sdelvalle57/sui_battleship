@@ -14,8 +14,8 @@ Un jugador crea una partida bloqueando su apuesta (abierta a cualquiera o como *
 a una dirección); otro la acepta igualando el monto; si nadie la acepta, el creador la cancela y
 recupera sus fondos. Cada jugador puede tener varias partidas simultáneas.
 
-**Fuera del MVP:** la mecánica real de batalla naval (tablero, barcos, disparos). El borrador de esos
-tipos vive en `sources/battleship.move` (legado, ver §7).
+**Fuera del MVP:** la mecánica real de batalla naval (tablero, barcos, disparos). El borrador 2025 de esos
+tipos se retiró del paquete en #2; se recupera con `git show f063a0e:sources/battleship.move` (#18).
 
 **Foco actual (oct-2026):** retomar el proyecto tras ~19 meses sin cambios (último commit 2025-03-12):
 reestructurar a monorepo, terminar los módulos Move, agregar tests, CI y la UI React. Backlog en los
@@ -26,8 +26,8 @@ issues de GitHub; estado en `documents/STATUS.md`.
 Un solo repo: **`sdelvalle57/sui_battleship`** (público), branch de integración `master`. Issues y PRs
 se citan como `#N`.
 
-**Layout objetivo (D-20261030-03)** — la reestructura es un issue propio; hasta que se mergee, el
-paquete Move sigue en la raíz (`Move.toml`, `sources/`, `tests/`):
+**Layout objetivo (D-20261030-03)** — `contracts/`, `package.json` y `.nvmrc` existen desde #2; `app/` (#9),
+`.github/workflows/` (#3), `contracts/tests/` (#4) y `contracts/deployments/` (#7) llegan con su issue:
 
 ```
 sui_battleship/
@@ -57,7 +57,9 @@ Sui CLI `1.83.0` (release `testnet`) vía `suiup` en `~/.local/bin` (STATUS H1, 
 cuya frase imprime. Toda invocación de `sui move`/`sui client` va precedida de `printf 'n\n' |` para que,
 si la config falta, la CLI aborte en vez de crear la clave.
 
-### Contratos (`contracts/`; hoy la raíz)
+### Contratos (desde `contracts/`)
+
+Los gates se corren con `cd contracts && printf 'n\n' | sui move …` (equivalente: `--path contracts` desde la raíz).
 
 | Comando | Qué hace |
 |---|---|
@@ -139,23 +141,13 @@ compatible o republicación con IDs nuevos.
 
 ## 7. Gotchas Técnicos
 
-- **`sources/Game/game.move` no compila:** `start_game` construye `GameRequest` sin la mayoría de sus
-  campos (`game.move:55-59`). Mientras no se arregle, `sui move build` del paquete está en rojo.
-- **`sources/battleship.move` es legado** (tipos de tablero/barcos sin uso) y `new_game` usa `player1`
-  después de moverlo; tampoco compila (`battleship.move:62`, baseline de #1). Su destino se decide en el backlog.
-- **`tests/battleship_tests.move` está todo comentado:** hoy no hay ningún test.
-- **`GamePool { pool: vector<GameRequest> }`** es un registro global creciente en un objeto compartido:
-  contención y sin IDs propios. El diseño objetivo es un objeto compartido por partida (PROY-6).
-- **`escrow: u64`** solo guarda un número: no custodia fondos (PROY-4).
-- **`house.move` reutiliza `EInsufficientBalance`** para validar el `fee_rate` (`house.move:48,69`).
+- **`house.move` reutiliza `EInsufficientBalance`** para validar el `fee_rate` (`contracts/sources/house.move:48,69`).
 - **Framework fijado por `Move.lock`:** `std`/`sui` son implícitas y el lock (regenerado por la CLI con
-  `-e testnet`, nunca a mano) los pinea al SHA del framework de testnet (STATUS Toolchain). Todo delta del
-  lock en un diff se declara y justifica (PROY-11).
+  `-e testnet`, nunca a mano) los pinea al SHA del piso de la PV de testnet vigente **al repinear**; la CLI no
+  repinea ni avisa por sí sola (STATUS H13). Todo delta del lock en un diff se declara y justifica (PROY-11).
 - **`sui move` sin `client.yaml` crea una clave:** si falta `~/.sui/sui_config/client.yaml`, la CLI
   ofrece crear la config y genera una clave cuya frase imprime; `-e` no lo evita (STATUS H11). Nunca
   correr `sui move` sin esa config sin claves, y siempre con `printf 'n\n' |` delante (§3).
-- **Subcarpetas en `sources/`** (`House/`, `Game/`): se compilan (verificado en el baseline de #1); el layout objetivo es plano
-  (`contracts/sources/<modulo>.move`).
 - **Repo público:** nada de keystores (`~/.sui/sui_config/`), mnemonics ni direcciones privadas del owner
   con contexto sensible en commits, issues o logs.
 
@@ -165,14 +157,14 @@ compatible o republicación con IDs nuevos.
   `HouseCap`, `init` (OTW + `HouseCap` al publicador), `initialize_house`, `update_fee_rate`,
   `withdraw_fees`, accessors `fee_rate`/`fees_collected`/`admin`. Falta: `add_fees` (`public(package)`),
   accessors/setters de límites, eventos.
-- **`battleship::game`** — en construcción. Objetivo: `create_game`, `accept_game`, `cancel_game`,
+- **`battleship::game`** — no existe hasta #5 (el stub 2025 se retiró en #2). Objetivo: `create_game`, `accept_game`, `cancel_game`,
   `resolve_game` (coinflip) + eventos `GameCreated`/`GameAccepted`/`GameCancelled`/`GameResolved`.
 
 ## 9. Entidades Clave
 
 `House` · `HouseCap` · `Game` (objeto compartido por partida: creador, oponente opcional, apuesta,
-`Balance<SUI>`, estado, timestamps) · `GameState` · eventos de transición · (futuro) `Board`/`Ship`/
-`Coordinate` de `battleship.move`.
+`Balance<SUI>`, estado, timestamps) · `GameState` · eventos de transición · (futuro, #18) `Board`/`Ship`/
+`Coordinate` del borrador 2025 (`git show f063a0e:sources/battleship.move`).
 
 ## 10. Testing
 
@@ -227,5 +219,4 @@ testnet con una wallet real.
 | `documents/FLUJO_AGENTES.md` | Pipeline multi-agente: roles, permisos, plantillas |
 | `documents/agentes/*.md` | Prompts de rol (DEV / MID / MAYOR / ORQUESTADOR) |
 | `README.md` | Visión del producto y roadmap original (2025-03) |
-| `sources/House/README.md`, `sources/Game/README.md` | Notas de diseño originales por módulo (contexto, verificar contra código) |
-| `contracts/README.md` | (a crear) Tablas de funciones, eventos y abort codes |
+| `contracts/README.md` | (a crear en #4) Tablas de funciones, eventos y abort codes |

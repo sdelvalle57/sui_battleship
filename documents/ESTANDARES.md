@@ -4,8 +4,8 @@
 > Fuente única de verdad. El DEV implementa contra estas reglas; el MID y el MAYOR revisan contra ellas.
 > Toda regla tiene ID: los hallazgos se citan como `SEG-4 violado en contracts/sources/game.move:120`.
 > §4 (reglas PROY) tiene prioridad sobre §1–§3.
-> **Código legado:** el código de 2025-03 (`house.move`, `game.move`, `battleship.move`) no cumple varias
-> reglas (STATUS §Hallazgos). Las reglas aplican a todo código **nuevo o tocado**.
+> **Código legado:** el código de 2025-03 que sigue en el árbol (`house.move`) no cumple varias reglas (STATUS §Hallazgos);
+> `game.move` y `battleship.move` se retiraron en #2. Las reglas aplican a todo código **nuevo o tocado**.
 
 ---
 

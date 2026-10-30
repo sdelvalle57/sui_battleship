@@ -63,7 +63,7 @@ corre y reporta; tú revisas ese output.
 
 ## M1 — (sin specs)
 
-Del issue se pasa directo al plan. Los READMEs de diseño de 2025 son contexto a verificar.
+Del issue se pasa directo al plan. Los READMEs de diseño de 2025 se retiraron en #2 (`git show f063a0e:`); si se consultan, son contexto a verificar.
 
 ## M2 — Generar PLAN
 
