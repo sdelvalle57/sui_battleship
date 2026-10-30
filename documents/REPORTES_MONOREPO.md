@@ -239,3 +239,155 @@ Sin ajustes obligatorios al handoff. Opcionales: en TASK-3 la fila H13 puede fij
 
 ### Mensaje de commit propuesto
 `contracts: move package to contracts/ and retire legacy code (#2)` (commit `f4b437c`).
+
+## Task completado: HANDOFF_MONOREPO — TASK-2
+
+> Reporte del DEV transcrito por el orquestador.
+
+TASK-2 implementado; todas las verificaciones dan lo esperado. `npm install` exit 0, sin desviación de
+`workspaces`. `package-lock.json` borrado (T3); no se creó `node_modules/`.
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-2-monorepo` @ `f85a7e5` (TASK-1 en `f4b437c`). Todo en el working tree, sin stage ni commit.
+
+### Archivos modificados/creados
+- `?? package.json` (nuevo) · `?? .nvmrc` (nuevo: `26` + salto de línea)
+- ` M .gitignore`: sección Node/Entorno/Varios bajo la sección Move.
+- ` M agents.md`: líneas 40, 51-52 y 194. ` M documents/agentes/AGENTE_DEV.md`: línea 17. ` M documents/STATUS.md`: línea 28. ` M documents/ESTANDARES.md`: líneas 3 y 83.
+
+### Qué se implementó (3 líneas máx)
+1. Raíz como workspace npm (`private`, `workspaces: ["app"]`, sin `version`/`scripts`/`engines`/dependencias); Node 26 en `.nvmrc`.
+2. `.gitignore` cubre `node_modules/`, `app/dist/`, `.env*` (excepto `!.env.example`), `*.log`, `.DS_Store`.
+3. El número de Node vive solo en `.nvmrc`, PROY-17 y la fila medida de STATUS; el resto dice `nvm use`. ESTANDARES v1.2.
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados: ninguno. Contracts: no aplica (`git diff --stat HEAD -- contracts` vacío). App: no existe (va el output de `npm install`). Tablas: no aplica.
+
+**Verif. 1 — Node vía `.nvmrc`**
+```
+$ source ~/.nvm/nvm.sh && nvm use
+Found '/home/santiago/Projects/Battleship/.nvmrc' with version <26>
+Now using node v26.13.0 (npm v11.20.0)
+$ node --version
+v26.13.0
+$ npm --version
+11.20.0
+```
+
+**Verif. 2 — `npm install` y árbol**
+```
+$ npm install; echo "exit=$?"
+
+up to date, audited 1 package in 266ms
+
+found 0 vulnerabilities
+exit=0
+$ ls -a
+.  ..  .git  .gitignore  .nvmrc  README.md  agents.md  contracts  documents  package-lock.json  package.json
+$ rm package-lock.json
+$ git status --porcelain --ignored
+ M .gitignore
+ M agents.md
+ M documents/ESTANDARES.md
+ M documents/STATUS.md
+ M documents/agentes/AGENTE_DEV.md
+?? .nvmrc
+?? package.json
+!! contracts/build/
+$ test -e node_modules || test -e package-lock.json || echo ok
+ok
+```
+
+**Verif. 3 — Ignorados**
+```
+$ git check-ignore -v node_modules/x app/dist/x app/.env app/.env.local .env.production foo.log .DS_Store
+.gitignore:10:node_modules/	node_modules/x
+.gitignore:11:app/dist/	app/dist/x
+.gitignore:14:.env	app/.env
+.gitignore:15:.env.*	app/.env.local
+.gitignore:15:.env.*	.env.production
+.gitignore:19:*.log	foo.log
+.gitignore:20:.DS_Store	.DS_Store
+$ git check-ignore app/.env.example; echo $?
+1
+```
+
+**Verif. 4 — JSON válido**
+```
+$ python3 -I -m json.tool package.json
+{
+    "name": "sui-battleship",
+    "private": true,
+    "workspaces": [
+        "app"
+    ]
+}
+```
+
+**Verif. 5 — Coherencia de Node (N5)**
+```
+$ git grep -nE "nvm use 2[0-9]|Node 2[0-9]|Usar 2[0-9]" -- agents.md documents/ ':!documents/*_MONOREPO.md' ':!documents/DECISIONES.md'
+documents/ESTANDARES.md:83:- **PROY-17 — Toolchain.** Node 26 (`.nvmrc`) y npm workspaces desde la raíz; Sui CLI instalada con `suiup`, versión registrada en STATUS.
+documents/STATUS.md:51:| H1 | toolchain | ✅ 2026-10-30: `suiup` 0.1.1 en `~/.local/bin`; **Sui CLI `1.83.0-16d2dc1e05ed`** (release `testnet`, default). Node 20/22/26 vía nvm. Registrado en Toolchain. | #1: fijar framework y registrar baseline con esta versión |
+```
+(Solo PROY-17 y el histórico de H1: lo esperado.)
+
+**Extra — contracts intacto y SEG-3**
+```
+$ git diff --stat HEAD -- contracts
+$ git diff HEAD | grep -E "^\+" | grep -ciE "recovery phrase|suiprivkey|mnemonic"
+0
+```
+(Sin `+`, la única coincidencia es una línea de contexto preexistente de `agents.md` §11.) No se invocó `sui`; `~/.sui/` no se tocó.
+
+**Diffs (líneas cambiadas)**
+```
+.gitignore  +# Node / app · node_modules/ · app/dist/ · # Entorno: nunca valores reales en el repo (SEG-3) · .env · .env.* · !.env.example · # Varios · *.log · .DS_Store
+agents.md:40   -├── .nvmrc  # Node 22                 +├── .nvmrc  # versión de Node (PROY-17)
+agents.md:51-52 -…; Node 22 (`.nvmrc`), npm. El `node` por defecto de la máquina es v26: correr `nvm use` …
+               +…; Node (versión en `.nvmrc`, PROY-17), npm. El `node` por defecto de la máquina puede ser otro: correr `nvm use` …
+agents.md:194  -| Node | nvm (20, 22 y 26 instalados) | Usar 22 |   +| … | Usar la de `.nvmrc` (`nvm use`) |
+ESTANDARES:3   -Versión 1.1 …                        +Versión 1.2 … ; PROY-17: `.nvmrc` = 26 por D-20261030-10)
+ESTANDARES:83  -PROY-17 … Node 22 (`.nvmrc`) …       +PROY-17 … Node 26 (`.nvmrc`) …
+STATUS:28      -| Node | `v22.23.4` tras `nvm use 22` |  +| Node | `v26.13.0` tras `nvm use` (`.nvmrc` = 26, D-20261030-10) |
+AGENTE_DEV:17  -… y Node 22 (`nvm use 22`).          +… y Node (`nvm use`, lee `.nvmrc`).
+```
+
+### Verificación manual
+No aplica (§6 del handoff).
+
+### Desviaciones del handoff (o "ninguna")
+1. `package-lock.json` creado por `npm install` y borrado (T3, previsto).
+2. Forma, `ESTANDARES.md:3`: texto del handoff en una sola línea para que PROY-17 siga en la 83 (verif. 5). Mismo texto.
+3. Forma, `agents.md:51-52`: el salto de línea cae tras "versión en"; texto literal del handoff; el párrafo sigue en 51-52.
+
+### Riesgos / pendientes (o "ninguno")
+- `"workspaces": ["app"]` apunta a una carpeta inexistente hasta #9; npm 11.20.0 / Node 26 no da error ni aviso.
+- `contracts/build/` ignorado en el working tree.
+- Incluir `package.json` y `.nvmrc` (untracked) en el commit.
+
+### Documentación
+- Actualizados: `agents.md` 40/51-52/194; `AGENTE_DEV.md:17`; `ESTANDARES.md:3,83`; `STATUS.md:28`. Resto para TASK-3.
+
+Commit propuesto por el handoff: `tooling: add npm workspaces root and .nvmrc with Node 26 (#2)`.
+
+## Revisión TASK-2: PASA
+
+> Revisión del MID transcrita por el orquestador.
+
+Contraste propio (git y lectura, sin `sui`/`npm`): `package.json` exacto (sin `version`/`scripts`/`engines`/deps); `.nvmrc` = `26` + salto de línea; `.gitignore` con 13 líneas nuevas = §3.3, sección de TASK-1 intacta, 7 patrones ignorados y `app/.env.example` no ignorado; sin `package-lock.json` ni `node_modules/` (T3); docs editadas con el texto del handoff y diffs balanceados (4/4, 2/2, 1/1, 1/1), así que las líneas citadas por TASK-3 siguen valiendo; grep N5 = `ESTANDARES.md:83` y `STATUS.md:51` (un grep más amplio encuentra `agents.md:194` "nvm (20, 22 y 26 instalados)", descripción de lo instalado, correcto); `contracts/` intacto.
+
+Checklist M4: alcance y HU (D3 / D-20261030-10) ✅ · PROY-17 Node 26, ESTANDARES v1.2 ✅ · SEG-3 (`.env*` ignorados salvo `.env.example`; 0 coincidencias en líneas agregadas; sin `sui` ni `~/.sui/`) ✅ · T3 declarado ✅ · Gates: contratos no aplican; `npm install` exit 0, 0 vulnerabilidades, Node v26.13.0 / npm 11.20.0 ✅ · 3 desviaciones de forma declaradas ✅ · PROY-20 ✅.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| 1 | Operativo (D-20261030-05) | `package.json`, `.nvmrc` | Untracked | `git add` en el commit (hecho) |
+| 2 | Operativo (D-20261030-05) | `documents/REPORTES_MONOREPO.md` | Artefacto del ciclo modificado | Commit de docs aparte (hecho) |
+| 3 | Informativo | `package.json` (`"workspaces": ["app"]`) | Apunta a `app/`, inexistente hasta #9; sin error ni aviso con npm 11.20.0 | Nada en #2; #9 crea `app/package.json` |
+
+### Siguiente paso: TASK-3 autorizado
+Sin ajustes al handoff (las líneas citadas siguen siendo correctas). Opcional: en la fila H13, PV medida = 140. El SHA anotado en TASK-3 puede ser el de TASK-2 o el commit de docs posterior; `contracts/` es el mismo.
+
+### Mensaje de commit propuesto
+`tooling: add npm workspaces root and .nvmrc with Node 26 (#2)` (commit `1c2d6b9`).
