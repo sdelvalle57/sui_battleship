@@ -35,7 +35,7 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 
 | Área @ ref | Gate | Resultado |
 |---|---|---|
-| contracts (raíz) @ `feature/issue-1-toolchain` (`b0fb54e`), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🔴 exit 1, compilación. **7 errores:** 6 × `EC04016` en `sources/Game/game.move:55-59` (H6) y 1 × `EC06002` en `sources/battleship.move:62` (H8). **Warnings:** 16 `WC09009`, **como mínimo** (9 en `battleship.move`, 7 en `Game/game.move`, 0 en `House/house.move`); la compilación aborta y pueden faltar pasos posteriores. `tests/battleship_tests.move`: 0 diagnósticos (está entero dentro de `/* */`). Las subcarpetas `sources/Game/` y `sources/House/` sí se compilan |
+| contracts (raíz) @ `master` (`e1849c6`, merge de #20; medido en `b0fb54e`, mismo código de contratos), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🔴 exit 1, compilación. **7 errores:** 6 × `EC04016` en `sources/Game/game.move:55-59` (H6) y 1 × `EC06002` en `sources/battleship.move:62` (H8). **Warnings:** 16 `WC09009`, **como mínimo** (9 en `battleship.move`, 7 en `Game/game.move`, 0 en `House/house.move`); la compilación aborta y pueden faltar pasos posteriores. `tests/battleship_tests.move`: 0 diagnósticos (está entero dentro de `/* */`). Las subcarpetas `sources/Game/` y `sources/House/` sí se compilan |
 | | `sui move build -e testnet --lint` | 🔴 exit 1. Mismos 7 errores y 16 `WC09009`, más **1 lint de Sui**, **como mínimo**: `WSL06010` (`prefer_mut_tx_context`) en `sources/House/house.move:67` (`update_fee_rate` con `&TxContext`). Puede haber lints de los módulos que no compilan que aún no se emiten |
 | | `sui move test -e testnet` | 🔴 exit 1. No compila: mismos 7 errores y 16 `WC09009`. **0 tests** ejecutados |
 | app | — | ⬜ no existe |
@@ -65,9 +65,10 @@ mismos conteos por archivo.
 
 | Paso | Estado | Nota |
 |---|---|---|
-| Docs del flujo adaptados (`agents.md`, `documents/`) | 🔍 2026-10-30 | D-20261030-01; PR `docs/agent-workflow` pendiente de merge del usuario |
+| Docs del flujo adaptados (`agents.md`, `documents/`) | ✅ 2026-10-30 | D-20261030-01; PR #19 mergeado (`2b088b5`) |
 | Issues del backlog en GitHub | ✅ 2026-10-30 | #1–#18 redactados por el MAYOR y creados por el orquestador |
-| #1 (toolchain) | 🔍 2026-10-30 | Plan v3 (`117aa91`); TASK-1 `b2e98e6`; TASK-2 `edb64ef`; PR #20 abierto (apilado sobre #19), en revisión de integración del MAYOR |
+| #1 (toolchain) | ✅ 2026-10-30 | PR #20 mergeado (`e1849c6`); MAYOR APPROVE. Artefactos del ciclo borrados en el housekeeping (`git show e1849c6:documents/PLAN_TOOLCHAIN.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_TOOLCHAIN.md`) |
+| Siguiente | ⏳ | #2 (monorepo, `contracts/`, retiro del legado) → plan del MID |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -104,7 +105,7 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 ## Pendientes del usuario
 
-- Mergear **#19** (docs del flujo, `docs/agent-workflow`) y **después** #20 (issue #1, apilado sobre #19); tras el merge, housekeeping del ciclo (FLUJO §9).
+- Ratificar D-20261030-08 (framework fijado por `Move.lock` + CLI canal testnet), hallazgo 🟡 de la revisión de integración de #20.
 - Resolver los STOP de los planes a medida que lleguen (el más pesado que queda: #4 D1). #5 D1/D2/D5/D7 y #4 D3 ya resueltas (D-20261030-06).
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
@@ -112,4 +113,5 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 | Ciclo | PR | Fecha |
 |---|---|---|
-| — | | |
+| Docs del flujo multi-agente (D-20261030-01) | #19 → `2b088b5` | 2026-10-30 |
+| #1 Toolchain, manifest pineado, primer baseline | #20 → `e1849c6` | 2026-10-30 |
