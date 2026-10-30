@@ -1,5 +1,6 @@
 # HANDOFF_TOOLCHAIN
-> Plan: PLAN_TOOLCHAIN v3 (aprobado, `117aa91`) | Issue: #1 | Branch: `feature/issue-1-toolchain` | Versión: v1 | Fecha: 2026-10-30
+> Plan: PLAN_TOOLCHAIN v3 (aprobado, `117aa91`) | Issue: #1 | Branch: `feature/issue-1-toolchain` | Versión: v1.1 | Fecha: 2026-10-30
+> v1.1: "Addendum TASK-2" al inicio de TASK-2 (líneas reales de H6/H8, warnings como mínimo, entornos del lock) — de la revisión MID de TASK-1.
 > Autor: MID · Tasks: TASK-1 (contracts) → TASK-2 (docs + gates). Un task por sesión; TASK-2 arranca
 > solo cuando TASK-1 tiene revisión MID PASA y el orquestador lo commiteó.
 
@@ -246,6 +247,27 @@ En "Documentación": "no aplica en TASK-1 (va en TASK-2)". Sin commits ni pushes
 ---
 
 ## TASK-2: Baseline de gates y documentación de la toolchain — área: docs (+ gates de contracts)
+
+### Addendum TASK-2 (v1.1, 2026-10-30 — de la revisión MID de TASK-1; prevalece sobre §2-§7 donde difiera)
+
+TASK-1 está commiteado en `b2e98e6` (`Move.lock` v4, `MoveStdlib`/`Sui` pineados a
+`719fb2960ccfbf9f4d33041f8ea5146d30671696`, PV 139). El build de TASK-1 confirmó las líneas reales de
+los rojos. Precisiones:
+
+1. **H6, líneas reales:** `sources/Game/game.move:55-59` (constructor de `GameRequest`; el compilador
+   lo marca en `:55:16`, 6 × `EC04016`), no `:54-62`. Corregir la cita en STATUS (fila H6,
+   `STATUS.md:42`, y en el baseline) y en `agents.md` §7 (`agents.md:135`, dentro de la sección §7
+   que este task ya toca).
+2. **H8, líneas reales:** `sources/battleship.move:62` (`EC06002`: uso de `player1` después de moverlo
+   en `:60`). Citarlo así en el baseline. En la fila de `STATUS.md:25`, "H6/H7" pasa a "H6/H8".
+3. **Warnings como mínimo, no como total:** registrar "16 `W09009` (9 en `battleship.move`, 7 en
+   `Game/game.move`, 0 en `House/house.move`), **mínimo**: la compilación aborta y pueden faltar pasos
+   posteriores" (ajustar el número si tus gates dan otro). Si el output de `--lint` no trae lints de
+   Sui, ese gate se registra como "no medible hasta que compile", no como 0.
+4. **Entornos del lock:** en la sección Toolchain de STATUS agregar: "`Move.lock` v4 solo pinea
+   `testnet`; un gate con otro `-e` crearía una sección `[pinned.<env>]` nueva = delta del lock a
+   declarar (PROY-11)".
+5. **Nada que corregir:** el §0 de este handoff cita `:54-62` y `:58-65`; quedan como antecedente. No se edita.
 
 ### 1. Historia de usuario del task
 
