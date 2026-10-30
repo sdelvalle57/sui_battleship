@@ -43,25 +43,33 @@ sui_battleship/
 
 | Área | Carpeta | Stack |
 |---|---|---|
-| Contratos | `contracts/` | Sui Move, edition `2024` (hoy `2024.beta`), framework Sui desde git con `override = true` (cómo se declara con la CLI vigente se decide en #1) |
+| Contratos | `contracts/` | Sui Move, edition `2024`, `std`/`sui` implícitas (sistema de paquetes de la CLI ≥ 1.63); framework fijado por `Move.lock` (repin con `-e testnet`; todo delta del lock se justifica) |
 | Cliente web | `app/` | Vite + React + TypeScript estricto + `@mysten/sui` + wallet kit de Mysten (`@mysten/dapp-kit` o su sucesor vigente; se fija en el issue de scaffolding) + TanStack Query + Vitest |
 
 ## 3. Comandos (por área, sin Makefile)
 
 **Toolchain:** Sui CLI instalada con `suiup` (versión fijada en `documents/STATUS.md`); Node 22
 (`.nvmrc`), npm. El `node` por defecto de la máquina es v26: correr `nvm use` antes de cada gate. Instalada el 2026-10-30:
-Sui CLI `1.83.0` (release `testnet`) vía `suiup` en `~/.local/bin` (STATUS H1).
+Sui CLI `1.83.0` (release `testnet`) vía `suiup` en `~/.local/bin` (STATUS H1, sección Toolchain).
+
+**Prerrequisito de `sui move`:** `~/.sui/sui_config/client.yaml` **sin claves**, con `active_env: testnet`
+(D-20261030-07; STATUS Toolchain/H11). Sin ese archivo la CLI ofrece crear una config y genera una clave
+cuya frase imprime. Toda invocación de `sui move`/`sui client` va precedida de `printf 'n\n' |` para que,
+si la config falta, la CLI aborte en vez de crear la clave.
 
 ### Contratos (`contracts/`; hoy la raíz)
 
 | Comando | Qué hace |
 |---|---|
-| `sui move build` | Compila el paquete. Gate: sin errores y **sin warnings nuevos** |
-| `sui move build --lint` | Lints de Sui (informativo hasta fijar baseline) |
-| `sui move test` | Gate de tests unitarios (`#[test]`, `test_scenario`) |
-| `sui move test --coverage && sui move coverage summary` | Cobertura (informativo) |
+| `sui move build -e testnet` | Compila el paquete. Gate: sin errores y **sin warnings nuevos** |
+| `sui move build -e testnet --lint` | Lints de Sui (informativo hasta fijar baseline) |
+| `sui move test -e testnet` | Gate de tests unitarios (`#[test]`, `test_scenario`) |
+| `sui move test -e testnet --coverage && sui move coverage summary -e testnet` | Cobertura (informativo) |
 | `sui start --with-faucet --force-regenesis` | Red local para smokes (localnet) |
 | `sui client publish` | Publicación — **solo el owner o con su autorización explícita** (§12) |
+
+`--warnings-are-errors` existe en `sui move build` y `sui move test` (para CI, #3). Baseline vigente de
+los tres gates: `documents/STATUS.md`.
 
 ### App (`app/`, cuando exista)
 
@@ -132,17 +140,21 @@ compatible o republicación con IDs nuevos.
 ## 7. Gotchas Técnicos
 
 - **`sources/Game/game.move` no compila:** `start_game` construye `GameRequest` sin la mayoría de sus
-  campos (`game.move:54-62`). Mientras no se arregle, `sui move build` del paquete está en rojo.
+  campos (`game.move:55-59`). Mientras no se arregle, `sui move build` del paquete está en rojo.
 - **`sources/battleship.move` es legado** (tipos de tablero/barcos sin uso) y `new_game` usa `player1`
-  después de moverlo; probablemente tampoco compila. Su destino se decide en el backlog.
+  después de moverlo; tampoco compila (`battleship.move:62`, baseline de #1). Su destino se decide en el backlog.
 - **`tests/battleship_tests.move` está todo comentado:** hoy no hay ningún test.
 - **`GamePool { pool: vector<GameRequest> }`** es un registro global creciente en un objeto compartido:
   contención y sin IDs propios. El diseño objetivo es un objeto compartido por partida (PROY-6).
 - **`escrow: u64`** solo guarda un número: no custodia fondos (PROY-4).
 - **`house.move` reutiliza `EInsufficientBalance`** para validar el `fee_rate` (`house.move:48,69`).
-- **Framework sin fijar:** `Move.toml` apunta a `rev = "framework/testnet"` (branch móvil). Se fija a la
-  versión de la CLI instalada; `Move.lock` se commitea.
-- **Subcarpetas en `sources/`** (`House/`, `Game/`): que compilen está por verificar (baseline de #1); el layout objetivo es plano
+- **Framework fijado por `Move.lock`:** `std`/`sui` son implícitas y el lock (regenerado por la CLI con
+  `-e testnet`, nunca a mano) los pinea al SHA del framework de testnet (STATUS Toolchain). Todo delta del
+  lock en un diff se declara y justifica (PROY-11).
+- **`sui move` sin `client.yaml` crea una clave:** si falta `~/.sui/sui_config/client.yaml`, la CLI
+  ofrece crear la config y genera una clave cuya frase imprime; `-e` no lo evita (STATUS H11). Nunca
+  correr `sui move` sin esa config sin claves, y siempre con `printf 'n\n' |` delante (§3).
+- **Subcarpetas en `sources/`** (`House/`, `Game/`): se compilan (verificado en el baseline de #1); el layout objetivo es plano
   (`contracts/sources/<modulo>.move`).
 - **Repo público:** nada de keystores (`~/.sui/sui_config/`), mnemonics ni direcciones privadas del owner
   con contexto sensible en commits, issues o logs.
@@ -176,7 +188,8 @@ testnet con una wallet real.
 
 | Qué | Dónde | Nota |
 |---|---|---|
-| Sui CLI | `suiup` (`~/.local/bin`) | `1.83.0`, release `testnet` (STATUS H1) |
+| Sui CLI | `suiup` (`~/.local/bin`) | `1.83.0-16d2dc1e05ed`, release `testnet` (STATUS H1, Toolchain) |
+| `client.yaml` | `~/.sui/sui_config/` | Sin claves hasta #8 (`active_env: testnet`, D-20261030-07). **Nunca** en el repo ni en logs |
 | Keystore / direcciones | `~/.sui/sui_config/` | **Nunca** en el repo ni en logs |
 | Node | nvm (20, 22 y 26 instalados) | Usar 22 |
 | Wallet de navegador | extensión de wallet Sui | Para smokes en testnet (owner) |
