@@ -74,7 +74,7 @@ con referencias provisionales `[ISSUE-k]` que el orquestador reemplaza por `#N`.
 ## M2 — (sin specs)
 
 No se generan specs. Los READMEs de diseño de 2025 se retiraron en #2 (recuperables con
-`git show f063a0e:sources/House/README.md` y `…/Game/README.md`); si se consultan, son contexto, no contrato:
+`git show f063a0e:sources/House/README.md` y `git show f063a0e:sources/Game/README.md`); si se consultan, son contexto, no contrato:
 se verifican contra el código y contra `ESTANDARES.md` antes de citarlos (p. ej. sus "pools" de
 estados contradicen PROY-6).
 
