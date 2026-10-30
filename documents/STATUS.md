@@ -51,7 +51,7 @@ sale del issue de toolchain.
 |---|---|---|
 | Docs del flujo adaptados (`agents.md`, `documents/`) | 🔍 2026-10-30 | D-20261030-01; PR `docs/agent-workflow` pendiente de merge del usuario |
 | Issues del backlog en GitHub | ✅ 2026-10-30 | #1–#18 redactados por el MAYOR y creados por el orquestador |
-| Siguiente | ⏳ | #1 (toolchain) → plan del MID |
+| Siguiente | 🚧 2026-10-30 | #1 (toolchain): plan del MID en curso |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -89,7 +89,7 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 ## Pendientes del usuario
 
 - Mergear el PR de docs del flujo (`docs/agent-workflow`).
-- Resolver los STOP de los planes a medida que lleguen (los más pesados: #4 D1/D3 y #5 D1).
+- Resolver los STOP de los planes a medida que lleguen (el más pesado que queda: #4 D1). #5 D1/D2/D5/D7 y #4 D3 ya resueltas (D-20261030-06).
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
 ## Mergeadas (histórico)

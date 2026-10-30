@@ -12,6 +12,18 @@
 
 ## Recientes
 
+### D-20261030-06 — Reglas de producto de partidas y del `HouseCap` (adelantadas a los planes de #4 y #5)
+- **Decisión:**
+  1. **Resolución atómica al aceptar** (#5 D1 = a): aceptar ejecuta el coinflip en la misma transacción; `Pending → Resolved | Cancelled`, sin estado `Active` persistente.
+  2. **Sin expiración** (#5 D2 = a): una partida `Pending` la cancela el creador cuando quiera.
+  3. **Comisión fijada al crear** (#5 D5 = a): el `Game` copia el `fee_rate` de la House en la creación y es el que se aplica al resolver.
+  4. **El invitado puede rechazar una invitación** (#5 D7 = b): reembolso íntegro al creador, sin comisión. El creador sigue pudiendo cancelar.
+  5. **El `HouseCap` es transferible a otra wallet** (#4 D3 ≠ a): el mecanismo (`key, store` con `public_transfer` o función explícita `transfer_house_cap`) lo propone el plan de #4.
+- **Alternativa descartada:** resolución separada con `Active` persistente (#5 D1 b/c/d); expiración con `&Clock`; tarifa leída al resolver; solo el creador cancela; `HouseCap` no transferible.
+- **Motivo:** (1)–(3) siguen la recomendación de los issues: ningún camino deja fondos de dos jugadores bloqueados y los jugadores conocen la tarifa al apostar. (4) y (5) los pidió el usuario explícitamente, en contra de la recomendación de MVP.
+- **Interpretación registrada:** el usuario respondió "todas sí, menos: el invitado puede rechazar una invitación, sí se puede pasar la llave de admin a otra wallet" al informe de alcance, cuyas preguntas llevaban recomendación; "sí" se registra como "acepto la recomendación" (por eso la expiración queda en "no").
+- **Aprobado por:** usuario (2026-10-30). **Fecha:** 2026-10-30. Los planes de #4 y #5 aplican estas decisiones sin reabrirlas; las demás decisiones abiertas de esos issues siguen siendo STOP.
+
 ### D-20261030-05 — El orquestador commitea, pushea y abre PRs; el usuario mergea
 - **Decisión:** el orquestador commitea un commit por task tras la revisión MID PASA (solo los archivos/hunks del task, mensaje del MID con `Co-Authored-By`), pushea la branch y abre el PR contra `master` con el body del MID. También commitea los docs de `documents/` y `agents.md`. **El merge es del usuario.** Publicar en testnet sigue requiriendo autorización explícita por publicación.
 - **Alternativa descartada:** que el usuario commitee y pushee cada task.
