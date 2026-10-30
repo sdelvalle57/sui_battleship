@@ -12,6 +12,16 @@
 
 ## Recientes
 
+### D-20261030-14 — Licencia del repo: Apache-2.0
+- **Decisión:** el repo se publica bajo **Apache-2.0** (la misma del framework de Sui): `LICENSE` con el texto oficial en la raíz y cabecera `// Copyright (c) 2025-2026 sdelvalle57` + `// SPDX-License-Identifier: Apache-2.0` en los fuentes Move (`house.move` y los que vengan, empezando por `game.move` en #5). Titular: el handle de GitHub del owner (`sdelvalle57`), modificable si el usuario prefiere su nombre legal.
+- **Alternativa descartada:** MIT; quitar la cabecera.
+- **Aprobado por:** usuario ("vamos con todas las recomendadas", 2026-10-30; titular tomado del usuario git/GitHub del owner). **Fecha:** 2026-10-30.
+
+### D-20261030-13 — CI de contratos (STOPs de #3)
+- **Decisión:** (1) STOP-2 = (a) build, `--lint` y test con `-e testnet --warnings-are-errors`, los tres **bloqueantes** (si el run rojo de prueba muestra que el flag no convierte los lints en error, se vuelve a este STOP). (2) STOP-3 = (a) en CI la CLI se instala desde el archivo oficial del release verificado por SHA-256 (+ `actions/cache`); en local sigue `suiup`; PROY-17 se reescribe en ese sentido. (3) STOP-1 = (a) protección clásica de `master` con el check `contracts` requerido, sin reviews obligatorias, sin "up to date", sin bypass (también admins); la aplica el orquestador **después** del merge de #3, con esta autorización. (4) STOP-4 = (a) exigir actions fijadas por SHA completo en los settings de Actions del repo; la aplica el orquestador tras el merge de #3.
+- **Alternativa descartada:** lint informativo o solo build; `suiup` en CI (MD5 opcional, rate limits); sin protección de `master`; settings de Actions sin cambios.
+- **Aprobado por:** usuario ("vamos con todas las recomendadas", 2026-10-30), sobre `documents/PLAN_CI.md` v1. **Fecha:** 2026-10-30.
+
 ### D-20261030-12 — Decisiones de diseño de `battleship::house` aprobadas en revisión (#4)
 - **Decisión:** dentro del alcance de D-20261030-11, quedan fijadas (y se congelan al publicar en #8):
   1. `update_fee_rate`, `update_bet_limits`, `transfer_house_cap` y `migrate` son `entry` (no `public`): sin consumidor componible, su firma puede cambiar o eliminarse en un upgrade; `withdraw_fees` es `public` porque devuelve un `Coin<SUI>` (una `entry` no puede devolver valores sin `drop`).
