@@ -1,4 +1,4 @@
-// Copyright (c) Your Project
+// Copyright (c) 2025-2026 sdelvalle57
 // SPDX-License-Identifier: Apache-2.0
 
 /// House of SUI Battleship: a single shared object holding the fee rate, the bet limits and the
