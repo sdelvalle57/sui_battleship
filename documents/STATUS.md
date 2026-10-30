@@ -113,7 +113,7 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 ## Pendientes del usuario
 
-- Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06).
+- Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #3 resuelto (D-20261030-13; protección de `master` y settings de Actions tras su merge); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06).
 - **Post-publicación (#8):** `update_fee_rate` antes de anunciar el juego (fee por defecto 0, D-20261030-11): las partidas creadas antes quedan con comisión 0 para siempre.
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
