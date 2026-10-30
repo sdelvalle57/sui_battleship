@@ -67,7 +67,7 @@ mismos conteos por archivo.
 |---|---|---|
 | Docs del flujo adaptados (`agents.md`, `documents/`) | 🔍 2026-10-30 | D-20261030-01; PR `docs/agent-workflow` pendiente de merge del usuario |
 | Issues del backlog en GitHub | ✅ 2026-10-30 | #1–#18 redactados por el MAYOR y creados por el orquestador |
-| #1 (toolchain) | 🚧 2026-10-30 | Plan v3 aprobado (`117aa91`); TASK-1 commiteado (`b2e98e6`); TASK-2 (baseline + docs) en revisión |
+| #1 (toolchain) | 🔍 2026-10-30 | Plan v3 (`117aa91`); TASK-1 `b2e98e6`; TASK-2 `edb64ef`; PR #20 abierto (apilado sobre #19), en revisión de integración del MAYOR |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -104,7 +104,7 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 ## Pendientes del usuario
 
-- Mergear **#19** (docs del flujo, `docs/agent-workflow`) y **después** el PR de #1 (apilado sobre #19); tras el merge, housekeeping del ciclo (FLUJO §9).
+- Mergear **#19** (docs del flujo, `docs/agent-workflow`) y **después** #20 (issue #1, apilado sobre #19); tras el merge, housekeeping del ciclo (FLUJO §9).
 - Resolver los STOP de los planes a medida que lleguen (el más pesado que queda: #4 D1). #5 D1/D2/D5/D7 y #4 D3 ya resueltas (D-20261030-06).
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
