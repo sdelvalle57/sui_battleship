@@ -12,6 +12,16 @@
 
 ## Recientes
 
+### D-20261030-12 — Decisiones de diseño de `battleship::house` aprobadas en revisión (#4)
+- **Decisión:** dentro del alcance de D-20261030-11, quedan fijadas (y se congelan al publicar en #8):
+  1. `update_fee_rate`, `update_bet_limits`, `transfer_house_cap` y `migrate` son `entry` (no `public`): sin consumidor componible, su firma puede cambiar o eliminarse en un upgrade; `withdraw_fees` es `public` porque devuelve un `Coin<SUI>` (una `entry` no puede devolver valores sin `drop`).
+  2. Los accessors `fee_rate`, `fees_collected`, `min_bet` y `max_bet` validan la versión primero (`EWrongVersion`), igual que las escrituras: así el código de un paquete viejo (p. ej. `game` v1) aborta en vez de crear partidas con reglas de una House ya migrada.
+  3. `version()` es público y **no** valida la versión (lectura de diagnóstico para el panel #14 y los tests de `migrate`).
+  4. Invariante PROY-10/SEG-4 para `Game` (#5): ningún camino de reembolso (cancelar/rechazar) puede quedar bloqueado por la versión; la mecánica de versionado de `Game` la decide el plan de #5.
+- **Alternativa descartada:** setters `public`; accessors sin chequeo de versión (con el chequeo delegado a `game`); PROY-10 con `migrate` por capability para todo objeto compartido (bloquearía reembolsos de partidas).
+- **Motivo:** revisiones del MAYOR del plan v1 (H4) y del handoff v1 (M1, m2, m3) de #4; guía oficial de Sui de objetos compartidos versionados ("guard the entry of all functions that access the shared object").
+- **Aprobado por:** MAYOR (revisiones de plan y handoff de #4; registro pedido en la revisión de integración de #24, hallazgo 🟡 1). Detalles de diseño dentro de D-20261030-11, sin STOP de usuario; el usuario puede reabrirlos antes de #8. **Fecha:** 2026-10-30.
+
 ### D-20261030-11 — Diseño del módulo House (STOPs de #4)
 - **Decisión:**
   1. **D1 = (a)** `init` crea y comparte una única House con valores por defecto y entrega el `HouseCap` al publicador; se elimina `initialize_house`. **Fee por defecto = 0 bps**: el owner la ajusta con `update_fee_rate` (CLI o panel admin #14) después de publicar.
