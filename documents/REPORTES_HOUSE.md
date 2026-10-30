@@ -229,3 +229,216 @@ Ajuste del handoff (v1.2): en TASK-2 §3, viñeta de STATUS, añadir a "Pendient
 
 ### Mensaje de commit propuesto
 `contracts: rewrite House with HouseCap authZ, versioning and tests (#4)` (commit `040f3c0`).
+
+## Task completado: HANDOFF_HOUSE — TASK-2
+
+> Reporte del DEV transcrito por el orquestador. Los outputs que repiten literalmente los de TASK-1 se
+> resumen con referencia; el resto va íntegro.
+
+TASK-2 terminado, sin commitear. Gates idénticos a TASK-1 (build 0 warnings, lint 0, 26 PASS); el diff no toca código.
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-4-house` @ `7917fa4` (TASK-1 en `040f3c0`). Sin commits.
+
+### Archivos modificados/creados
+- `contracts/README.md`: creado.
+- `agents.md` (+35/−20) · `documents/ESTANDARES.md` (+7/−7; encabezado 1.2 → 1.3) · `documents/STATUS.md` (+17/−10).
+- Sin tocar: `contracts/sources/`, `contracts/tests/`, `Move.toml`, `Move.lock`, `.gitignore`, `DECISIONES.md`, `REPORTES_HOUSE.md`, handoff, plan, cabecera de licencia.
+
+### Qué se implementó (3 líneas máx)
+`contracts/README.md` documenta `battleship::house` (objetos, constantes, funciones, eventos, abort codes) copiado de
+`house.move` @ `040f3c0`, más los 12 puntos de §3. `agents.md` (§2, §6, §7, §8, §12, §13, §14), `ESTANDARES.md`
+("Código legado", SEG-2, LIM-8, PROY-9, PROY-10) y `STATUS.md` (baseline `040f3c0`, H3/H4/H5/H12 ✅, H9 parcial, ciclo, 2 pendientes nuevos) alineados.
+
+| Punto §3 | Dónde en `contracts/README.md` |
+|---|---|
+| 1 Gates | Remite a `agents.md` §3 |
+| 2 Funciones | Firma, visibilidad, quién llama, aborts, evento; `version()` y `EWrongVersion` por accessor |
+| 3 Eventos | Tabla |
+| 4 Abort codes | Número, constante, condición, funciones |
+| 5 AuthZ | Posesión del cap; sin `store`: sin "Send", congelar, compartir, envolver ni vender; custodia en tests |
+| 6 Cap perdido | Enviado a un ID de objeto queda huérfano; nota SEG-9 para #14 |
+| 7 Fee 0 | Paso obligatorio de #8 |
+| 8 Retiro | Ejemplo `sui client ptb` (solo owner) |
+| 9 Límites | Solo al crear la partida |
+| 10 Versionado | Chequeo primero, `migrate`, `ENotUpgrade`, `transfer_house_cap` fuera |
+| 11 Contención | Sección propia |
+| 12 ID de la House | De `deployments/<red>.json` (#7) |
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados: ninguno (docs). `sui client active-env` → `testnet`.
+```
+$ git rev-parse --short HEAD
+7917fa4
+$ sui --version
+sui 1.83.0-16d2dc1e05ed
+
+$ (cd contracts && printf 'n\n' | sui move build -e testnet); echo "exit=$?"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+
+$ (cd contracts && printf 'n\n' | sui move build -e testnet --lint); echo "exit=$?"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+
+$ (cd contracts && printf 'n\n' | sui move test -e testnet); echo "exit=$?"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+Running Move unit tests
+[... las mismas 26 líneas [ PASS ] de TASK-1, en el mismo orden ...]
+Test result: OK. Total tests: 26; passed: 26; failed: 0
+exit=0
+```
+
+**Diff y alcance**
+```
+$ git status --porcelain
+ M agents.md
+ M documents/ESTANDARES.md
+ M documents/STATUS.md
+?? contracts/README.md
+
+$ git diff --stat
+ agents.md               | 55 +++++++++++++++++++++++++++++++------------------
+ documents/ESTANDARES.md | 14 ++++++-------
+ documents/STATUS.md     | 27 +++++++++++++++---------
+ 3 files changed, 59 insertions(+), 37 deletions(-)
+
+$ git diff --stat -- contracts/sources contracts/tests contracts/Move.toml contracts/Move.lock .gitignore documents/DECISIONES.md documents/REPORTES_HOUSE.md
+(sin output)
+```
+
+**§7 — nombres viejos**
+```
+$ grep -nE "EInsufficientBalance|initialize_house|ECallerNotHouse" agents.md documents/ESTANDARES.md contracts/README.md
+(sin output, exit=1)
+```
+
+**§7 — authZ por capability**
+```
+$ grep -nE "custodia del cap" agents.md documents/ESTANDARES.md
+documents/ESTANDARES.md:29:- **SEG-2 — AuthZ en cada función.** ... con authZ por capability (`&HouseCap`) el caso denegado no se puede armar como transacción, y se cubre verificando la custodia del cap (dónde está antes y después de transferirlo, y que el nuevo titular administra).
+documents/ESTANDARES.md:69:- **PROY-9 — Tests de contrato.** ... authZ denegada (con capability: verificando la custodia del cap, no con `expected_failure`; ver SEG-2) y conservación de fondos. ...
+agents.md:221:      AuthZ por capability ⇒ el caso denegado se cubre verificando la custodia del cap, no con `expected_failure`.
+```
+
+**Contraste 1:1 de tablas vs `git show 040f3c0:contracts/sources/house.move`** (script)
+```
+---FIRMAS
+OK  init(otw: HOUSE, ctx: &mut TxContext)
+OK  update_fee_rate(house: &mut House, _: &HouseCap, new_fee_rate: u16)
+OK  update_bet_limits(house: &mut House, _: &HouseCap, min_bet: u64, max_bet: u64)
+OK  transfer_house_cap(cap: HouseCap, recipient: address)
+OK  migrate(house: &mut House, _: &HouseCap)
+OK  withdraw_fees(house: &mut House, _: &HouseCap, ctx: &mut TxContext): Coin<SUI>
+OK  add_fees(house: &mut House, fees: Balance<SUI>)
+OK  fee_rate(house: &House): u16
+OK  fees_collected(house: &House): u64
+OK  min_bet(house: &House): u64
+OK  max_bet(house: &House): u64
+OK  version(house: &House): u64
+FALTA assert_current_version(house: &House)
+---ABORTS
+OK  0 EFeeTooHigh
+OK  1 EInvalidBetLimits
+OK  2 ENoFeesToWithdraw
+OK  3 EWrongVersion
+OK  4 ENotUpgrade
+---EVENTOS (campos)
+OK  FeeRateUpdated: `house_id: ID`, `old_fee_rate: u16`, `new_fee_rate: u16`
+OK  BetLimitsUpdated: `house_id: ID`, `old_min_bet: u64`, `old_max_bet: u64`, `new_min_bet: u64`, `new_max_bet: u64`
+OK  FeesWithdrawn: `house_id: ID`, `amount: u64`
+OK  HouseCapTransferred: `cap_id: ID`, `recipient: address`
+OK  HouseMigrated: `house_id: ID`, `old_version: u64`, `new_version: u64`
+---CONSTANTES
+const VERSION: u64 = 1;
+const MAX_FEE_BPS: u16 = 1000; // 10 %
+const DEFAULT_FEE_BPS: u16 = 0;
+const DEFAULT_MIN_BET: u64 = 1_000_000; // 0.001 SUI
+const DEFAULT_MAX_BET: u64 = 50_000_000_000; // 50 SUI
+```
+(`assert_current_version` es el helper privado, fuera a propósito; constantes = tabla "Valores con los que nace la House".)
+
+**Secretos**
+```
+$ git diff -U0 master | grep -E '^\+' | grep -inE 'suiprivkey|mnemonic|recovery|private.?key|keystore'
+[15 matches; ver clasificación]
+$ git ls-files --others --exclude-standard -z | xargs -0 -r grep -inE 'suiprivkey|mnemonic|recovery|private.?key|keystore'
+(sin output, exit=123; incluye contracts/README.md)
+```
+Clasificación: `HANDOFF_HOUSE.md` 3, `PLAN_HOUSE.md` 3, `REPORTES_HOUSE.md` 8 (transcripción de los greps de
+TASK-1), `REVISION_PLAN_HOUSE.md` 1 — todos artefactos de proceso que citan el patrón (esperados). 0 en
+`agents.md`, `ESTANDARES.md`, `STATUS.md` y `contracts/README.md`.
+
+- App: no aplica. Tablas de `contracts/README.md` sincronizadas con el código: sí.
+
+### Verificación manual
+No aplica (docs).
+
+### Desviaciones del handoff (o "ninguna")
+1. README más allá de los 12 puntos: tablas de objetos, de constantes (valores iniciales, útiles para #9/#14) y de rutas del paquete; `Publisher` en la fila de `init`.
+2. `agents.md` §6: la nota de cabecera dice que las reglas de partidas siguen siendo propuesta "salvo lo ya decidido en D-20261030-06". La viñeta "Estados: `Pending → Active → Resolved`" queda como estaba aunque D-06 §1 la contradice: regla de Game, de #5.
+3. `STATUS.md` más allá de lo pedido: roadmap "2. House module" ✅ y "5. Tests" 🚧; la fila de baseline de `master` queda como histórica ("anterior a #4"); la primera viñeta de Pendientes ya no cita "#4 D1".
+
+### Riesgos / pendientes (o "ninguno")
+- `agents.md` §6 "Estados" y §8 `battleship::game` siguen con el modelo previo a D-20261030-06 §1: los reescribe #5.
+- Pendientes del usuario en STATUS: licencia (antes de #5) y fee post-publicación (#8).
+
+### Documentación
+- Actualizados: `contracts/README.md` (nuevo); `agents.md` §2/§6/§7/§8/§12/§13/§14; `ESTANDARES.md` v1.3; `STATUS.md`.
+- Al mergear, el orquestador pasa la fila "#4 (House)" a ✅ con PR y SHA de merge.
+
+### Datos para el body del PR
+Título sugerido `House: HouseCap authZ, bet limits, add_fees, events, versioning and tests (#4)`. Commits `040f3c0`
+(TASK-1) + docs del ciclo + TASK-2. Cierra H3, H4, H5, H12; H9 avanza (26 tests). Decisiones D-20261030-11 y -06 §5.
+Gates @ `040f3c0`: build 0 · lint 0 (−1) · 26/26 · coverage 100 %. Post-merge owner: fee en #8; licencia antes de #5. `Closes #4`.
+
+## Revisión TASK-2: NO PASA
+
+> Revisión del MID transcrita por el orquestador.
+
+Bien: código idéntico a `040f3c0`; diff fuera de `sources/`, `tests/`, `Move.*`, `.gitignore`, `DECISIONES.md` y handoff; tablas de `contracts/README.md` 1:1 con `house.move` (funciones `:42-53` ↔ `:83-183`, eventos `:65-69` ↔ `:48-80`, aborts `:78-82` ↔ `:15-19`, objetos/constantes `:24-36` ↔ `:21-45`); 12 puntos de §3 cubiertos; ESTANDARES v1.3 y STATUS correctos; `agents.md` §2/§7/§8 house/§12/§13/§14 correctos; gates cero delta; secretos solo en documentos de proceso.
+
+### Hallazgos
+| # | Sev. | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|---|
+| 1 | 🟡 MINOR (requerido) | PROY-20; handoff TASK-2 §3; D-20261030-06 | `agents.md:121-125` (vs `:138-139`, `:142`, `:143-144`) | La nota de §6 lista "estados, quién cancela/resuelve" como abiertas, aunque D-06 §1/§4 las cerró; los bullets Coinflip (`Active` abandonada) y Cancelación (sin rechazo del invitado) también chocan con D-06 y no se declararon | Reemplazar solo la nota de `:121-125` por el texto literal de abajo |
+| 2 | 🔵 SUGGESTION | ARQ-6 / PROY-15 | `contracts/README.md:61` | El tipo de los eventos conserva el ID del paquete **original** tras un upgrade | Precisar en #7 o #11 |
+| 3 | 🔵 SUGGESTION | — | `contracts/README.md:149` | `object::id` es público, no "dentro del paquete" | Opcional: "(en Move, `object::id(house)`)" |
+| 4 | 🔵 Nota | PROY-19 | `REPORTES_HOUSE.md` (gate de test de TASK-2) | Las 26 líneas `[ PASS ]` resumidas (conteo pegado) | Aceptado; en la re-entrega pegar el output íntegro |
+
+**Texto esperado para el hallazgo 1** (reemplaza `agents.md:121-125`):
+
+> **Reglas de la House confirmadas** por D-20261030-11 (#4; contrato en `contracts/README.md`). Las de partidas son **propuesta hasta los planes de #5 y #6**, salvo lo ya decidido en D-20261030-06, que **prevalece sobre los bullets de abajo**: aceptar resuelve el coinflip en la misma transacción (`Pending → Resolved | Cancelled`, sin estado `Active` persistente), sin expiración, el `Game` copia el `fee_rate` al crearse y el invitado puede rechazar (reembolso íntegro al creador, sin comisión). Siguen abiertas (Escrow absorbido en Game, base de la comisión…). Los bullets Estados, Cancelación y Coinflip, §8 `battleship::game`, §9 y PROY-7/8 se reescriben en #5 al aprobarse su plan.
+
+Desviaciones declaradas (3): aceptadas (la 2 la completa el hallazgo 1).
+
+### Siguiente paso: correcciones al DEV
+El DEV aplica el hallazgo 1 (texto literal) y re-entrega: hunk de §6, 3 gates con output íntegro (cero delta: build 0, lint 0, 26) y los 2 greps de secretos. Re-revisión limitada a eso.
+
+### Mensaje de commit propuesto (para cuando pase)
+`docs: document House contract and align repo docs (#4)`.
+
+## Re-entrega TASK-2 (hallazgo 1 del MID)
+
+> Reporte del DEV transcrito por el orquestador.
+
+- Nota de cabecera de `agents.md` §6 reemplazada por el texto literal del MID (blockquote y negritas conservados), con reemplazo exacto de una única coincidencia. Bullets de Game y resto del archivo sin cambios.
+- Gates (output íntegro, `7917fa4`, `sui 1.83.0-16d2dc1e05ed`, `active-env` testnet): build exit 0 (0 warnings); `--lint` exit 0 (0 lints); test exit 0 con las 26 líneas `[ PASS ]` (mismas de TASK-1) y `Test result: OK. Total tests: 26; passed: 26; failed: 0`. Cero delta.
+- `git diff --stat`: `agents.md` +37/−20 (antes +35/−20: la nota tiene 2 líneas más), `ESTANDARES.md` 14, `STATUS.md` 27, `REPORTES_HOUSE.md` (orquestador); `contracts/README.md` untracked.
+- Secretos: `git diff -U0 master | grep '^\+' | grep -inE …` → 17 matches, todos en documentos del ciclo que citan el patrón (`HANDOFF_HOUSE` 3, `PLAN_HOUSE` 3, `REPORTES_HOUSE` 10, `REVISION_PLAN_HOUSE` 1); 0 en `agents.md`, `ESTANDARES.md`, `STATUS.md`, `contracts/README.md`. Untracked: sin matches (exit 123).
+- Desviaciones: ninguna. Riesgos: sin cambios.
+
+## Re-revisión TASK-2: PASA
+
+> Revisión del MID transcrita por el orquestador.
+
+La nota de `agents.md:121-127` coincide literalmente con el texto pedido y es el único cambio respecto de la entrega anterior (+35/−20 → +37/−20). Gates cero delta (build 0, lint 0, 26/26, output íntegro). Secretos: 17 matches, todos en documentos del ciclo; 0 en los archivos de TASK-2. Mensaje de commit y body del PR sin cambios.
+
+### Mensaje de commit propuesto
+`docs: document House contract and align repo docs (#4)` (commit `667c088`).
