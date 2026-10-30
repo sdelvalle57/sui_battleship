@@ -391,3 +391,161 @@ Sin ajustes al handoff (las líneas citadas siguen siendo correctas). Opcional: 
 
 ### Mensaje de commit propuesto
 `tooling: add npm workspaces root and .nvmrc with Node 26 (#2)` (commit `1c2d6b9`).
+
+## Task completado: HANDOFF_MONOREPO — TASK-3
+
+> Reporte del DEV transcrito por el orquestador.
+
+TASK-3 listo: 3 gates verdes sobre `8325126` con los mismos conteos que TASK-1; docs con el layout
+`contracts/` y el baseline nuevo. Verif. 2 y 3 dan lo esperado; la 4 da `1` en vez de `0` por una línea de
+contexto preexistente de `agents.md` (con `-U0` da `0`). Ninguna condición de parada.
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-2-monorepo` @ `8325126` (SHA del baseline; TASK-1 `f4b437c`, TASK-2 `1c2d6b9`). Cambios sin stage ni commit.
+
+### Archivos modificados/creados
+- `M agents.md` (§1, §2, §3, §7, §8, §9, §14)
+- `M documents/STATUS.md` (roadmap filas 3 y 5; Toolchain Framework y Gates; 3 filas de baseline; H6, H7, H8, H9, H12; H13 nueva)
+- `M documents/agentes/AGENTE_MAYOR.md` (§M2, 76-79) · `M documents/agentes/AGENTE_MID.md` (66) · `M documents/ESTANDARES.md` (7-8, en 2 líneas para que PROY-17 siga en la 83)
+- Sin tocar: código, `contracts/**`, `package.json`, `.nvmrc`, `README.md`, `DECISIONES.md`, `REPORTES_MONOREPO.md`, secciones de STATUS del orquestador.
+
+### Qué se implementó (3 líneas máx)
+1. Gates re-medidos sobre `8325126`: verdes, mismos conteos que TASK-1, árbol limpio después.
+2. STATUS: baseline verde con SHA, Toolchain corregida, roadmap y H6–H9/H12 actualizados, H13 con dueño (pre-vuelo de #8).
+3. `agents.md`, prompts MAYOR/MID y `ESTANDARES.md:7` sin el layout viejo; rutas retiradas solo dentro de `git show f063a0e:`.
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados: ninguno (0 tests). Tablas de contrato / `app/src/sui/`: no aplica.
+```
+$ git rev-parse --short HEAD
+8325126
+$ git diff --stat f4b437c HEAD -- contracts
+$ printf 'n\n' | sui --version
+sui 1.83.0-16d2dc1e05ed
+$ printf 'n\n' | sui client active-env
+testnet
+```
+
+**Verif. 1 — Gates desde `contracts/`** (íntegros, sin ANSI; crudos en `<scratch>/t3/`)
+```
+$ cd contracts
+$ printf 'n\n' | sui move build -e testnet 2>&1 | tee <scratch>/t3/build.txt; echo "exit=${PIPESTATUS[1]}"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+$ printf 'n\n' | sui move build -e testnet --lint 2>&1 | tee <scratch>/t3/lint.txt; echo "exit=${PIPESTATUS[1]}"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+warning[WSL06010]: prefer '&mut TxContext' over '&TxContext'
+   ┌─ ./sources/house.move:67:71
+   │
+67 │ public fun update_fee_rate(house: &mut House, new_fee_rate: u16, ctx: &TxContext) {
+   │                                                                       ^^^^^^^^^^ 'public' functions should prefer '&mut TxContext' over '&TxContext' for better upgradability.
+   │
+   = When upgrading, the public function cannot be modified to take '&mut TxContext' instead of '&TxContext'. As such, it is recommended to consider using '&mut TxContext' to future-proof the function.
+   = This warning can be suppressed with '#[allow(lint(prefer_mut_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+Please report feedback on the linter warnings at https://forums.sui.io
+
+exit=0
+$ printf 'n\n' | sui move test -e testnet 2>&1 | tee <scratch>/t3/test.txt; echo "exit=${PIPESTATUS[1]}"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+Running Move unit tests
+Test result: OK. Total tests: 0; passed: 0; failed: 0
+exit=0
+$ cd ..
+$ git status --porcelain
+$
+```
+(`Move.lock` sin modificar: contingencia T1 no activada.)
+
+| Gate | exit | Errores | Warnings `WC…` | Lints `WSL…` | Tests |
+|---|---|---|---|---|---|
+| build | 0 | 0 | 0 | — | — |
+| build --lint | 0 | 0 | 0 | 1 × `WSL06010` en `contracts/sources/house.move:67` | — |
+| test | 0 | 0 | 0 | — | 0 (OK) |
+
+`grep -ciE 'recovery phrase|Generated new keypair|Updating dependencies'` = 0 en los 3 outputs.
+```
+$ curl -s https://graphql.testnet.sui.io/graphql -H 'Content-Type: application/json' -d '{"query":"{ epoch { epochId protocolConfigs { protocolVersion } } }"}'
+{"data":{"epoch":{"epochId":1269,"protocolConfigs":{"protocolVersion":140}}}}
+PV=140
+$ date -u
+Fri Oct 30 10:25:36 PM UTC 2026
+```
+
+**Verif. 2 — Coherencia del layout (N2)**
+```
+$ git grep -nE "(^|[^/])sources/(House|Game|battleship|\*)|tests/battleship|hoy la raíz|hasta que se mergee" -- agents.md documents/ ':!documents/*_MONOREPO.md' ':!documents/DECISIONES.md'
+agents.md:18:tipos se retiró del paquete en #2; se recupera con `git show f063a0e:sources/battleship.move` (#18).
+agents.md:167:`Coordinate` del borrador 2025 (`git show f063a0e:sources/battleship.move`).
+documents/STATUS.md:57:| H7 | game | … | → #5 (diseño 2025 retirado con el archivo; `git show f063a0e:sources/Game/game.move`) |
+documents/STATUS.md:58:| H8 | legado | … | ✅ 2026-10-30 (#2): borrado (D-20261030-10); se recupera con `git show f063a0e:sources/battleship.move` (#18) |
+documents/STATUS.md:59:| H9 | tests | … | 🚧 parcial (#2): el test comentado se retiró (`git show f063a0e:tests/battleship_tests.move`); suites en #4–#6 |
+documents/agentes/AGENTE_MAYOR.md:77:`git show f063a0e:sources/House/README.md` y `…/Game/README.md`); si se consultan, son contexto, no contrato:
+$ git grep -nE "…mismo patrón…" -- … | grep -v 'f063a0e:'
+$
+```
+
+**Verif. 3 — Coherencia de Node**
+```
+$ git grep -nE "nvm use 2[0-9]|Node 2[0-9]|Usar 2[0-9]" -- agents.md documents/ ':!documents/*_MONOREPO.md' ':!documents/DECISIONES.md'
+documents/ESTANDARES.md:83:- **PROY-17 — Toolchain.** Node 26 (`.nvmrc`) …
+documents/STATUS.md:51:| H1 | toolchain | … Node 20/22/26 vía nvm. …
+```
+
+**Verif. 4 — SEG-3**
+```
+$ git diff HEAD | grep -ciE 'recovery phrase|suiprivkey|mnemonic'
+1
+$ git diff HEAD | grep -niE 'recovery phrase|suiprivkey|mnemonic'
+62: - **Repo público:** nada de keystores (`~/.sui/sui_config/`), mnemonics ni direcciones privadas del owner
+$ git diff -U0 HEAD | grep -ciE 'recovery phrase|suiprivkey|mnemonic'
+0
+```
+(Línea de contexto preexistente de `agents.md` §7; ninguna línea agregada coincide.) Diff: 5 archivos, +32 −39 (`git diff 8325126` sobre el commit de TASK-3).
+
+### Verificación manual
+No aplica (solo lectura de la PV por GraphQL).
+
+### Desviaciones del handoff (o "ninguna")
+1. H8/H9: texto pedido en la columna Acción; la columna Hallazgo se reescribió sin la ruta vieja (regla: rutas viejas solo dentro de `git show f063a0e:`).
+2. H6/H7: solo se reemplazó Acción; en H7 se pierde la guía anterior (sigue cubierta por PROY-6/PROY-8/SEG-4). H6 conserva `game.move:55-59` como dato histórico.
+3. Forma: ref del baseline "contracts/ @ `8325126` (branch de #2 …; `master` tras el merge de #2, mismo código de contratos que `f4b437c`)"; `\|` escapado en H13; línea nueva de §3 entre líneas en blanco.
+4. Verif. 4 da `1` (línea de contexto); con `-U0`, `0`.
+
+### Riesgos / pendientes (o "ninguno")
+- H13 abierto (pre-vuelo de #8): testnet PV 140, lock en piso de la 139; CLI soporta hasta 140.
+- `contracts/build/` ignorado en el working tree.
+- Tras el merge, el baseline cita el SHA de la branch (mismo código de contratos).
+
+### Documentación
+- Actualizados (PROY-20): ver "Archivos modificados/creados". STATUS: roadmap (15, 17), Toolchain (30, 32), baseline (38-40), H6 (56), H7 (57), H8 (58), H9 (59), H12 (62), H13 (63); "Cero delta …" conservada (44-45).
+
+### Datos para el body del PR
+Commits `f4b437c`, `1c2d6b9` y el de TASK-3 (`docs: record first green baseline and contracts/ layout (#2)`). Decisiones D-20261030-10 y D-08 ratificada. T1–T5 cumplidos. Antes (`e1849c6`): build 🔴 7 errores, ≥16 `WC09009`; test 🔴. Después (`8325126`): build 🟢 0/0; lint 🟢 1 `WSL06010` (H12 → #4); test 🟢 0 tests. Desviación de coverage aprobada (→ #4). H13 → #8. Legado recuperable con `git show f063a0e:…`. Fuera de alcance: #3, #4, #5, #7, #9, #16. `Closes #2`.
+
+## Revisión TASK-3: PASA
+
+> Revisión del MID transcrita por el orquestador.
+
+Contraste (git y `gh` de lectura): diff limitado a los 5 archivos permitidos (`agents.md` +14 −23, `STATUS.md` +13 −12, `AGENTE_MAYOR.md` +2 −1, `AGENTE_MID.md` +1 −1, `ESTANDARES.md` +2 −2); rutas viejas solo dentro de `git show f063a0e:…` (quedan menciones correctas: layout objetivo `agents.md:36`, PROY-1/6/11, ejemplo de `ESTANDARES.md:5`, histórico `game.move:55-59` de H6); STATUS con baseline (38-40), Framework (30), Gates (32), roadmap (15, 17), H6–H9, H12 y H13 con dueño; PROY-17 sigue en la línea 83.
+
+Checklist M4: alcance y HU ✅ · PROY-20 (todos los ítems de docs del issue) ✅ · Gates verdes sin delta vs TASK-1; `git status` vacío tras los gates (lock intacto, T1 no activada) ✅ · SEG-3: 0 en líneas agregadas; sin frase ni "Updating dependencies" ✅ · 4 desviaciones declaradas y justificadas ✅.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| 1 | Informativo | `documents/HANDOFF_MONOREPO.md:400` (TASK-3 §5.4) | `git diff HEAD \| grep -ci …` cuenta líneas de contexto (da 1 sin secretos) | En handoffs futuros usar `git diff -U0` o filtrar `^\+` |
+| 2 | Operativo (STATUS) | `documents/STATUS.md:38` | Baseline con SHAs de la branch | Mergear con merge commit (D-20261030-09) |
+| 3 | Operativo (D-20261030-05) | `documents/REPORTES_MONOREPO.md` | Artefacto del ciclo | Commit de docs aparte (hecho) |
+
+### Siguiente paso: abrir el PR de #2 contra `master`
+Smoke: no aplica (reestructura sin flujo ejecutable).
+
+### Mensaje de commit propuesto
+`docs: record first green baseline and contracts/ layout (#2)` (commit `059f1ce`).
