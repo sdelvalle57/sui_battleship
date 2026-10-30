@@ -2,9 +2,10 @@
 > Issue: #2 | Áreas: contracts (layout), tooling, docs | Fecha: 2026-10-30 | Branch: `feature/issue-2-monorepo` (desde `master` @ `c9536b4`)
 > Autor: MID · Estado: v1 **aprobado con cambios** por el MAYOR (`documents/REVISION_PLAN_MONOREPO.md`, sin
 > BLOCKER/MAJOR). v1.1 aplica los MINOR 1-8 y las sugerencias 9-11 (la 11 como nota para #3). **T1-T5 aprobadas.**
-> **STOP-1, STOP-2 y STOP-3 siguen abiertos (usuario):** TASK-1 depende de STOP-1/STOP-2 y TASK-2 de STOP-3; el
-> plan no asume ninguna opción. STOP-2 tiene respuesta técnica clara, pero el issue lo declara STOP: queda **a
-> ratificar por el usuario** (lección de #1).
+> **STOPs resueltos (D-20261030-10):** STOP-1 = (a) borrar `battleship.move`; STOP-2 = (a) borrar los READMEs de
+> 2025; STOP-3 = (b) Node 26.
+>
+> Decisión (2026-10-30): se optó por las recomendaciones del plan en STOP-1/2/3 — aprobado por el usuario ("sí a todo lo recomendado").
 
 ## Historia de usuario
 
