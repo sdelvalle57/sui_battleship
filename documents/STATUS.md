@@ -25,7 +25,7 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 | Ítem | Valor |
 |---|---|
 | Sui CLI | `sui 1.83.0-16d2dc1e05ed` (release `testnet`), `suiup 0.1.1`, binarios en `~/.local/bin` |
-| Node | `v22.23.4` tras `nvm use 22` |
+| Node | `v26.13.0` tras `nvm use` (`.nvmrc` = 26, D-20261030-10) |
 | Prerrequisito de `sui move` | `~/.sui/sui_config/client.yaml` **sin claves** con `active_env: testnet` y `active_address: ~` (D-20261030-07). Sin ese archivo la CLI crea una clave e imprime su frase (H11). Nunca va al repo ni a logs; su contenido no se pega |
 | Framework | `std`/`sui` implícitas; fijados por `Move.lock` v4 a `719fb2960ccfbf9f4d33041f8ea5146d30671696`, el piso de la versión de protocolo **139** de testnet (verificado 2026-10-30) |
 | Entornos del lock | `Move.lock` v4 solo pinea `testnet`. Un gate con otro `-e` crearía una sección `[pinned.<env>]` nueva, y ese delta del lock hay que declararlo (PROY-11) |

@@ -37,7 +37,7 @@ sui_battleship/
 │   └── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos)
 ├── app/                      # cliente React (Vite + TS + SDK TypeScript de Sui + wallet kit)
 ├── package.json              # npm workspaces: ["app"]
-├── .nvmrc                    # Node 22
+├── .nvmrc                    # versión de Node (PROY-17)
 └── .github/workflows/        # CI de contracts y app
 ```
 
@@ -48,8 +48,8 @@ sui_battleship/
 
 ## 3. Comandos (por área, sin Makefile)
 
-**Toolchain:** Sui CLI instalada con `suiup` (versión fijada en `documents/STATUS.md`); Node 22
-(`.nvmrc`), npm. El `node` por defecto de la máquina es v26: correr `nvm use` antes de cada gate. Instalada el 2026-10-30:
+**Toolchain:** Sui CLI instalada con `suiup` (versión fijada en `documents/STATUS.md`); Node (versión en
+`.nvmrc`, PROY-17), npm. El `node` por defecto de la máquina puede ser otro: correr `nvm use` antes de cada gate. Instalada el 2026-10-30:
 Sui CLI `1.83.0` (release `testnet`) vía `suiup` en `~/.local/bin` (STATUS H1, sección Toolchain).
 
 **Prerrequisito de `sui move`:** `~/.sui/sui_config/client.yaml` **sin claves**, con `active_env: testnet`
@@ -191,7 +191,7 @@ testnet con una wallet real.
 | Sui CLI | `suiup` (`~/.local/bin`) | `1.83.0-16d2dc1e05ed`, release `testnet` (STATUS H1, Toolchain) |
 | `client.yaml` | `~/.sui/sui_config/` | Sin claves hasta #8 (`active_env: testnet`, D-20261030-07). **Nunca** en el repo ni en logs |
 | Keystore / direcciones | `~/.sui/sui_config/` | **Nunca** en el repo ni en logs |
-| Node | nvm (20, 22 y 26 instalados) | Usar 22 |
+| Node | nvm (20, 22 y 26 instalados) | Usar la de `.nvmrc` (`nvm use`) |
 | Wallet de navegador | extensión de wallet Sui | Para smokes en testnet (owner) |
 
 **Nunca** imprimir ni copiar mnemonics, claves privadas ni el contenido del keystore (SEG-3).
