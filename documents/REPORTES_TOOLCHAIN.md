@@ -449,3 +449,167 @@ Tras el commit de TASK-1. Precisiones para TASK-2 (addendum del handoff v1.1):
 
 ### Mensaje de commit propuesto
 `contracts: migrate manifest to CLI 1.83 package system (#1)` (commit `b2e98e6`).
+
+## Task completado: HANDOFF_TOOLCHAIN — TASK-2
+
+> Reporte del DEV transcrito por el orquestador (devuelto como texto).
+
+TASK-2 hecho: tres gates con `-e testnet`; `documents/STATUS.md`, `agents.md` y `documents/ESTANDARES.md`
+actualizados. `Move.lock` intacto en todos los gates; ningún prompt de creación de clave. Nuevo frente a
+TASK-1: `--lint` emite `WSL06010` en `sources/House/house.move:67`, así que ese gate se registra como
+conteo **mínimo** y no como "no medible".
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-1-toolchain` @ `b0fb54e` (árbol limpio al correr los gates; cambios de docs sin commitear).
+
+### Archivos modificados/creados
+- `documents/STATUS.md`: sección "Toolchain" nueva antes de "Baselines de gates"; tres filas del baseline; H1 ("Registrado en Toolchain"); H2 ✅; H6 → `:55-59`; H11 nuevo con notas #3/#7/#8; fila #1 en "Ciclo activo".
+- `agents.md`: §2 fila Contratos; §3 (prerrequisito `client.yaml`, gates con `-e testnet`, nota `--warnings-are-errors`); §7 (líneas H6/H8, gotcha del framework fijado, gotcha del `client.yaml`, subcarpetas verificadas); §11 (fila Sui CLI y fila nueva `client.yaml`).
+- `documents/ESTANDARES.md`: encabezado `1.1 · 2026-10-30` y PROY-11 con el texto aprobado, literal.
+- `git diff --stat`: 3 archivos, +50 −22. Sin tocar `Move.toml`, `Move.lock`, `.gitignore`, `sources/`, `tests/`, `~/.sui/`, `DECISIONES.md` ni `REPORTES_TOOLCHAIN.md`.
+
+### Qué se implementó (3 líneas máx)
+Primer baseline real de build, lint y test con `-e testnet`, con ref, SHA y conteo por archivo. Toolchain
+documentada en STATUS (CLI, `client.yaml` sin claves, framework `719fb29…` PV 139, entornos del lock, H11).
+`agents.md` y PROY-11 alineados con el `Move.toml` de TASK-1.
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados: ninguno (handoff §5).
+- Contracts: `sui 1.83.0-16d2dc1e05ed`; los tres gates exit 1 por compilación (H6 + H8), sin delta vs TASK-1; 0 tests.
+- Tablas de contrato y `app/src/sui/`: no aplica.
+
+**Preflight**
+```
+$ git status --short
+(vacío)
+$ git rev-parse --short HEAD
+b0fb54e
+$ printf 'n\n' | sui client active-env 2>&1; echo "exit=${PIPESTATUS[1]}"
+testnet
+exit=0
+```
+
+**Gates** (output a `$SCR/g{1,2,3}.txt`, ANSI quitado con `sed 's/\x1b\[[0-9;]*m//g'`)
+```
+$ printf 'n\n' | sui move build -e testnet 2>&1 | sed … > $SCR/g1.txt;        echo "g1 exit=${PIPESTATUS[1]}"
+g1 exit=1
+$ printf 'n\n' | sui move build -e testnet --lint 2>&1 | sed … > $SCR/g2.txt; echo "g2 exit=${PIPESTATUS[1]}"
+g2 exit=1
+$ printf 'n\n' | sui move test -e testnet 2>&1 | sed … > $SCR/g3.txt;         echo "g3 exit=${PIPESTATUS[1]}"
+g3 exit=1
+$ git diff --stat Move.lock
+(vacío)
+$ git status --short --ignored
+(vacío: no hay build/)
+$ grep -ciE 'recovery phrase|Generated new keypair' g1.txt g2.txt g3.txt
+g2.txt:0
+g3.txt:0
+g1.txt:0
+$ wc -l g1.txt g2.txt g3.txt
+210 / 219 / 209
+```
+
+**g1.txt** (`sui move build -e testnet`): `diff g1.txt build1.clean.txt` → única diferencia, la línea
+inicial `Downloading from https://github.com/MystenLabs/sui.git` de TASK-1 (caché `~/.move` ya poblada).
+El resto es idéntico línea por línea al anexo `build1.txt` de TASK-1 en este archivo: 9 `WC09009` en
+`battleship.move` (`:8,9,20,21,22,23,32,39,40`), `EC06002` en `battleship.move:62:23`, 7 `WC09009` en
+`Game/game.move` (`:23,33-38`), 6 `EC04016` en `Game/game.move:55:16`, "Failed to build Move modules:
+Compilation error.", exit=1.
+
+**g2.txt** (`sui move build -e testnet --lint`) = g1 + un bloque (`diff g1.txt g2.txt`):
+```
+206a207,215
+> warning[WSL06010]: prefer '&mut TxContext' over '&TxContext'
+>    ┌─ ./sources/House/house.move:67:71
+>    │
+> 67 │ public fun update_fee_rate(house: &mut House, new_fee_rate: u16, ctx: &TxContext) {
+>    │                                                                       ^^^^^^^^^^ 'public' functions should prefer '&mut TxContext' over '&TxContext' for better upgradability.
+>    │
+>    = When upgrading, the public function cannot be modified to take '&mut TxContext' instead of '&TxContext'. As such, it is recommended to consider using '&mut TxContext' to future-proof the function.
+>    = This warning can be suppressed with '#[allow(lint(prefer_mut_tx_context))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+>
+exit=1
+```
+
+**g3.txt** (`sui move test -e testnet`) = g1 sin la línea final (`diff g1.txt g3.txt` → `210d209 < Failed to build Move modules: Compilation error.`). Sin "Running Move unit tests" ni "Test result": 0 tests. exit=1.
+
+**Conteo por archivo**
+
+| Archivo | g1 build | g2 build --lint | g3 test |
+|---|---|---|---|
+| `sources/battleship.move` | 1 `EC06002` (`:62`, H8) + 9 `WC09009` | igual | igual |
+| `sources/Game/game.move` | 6 `EC04016` (`:55-59`, H6) + 7 `WC09009` | igual | igual |
+| `sources/House/house.move` | 0 | 1 `WSL06010` (`:67`) | 0 |
+| `tests/battleship_tests.move` | 0 (entero dentro de `/* */`) | 0 | 0, sin tests |
+
+`sources/Game/` y `sources/House/` se compilan (hay diagnósticos de ambas). El compilador aborta tras el
+tipado: los 16 `WC09009` y el lint son **mínimos**.
+
+**Comprobaciones de la CLI para las notas de docs**
+```
+$ printf 'n\n' | sui move build --help | grep -n 'warnings-are-errors\|--lint\|json-errors'
+41:      --warnings-are-errors
+43:      --json-errors
+47:      --lint
+$ printf 'n\n' | sui move test --help | grep -n 'warnings-are-errors\|--coverage'
+29:      --coverage
+53:      --warnings-are-errors
+$ printf 'n\n' | sui move coverage summary --help | grep -n -- '-e,'
+44:  -e, --build-env <ENVIRONMENT>
+```
+
+**Verificaciones finales**
+```
+$ git diff --stat Move.lock Move.toml .gitignore sources tests
+(vacío)
+$ git diff | grep -E '^\+' | grep -ciE '0x[0-9a-f]{6,}|recovery phrase|mnemonic|suiprivkey|BEGIN .*KEY'
+0
+```
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica (sin transacciones ni `sui start`).
+
+### Desviaciones del handoff (o "ninguna")
+1. Output con `| sed (quitar ANSI) >` en vez de `| tee`; exit con `${PIPESTATUS[1]}`. g2/g3 como diff exacto contra g1; g1 resumido con referencia al `build1` íntegro de TASK-1. Sin `--json-errors`.
+2. Lint registrado como "1, mínimo" y no "no medible": el Addendum §3 solo pide "no medible" si `--lint` no trae lints de Sui, y trae `WSL06010`.
+3. En STATUS se usa `WC09009` (código que imprime el compilador); el addendum dice `W09009`.
+4. Fuera de la lista literal, en `agents.md` §7: gotcha de `battleship.move` "probablemente tampoco compila" → "tampoco compila (`battleship.move:62`)"; subcarpetas "por verificar" → "se compilan"; tabla de §3 con coverage `-e testnet` también en `sui move coverage summary`. Hechos verificados por este baseline.
+5. Fila "Gates" de "Toolchain" en STATUS sin el carácter `|` (rompe la tabla); el comando literal está en `agents.md` §3.
+
+### Riesgos / pendientes (o "ninguno")
+- Lint en código vivo: `WSL06010` en `house.move:67` (`update_fee_rate` es `public` y recibe `&TxContext`) afecta compatibilidad de upgrade (PROY-10). Propuesto para el alcance de #4 o como hallazgo nuevo; no se convirtió en H porque el handoff no lo pide.
+- Baseline medido en `b0fb54e`; el código de contratos es idéntico al de `b2e98e6` (los commits posteriores solo tocan docs).
+
+### Documentación
+- READMEs / agents.md actualizados: sí (`agents.md` §2/§3/§7/§11; `ESTANDARES.md` PROY-11 y v1.1).
+- Snippet de STATUS: ya forma parte del diff (Toolchain, baseline, H2 ✅, H11, fila #1). P-3 sigue cerrado, sin duplicar.
+
+### SEG-3
+`git diff` sin frases, claves, contenido de `client.yaml`/keystore ni direcciones (grep = 0); solo SHAs de
+git/framework y la versión de protocolo. Sin prompt de creación de clave. Comandos usados: `sui client
+active-env`, `sui move build`, `sui move test`, `sui move coverage summary --help` y las ayudas de build y
+test, todos con `printf 'n\n' |`. Sin commits, pushes ni cambios de branch.
+
+## Revisión TASK-2: PASA
+
+> Revisión del MID transcrita por el orquestador.
+
+Checklist M4: implementa lo pedido con el Addendum (STATUS: Toolchain, 3 filas de baseline con ref `b0fb54e` y conteo por archivo, H1, H2 ✅, H6 `:55-59`, H8 `:62`, H7 fuera del baseline, H11, P-3 sin duplicar; `agents.md` §2/§3/§7/§11; `ESTANDARES.md` v1.1 con PROY-11 literal) ✅ · Gates con `-e testnet`, exit 1 solo por H6/H8, sin delta vs TASK-1; `Move.lock` intacto; sin `build/` ✅ · LIM-9/PROY-19: errores y warnings como mínimos; `WC09009` es el código correcto; lint "1, mínimo" justificado ✅ · SEG-3: grep = 0, sin prompts, solo `active-env`, todo con `printf 'n\n' |` ✅ · 5 desviaciones declaradas y justificadas ✅ · Los 8 criterios del issue #1 se cumplen con TASK-1 (`b2e98e6`) + TASK-2 ✅.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| 1 | 🔵 PROY-20 | `documents/STATUS.md` (fila "#1 (toolchain)"; "Pendientes del usuario") | "TASK-2 en revisión" queda desactualizado al commitear; falta el merge del PR de #1 y su orden respecto de #19 | Commit de docs del orquestador; no vuelve al DEV |
+| 2 | 🔵 — | `agents.md` §3 (prerrequisito de `sui move`) | El guard `printf 'n\n' \|` pasa a regla permanente | Ninguna (inocuo con la config sin claves) |
+
+**Riesgo `WSL06010` (`sources/House/house.move:67`):** fuera de #1 (no toca código). Se registra como **H12**
+en STATUS y se traza en #4, que reescribe `update_fee_rate` con `&HouseCap` (H3): quitar `ctx` si deja de
+usarse o recibirlo `&mut`; criterio `sui move build -e testnet --lint` sin lints en `house.move`. Resolver
+antes de la primera publicación (#8, PROY-10).
+
+### Siguiente paso: ciclo de #1 completo
+Sin tasks pendientes; smoke no aplica. Commit de TASK-2, commit de docs (H12 y estado), push, PR contra
+`master`, revisión de integración del MAYOR y merge del usuario después de #19.
+
+### Mensaje de commit propuesto
+`docs: record toolchain and first gate baseline (#1)` (commit `edb64ef`).

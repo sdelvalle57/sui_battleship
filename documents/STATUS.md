@@ -59,6 +59,7 @@ mismos conteos por archivo.
 | H9 | tests | `tests/battleship_tests.move` comentado entero. | Suite con `test_scenario` por módulo (PROY-9) |
 | H10 | docs | README dice "2 vs 2"; el diseño es 1 vs 1. Roadmap marca el Escrow como diseñado. | Actualizar README en el issue de docs |
 | H11 | toolchain | `sui move` exige `client.yaml`. Sin él, la CLI crea una clave e imprime su frase (`sui_commands.rs:584, 1630-1648` @ `testnet-v1.83.0`), y `-e` no lo evita. | ✅ 2026-10-30: resuelto con una config sin claves (D-20261030-07). **#3:** escribir la misma config en `$RUNNER_TEMP` con `SUI_CONFIG_DIR`; `--warnings-are-errors` existe en `sui move build` y en `sui move test`. **#7:** al publicar, la CLI escribe `Published.toml` (se commitea) y `Pub.*.toml` efímeros (ignorados en `.gitignore`). `Published.toml` se superpone con `contracts/deployments/<red>.json` (D-20261030-03, ARQ-6): #7 define cuál es la fuente del `packageId` y cuál se deriva. **#8:** el owner agrega su clave a este mismo `client.yaml` desde su terminal, sin agentes |
+| H12 | house | Lint `WSL06010` (`prefer_mut_tx_context`): `update_fee_rate` es `public` y recibe `&TxContext` (`house.move:67`); tras publicar, la firma ya no podría pasar a `&mut` (PROY-10). Detectado por el baseline de #1. | #4: al migrar a `&HouseCap` (H3) quitar `ctx` si deja de usarse, o usar `&mut TxContext`; criterio: `sui move build -e testnet --lint` sin lints en `house.move` |
 
 ## Ciclo activo — backlog para terminar el MVP
 
@@ -103,7 +104,7 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 ## Pendientes del usuario
 
-- Mergear el PR de docs del flujo (`docs/agent-workflow`).
+- Mergear **#19** (docs del flujo, `docs/agent-workflow`) y **después** el PR de #1 (apilado sobre #19); tras el merge, housekeeping del ciclo (FLUJO §9).
 - Resolver los STOP de los planes a medida que lleguen (el más pesado que queda: #4 D1). #5 D1/D2/D5/D7 y #4 D3 ya resueltas (D-20261030-06).
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
