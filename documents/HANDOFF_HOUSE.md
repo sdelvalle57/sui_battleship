@@ -1,8 +1,9 @@
 # HANDOFF_HOUSE
 > Plan: PLAN_HOUSE v1.1 (APROBADO por el MAYOR, "Revisión v1.1" en `documents/REVISION_PLAN_HOUSE.md`) | Issue: #4 |
-> Branch: `feature/issue-4-house` | Versión: v1 | Fecha: 2026-10-30 | Autor: MID
+> Branch: `feature/issue-4-house` | Versión: v1.1 | Fecha: 2026-10-30 | Autor: MID
 > Aplica las decisiones del usuario (D-20261030-11) y los MINOR N1 (D7 b ⇒ 6 tests más, total ≥ 20) y N2
 > (alcance incluye `agents.md` §13 y SEG-2/PROY-9 de `ESTANDARES.md`) de la revisión v1.1.
+> **v1.1:** aplica la revisión del MAYOR sobre el handoff v1 (M1 opción a, m1, m2, m3); ver §Changelog al final.
 > Tasks: **TASK-1** (contracts) → revisión MID → commit → **TASK-2** (docs). Un task por sesión; sin commits ni pushes del DEV.
 
 ## 0. Baseline de gates verificado (2026-10-30)
@@ -18,7 +19,7 @@
 | Prerrequisito | `~/.sui/sui_config/client.yaml` sin claves (`active_env: testnet`, D-20261030-07). Toda invocación `sui move …` con `printf 'n\n' |` delante. Nunca leer, pegar ni crear claves; nada de `sui client` salvo `sui client active-env` |
 | App / CI | no existen (no se tocan) |
 
-Objetivo al cerrar TASK-1: build 0 warnings · **lint 0** (delta −1, cierra H12) · **≥ 20 tests PASS**, 0 warnings.
+Objetivo al cerrar TASK-1: build 0 warnings · **lint 0** (delta −1, cierra H12) · **≥ 25 tests PASS**, 0 warnings.
 
 ## Decisiones del owner (no reabrir)
 
@@ -30,7 +31,7 @@ Objetivo al cerrar TASK-1: build 0 warnings · **lint 0** (delta −1, cierra H1
 | D4 | `public fun withdraw_fees(...): Coin<SUI>` (la PTB decide el destino); aborta con `ENoFeesToWithdraw` si no hay fees | D-20261030-11 §4 |
 | D5 | Abort codes clásicos `const E…: u64` con número estable | D-20261030-11 §5 |
 | D6 | Límites por defecto 0,001 SUI (`1_000_000` MIST) / 50 SUI (`50_000_000_000` MIST) | D-20261030-11 §6 |
-| D7 | La House lleva `version` desde la v1: `VERSION`, `EWrongVersion`, `ENotUpgrade`, `entry migrate` con `&HouseCap`, chequeo de versión en toda función que escriba la House. #5 replica el patrón en `Game` | D-20261030-11 §7 |
+| D7 | La House lleva `version` desde la v1: `VERSION`, `EWrongVersion`, `ENotUpgrade`, `entry migrate` con `&HouseCap`, chequeo de versión en toda función que escriba la House (y, por M1 de la revisión del handoff, en los accessors de configuración y fondos). La mecánica en `Game` la decide el plan de #5, con el invariante SEG-4 de §TASK-2 (ningún reembolso bloqueado por la versión) | D-20261030-11 §7 |
 | — | El `Game` copia el `fee_rate` al crear; aceptar resuelve en la misma tx | D-20261030-06 §1, §3 |
 | — | Visibilidad: `entry` para `update_fee_rate`, `update_bet_limits`, `transfer_house_cap`, `migrate`; `public` solo para `withdraw_fees` y accessors | PLAN_HOUSE v1.1 (Decisión de diseño aprobada por el MAYOR) |
 
@@ -51,7 +52,7 @@ comisiones solo entren desde el propio paquete, **para** que nadie más pueda to
 fondos de la House, poder cerrar versiones viejas del paquete tras un upgrade, y que Game (#5, #6) se
 construya sobre una API estable y testeada.
 
-**Scope en una frase:** `contracts/sources/house.move` reescrito y `contracts/tests/house_tests.move` con 20 tests.
+**Scope en una frase:** `contracts/sources/house.move` reescrito y `contracts/tests/house_tests.move` con 25 tests.
 **Lo que NO entrega:** docs (TASK-2), Game (#5/#6), CI (#3), app (#9+), publicación (#8), repin (H13).
 
 ### 2. Contexto (qué existe hoy)
@@ -135,16 +136,21 @@ public struct HOUSE has drop {}              // OTW, sin cambios
 | `entry fun migrate(house: &mut House, _: &HouseCap)` | `entry` | titular del cap | `assert!(house.version < VERSION, ENotUpgrade)`; `old = house.version`; `house.version = VERSION`; emite `HouseMigrated`. En la v1 siempre aborta (la House nace en `VERSION`); existe para fijar el patrón y la firma |
 | `public fun withdraw_fees(house: &mut House, _: &HouseCap, ctx: &mut TxContext): Coin<SUI>` | `public` (devuelve `Coin`) | titular del cap | `assert_current_version(house)`; `assert!(house.fees_collected.value() > 0, ENoFeesToWithdraw)`; `let fees = house.fees_collected.withdraw_all()`; emite `FeesWithdrawn { amount }`; `coin::from_balance(fees, ctx)` |
 | `public(package) fun add_fees(house: &mut House, fees: Balance<SUI>)` | `public(package)` | solo módulos de `battleship` | `assert_current_version(house)`; `house.fees_collected.join(fees)`. Acepta valor 0. Sin evento |
-| `public fun fee_rate(house: &House): u16` | `public` | cualquiera | |
-| `public fun fees_collected(house: &House): u64` | `public` | cualquiera | |
-| `public fun min_bet(house: &House): u64` / `public fun max_bet(house: &House): u64` | `public` | cualquiera | |
-| `public fun version(house: &House): u64` | `public` | cualquiera | para el panel (#14) y los tests de `migrate` |
+| `public fun fee_rate(house: &House): u16` | `public` | cualquiera | `assert_current_version(house)`; devuelve el valor |
+| `public fun fees_collected(house: &House): u64` | `public` | cualquiera | `assert_current_version(house)`; devuelve el valor |
+| `public fun min_bet(house: &House): u64` / `public fun max_bet(house: &House): u64` | `public` | cualquiera | `assert_current_version(house)`; devuelve el valor |
+| `public fun version(house: &House): u64` | `public` | cualquiera | **sin** chequeo de versión (diagnóstico: el panel #14 y los tests de `migrate` lo leen justamente cuando la versión no coincide) |
 | `fun assert_current_version(house: &House)` | privada | — | `assert!(house.version == VERSION, EWrongVersion)` (un solo lugar, LIM-5) |
 
 - **El chequeo de versión va primero** en cada función que escribe la House (antes de validar argumentos),
   así una versión vieja del paquete aborta siempre con `EWrongVersion`.
-- Los accessors no validan versión (solo leen). Si #5 necesita validar la versión desde `game` con `&House`,
-  agrega allí un `public(package)` (fuera de este task, ARQ-7).
+- **Los accessors `fee_rate`, `fees_collected`, `min_bet` y `max_bet` también validan la versión** (M1 de
+  la revisión del handoff): así el código de `game` de un paquete viejo (#5 lee `fee_rate`/`min_bet`/
+  `max_bet` al crear una partida) aborta con `EWrongVersion` en vez de crear partidas con reglas de una
+  House ya migrada. `version()` es la única lectura sin chequeo.
+  > Decisión (2026-10-30): accessor público `version()` sin chequeo de versión, para que el panel (#14) y
+  > los tests de `migrate` puedan leer la versión de una House que no coincide con el paquete; no estaba
+  > en el plan ni en D-20261030-11 y no amplía la authZ (solo lectura) — MID.
 - `ctx.sender()` aparece **solo** en `init`. Ninguna función `public`/`entry` recibe `&TxContext`
   inmutable. No usar `public entry` (lint `public_entry`).
 - El ID de la House para #5 sale de `object::id(house)`: no agregar accessor de ID.
@@ -208,12 +214,17 @@ constantes propias del test para los valores esperados (`0`, `1_000_000`, `50_00
 | 12 | `test_withdraw_fees_rejects_empty_house` | → `ENoFeesToWithdraw` |
 | 13 | `test_transfer_house_cap_moves_cap_and_emits_event` | después: `PUBLISHER` sin `HouseCap`, `NEW_ADMIN` con uno; `HouseCapTransferred { cap_id, recipient }` |
 | 14 | `test_transferred_cap_lets_new_holder_administer` | `NEW_ADMIN` actualiza el fee y retira fees (con conservación) |
-| 15 | `test_update_fee_rate_rejects_wrong_version` | `set_version_for_testing(house, 2)` → `EWrongVersion` |
+| 15 | `test_update_fee_rate_rejects_wrong_version` | `set_version_for_testing(house, 2)` y fee **1001** (argumento también inválido) → `EWrongVersion`: demuestra que el chequeo de versión se reporta primero |
 | 16 | `test_update_bet_limits_rejects_wrong_version` | ídem → `EWrongVersion` |
 | 17 | `test_withdraw_fees_rejects_wrong_version` | con fees > 0, versión 2 → `EWrongVersion` (el chequeo de versión va primero) |
 | 18 | `test_add_fees_rejects_wrong_version` | versión 2 → `EWrongVersion` |
-| 19 | `test_migrate_bumps_version_and_emits_event` | `set_version_for_testing(house, 0)`; `migrate` → `version()` = 1 + `HouseMigrated { old_version: 0, new_version: 1 }` |
+| 19 | `test_migrate_bumps_version_and_emits_event` | `set_version_for_testing(house, 0)`; `migrate` → `version()` = 1 + `HouseMigrated { old_version: 0, new_version: 1 }`; después `update_fee_rate` vuelve a funcionar (valor nuevo guardado) |
 | 20 | `test_migrate_rejects_current_version` | House recién creada → `ENotUpgrade` |
+| 21 | `test_migrate_rejects_house_newer_than_package` | `set_version_for_testing(house, 2)`; `migrate` de este paquete (v1) → `ENotUpgrade` (un paquete viejo no puede "migrar" hacia atrás) |
+| 22 | `test_fee_rate_rejects_wrong_version` | versión 2 → `EWrongVersion` |
+| 23 | `test_fees_collected_rejects_wrong_version` | versión 2 → `EWrongVersion` |
+| 24 | `test_min_bet_rejects_wrong_version` | versión 2 → `EWrongVersion` |
+| 25 | `test_max_bet_rejects_wrong_version` | versión 2 → `EWrongVersion` |
 
 **AuthZ denegada (SEG-2):** con capability, el caso denegado no se puede expresar como `expected_failure`
 (sin el cap la llamada no compila ni se arma como transacción). Se cubre con la **custodia** del cap: tests
@@ -228,7 +239,7 @@ No aplica: el issue lo excluye; el flujo de admin end-to-end se verifica en el s
 - [ ] Firmas, visibilidades, structs, eventos, constantes y abort codes **exactamente** como §3.
 - [ ] `sui move build -e testnet`: exit 0, 0 warnings.
 - [ ] `sui move build -e testnet --lint`: exit 0, **0 lints** (desaparece `WSL06010`, H12).
-- [ ] `sui move test -e testnet`: exit 0, 0 warnings, **≥ 20 tests**, todos PASS (lista de §5 completa).
+- [ ] `sui move test -e testnet`: exit 0, 0 warnings, **≥ 25 tests**, todos PASS (lista de §5 completa).
 - [ ] Gancho de coverage: output de `--coverage` + `coverage summary` pegado (informativo); `ls -A contracts`
       pegado; `git status --porcelain` sin artefactos de coverage; `git status --porcelain --ignored contracts/`
       los lista como `!!`. Si alguno aparece sin ignorar, **no** tocar `.gitignore`: declararlo en
@@ -320,10 +331,14 @@ para que el owner sepa qué hacer al publicar (fijar el fee).
 9. **Límites:** `min_bet`/`max_bet` solo se aplican al crear una partida (#5); cambiarlos no afecta a las
    `Pending` existentes, y aceptar solo exige el monto exacto (D-06 §1).
 10. **Versionado (D7):** toda versión anterior de un paquete sigue invocable tras un upgrade; la House
-    guarda `version` y cada función que la escribe exige `version == VERSION` (`EWrongVersion`). Tras un
-    upgrade que sube `VERSION`, el titular del cap llama `migrate` de la versión nueva y las funciones de
-    las versiones viejas dejan de poder escribir la House. `transfer_house_cap` no recibe la House y queda
-    fuera del versionado.
+    guarda `version` y exigen `version == VERSION` (`EWrongVersion`, chequeado antes que cualquier otro
+    argumento) las funciones que la escriben (`update_fee_rate`, `update_bet_limits`, `withdraw_fees`,
+    `add_fees`) **y** los accessors `fee_rate`, `fees_collected`, `min_bet`, `max_bet`. `version()` no
+    valida (diagnóstico). Tras un upgrade que sube `VERSION`, el titular del cap llama `migrate` de la
+    versión nueva; desde ahí el código de las versiones viejas no puede escribir ni leer la configuración
+    de la House, y el `migrate` de un paquete viejo aborta con `ENotUpgrade`. `transfer_house_cap` no
+    recibe la House y queda fuera del versionado. La tabla de funciones incluye la fila de `version()`
+    con su propósito, y la columna de abort codes lista `EWrongVersion` en cada accessor que lo valida.
 11. **Contención:** setters, `withdraw_fees`, `migrate` y `add_fees` (#6) toman `&mut House`: las
     resoluciones de partidas se serializan sobre la House (aceptable en el MVP).
 12. **ID de la House:** sale de los efectos de la publicación (#7, `deployments/<red>.json`).
@@ -340,8 +355,10 @@ la wallet del panel con `transfer_house_cap`; post-publicación: `update_fee_rat
 
 **`documents/ESTANDARES.md`** (redacción sujeta a revisión del MAYOR; versión del encabezado +0.1):
 `:7` (`house.move` ya cumple las reglas); `:50` LIM-8 (quitar el ejemplo vigente de `EInsufficientBalance`);
-**SEG-2 y PROY-9:** la misma línea de authZ por capability; **PROY-10:** "Todo objeto compartido lleva
-`version` + `EWrongVersion` + `entry migrate` con su capability (D-20261030-11); #5 lo replica en `Game`".
+**SEG-2 y PROY-9:** la misma línea de authZ por capability; **PROY-10:** "La House compartida lleva
+`version` + `EWrongVersion` + `entry migrate` con `&HouseCap` (D-20261030-11). Invariante SEG-4 para los
+objetos que custodian fondos de jugadores (`Game`, #5): un camino de reembolso (cancelar/rechazar) nunca
+puede quedar bloqueado por la versión; la mecánica de versionado de `Game` la decide el plan de #5".
 PROY-3 no cambia (D3 c no usa `store`).
 
 **`documents/STATUS.md`:** H3, H4, H5 y H12 ✅ (#4); H9 🚧 parcial (suite de House: N tests); nueva fila
@@ -394,3 +411,15 @@ Issue #4 → `documents/PLAN_HOUSE.md` v1.1 (APROBADO) → este handoff → TASK
 (#4)`) → TASK-2 (commit `docs: … (#4)`) → PR único contra `master` con `Closes #4`. Suma de tasks = criterios
 1-12 del issue: 1-9 y 11 en TASK-1; 10 (`contracts/README.md`) y 12 (docs) en TASK-2; 11 (gates) también en
 TASK-2. "CI verde": si #3 se mergea antes del PR, la CI gatea el PR; #4 no crea CI.
+
+## Changelog
+
+- **v1.1 (2026-10-30)**, revisión del MAYOR sobre el handoff v1:
+  - M1 (opción a): `fee_rate`, `fees_collected`, `min_bet`, `max_bet` validan la versión; `version()` no.
+    4 tests nuevos (22-25); README punto 10 y tabla de funciones ajustados.
+  - m1: test 15 con fee 1001 + versión incorrecta (orden de los chequeos); test 19 verifica que un setter
+    vuelve a funcionar tras `migrate`; test 21 nuevo (House más nueva que el paquete ⇒ `ENotUpgrade`).
+    Total ≥ 25 (20 + 4 de M1 + 1 de m1).
+  - m2: línea `> Decisión` del accessor `version()` (FLUJO §8) y su fila en la tabla del README.
+  - m3: PROY-10 se limita a la House y suma el invariante SEG-4 para `Game` (#5 decide la mecánica).
+- **v1 (2026-10-30):** primera versión.
