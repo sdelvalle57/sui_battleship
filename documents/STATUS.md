@@ -11,10 +11,10 @@ del orquestador sobre `master`:
 | Roadmap original (README) | Estado real |
 |---|---|
 | 1. Diseño de recursos | 🚧 House y Game esbozados; Escrow sin diseño |
-| 2. House module | 🔍 implementado, con hallazgos H3–H5 |
+| 2. House module | ✅ reescrito en #4 (`040f3c0`): `HouseCap`, límites, `add_fees`, eventos, versionado |
 | 3. Game module | ⬜ stub retirado en #2; se crea en #5 |
 | 4. Escrow module | ⬜ no existe (se propone absorberlo en Game: fondos como `Balance<SUI>` de la partida) |
-| 5. Tests | ⬜ sin tests (el archivo comentado se retiró en #2) |
+| 5. Tests | 🚧 suite de House (26 tests, #4); Game en #5/#6 |
 | 6. Docs y despliegue | ⬜ |
 | UI React | ⬜ no existe (D-20261030-03) |
 
@@ -35,7 +35,11 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 
 | Área @ ref | Gate | Resultado |
 |---|---|---|
-| contracts/ @ `master` (`48df3b4`, merge de #22; medido en `8325126`, mismo código de contratos que `f4b437c`), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🟢 exit 0. **0 errores, 0 warnings** de compilación. Único módulo: `contracts/sources/house.move` |
+| contracts/ @ `040f3c0` (TASK-1 de #4, branch `feature/issue-4-house`), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🟢 exit 0. **0 errores, 0 warnings** de compilación. Único módulo: `contracts/sources/house.move` |
+| | `sui move build -e testnet --lint` | 🟢 exit 0. **0 lints** (delta −1: `WSL06010` cerrado, H12) |
+| | `sui move test -e testnet` | 🟢 exit 0. 0 warnings. **26 tests PASS** (`contracts/tests/house_tests.move`) |
+| | `sui move test -e testnet --coverage` + `sui move coverage summary -e testnet` | Informativo: **100 %** de `battleship::house`. Artefactos `contracts/.coverage_map.mvcov` y `contracts/traces/`, ya ignorados por `.coverage*` y `contracts/traces/` en `.gitignore` (sin cambios) |
+| contracts/ @ `master` (anterior a #4: `48df3b4`, merge de #22; medido en `8325126`, mismo código de contratos que `f4b437c`), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🟢 exit 0. **0 errores, 0 warnings** de compilación. Único módulo: `contracts/sources/house.move` |
 | | `sui move build -e testnet --lint` | 🟢 exit 0. 0 errores, 0 warnings; **1 lint de Sui:** `WSL06010` (`prefer_mut_tx_context`) en `contracts/sources/house.move:67` (`update_fee_rate` con `&TxContext`, H12 → #4) |
 | | `sui move test -e testnet` | 🟢 exit 0. 0 errores, 0 warnings. **0 tests** (`Test result: OK. Total tests: 0`) |
 | app | — | ⬜ no existe |
@@ -50,16 +54,16 @@ mismos conteos por archivo.
 |---|---|---|---|
 | H1 | toolchain | ✅ 2026-10-30: `suiup` 0.1.1 en `~/.local/bin`; **Sui CLI `1.83.0-16d2dc1e05ed`** (release `testnet`, default). Node 20/22/26 vía nvm. Registrado en Toolchain. | #1: fijar framework y registrar baseline con esta versión |
 | H2 | contracts | ✅ 2026-10-30 (#1). Antes, `Move.toml` usaba `rev = "framework/testnet"` (branch móvil) y edition `2024.beta`. Ahora `std`/`sui` son implícitas, `edition = "2024"` y `Move.lock` v4 los pinea a `719fb2960ccfbf9f4d33041f8ea5146d30671696` (PV 139). | — (PROY-11 reescrita) |
-| H3 | house | `initialize_house` destruye el `HouseCap`; admin validado por `ctx.sender() == house.admin` y fees pagadas a `house.admin` (`house.move:47-81`). | Requerir `&HouseCap` (PROY-3) |
-| H4 | house | `EInsufficientBalance` se usa para el fee y para fees = 0 (`house.move:48,69,78`). | Abort code propio (LIM-8) |
-| H5 | house | Sin `add_fees` para Game, sin accessors/setters de `min_bet`/`max_bet`, sin eventos. | `public(package) add_fees`, accessors, eventos (PROY-4, PROY-7) |
+| H3 | house | ✅ 2026-10-30 (#4, `040f3c0`). Antes, `initialize_house` destruía el `HouseCap`; admin validado por `ctx.sender() == house.admin` y fees pagadas a `house.admin`. Ahora toda operación de admin recibe `&HouseCap`, sin campo `admin` (D-20261030-11). | — |
+| H4 | house | ✅ 2026-10-30 (#4, `040f3c0`). Antes, `EInsufficientBalance` se usaba para el fee y para fees = 0. Ahora un abort code por condición (0–4, `contracts/README.md`). | — |
+| H5 | house | ✅ 2026-10-30 (#4, `040f3c0`): `public(package) add_fees`, `update_bet_limits`, accessors `min_bet`/`max_bet` y 5 eventos. | — |
 | H6 | game | `start_game` construye `GameRequest` sin la mayoría de campos: no compila (`game.move:55-59`). | ✅ 2026-10-30 (#2): archivo retirado; `battleship::game` se crea desde cero en #5 |
 | H7 | game | `GamePool` con `vector<GameRequest>` compartido; `escrow: u64` sin custodia; `TurnCap` sin uso; estados `Finished`/`Resolution`/`Resolved` solapados. | → #5 (diseño 2025 retirado con el archivo; `git show f063a0e:sources/Game/game.move`) |
 | H8 | legado | Borrador 2025 de tablero/barcos sin uso; `new_game` usaba `player1` tras moverlo (no compilaba). | ✅ 2026-10-30 (#2): borrado (D-20261030-10); se recupera con `git show f063a0e:sources/battleship.move` (#18) |
-| H9 | tests | El único archivo de tests estaba comentado entero. | 🚧 parcial (#2): el test comentado se retiró (`git show f063a0e:tests/battleship_tests.move`); suites en #4–#6 |
+| H9 | tests | El único archivo de tests estaba comentado entero. | 🚧 parcial: el test comentado se retiró en #2 (`git show f063a0e:tests/battleship_tests.move`); suite de House en #4 (26 tests, `040f3c0`); Game en #5/#6 |
 | H10 | docs | README dice "2 vs 2"; el diseño es 1 vs 1. Roadmap marca el Escrow como diseñado. | Actualizar README en el issue de docs |
 | H11 | toolchain | `sui move` exige `client.yaml`. Sin él, la CLI crea una clave e imprime su frase (`sui_commands.rs:584, 1630-1648` @ `testnet-v1.83.0`), y `-e` no lo evita. | ✅ 2026-10-30: resuelto con una config sin claves (D-20261030-07). **#3:** escribir la misma config en `$RUNNER_TEMP` con `SUI_CONFIG_DIR`; `--warnings-are-errors` existe en `sui move build` y en `sui move test`. **#7:** al publicar, la CLI escribe `Published.toml` (se commitea) y `Pub.*.toml` efímeros (ignorados en `.gitignore`). `Published.toml` se superpone con `contracts/deployments/<red>.json` (D-20261030-03, ARQ-6): #7 define cuál es la fuente del `packageId` y cuál se deriva. **#8:** el owner agrega su clave a este mismo `client.yaml` desde su terminal, sin agentes |
-| H12 | house | Lint `WSL06010` (`prefer_mut_tx_context`): `update_fee_rate` es `public` y recibe `&TxContext` (`contracts/sources/house.move:67`); tras publicar, la firma ya no podría pasar a `&mut` (PROY-10). Detectado por el baseline de #1. | #4: al migrar a `&HouseCap` (H3) quitar `ctx` si deja de usarse, o usar `&mut TxContext`; criterio: `sui move build -e testnet --lint` sin lints en `house.move` |
+| H12 | house | ✅ 2026-10-30 (#4, `040f3c0`). Antes, lint `WSL06010` (`prefer_mut_tx_context`): `update_fee_rate` era `public` y recibía `&TxContext`. Ahora es `entry` sin `ctx` y ninguna función recibe `&TxContext` inmutable; `sui move build -e testnet --lint` da 0 lints. | — |
 | H13 | toolchain | testnet en PV `140` (medida 2026-10-30, época 1269; `05ad86a3e86c522deea116f80dc2bf2309a53363` para 140) y el lock en el piso de 139 (`719fb29…`). La CLI no repinea ni avisa por sí sola (solo con `update-deps`, al cambiar las dependencias del manifest, con un digest de dependencia distinto o con otro `-e`; publish solo compara la CLI con la red). | Pre-vuelo de #8 (comentado en el issue): (1) CLI del canal testnet con PV máxima ≥ PV de testnet (si no, `suiup` y registrar en Toolchain); (2) `cd contracts && printf 'n\n' \| sui move update-deps -e testnet`; (3) delta del lock declarado y gates re-medidos |
 
 ## Ciclo activo — backlog para terminar el MVP
@@ -70,7 +74,8 @@ mismos conteos por archivo.
 | Issues del backlog en GitHub | ✅ 2026-10-30 | #1–#18 redactados por el MAYOR y creados por el orquestador |
 | #1 (toolchain) | ✅ 2026-10-30 | PR #20 mergeado (`e1849c6`); MAYOR APPROVE. Artefactos del ciclo borrados en el housekeeping (`git show e1849c6:documents/PLAN_TOOLCHAIN.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_TOOLCHAIN.md`) |
 | #2 (monorepo) | ✅ 2026-10-30 | PR #22 mergeado (`48df3b4`); MAYOR APPROVE; primer baseline verde. Artefactos borrados en el housekeeping (`git show 48df3b4:documents/PLAN_MONOREPO.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_MONOREPO.md`) |
-| Siguiente | ⏳ | #4 (House: `HouseCap` transferible por D-20261030-06, H3–H5, H12, gancho de coverage) → plan del MID; STOPs abiertos D1, D2, D4, D5, D6. #3 (CI) puede ir en paralelo |
+| #4 (House) | 🚧 2026-10-30 | Plan v1.1 aprobado; STOPs resueltos (D-20261030-11). TASK-1 (contracts) MID PASA, commit `040f3c0`; TASK-2 (docs: `contracts/README.md`, `agents.md`, `ESTANDARES.md`, este archivo) en revisión; luego PR contra `master` |
+| Siguiente | ⏳ | #5 (Game: crear/cancelar) tras el merge de #4; antes, decidir la licencia (Pendientes del usuario). #3 (CI) puede ir en paralelo |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -107,7 +112,9 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 ## Pendientes del usuario
 
-- Resolver los STOP de los planes a medida que lleguen (el más pesado que queda: #4 D1). #5 D1/D2/D5/D7 y #4 D3 ya resueltas (D-20261030-06).
+- Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06).
+- **Post-publicación (#8):** `update_fee_rate` antes de anunciar el juego (fee por defecto 0, D-20261030-11): las partidas creadas antes quedan con comisión 0 para siempre.
+- **Licencia del repo:** cabecera placeholder `// Copyright (c) Your Project` + SPDX Apache-2.0 en `contracts/sources/house.move:1-2`, sin `LICENSE` en el repo; decidir antes de #5 (Apache-2.0 / otra / quitar la cabecera), en un PR propio.
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
 ## Mergeadas (histórico)

@@ -12,6 +12,20 @@
 
 ## Recientes
 
+### D-20261030-11 — Diseño del módulo House (STOPs de #4)
+- **Decisión:**
+  1. **D1 = (a)** `init` crea y comparte una única House con valores por defecto y entrega el `HouseCap` al publicador; se elimina `initialize_house`. **Fee por defecto = 0 bps**: el owner la ajusta con `update_fee_rate` (CLI o panel admin #14) después de publicar.
+  2. **D2 = (a)** se eliminan el campo `admin` y su accessor: la authZ es la posesión del `HouseCap`.
+  3. **D3 = (c)** `HouseCap` con `key` sin `store`; se transfiere solo con `entry fun transfer_house_cap` que emite `HouseCapTransferred` (concreta D-20261030-06 §5).
+  4. **D4 = (a)** `public fun withdraw_fees(...): Coin<SUI>` (la PTB decide el destino); aborta con código propio si no hay fees.
+  5. **D5 = (a)** abort codes clásicos `const E…: u64` con número estable.
+  6. **D6** límites por defecto 0,001 SUI / 50 SUI.
+  7. **D7 = (b)** la House lleva campo `version` desde la v1 (constante `VERSION`, `EWrongVersion`, `ENotUpgrade`, `entry migrate` con `&HouseCap`), para poder cerrar versiones viejas tras un upgrade; #5 replica el patrón en `Game`.
+- **Alternativa descartada:** House en dos pasos o múltiples Houses; fee por defecto 200 bps; campo `admin` informativo; `HouseCap` con `key, store` (congelable: cualquiera podría usarlo); retiro a `ctx.sender()` o con `recipient`; `#[error]` (el código cambia al mover líneas); sin `version` en el MVP.
+- **Motivo:** plan v1.1 de #4 aprobado por el MAYOR (`documents/PLAN_HOUSE.md`). El usuario se apartó de la recomendación en el fee por defecto (0 en lugar de 200 bps) y en D7 (versionado desde ya en lugar de diferirlo).
+- **Consecuencia a vigilar:** con fee por defecto 0 y D-20261030-06 §3 (el `Game` copia el fee al crear), las partidas creadas entre la publicación y el primer `update_fee_rate` quedan con comisión 0. El pre-vuelo/post-vuelo de #8 debe ajustar el fee antes de anunciar el juego.
+- **Aprobado por:** usuario ("1. a; 2. 0 % y la ajustas desde el panel admin; 3. a; 4. a; 5. números fijos clásicos; 6. se mantienen en 0,001–50 SUI; 7. b de una vez" + D3 (c) por pregunta directa, 2026-10-30). **Fecha:** 2026-10-30.
+
 ### D-20261030-10 — Reestructura a monorepo: legado fuera y Node 26 (STOPs de #2)
 - **Decisión:** (1) `sources/battleship.move` se **borra** (STOP-1 a); recuperable con `git show f063a0e:sources/battleship.move` para #18. (2) `sources/House/README.md` y `sources/Game/README.md` (diseño 2025) se **borran** (STOP-2 a); recuperables con `git show f063a0e:`. (3) El proyecto usa **Node 26** (Active LTS, EOL 2029-04) en `.nvmrc` y PROY-17, en lugar de Node 22 (STOP-3 b); confirma `contracts/`, `app/` y npm workspaces de D-20261030-03.
 - **Alternativa descartada:** mover o arreglar `battleship.move` (publicaría y congelaría layouts sin uso, PROY-10); mover los READMEs a `contracts/docs/`; Node 22 (EOL 2027-04-30) o Node 24.

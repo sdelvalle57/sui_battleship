@@ -26,14 +26,15 @@ issues de GitHub; estado en `documents/STATUS.md`.
 Un solo repo: **`sdelvalle57/sui_battleship`** (público), branch de integración `master`. Issues y PRs
 se citan como `#N`.
 
-**Layout objetivo (D-20261030-03)** — `contracts/`, `package.json` y `.nvmrc` existen desde #2; `app/` (#9),
-`.github/workflows/` (#3), `contracts/tests/` (#4) y `contracts/deployments/` (#7) llegan con su issue:
+**Layout objetivo (D-20261030-03)** — `contracts/`, `package.json` y `.nvmrc` existen desde #2;
+`contracts/tests/` y `contracts/README.md` desde #4; `app/` (#9), `.github/workflows/` (#3) y
+`contracts/deployments/` (#7) llegan con su issue:
 
 ```
 sui_battleship/
 ├── agents.md                 # este archivo
 ├── documents/                # flujo multi-agente, estándares, decisiones, status, planes/handoffs
-├── contracts/                # paquete Move (Move.toml, Move.lock, sources/, tests/)
+├── contracts/                # paquete Move (Move.toml, Move.lock, README.md, sources/, tests/)
 │   └── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos)
 ├── app/                      # cliente React (Vite + TS + SDK TypeScript de Sui + wallet kit)
 ├── package.json              # npm workspaces: ["app"]
@@ -118,17 +119,24 @@ compatible o republicación con IDs nuevos.
 
 ## 6. Reglas de Negocio Críticas (MVP)
 
-> **Propuesta hasta los planes de #4, #5 y #6:** varias reglas de abajo (Escrow absorbido en Game,
-> estados, quién cancela/resuelve, base de la comisión) son decisiones abiertas de esos issues. Al
-> aprobarse se registran en `DECISIONES.md` y se reescribe esta sección (y §8, §9, PROY-7/8).
+> **Reglas de la House confirmadas** por D-20261030-11 (#4; contrato en `contracts/README.md`). Las de
+> partidas son **propuesta hasta los planes de #5 y #6**, salvo lo ya decidido en D-20261030-06, que
+> **prevalece sobre los bullets de abajo**: aceptar resuelve el coinflip en la misma transacción
+> (`Pending → Resolved | Cancelled`, sin estado `Active` persistente), sin expiración, el `Game` copia el
+> `fee_rate` al crearse y el invitado puede rechazar (reembolso íntegro al creador, sin comisión). Siguen
+> abiertas (Escrow absorbido en Game, base de la comisión…). Los bullets Estados, Cancelación y Coinflip,
+> §8 `battleship::game`, §9 y PROY-7/8 se reescriben en #5 al aprobarse su plan.
 
 
-- **Apuesta:** entre `min_bet` y `max_bet` de la House (hoy 0,001 y 50 SUI, en MIST). El que acepta iguala
-  **exactamente** el monto del creador.
+- **Apuesta:** entre `min_bet` y `max_bet` de la House (por defecto 0,001 y 50 SUI, en MIST; el titular del
+  `HouseCap` los cambia con `update_bet_limits`). Los límites se aplican solo al crear la partida; el que
+  acepta iguala **exactamente** el monto del creador.
 - **Fondos:** viven como `Balance<SUI>` dentro de la partida desde que se crean hasta que se cancela o se
   resuelve. Conservación: lo que entra = lo que sale al ganador/creador + comisión.
-- **Comisión:** `fee_rate` en basis points (máx. 1000 = 10 %), se calcula sobre el pozo al resolver y se
-  acumula en `House.fees_collected`; solo el admin la retira.
+- **Comisión:** `fee_rate` en basis points (máx. 1000 = 10 %), **por defecto 0**: el titular del `HouseCap`
+  la fija con `update_fee_rate` tras publicar (#8), antes de anunciar el juego. Se calcula sobre el pozo al
+  resolver, entra a `House.fees_collected` por `add_fees` (`public(package)`) y solo el titular del
+  `HouseCap` la retira (`withdraw_fees`).
 - **Estados:** `Pending → Active → Resolved` y `Pending → Cancelled`. Solo `Pending` se acepta o cancela;
   solo `Active` se resuelve.
 - **Invitación directa:** si la partida tiene `opponent`, solo esa dirección puede aceptarla. Nadie juega
@@ -136,12 +144,14 @@ compatible o republicación con IDs nuevos.
 - **Cancelación:** solo el creador, solo en `Pending`; devuelve el 100 % (sin comisión).
 - **Coinflip:** `sui::random` en una función `entry` no `public` (PROY-5). Quién puede disparar la
   resolución y qué pasa con una partida `Active` abandonada se define en el issue del Game module.
-- **Admin:** las operaciones de la House requieren el `HouseCap` (pendiente: hoy se valida por dirección,
-  STATUS H3).
+- **Admin:** las operaciones de la House requieren el `HouseCap` (`key` sin `store`); se pasa a otra wallet
+  solo con `transfer_house_cap`, que emite `HouseCapTransferred`.
 
 ## 7. Gotchas Técnicos
 
-- **`house.move` reutiliza `EInsufficientBalance`** para validar el `fee_rate` (`contracts/sources/house.move:48,69`).
+- **Versionado de la House:** tras un upgrade y `migrate`, una función que escribe la House (o lee su
+  configuración) desde un paquete viejo aborta con `EWrongVersion`; `version()` es la única lectura sin
+  chequeo (`contracts/README.md`, Versionado).
 - **Framework fijado por `Move.lock`:** `std`/`sui` son implícitas y el lock (regenerado por la CLI con
   `-e testnet`, nunca a mano) los pinea al SHA del piso de la PV de testnet vigente **al repinear**; la CLI no
   repinea ni avisa por sí sola (STATUS H13). Todo delta del lock en un diff se declara y justifica (PROY-11).
@@ -153,10 +163,13 @@ compatible o republicación con IDs nuevos.
 
 ## 8. API on-chain (mapa por módulo)
 
-- **`battleship::house`** — `House` (shared: `fee_rate`, `fees_collected`, `admin`, `min_bet`, `max_bet`),
-  `HouseCap`, `init` (OTW + `HouseCap` al publicador), `initialize_house`, `update_fee_rate`,
-  `withdraw_fees`, accessors `fee_rate`/`fees_collected`/`admin`. Falta: `add_fees` (`public(package)`),
-  accessors/setters de límites, eventos.
+- **`battleship::house`** — `House` (shared: `version`, `fee_rate`, `fees_collected`, `min_bet`, `max_bet`),
+  `HouseCap` (`key` sin `store`), `init` (comparte la House con valores por defecto y entrega el `HouseCap`
+  al publicador); `entry` con `&HouseCap`: `update_fee_rate`, `update_bet_limits`, `transfer_house_cap`,
+  `migrate`; `public withdraw_fees` (devuelve `Coin<SUI>`); `public(package) add_fees`; accessors
+  `fee_rate`/`fees_collected`/`min_bet`/`max_bet` (validan versión) y `version`; eventos `FeeRateUpdated`,
+  `BetLimitsUpdated`, `FeesWithdrawn`, `HouseCapTransferred`, `HouseMigrated`; abort codes 0–4. Tablas en
+  `contracts/README.md`.
 - **`battleship::game`** — no existe hasta #5 (el stub 2025 se retiró en #2). Objetivo: `create_game`, `accept_game`, `cancel_game`,
   `resolve_game` (coinflip) + eventos `GameCreated`/`GameAccepted`/`GameCancelled`/`GameResolved`.
 
@@ -193,8 +206,11 @@ testnet con una wallet real.
 - **Contratos:** `sui client publish` desde `contracts/` a testnet. Publicar, upgradear y custodiar el
   `UpgradeCap`/`HouseCap` es del **owner** (o del orquestador con autorización explícita por publicación).
   Tras publicar: `contracts/deployments/testnet.json` en el mismo PR.
-- **Dirección publicadora:** recibe el `HouseCap` (no transferible si queda sin `store`, PROY-3); debe
-  ser una dirección que el owner también use en la wallet del navegador para el panel admin (#8, #14).
+- **Dirección publicadora:** recibe el `HouseCap` (`key` sin `store`, PROY-3). Si no es la wallet del
+  navegador del panel admin (#14), el owner le pasa el cap con `transfer_house_cap` (no con "Send" de la
+  wallet).
+- **Post-publicación (#8):** la House nace con fee 0 (D-20261030-11); `update_fee_rate` antes de anunciar el
+  juego, o las partidas creadas antes quedan con comisión 0 para siempre.
 - **App:** hosting estático (por definir en el backlog).
 - **Mainnet:** fuera de alcance sin decisión registrada.
 
@@ -204,6 +220,7 @@ testnet con una wallet real.
 - [ ] Contrato on-chain: si cambió una firma/struct/evento/abort code, tablas de `contracts/README.md` y
       módulo `app/src/sui/` actualizados en el mismo ciclo (§5).
 - [ ] AuthZ por función: quién puede llamar (jugador, invitado, admin con `HouseCap`) y test del caso denegado.
+      AuthZ por capability ⇒ el caso denegado se cubre verificando la custodia del cap, no con `expected_failure`.
 - [ ] Fondos: conservación testeada (balances antes/después) en cada camino que mueve SUI.
 - [ ] Sin claves, mnemonics ni secretos en código, docs o logs.
 - [ ] Docs actualizadas si cambió arquitectura, layout, comandos, contrato o tests (PROY-20): README del
@@ -219,4 +236,4 @@ testnet con una wallet real.
 | `documents/FLUJO_AGENTES.md` | Pipeline multi-agente: roles, permisos, plantillas |
 | `documents/agentes/*.md` | Prompts de rol (DEV / MID / MAYOR / ORQUESTADOR) |
 | `README.md` | Visión del producto y roadmap original (2025-03) |
-| `contracts/README.md` | (a crear en #4) Tablas de funciones, eventos y abort codes |
+| `contracts/README.md` | Contrato on-chain: tablas de funciones, eventos y abort codes, authZ, versionado y operación |
