@@ -182,3 +182,73 @@ Test 26 (`game_tests.move:513-528`) coincide con lo pedido (26 tests, 15 `expect
 
 ### Mensaje de commit propuesto
 `contracts: add battleship::game with create, cancel and reject (#5)`.
+
+## Task completado: HANDOFF_GAME — TASK-2 (docs)
+
+> Reporte del DEV transcrito por el orquestador.
+
+4 archivos de docs (`git diff --stat HEAD`: +220 −34): `contracts/README.md` (+170), `agents.md`, `documents/ESTANDARES.md` (v1.5), `documents/STATUS.md`. Sin tocar código, `Move.*`, `.github/`, README raíz, `DECISIONES.md`, plan, revisión, handoff ni reportes. Branch `feature/issue-5-game` @ `67fa60d`; merge-base `b00c093`.
+
+### Qué se implementó (3 líneas máx)
+1. `contracts/README.md`: rutas de `game.move`/`game_tests.move` y sección `## battleship::game` (Objetos, Estados con mermaid, Funciones con aborts en orden, Eventos, Abort codes 0-6, Autorización, Flujo de fondos, Carreras, Comisión, Versionado del `Game`, Objeto terminal y storage, PTB, Lectura desde la app con las formas del enum por RPC); lo de #6 marcado "(#6)".
+2. `agents.md` §6 (cabecera y bullets), §7 (gotcha "Versionado de `Game`"), §8 (API real de #5, #6 y cierre en #8), §9 (campos reales, `GameState`).
+3. ESTANDARES v1.5 (D-15) con PROY-7/8/10; STATUS: roadmap 3-5, H7/H9 parciales, baseline sobre `67fa60d`, ciclo activo.
+
+### Tests y gates (output pegado, forma canónica literal)
+```
+$ printf 'n\n' | sui --version
+sui 1.83.0-16d2dc1e05ed
+$ printf 'n\n' | sui client active-env
+testnet
+$ (cd contracts && printf 'n\n' | sui move build -e testnet --warnings-are-errors); echo "exit=$?"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+$ (cd contracts && printf 'n\n' | sui move build -e testnet --lint --warnings-are-errors); echo "exit=$?"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+$ (cd contracts && printf 'n\n' | sui move test -e testnet --warnings-are-errors); echo "exit=$?"
+[… 52 líneas [ PASS ]: las 26 de house_tests y las 26 de game_tests, intercaladas …]
+Test result: OK. Total tests: 52; passed: 52; failed: 0
+exit=0
+$ (cd contracts && git diff --exit-code -- Move.lock); echo "exit=$?"
+exit=0
+coverage: house 100.00 / game 98.02 / total 99.03
+```
+Cero delta respecto de TASK-1.
+
+**§8:** `git status` solo con los 4 docs; `--stat` contra el merge-base de `contracts/` = solo los archivos de TASK-1 (commiteados); grep `Active|resolve_game|GameAccepted` → solo `contracts/README.md:181` (mención explícita a #6, permitida); secretos: en el diff solo líneas que contienen el propio patrón (`HANDOFF_GAME.md`, `PLAN_GAME.md`, `REPORTES_GAME.md`) más la línea declarada de `PLAN_GAME.md`; **0 en los 4 archivos de TASK-2** (`git diff -U0 HEAD -- … | grep '^\+' | grep …` → exit 1); sin archivos untracked.
+
+### Verificación manual
+Formas del RPC contrastadas con fuentes locales de Sui en el scratchpad (sin metadatos de tag): `sui_move.rs:394-408, 457, 474-486, 510-520, 724-725`; `rpc_visitor/mod.rs:247-262`; `sui_event.rs:62`.
+
+### Desviaciones del handoff (o "ninguna")
+Ninguna de contenido. Menores: filas privadas `refund_creator`/`is_pending` y filas "(#6)" en el README; nota de que el código 3 existe en `house` y `game` (mapear por módulo + código); bullet Comisión con D-06 §3; bullet Estados dice "sin estado intermedio" (para no disparar el grep de criterio); no se incluyó una afirmación no verificada sobre firmas `entry` tras upgrades.
+
+### Riesgos / pendientes (o "ninguno")
+- Fila 1 del roadmap de STATUS ("Escrow sin diseño") contradice la fila 4; propone "🚧 House ✅, Game en #5/#6; Escrow absorbido en Game (D-20261030-15)".
+- JSON-RPC: `SuiMoveVariant::to_json_value` (`sui_move.rs:522-534`) emite solo `variant`/`fields`; no se confirmó qué camino usa `getObject`; confirmarlo con una respuesta real en el smoke de #6 / parser de #10.
+- Coverage `game` 98,02 % (→ #6).
+
+### Datos para el body del PR
+Módulo `battleship::game` (un `Game` compartido con `stake: Balance<SUI>`, sin Escrow; `Pending | Cancelled | Resolved{acceptor, winner}`; `create_game`/`cancel_game`/`reject_game` `entry`; reembolso 100 % sin House ni versión; aborts 0-6; `GameCreated`/`GameCancelled`). Commits `67fa60d` + TASK-2. 52/52, build/lint 0, `Move.lock` intacto, coverage `game` 98,02 %. Mutaciones M1-M5 detectadas. Smoke diferido a #6. Decisiones D-06, -11, -12, -14, -15.
+
+## Revisión TASK-2: PASA (con 2 ediciones literales en STATUS)
+
+> Revisión del MID transcrita por el orquestador.
+
+`contracts/README.md` = `game.move` @ `67fa60d` 1:1 (9 campos, `key` sin `store`, `GameState` `copy, drop, store`, tres `entry`, órdenes de aborts `create_game` `house::EWrongVersion`→0→1→2, `cancel_game` 3→4, `reject_game` 6→5→4, eventos, aborts 0-6; notas del código 3 en dos módulos, authZ antes que estado, fondos, versionado D-15 DV, storage D3 con borrado restringido al creador, PTB). `agents.md` §6-§9 respeta D-06/D-15 sin quitar nada a #6; grep `Active|resolve_game|GameAccepted` solo en `contracts/README.md:181` (negación permitida). ESTANDARES v1.5 correcto.
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| 1 | 🟡 PROY-20 | `STATUS.md:13` | Fila 1 del roadmap contradice filas 2-4 y D-15 | Edición literal (aplicada por el orquestador) |
+| 2 | 🟡 PROY-20 | `STATUS.md` (fila #5) | "TASK-2 en revisión" queda viejo | Edición literal (aplicada por el orquestador) |
+| 3 | ℹ️ (riesgo 2 del DEV) | `contracts/README.md` (Lectura desde la app) | `to_json_value` sin `type` | README correcto para `getObject` (serde derive de `SuiMoveVariant`, `sui_move.rs:510-520`); `to_json_value` solo se usa en `parsedJson` de eventos (`sui_move.rs:778-791`, `sui_event.rs:194`). Nota para #6/#10: capturar un `getObject` real de un `Game` en el smoke de #6 como fixture |
+
+Desviaciones menores del DEV: aceptadas.
+
+### Mensaje de commit propuesto
+`docs: document battleship::game and align agents, standards and status (#5)`.

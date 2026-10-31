@@ -124,31 +124,31 @@ compatible o republicación con IDs nuevos.
 
 ## 6. Reglas de Negocio Críticas (MVP)
 
-> **Reglas de la House confirmadas** por D-20261030-11 (#4; contrato en `contracts/README.md`). Las de
-> partidas son **propuesta hasta los planes de #5 y #6**, salvo lo ya decidido en D-20261030-06, que
-> **prevalece sobre los bullets de abajo**: aceptar resuelve el coinflip en la misma transacción
-> (`Pending → Resolved | Cancelled`, sin estado `Active` persistente), sin expiración, el `Game` copia el
-> `fee_rate` al crearse y el invitado puede rechazar (reembolso íntegro al creador, sin comisión). Siguen
-> abiertas (Escrow absorbido en Game, base de la comisión…). Los bullets Estados, Cancelación y Coinflip,
-> §8 `battleship::game`, §9 y PROY-7/8 se reescriben en #5 al aprobarse su plan.
-
+> **Reglas de la House confirmadas** por D-20261030-11 (#4) y **de partidas** por D-20261030-06 y
+> D-20261030-15 (#5); contrato en `contracts/README.md`. Sigue abierta la **base de la comisión** y la
+> mecánica de aceptar/coinflip, que fija el plan de #6.
 
 - **Apuesta:** entre `min_bet` y `max_bet` de la House (por defecto 0,001 y 50 SUI, en MIST; el titular del
   `HouseCap` los cambia con `update_bet_limits`). Los límites se aplican solo al crear la partida; el que
   acepta iguala **exactamente** el monto del creador.
-- **Fondos:** viven como `Balance<SUI>` dentro de la partida desde que se crean hasta que se cancela o se
-  resuelve. Conservación: lo que entra = lo que sale al ganador/creador + comisión.
+- **Fondos:** la apuesta vive como `stake: Balance<SUI>` dentro de cada `Game` (sin módulo Escrow,
+  D-20261030-15) desde que se crea hasta que se cancela, se rechaza o se resuelve; la partida terminada queda
+  con `stake == 0`. Conservación: lo que entra = lo que sale al ganador/creador + comisión.
 - **Comisión:** `fee_rate` en basis points (máx. 1000 = 10 %), **por defecto 0**: el titular del `HouseCap`
-  la fija con `update_fee_rate` tras publicar (#8), antes de anunciar el juego. Se calcula sobre el pozo al
-  resolver, entra a `House.fees_collected` por `add_fees` (`public(package)`) y solo el titular del
-  `HouseCap` la retira (`withdraw_fees`).
-- **Estados:** `Pending → Active → Resolved` y `Pending → Cancelled`. Solo `Pending` se acepta o cancela;
-  solo `Active` se resuelve.
-- **Invitación directa:** si la partida tiene `opponent`, solo esa dirección puede aceptarla. Nadie juega
-  contra sí mismo.
-- **Cancelación:** solo el creador, solo en `Pending`; devuelve el 100 % (sin comisión).
-- **Coinflip:** `sui::random` en una función `entry` no `public` (PROY-5). Quién puede disparar la
-  resolución y qué pasa con una partida `Active` abandonada se define en el issue del Game module.
+  la fija con `update_fee_rate` tras publicar (#8), antes de anunciar el juego. El `Game` **copia el
+  `fee_rate` al crearse** (D-20261030-06 §3). Se calcula al resolver (base: plan de #6), entra a
+  `House.fees_collected` por `add_fees` (`public(package)`) y solo el titular del `HouseCap` la retira
+  (`withdraw_fees`).
+- **Estados:** `Pending → Cancelled | Resolved` (`GameState`), sin estado intermedio y sin expiración. Solo
+  `Pending` se acepta, cancela o rechaza; `Cancelled` y `Resolved` son terminales (el objeto se conserva).
+- **Invitación directa:** si la partida tiene `opponent`, solo esa dirección puede aceptarla (#6) y esa
+  dirección también puede **rechazarla** (`reject_game`). Nadie juega contra sí mismo (`ESelfInvite`).
+- **Cancelación:** el creador cancela (`cancel_game`) y el invitado rechaza (`reject_game`), solo en
+  `Pending`; en ambos casos vuelve el **100 % al creador**, sin comisión y sin tocar la House. Sin expiración.
+  Nunca queda bloqueada por la versión: cancelar y rechazar no reciben la House ni leen la versión
+  (D-20261030-12 §4).
+- **Coinflip:** aceptar resuelve en la **misma transacción** (#6): `sui::random` en una función `entry` no
+  `public` (PROY-5).
 - **Admin:** las operaciones de la House requieren el `HouseCap` (`key` sin `store`); se pasa a otra wallet
   solo con `transfer_house_cap`, que emite `HouseCapTransferred`.
 
@@ -157,6 +157,11 @@ compatible o republicación con IDs nuevos.
 - **Versionado de la House:** tras un upgrade y `migrate`, una función que escribe la House (o lee su
   configuración) desde un paquete viejo aborta con `EWrongVersion`; `version()` es la única lectura sin
   chequeo (`contracts/README.md`, Versionado).
+- **Versionado de `Game`:** cada partida guarda `version = house.version()` al crearse. Tras `migrate` de la
+  House, `create_game` del paquete viejo aborta con `house::EWrongVersion` y las partidas `Pending` de
+  versiones anteriores solo se cancelan o rechazan, salvo que la versión nueva decida aceptarlas (#6 compara
+  la versión al aceptar). Cancelar y rechazar funcionan en cualquier versión: no reciben la House ni leen la
+  versión (`contracts/README.md`, Versionado del `Game`).
 - **Framework fijado por `Move.lock`:** `std`/`sui` son implícitas y el lock (regenerado por la CLI con
   `-e testnet`, nunca a mano) los pinea al SHA del piso de la PV de testnet vigente **al repinear**; la CLI no
   repinea ni avisa por sí sola (STATUS H13). Todo delta del lock en un diff se declara y justifica (PROY-11).
@@ -175,13 +180,20 @@ compatible o republicación con IDs nuevos.
   `fee_rate`/`fees_collected`/`min_bet`/`max_bet` (validan versión) y `version`; eventos `FeeRateUpdated`,
   `BetLimitsUpdated`, `FeesWithdrawn`, `HouseCapTransferred`, `HouseMigrated`; abort codes 0–4. Tablas en
   `contracts/README.md`.
-- **`battleship::game`** — no existe hasta #5 (el stub 2025 se retiró en #2). Objetivo: `create_game`, `accept_game`, `cancel_game`,
-  `resolve_game` (coinflip) + eventos `GameCreated`/`GameAccepted`/`GameCancelled`/`GameResolved`.
+- **`battleship::game`** (#5) — `Game` (shared, uno por partida, `key` sin `store`: `version`, `house_id`,
+  `creator`, `opponent: Option<address>`, `bet`, `stake: Balance<SUI>`, `fee_rate`, `state`), enum
+  `GameState` (`Pending | Cancelled | Resolved { acceptor, winner }`); `entry` (no `public`): `create_game`
+  (abierta o invitación, copia el `fee_rate`), `cancel_game` (creador), `reject_game` (invitado), ambas con
+  reembolso del 100 % al creador; eventos `GameCreated`, `GameCancelled` (con `cancelled_by`); abort codes 0–6
+  (más `house::EWrongVersion` en `create_game`). **#6 agrega** aceptar + coinflip (resolución atómica, pago y
+  comisión), `GameResolved` y aborts desde el 7. `GameState` y el layout de `Game` quedan cerrados en #8: #18
+  usa un objeto nuevo o dynamic fields. Tablas en `contracts/README.md`.
 
 ## 9. Entidades Clave
 
-`House` · `HouseCap` · `Game` (objeto compartido por partida: creador, oponente opcional, apuesta,
-`Balance<SUI>`, estado, timestamps) · `GameState` · eventos de transición · (futuro, #18) `Board`/`Ship`/
+`House` · `HouseCap` · `Game` (objeto compartido por partida: `version`, `house_id`, `creator`, `opponent`
+opcional, `bet`, `stake: Balance<SUI>`, `fee_rate`, `state`; sin timestamps) · `GameState` (`Pending`,
+`Cancelled`, `Resolved { acceptor, winner }`) · eventos de transición · (futuro, #18) `Board`/`Ship`/
 `Coordinate` del borrador 2025 (`git show f063a0e:sources/battleship.move`).
 
 ## 10. Testing
