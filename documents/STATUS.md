@@ -44,7 +44,8 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 | | `sui move build -e testnet --lint` | 🟢 exit 0. 0 errores, 0 warnings; **1 lint de Sui:** `WSL06010` (`prefer_mut_tx_context`) en `contracts/sources/house.move:67` (`update_fee_rate` con `&TxContext`, H12 → #4) |
 | | `sui move test -e testnet` | 🟢 exit 0. 0 errores, 0 warnings. **0 tests** (`Test result: OK. Total tests: 0`) |
 | app | — | ⬜ no existe |
-| CI @ `feature/issue-3-ci` (`44ff83a`, PR #27), 2026-10-30 | R1: job `contracts` ([run 41148825720, attempt 1](https://github.com/sdelvalle57/sui_battleship/actions/runs/41148825720/attempts/1)) | 🟢 success en 56 s (Install 31 s, cache miss): `.tgz` y binario `OK` (SHA-256), `sui 1.83.0-16d2dc1e05ed`, build, `--lint` y test con `--warnings-are-errors` exit 0, **26/26**, `Move.lock` y árbol sin cambios, guarda de cero claves en verde |
+| CI @ `master` (`ae89cd5`, merge de #27), 2026-10-30 | Primer run `push` ([run 41150550292](https://github.com/sdelvalle57/sui_battleship/actions/runs/41150550292)) | 🟢 `contracts` y `framework-drift` success (baseline de CI en `master`) |
+| CI @ `feature/issue-3-ci` (`44ff83a`, PR #27), 2026-10-30 (evidencia de #3) | R1: job `contracts` ([run 41148825720, attempt 1](https://github.com/sdelvalle57/sui_battleship/actions/runs/41148825720/attempts/1)) | 🟢 success en 56 s (Install 31 s, cache miss): `.tgz` y binario `OK` (SHA-256), `sui 1.83.0-16d2dc1e05ed`, build, `--lint` y test con `--warnings-are-errors` exit 0, **26/26**, `Move.lock` y árbol sin cambios, guarda de cero claves en verde |
 | | R1: job `framework-drift` | 🟢 success en 5 s con el warning H13 esperado (lock PV 139 vs testnet PV 140; época 1269 en la medición local V4); sin "CLI atrasada" |
 | | R2: mismo run, [attempt 2](https://github.com/sdelvalle57/sui_battleship/actions/runs/41148825720/attempts/2) | 🟢 success en 14 s: cache hit de la CLI (Install y Save skipped) y de `~/.move/git`; Verify OK; 26/26 |
 | | R3 y R4: rojos provocados en el PR desechable #28 (cerrado sin merge) | Evidencia de #3, no baseline: R3 ([run 41149053353](https://github.com/sdelvalle57/sui_battleship/actions/runs/41149053353/attempts/1), `8653839`) Build failure `error[EC04007]`; R4 ([run 41149200767](https://github.com/sdelvalle57/sui_battleship/actions/runs/41149200767/attempts/1), `fc0a3d4`) Build success y **Lint failure** `error[ESL06010]` (D-20261030-13 confirmada) |
@@ -80,8 +81,8 @@ mismos conteos por archivo.
 | #2 (monorepo) | ✅ 2026-10-30 | PR #22 mergeado (`48df3b4`); MAYOR APPROVE; primer baseline verde. Artefactos borrados en el housekeeping (`git show 48df3b4:documents/PLAN_MONOREPO.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_MONOREPO.md`) |
 | #4 (House) | ✅ 2026-10-30 | PR #24 mergeado (`68d1afe`); MAYOR APPROVE. 26 tests, coverage 100 %. Artefactos borrados en el housekeeping (`git show 68d1afe:documents/PLAN_HOUSE.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_HOUSE.md`) |
 | Licencia | ✅ 2026-10-30 | Apache-2.0 (D-20261030-14): `LICENSE` en la raíz y cabecera `// Copyright (c) 2025-2026 sdelvalle57` + SPDX en los fuentes Move |
-| #3 (CI) | 🚧 2026-10-30 | PR #27 (borrador): TASK-1 `ci.yml` (`44ff83a`, R1–R4 en `documents/REPORTES_CI.md`) y TASK-2 docs; al merge lo cierra el housekeeping |
-| Siguiente | ⏳ | Merge de #3; #5 (Game: crear/cancelar) desbloqueado |
+| #3 (CI) | ✅ 2026-10-30 | PR #27 mergeado (`ae89cd5`); MAYOR APPROVE; run `push` en `master` verde. Artefactos borrados en el housekeeping (`git show ae89cd5:documents/PLAN_CI.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_CI.md`) |
+| Siguiente | ⏳ | #5 (Game: crear/cancelar/rechazar): plan v1.1 aprobado por el MAYOR, STOPs D3/D4/D6/D8/DV pendientes del usuario |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -131,3 +132,4 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 | #1 Toolchain, manifest pineado, primer baseline | #20 → `e1849c6` | 2026-10-30 |
 | #2 Monorepo (`contracts/`), legado retirado, Node 26 | #22 → `48df3b4` | 2026-10-30 |
 | #4 House: `HouseCap`, límites, `add_fees`, eventos, versionado, 26 tests | #24 → `68d1afe` | 2026-10-30 |
+| #3 CI de contratos (`ci.yml`: `contracts` + `framework-drift`) | #27 → `ae89cd5` | 2026-10-30 |
