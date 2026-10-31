@@ -82,7 +82,7 @@ mismos conteos por archivo.
 | #4 (House) | ✅ 2026-10-30 | PR #24 mergeado (`68d1afe`); MAYOR APPROVE. 26 tests, coverage 100 %. Artefactos borrados en el housekeeping (`git show 68d1afe:documents/PLAN_HOUSE.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_HOUSE.md`) |
 | Licencia | ✅ 2026-10-30 | Apache-2.0 (D-20261030-14): `LICENSE` en la raíz y cabecera `// Copyright (c) 2025-2026 sdelvalle57` + SPDX en los fuentes Move |
 | #3 (CI) | ✅ 2026-10-30 | PR #27 mergeado (`ae89cd5`); MAYOR APPROVE; run `push` en `master` verde. Artefactos borrados en el housekeeping (`git show ae89cd5:documents/PLAN_CI.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_CI.md`) |
-| Siguiente | ⏳ | #5 (Game: crear/cancelar/rechazar): plan v1.1 aprobado por el MAYOR, STOPs D3/D4/D6/D8/DV pendientes del usuario |
+| Siguiente | 🚧 2026-10-30 | #5 (Game: crear/cancelar/rechazar): plan v1.1 aprobado, STOPs resueltos (D-20261030-15); handoff del MID en curso |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -119,8 +119,7 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 ## Pendientes del usuario
 
-- Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #3 resuelto (D-20261030-13; protección de `master` y settings de Actions tras su merge); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06).
-- **Tras el merge de #3:** protección clásica de `master` con el check `contracts` requerido (sin reviews, sin 'up to date', sin bypass) y 'Require actions to be pinned to a full-length commit SHA' (D-20261030-13); los aplica el usuario, o el orquestador solo con autorización expresa del usuario en ese momento.
+- Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #3 resuelto (D-20261030-13; protección de `master` y SHA-pinning de Actions aplicados el 2026-10-30); #5 resuelto (D-20261030-15); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06).
 - **Post-publicación (#8):** `update_fee_rate` antes de anunciar el juego (fee por defecto 0, D-20261030-11): las partidas creadas antes quedan con comisión 0 para siempre.
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
