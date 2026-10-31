@@ -88,7 +88,7 @@ Sin reporte completo el MID no inicia revisión — **incluidos los tasks solo-U
 
 ### Tests y gates (output pegado, por área tocada)
 - Agregados/modificados: (lista)
-- Contracts: sui --version / sui move build (warnings) / sui move test (N tests, PASS/FAIL) — forma canónica de los gates (con `-e testnet` y el guard `printf 'n\n' |`) en `agents.md` §3
+- Contracts: sui --version / sui move build (warnings) / sui move build --lint (lints) / sui move test (N tests, PASS/FAIL) — todos con `--warnings-are-errors`; forma canónica (con `-e testnet` y el guard `printf 'n\n' |`) en `agents.md` §3
 - App: npm run lint / typecheck / npm test (archivos y tests) / npm run build
 - Tablas de contrato (contracts/README.md) y app/src/sui/ sincronizados: sí / no aplica
 

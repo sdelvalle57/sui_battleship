@@ -1,0 +1,199 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  # PR: un grupo por PR; un push nuevo cancela el run anterior del mismo PR.
+  # push a master: un grupo por commit; ningún run de master se cancela ni se descarta en cola.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Única fuente de la versión de la Sui CLI en CI: debe coincidir con documents/STATUS.md (Toolchain).
+  # Al subir de versión: SUI_TGZ_SHA256 = gh api repos/MystenLabs/sui/releases/tags/testnet-v<versión> --jq '.assets[] | .name + " " + .digest'
+  #                      SUI_BIN_SHA256 = sha256sum del binario `sui` de esa versión instalado en local con suiup
+  SUI_VERSION: "1.83.0"
+  SUI_COMMIT: "16d2dc1e05ed"
+  SUI_TGZ_SHA256: "e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8"
+  SUI_BIN_SHA256: "29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa"
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash                 # explícito: -eo pipefail (el default implícito no trae pipefail)
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Restore Sui CLI cache
+        id: sui-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/sui-cli/${{ env.SUI_VERSION }}
+          key: sui-cli-${{ runner.os }}-${{ runner.arch }}-${{ env.SUI_VERSION }}-${{ env.SUI_TGZ_SHA256 }}
+
+      - name: Install Sui CLI (release testnet, SHA-256 verificado)
+        if: steps.sui-cache.outputs.cache-hit != 'true'
+        run: |
+          cd "$RUNNER_TEMP"
+          asset="sui-testnet-v${SUI_VERSION}-ubuntu-x86_64.tgz"
+          # ~1,2 GB: hasta 5 min por intento y reintentos dentro de 10 min (job: 20 min)
+          curl -fsSL --connect-timeout 20 --max-time 300 --retry 3 --retry-all-errors --retry-max-time 600 \
+            -o "$asset" "https://github.com/MystenLabs/sui/releases/download/testnet-v${SUI_VERSION}/${asset}"
+          echo "${SUI_TGZ_SHA256}  ${asset}" | sha256sum -c -
+          mkdir sui-release
+          tar -xzf "$asset" -C sui-release ./sui          # solo el binario `sui`
+          test -f sui-release/sui || { echo "::error::el archivo no trae ./sui"; exit 1; }
+          install -D -m 0755 sui-release/sui "$HOME/.cache/sui-cli/${SUI_VERSION}/sui"
+          rm -rf "$asset" sui-release
+
+      - name: Verify Sui CLI binary (SHA-256, cada run)
+        run: echo "${SUI_BIN_SHA256}  $HOME/.cache/sui-cli/${SUI_VERSION}/sui" | sha256sum -c -
+
+      - name: Save Sui CLI cache
+        if: steps.sui-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/sui-cli/${{ env.SUI_VERSION }}
+          key: ${{ steps.sui-cache.outputs.cache-primary-key }}
+
+      - name: Add Sui CLI to PATH
+        run: echo "$HOME/.cache/sui-cli/${SUI_VERSION}" >> "$GITHUB_PATH"
+
+      - name: Keyless Sui config (D-20261030-07, STATUS H11)
+        run: |
+          cfg="$RUNNER_TEMP/sui_config"
+          mkdir -p "$cfg"
+          printf '[]\n' > "$cfg/sui.keystore"
+          cat > "$cfg/client.yaml" <<EOF
+          ---
+          keystore:
+            File: $cfg/sui.keystore
+          envs:
+            - alias: testnet
+              rpc: "https://fullnode.testnet.sui.io:443"
+              ws: ~
+              basic_auth: ~
+          active_env: testnet
+          active_address: ~
+          EOF
+          echo "SUI_CONFIG_DIR=$cfg" >> "$GITHUB_ENV"
+
+      - name: Check Sui CLI version
+        run: |
+          actual="$(printf 'n\n' | sui --version)"
+          echo "$actual"
+          [ "$actual" = "sui ${SUI_VERSION}-${SUI_COMMIT}" ]
+
+      - name: Cache Move git dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.move/git
+          key: move-git-${{ runner.os }}-${{ env.SUI_VERSION }}-${{ hashFiles('contracts/Move.lock') }}
+
+      - name: Build (warnings como error)
+        run: printf 'n\n' | sui move build -e testnet --warnings-are-errors
+      - name: Lint (warnings como error)
+        run: printf 'n\n' | sui move build -e testnet --lint --warnings-are-errors
+      - name: Test (warnings como error)
+        run: printf 'n\n' | sui move test -e testnet --warnings-are-errors
+
+      - name: Move.lock y árbol sin cambios tras los gates (PROY-11)
+        if: ${{ !cancelled() }}
+        run: |
+          git diff --exit-code -- Move.lock
+          git status --porcelain --untracked-files=all
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Guarda de cero claves
+        if: ${{ !cancelled() }}
+        run: |
+          ls -A "$SUI_CONFIG_DIR"
+          test "$(tr -d '[:space:]' < "$SUI_CONFIG_DIR/sui.keystore")" = "[]" \
+            || { echo "::error::el keystore de CI no está vacío"; exit 1; }
+          test -z "$(find "$SUI_CONFIG_DIR" -name '*.keystore' ! -name sui.keystore)" \
+            || { echo "::error::apareció otro keystore en SUI_CONFIG_DIR"; exit 1; }
+          test ! -e "$HOME/.sui" \
+            || { echo "::error::existe ~/.sui: la CLI ignoró SUI_CONFIG_DIR"; exit 1; }
+
+  # TODO(#9): job `app` (Node de .nvmrc con actions/setup-node fijada por SHA; npm ci; lint, typecheck,
+  # test y build -w app), sin `needs` sobre `contracts` para que corran en paralelo.
+
+  framework-drift:
+    # Informativo (STATUS H13): nunca bloquea ni será check requerido; avisa con ::warning:: y en el resumen.
+    # Presupuesto: 3 descargas × (≤15 s por intento, reintentos dentro de 40 s) ≈ 3 min < 4 min del step.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: PV de testnet vs framework pineado en Move.lock
+        timeout-minutes: 4
+        continue-on-error: true
+        shell: bash --noprofile --norc {0}     # sin -e: el script decide y termina siempre en 0
+        run: |
+          warn() { echo "::warning title=H13::$1"; echo "- ⚠️ $1" >> "$GITHUB_STEP_SUMMARY"; }
+          finished=0
+          trap '[ "$finished" = 1 ] || warn "chequeo H13 incompleto: el script terminó antes de llegar al final"' EXIT
+          curl_get() { curl -fsSL --max-time 15 --retry 3 --retry-all-errors --retry-max-time 40 "$@"; }
+          is_int() { [[ "$1" =~ ^[0-9]+$ ]]; }
+          RAW="https://raw.githubusercontent.com/MystenLabs/sui/testnet-v${SUI_VERSION}/crates"
+          lock_rev() {
+            sed -n "/^\[pinned\.testnet\.$1\]\$/,/^\[/p" contracts/Move.lock \
+              | grep -oE 'rev = "[0-9a-f]{40}"' | head -n 1 | grep -oE '[0-9a-f]{40}'
+          }
+          LOCK_REV="$(lock_rev Sui)"
+          STD_REV="$(lock_rev MoveStdlib)"
+          if [ -z "$LOCK_REV" ]; then warn "no se encontró el rev de [pinned.testnet.Sui] en contracts/Move.lock"; finished=1; exit 0; fi
+          [ "$STD_REV" = "$LOCK_REV" ] || warn "MoveStdlib (${STD_REV:-vacío}) y Sui (${LOCK_REV}) tienen revs distintos en Move.lock"
+
+          GQL="$(curl_get -X POST -H 'content-type: application/json' \
+            -d '{"query":"{ epoch { epochId protocolConfigs { protocolVersion } } }"}' \
+            https://graphql.testnet.sui.io/graphql)"
+          TESTNET_PV="$(jq -r '.data.epoch.protocolConfigs.protocolVersion // empty' <<<"$GQL" 2>/dev/null)"
+          EPOCH="$(jq -r '.data.epoch.epochId // empty' <<<"$GQL" 2>/dev/null)"
+          if ! is_int "$TESTNET_PV"; then warn "no se pudo leer la PV de testnet por GraphQL"; finished=1; exit 0; fi
+
+          MANIFEST="$(curl_get "$RAW/sui-framework-snapshot/manifest.json")"
+          EXPECTED_PV="$(jq -r --argjson pv "$TESTNET_PV" '[keys[] | tonumber | select(. <= $pv)] | max // empty' <<<"$MANIFEST" 2>/dev/null)"
+          EXPECTED_REV="$(jq -r --arg k "$EXPECTED_PV" '.[$k].git_revision // empty' <<<"$MANIFEST" 2>/dev/null)"
+          LOCK_PV="$(jq -r --arg r "$LOCK_REV" '[to_entries[] | select(.value.git_revision == $r) | .key | tonumber] | max // empty' <<<"$MANIFEST" 2>/dev/null)"
+          if [ -z "$EXPECTED_REV" ]; then warn "no se pudo leer el manifest del framework de la CLI ${SUI_VERSION}"; finished=1; exit 0; fi
+          [ -n "$LOCK_PV" ] || warn "el rev del lock (${LOCK_REV:0:12}) no está en el manifest de la CLI ${SUI_VERSION}"
+
+          CLI_MAX_PV="$(curl_get "$RAW/sui-protocol-config/src/lib.rs" | sed -nE 's/^const MAX_PROTOCOL_VERSION: u64 = ([0-9]+);.*/\1/p' | head -n 1)"
+          if ! is_int "$CLI_MAX_PV"; then
+            warn "no se pudo leer MAX_PROTOCOL_VERSION de la CLI ${SUI_VERSION}"
+          elif [ "$TESTNET_PV" -gt "$CLI_MAX_PV" ]; then
+            warn "CLI atrasada: testnet en PV ${TESTNET_PV}, la CLI ${SUI_VERSION} llega a ${CLI_MAX_PV} (pre-vuelo #8, paso 1)"
+          fi
+
+          if [ "$LOCK_REV" != "$EXPECTED_REV" ]; then
+            verdict="lock atrasado: repinear en el pre-vuelo de #8"
+            warn "Move.lock en PV ${LOCK_PV:-?} (${LOCK_REV:0:12}); el framework vigente en testnet (PV ${TESTNET_PV}) es el de PV ${EXPECTED_PV} (${EXPECTED_REV:0:12}): repinear en el pre-vuelo de #8 (paso 2)"
+          else
+            verdict="lock al día"
+          fi
+          {
+            echo "### H13 — framework pineado vs testnet (informativo)"
+            echo ""
+            echo "| Época | PV testnet | Framework vigente (PV / rev) | Move.lock (PV / rev) | PV máx. CLI ${SUI_VERSION} | Veredicto |"
+            echo "|---|---|---|---|---|---|"
+            echo "| ${EPOCH:-?} | ${TESTNET_PV} | ${EXPECTED_PV} / \`${EXPECTED_REV:0:12}\` | ${LOCK_PV:-?} / \`${LOCK_REV:0:12}\` | ${CLI_MAX_PV:-?} | ${verdict} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          finished=1
+          exit 0
