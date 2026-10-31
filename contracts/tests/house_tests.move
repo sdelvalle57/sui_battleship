@@ -1,3 +1,6 @@
+// Copyright (c) 2025-2026 sdelvalle57
+// SPDX-License-Identifier: Apache-2.0
+
 #[test_only]
 module battleship::house_tests;
 
