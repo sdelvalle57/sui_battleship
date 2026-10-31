@@ -36,7 +36,7 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 
 | Área @ ref | Gate | Resultado |
 |---|---|---|
-| contracts/ @ `feature/issue-5-game` (`67fa60d`, TASK-1 de #5), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet --warnings-are-errors` | 🟢 exit 0. **0 warnings**. Módulos: `contracts/sources/house.move`, `contracts/sources/game.move` |
+| contracts/ @ `master` (`a69fe7c`, merge de #30; medido en `67fa60d`, mismo código), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet --warnings-are-errors` | 🟢 exit 0. **0 warnings**. Módulos: `contracts/sources/house.move`, `contracts/sources/game.move` |
 | | `sui move build -e testnet --lint --warnings-are-errors` | 🟢 exit 0. **0 lints** |
 | | `sui move test -e testnet --warnings-are-errors` | 🟢 exit 0. **52 tests PASS** (26 `house_tests` + 26 `game_tests`); `Move.lock` sin delta |
 | | `sui move test -e testnet --coverage` + `sui move coverage summary -e testnet` | Informativo: `battleship::house` **100 %**, `battleship::game` **98,02 %** (sin cubrir solo el brazo `Resolved` de `is_pending`, alcanzable desde #6), total 99,03 % |
@@ -86,7 +86,7 @@ mismos conteos por archivo.
 | #4 (House) | ✅ 2026-10-30 | PR #24 mergeado (`68d1afe`); MAYOR APPROVE. 26 tests, coverage 100 %. Artefactos borrados en el housekeeping (`git show 68d1afe:documents/PLAN_HOUSE.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_HOUSE.md`) |
 | Licencia | ✅ 2026-10-30 | Apache-2.0 (D-20261030-14): `LICENSE` en la raíz y cabecera `// Copyright (c) 2025-2026 sdelvalle57` + SPDX en los fuentes Move |
 | #3 (CI) | ✅ 2026-10-30 | PR #27 mergeado (`ae89cd5`); MAYOR APPROVE; run `push` en `master` verde. Artefactos borrados en el housekeeping (`git show ae89cd5:documents/PLAN_CI.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_CI.md`) |
-| #5 (Game: crear/cancelar/rechazar) | 🚧 2026-10-30 | Plan v1.1 aprobado (D-20261030-15); handoff v1.1. TASK-1 (contrato + 26 tests, `67fa60d`) y TASK-2 (docs) PASA; PR abierto contra `master` (merge con el check `contracts` en verde) |
+| #5 (Game: crear/cancelar/rechazar) | ✅ 2026-10-31 | PR #30 mergeado (`a69fe7c`); MAYOR APPROVE; CI `contracts` verde (52/52). Artefactos borrados en el housekeeping (`git show a69fe7c:documents/PLAN_GAME.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_GAME.md`) |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -136,3 +136,4 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 | #2 Monorepo (`contracts/`), legado retirado, Node 26 | #22 → `48df3b4` | 2026-10-30 |
 | #4 House: `HouseCap`, límites, `add_fees`, eventos, versionado, 26 tests | #24 → `68d1afe` | 2026-10-30 |
 | #3 CI de contratos (`ci.yml`: `contracts` + `framework-drift`) | #27 → `ae89cd5` | 2026-10-30 |
+| #5 Game: crear/cancelar/rechazar, 26 tests | #30 → `a69fe7c` | 2026-10-31 |
