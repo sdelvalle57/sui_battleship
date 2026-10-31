@@ -163,8 +163,8 @@ Es un runbook vivo: el resultado de cada paso se registra en el mismo documento.
 > Plan: PLAN_<TEMA> vX | Issue: #N | Fecha: YYYY-MM-DD | Estado: EN CURSO / COMPLETADO
 
 ## Precondiciones
-- Red: (localnet: `sui start --with-faucet --force-regenesis` / testnet + packageId)
-- Cuentas: (dirección A, dirección B, con SUI de faucet)
+- Red: (localnet **aislada** según `agents.md` §3, "Localnet aislada (smokes)" / testnet + packageId)
+- Cuentas: (dirección A, dirección B: de la génesis aislada en localnet o con SUI de faucet en testnet)
 - Cliente: (CLI / `npm run dev -w app` + wallet)
 
 ## Pasos

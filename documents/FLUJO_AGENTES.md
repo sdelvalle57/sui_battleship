@@ -118,7 +118,7 @@ NO PASA = hallazgos concretos con fix esperado, nunca "mejóralo". PASA = se aut
 
 ## 6. Formato de smoke tests (localnet / testnet / navegador)
 
-El DEV ejecuta lo que pueda (localnet con `sui start --with-faucet --force-regenesis`, direcciones de prueba de la CLI, `sui client call`/PTBs, la app en `npm run dev`). Lo que requiere la wallet del owner o testnet con fondos reales de faucet se entrega como checklist ejecutable sin contexto. El documento (`documents/SMOKE_<TEMA>.md`, formato en `agentes/AGENTE_MID.md` §M5) se completa **durante la corrida** — nunca por adelantado:
+El DEV ejecuta lo que pueda (localnet **aislada** según `agents.md` §3 (Localnet aislada); nunca `sui start` a secas; direcciones de prueba de la CLI, `sui client call`/PTBs, la app en `npm run dev`). Lo que requiere la wallet del owner o testnet con fondos reales de faucet se entrega como checklist ejecutable sin contexto. El documento (`documents/SMOKE_<TEMA>.md`, formato en `agentes/AGENTE_MID.md` §M5) se completa **durante la corrida** — nunca por adelantado:
 
 ```markdown
 ## Smoke test: [nombre del flujo]

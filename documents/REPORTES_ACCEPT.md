@@ -145,3 +145,72 @@ DEV aplica H1 → commit de TASK-1 → TASK-2 autorizado (baseline 83 tests, `ga
 - Reemplazadas solo `game.move:5`, `:35` y `:49` con el texto literal del MID (script que exige coincidencia exacta del original).
 - Gates (output literal pegado por el DEV): build exit 0 / 0 warnings; `--lint` exit 0 / 0 lints; test exit 0, `Test result: OK. Total tests: 83; passed: 83; failed: 0`; `Move.lock` sin delta; `grep -n '#[0-9]' contracts/sources/game.move` → exit 1 (vacío).
 - Orquestador: `diff` entre la copia revisada por el MID y el archivo actual = exactamente esas 3 líneas.
+
+## Task completado: HANDOFF_ACCEPT — TASK-2 (docs)
+
+> Reporte del DEV transcrito por el orquestador (los greps de criterio y secretos, literales; la salida de test, resumida: 83 líneas `[ PASS ]`, las mismas de TASK-1).
+
+Docs alineadas con `accept_game`; gates cero delta; sin STOP. Branch @ `1630eaa`, cambios sin commitear. `git diff --stat HEAD`: `agents.md` +120, `contracts/README.md` +167, `ESTANDARES.md` 6, `FLUJO_AGENTES.md` 2, `STATUS.md` 17 (243+/69−). Sin tocar código, `Move.*`, DECISIONES, REPORTES, SMOKE, plan, handoff, README raíz ni `~/.sui/`. No se hizo el smoke.
+
+### Qué se implementó (3 líneas máx)
+- `contracts/README.md`: sección `battleship::game` completa 1:1 con `game.move` (`accept_game` con aborts en orden, 4 privadas, `GameResolved`, códigos 7-10, comisión, Aleatoriedad, Cancelaciones del runtime, PTB con `Random`, Carreras, Versionado en 3 casos, Contención); referencias "(#6)" de la sección House actualizadas.
+- `agents.md`: §3 nueva subsección "Localnet aislada (smokes)" con el procedimiento completo (n1); §2 (`contracts/fixtures/`), §6, §7 (3 gotchas nuevos), §8, §9.
+- ESTANDARES v1.6 (PROY-5/7 por D-16), FLUJO §6 (localnet aislada), STATUS (baseline 83 / 100 % sobre `1630eaa`, H7/H9 ✅, roadmap, fila #6).
+
+### Tests y gates (output pegado)
+```
+$ grep -nE "\(#6\)|GameAccepted|resolve_game|Active" contracts/README.md agents.md documents/ESTANDARES.md contracts/sources/game.move
+documents/ESTANDARES.md:70:- **PROY-10 — Upgrades.** … comparada solo al aceptar (#6); …
+agents.md:190:> D-20261030-15 (#5), y **comisión y aceptar/coinflip** por D-20261030-16 (#6); contrato en
+contracts/README.md:181:Sin estado `Active` y **sin expiración** (D-20261030-06 §1-§2): `accept_game` acepta y resuelve en la misma
+$ grep -n "\(#6\)" contracts/sources/game.move; echo "exit=$?"
+exit=1
+$ grep -n "force-regenesis" agents.md documents/FLUJO_AGENTES.md
+agents.md:85:**Motivo:** con `--force-regenesis` y sin `SUI_CONFIG_DIR`, `sui start` reescribe
+agents.md:122:4. **Génesis y arranque** (sin `--force-regenesis` ni faucet; la génesis crea 5 cuentas con fondos y un
+agents.md:239:- **Localnet sin aislar:** `sui start --with-faucet --force-regenesis` sin `SUI_CONFIG_DIR` reescribe
+$ printf 'n\n' | sui --version
+sui 1.83.0-16d2dc1e05ed
+$ printf 'n\n' | sui client active-env
+testnet
+build --warnings-are-errors: exit=0 · --lint --warnings-are-errors: exit=0
+test --warnings-are-errors: Test result: OK. Total tests: 83; passed: 83; failed: 0 · exit=0
+$ git diff --exit-code -- contracts/Move.lock; echo "exit=$?"
+exit=0
+$ git diff --stat HEAD -- contracts/sources contracts/tests contracts/Move.toml contracts/Move.lock documents/DECISIONES.md documents/REPORTES_ACCEPT.md documents/SMOKE_ACCEPT.md
+(vacío)
+grep de orden: idéntico a TASK-1 (7 líneas; `new_generator` una vez) · azar alternativo y `if (`: vacíos · visibilidad: solo `142:entry fun accept_game(`
+$ git diff -U0 "$B" | grep -E '^\+' | grep -inE 'suiprivkey|recoveryPhrase|recovery_phrase|mnemonic|PRIVATE KEY'
+(7 líneas: comando en HANDOFF_ACCEPT.md ×2 y PLAN_ACCEPT.md ×2; transcripción del comando en REPORTES_ACCEPT.md; cita de `recovery_phrase` y patrón del hallazgo n4 en REVISION_PLAN_ACCEPT.md)
+$ git diff -U0 HEAD | grep -E '^\+' | grep -inE '…'   (cambios de TASK-2)
+exit=1
+```
+Clasificación del grep de criterio: `game.move` vacío (guarda); `ESTANDARES.md:70` y `agents.md:190` atribuciones históricas; `README.md:181` negación (ejemplo del handoff). Tablas del README: 10/10 firmas literales, códigos y eventos cotejados.
+
+### Desviaciones del handoff
+- `agents.md` §3 suma línea base `stat`/`ls` de `~/.sui/sui_config/`, publicación efímera con `test-publish --pubfile-path` (+ `git checkout -- contracts/Move.lock`) y chequeo de `Pub.*.toml`/`Published.toml` en el cierre (copias literales del handoff/runbook; completan el procedimiento para #17).
+- README: Contención propia, ejemplo `sui client ptb` de aceptar, "el resultado se lee de `GameResolved` o del objeto"; referencias de House a `accept_game`.
+
+### Riesgos / pendientes
+- `documents/agentes/AGENTE_DEV.md:63` y `AGENTE_MID.md:166` siguen recomendando `sui start --with-faucet --force-regenesis` (fuera del alcance de TASK-2).
+- PROY-10 conserva "(#6)" (histórico).
+- Procedimiento de localnet sin probar: lo valida TASK-3.
+
+## Revisión TASK-2: PASA (con retoques literales H1-H4, aplicados por el orquestador)
+
+> Revisión del MID transcrita por el orquestador.
+
+README 1:1 con `game.move` @ `1630eaa` (10 funciones, firmas carácter por carácter; aborts de `accept_game` 7 → 8 → 9 → 5 → 4 → 10 → `house::EWrongVersion`; tabla 7-10 = `game.move:23-26`; `GameResolved` = `:75-83`; versionado en 3 casos; comisión, aleatoriedad, PTB, cancelaciones del runtime, carreras y contención = código y D-16). `agents.md` §3 "Localnet aislada" (`:83-141`) correcta y completa (7 puntos de n1), salvo H1; desviaciones del DEV aceptadas. Resto del diff correcto; secretos solo en líneas de `REPORTES_ACCEPT.md` que transcriben el patrón, 0 en `contracts/`. Decisiones: `AGENTE_DEV.md:63` y `AGENTE_MID.md:166-167` se corrigen ya (H2); el "(#6)" de PROY-10 se queda (atribución histórica).
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| H1 | PROY-20 | `agents.md:129` | Publicación efímera en el paso 4 usa `$ADMIN` del paso 5 | Texto literal del MID (después del paso 5) — aplicado |
+| H2 | SEG-3, D-07, FLUJO §6 | `AGENTE_DEV.md:63`; `AGENTE_MID.md:166-167` | Recomiendan `sui start --with-faucet --force-regenesis` | Texto literal del MID — aplicado |
+| H3 | Sugerencia | `agents.md:139` | `rm -rf` con la red aún escribiendo | Confirmar fin con `kill -0` antes de borrar — aplicado |
+| H4 | STATUS | `STATUS.md` fila #6 | "TASK-2 en revisión" | `TASK-2 ✅ (docs, MID PASA)` — aplicado |
+| H5 | Proceso | este archivo | build/lint resumidos | Sin acción; en TASK-3 output literal |
+
+Verificación del orquestador: `git diff --stat HEAD -- contracts/` vacío; `grep -rn force-regenesis documents/agentes/` vacío. **TASK-3 autorizado.**
+
+### Mensaje de commit propuesto
+`docs: document accept_game and the isolated localnet procedure (#6)`.

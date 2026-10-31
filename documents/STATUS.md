@@ -10,11 +10,11 @@ del orquestador sobre `master`:
 
 | Roadmap original (README) | Estado real |
 |---|---|
-| 1. Diseño de recursos | 🚧 House ✅ (#4); Game: crear/cancelar/rechazar ✅ (#5), aceptar + coinflip en #6; Escrow absorbido en Game (D-20261030-15) |
+| 1. Diseño de recursos | ✅ House (#4); Game: crear/cancelar/rechazar (#5) y aceptar + coinflip (#6, `1630eaa`); Escrow absorbido en Game (D-20261030-15) |
 | 2. House module | ✅ reescrito en #4 (`040f3c0`): `HouseCap`, límites, `add_fees`, eventos, versionado |
-| 3. Game module | 🚧 `battleship::game` en #5 (crear/cancelar/rechazar, `67fa60d`); aceptar + coinflip en #6 |
+| 3. Game module | ✅ `battleship::game`: crear/cancelar/rechazar en #5 (`67fa60d`); `accept_game` con coinflip, comisión y `GameResolved` en #6 (`1630eaa`) |
 | 4. Escrow module | ✅ absorbido en Game (D-20261030-15): la apuesta es `stake: Balance<SUI>` de cada `Game` |
-| 5. Tests | 🚧 suites de House (26 tests, #4) y Game (26 tests, #5); aceptar/coinflip en #6 |
+| 5. Tests | ✅ suites de House (26 tests, #4) y Game (57 tests: 26 de #5 + 31 de aceptar/coinflip en #6, `1630eaa`); coverage 100 % |
 | 6. Docs y despliegue | ⬜ |
 | UI React | ⬜ no existe (D-20261030-03) |
 
@@ -36,6 +36,10 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 
 | Área @ ref | Gate | Resultado |
 |---|---|---|
+| contracts/ @ `feature/issue-6-accept` (`1630eaa`, TASK-1 de #6), CLI `1.83.0`, 2026-10-31 | `sui move build -e testnet --warnings-are-errors` | 🟢 exit 0. **0 warnings**. Módulos: `contracts/sources/house.move`, `contracts/sources/game.move` |
+| | `sui move build -e testnet --lint --warnings-are-errors` | 🟢 exit 0. **0 lints** |
+| | `sui move test -e testnet --warnings-are-errors` | 🟢 exit 0. **83 tests PASS** (26 `house_tests` + 57 `game_tests`); `Move.lock` sin delta |
+| | `sui move test -e testnet --coverage` + `sui move coverage summary -e testnet` | Informativo: `battleship::house` **100 %**, `battleship::game` **100 %**, total 100 % |
 | contracts/ @ `master` (`a69fe7c`, merge de #30; medido en `67fa60d`, mismo código), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet --warnings-are-errors` | 🟢 exit 0. **0 warnings**. Módulos: `contracts/sources/house.move`, `contracts/sources/game.move` |
 | | `sui move build -e testnet --lint --warnings-are-errors` | 🟢 exit 0. **0 lints** |
 | | `sui move test -e testnet --warnings-are-errors` | 🟢 exit 0. **52 tests PASS** (26 `house_tests` + 26 `game_tests`); `Move.lock` sin delta |
@@ -67,9 +71,9 @@ mismos conteos por archivo.
 | H4 | house | ✅ 2026-10-30 (#4, `040f3c0`). Antes, `EInsufficientBalance` se usaba para el fee y para fees = 0. Ahora un abort code por condición (0–4, `contracts/README.md`). | — |
 | H5 | house | ✅ 2026-10-30 (#4, `040f3c0`): `public(package) add_fees`, `update_bet_limits`, accessors `min_bet`/`max_bet` y 5 eventos. | — |
 | H6 | game | `start_game` construye `GameRequest` sin la mayoría de campos: no compila (`game.move:55-59`). | ✅ 2026-10-30 (#2): archivo retirado; `battleship::game` se crea desde cero en #5 |
-| H7 | game | `GamePool` con `vector<GameRequest>` compartido; `escrow: u64` sin custodia; `TurnCap` sin uso; estados `Finished`/`Resolution`/`Resolved` solapados. | 🚧 parcial (#5, `67fa60d`): un `Game` compartido por partida (sin pool), apuesta en `stake: Balance<SUI>` (sin escrow), sin `TurnCap`, `GameState` = `Pending \| Cancelled \| Resolved`; la resolución llega en #6. Diseño 2025: `git show f063a0e:sources/Game/game.move` |
+| H7 | game | `GamePool` con `vector<GameRequest>` compartido; `escrow: u64` sin custodia; `TurnCap` sin uso; estados `Finished`/`Resolution`/`Resolved` solapados. | ✅ 2026-10-31: #5 (`67fa60d`): un `Game` compartido por partida (sin pool), apuesta en `stake: Balance<SUI>` (sin escrow), sin `TurnCap`, `GameState` = `Pending \| Cancelled \| Resolved`; #6 (`1630eaa`): `accept_game` resuelve de forma atómica con `sui::random` (D-20261030-16). Diseño 2025: `git show f063a0e:sources/Game/game.move` |
 | H8 | legado | Borrador 2025 de tablero/barcos sin uso; `new_game` usaba `player1` tras moverlo (no compilaba). | ✅ 2026-10-30 (#2): borrado (D-20261030-10); se recupera con `git show f063a0e:sources/battleship.move` (#18) |
-| H9 | tests | El único archivo de tests estaba comentado entero. | 🚧 parcial: el test comentado se retiró en #2 (`git show f063a0e:tests/battleship_tests.move`); suite de House en #4 (26 tests, `040f3c0`); suite de Game en #5 (26 tests, `67fa60d`); aceptar/coinflip en #6 |
+| H9 | tests | El único archivo de tests estaba comentado entero. | ✅ 2026-10-31: el test comentado se retiró en #2 (`git show f063a0e:tests/battleship_tests.move`); suite de House en #4 (26 tests, `040f3c0`); suite de Game en #5 (26 tests, `67fa60d`) y #6 (+31: aceptar, ambos resultados del coinflip con `sui::random`, comisión y conservación, `1630eaa`): 83 tests, coverage 100 % |
 | H10 | docs | README dice "2 vs 2"; el diseño es 1 vs 1. Roadmap marca el Escrow como diseñado. | Actualizar README en el issue de docs |
 | H11 | toolchain | `sui move` exige `client.yaml`. Sin él, la CLI crea una clave e imprime su frase (`sui_commands.rs:584, 1630-1648` @ `testnet-v1.83.0`), y `-e` no lo evita. | ✅ 2026-10-30: resuelto con una config sin claves (D-20261030-07). **#3:** ✅ 2026-10-30: el job `contracts` escribe la misma config sin claves en `$RUNNER_TEMP/sui_config`, exporta `SUI_CONFIG_DIR` y corre una guarda de cero claves (keystore `[]`, ningún otro keystore, sin `~/.sui`) en cada run (R1 de #3). **#7:** al publicar, la CLI escribe `Published.toml` (se commitea) y `Pub.*.toml` efímeros (ignorados en `.gitignore`). `Published.toml` se superpone con `contracts/deployments/<red>.json` (D-20261030-03, ARQ-6): #7 define cuál es la fuente del `packageId` y cuál se deriva. **#8:** el owner agrega su clave a este mismo `client.yaml` desde su terminal, sin agentes |
 | H12 | house | ✅ 2026-10-30 (#4, `040f3c0`). Antes, lint `WSL06010` (`prefer_mut_tx_context`): `update_fee_rate` era `public` y recibía `&TxContext`. Ahora es `entry` sin `ctx` y ninguna función recibe `&TxContext` inmutable; `sui move build -e testnet --lint` da 0 lints. | — |
@@ -87,6 +91,7 @@ mismos conteos por archivo.
 | Licencia | ✅ 2026-10-30 | Apache-2.0 (D-20261030-14): `LICENSE` en la raíz y cabecera `// Copyright (c) 2025-2026 sdelvalle57` + SPDX en los fuentes Move |
 | #3 (CI) | ✅ 2026-10-30 | PR #27 mergeado (`ae89cd5`); MAYOR APPROVE; run `push` en `master` verde. Artefactos borrados en el housekeeping (`git show ae89cd5:documents/PLAN_CI.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_CI.md`) |
 | #5 (Game: crear/cancelar/rechazar) | ✅ 2026-10-31 | PR #30 mergeado (`a69fe7c`); MAYOR APPROVE; CI `contracts` verde (52/52). Artefactos borrados en el housekeeping (`git show a69fe7c:documents/PLAN_GAME.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_GAME.md`) |
+| #6 (Game: aceptar + coinflip, pago y comisión) | 🚧 2026-10-31 | Branch `feature/issue-6-accept`. Plan v2 aprobado por el MAYOR (D-20261030-16); `documents/PLAN_ACCEPT.md`, `REVISION_PLAN_ACCEPT.md`, `HANDOFF_ACCEPT.md`, `SMOKE_ACCEPT.md`, `REPORTES_ACCEPT.md`. TASK-1 ✅ (`1630eaa`, MID PASA: `accept_game`, `GameResolved`, aborts 7-10, 83 tests); TASK-2 ✅ (docs, MID PASA); TASK-3 (smoke en localnet aislada, storage, fixtures) pendiente |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -123,7 +128,7 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 ## Pendientes del usuario
 
-- Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #3 resuelto (D-20261030-13; protección de `master` y SHA-pinning de Actions aplicados el 2026-10-30); #5 resuelto (D-20261030-15); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06).
+- Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #3 resuelto (D-20261030-13; protección de `master` y SHA-pinning de Actions aplicados el 2026-10-30); #5 resuelto (D-20261030-15); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06); #6 resuelto (D-20261030-16).
 - **Post-publicación (#8):** `update_fee_rate` antes de anunciar el juego (fee por defecto 0, D-20261030-11): las partidas creadas antes quedan con comisión 0 para siempre.
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
