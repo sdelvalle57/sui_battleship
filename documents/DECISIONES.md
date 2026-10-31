@@ -22,6 +22,7 @@
 - **Decisión:** el repo se publica bajo **Apache-2.0** (la misma del framework de Sui): `LICENSE` con el texto oficial en la raíz y cabecera `// Copyright (c) 2025-2026 sdelvalle57` + `// SPDX-License-Identifier: Apache-2.0` en los fuentes Move (`house.move` y los que vengan, empezando por `game.move` en #5). Titular: el handle de GitHub del owner (`sdelvalle57`), modificable si el usuario prefiere su nombre legal.
 - **Alternativa descartada:** MIT; quitar la cabecera.
 - **Motivo:** misma licencia que el framework de Sui; la cabecera SPDX Apache-2.0 ya estaba en los fuentes.
+- **Aclaración (2026-10-30, orquestador; revisión v1.1 del plan de #5, v1.1-5):** "fuentes Move" incluye los módulos de test (`contracts/tests/*.move`); `house_tests.move` se alinea en #5.
 - **Aprobado por:** usuario ("vamos con todas las recomendadas", 2026-10-30; titular tomado del usuario git/GitHub del owner). **Fecha:** 2026-10-30.
 
 ### D-20261030-13 — CI de contratos (STOPs de #3)
