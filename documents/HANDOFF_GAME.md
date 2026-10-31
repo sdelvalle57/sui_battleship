@@ -1,6 +1,7 @@
 # HANDOFF_GAME
+> **v1.1 (2026-10-30, transcrito por el orquestador de la revisión MID de TASK-1):** suma el test 26 `test_reject_by_other_on_cancelled_invite_reports_not_invited` (`expected_failure(abort_code = battleship::game::ENotInvited)`: invitación a INVITEE, el creador cancela, `next_tx(OTHER)` + `reject_game`), que fija el orden de aborts de `reject_game`; totales ≥ 52 (≥ 26 de Game).
 > Plan: `documents/PLAN_GAME.md` v1.1 (aprobado por el MAYOR, `documents/REVISION_PLAN_GAME.md` "Revisión v1.1") | Issue: #5 |
-> Branch: `feature/issue-5-game` (desde `master` @ `b00c093`) | Versión: v1 | Fecha: 2026-10-30 | Autor: MID
+> Branch: `feature/issue-5-game` (desde `master` @ `b00c093`) | Versión: v1.1 | Fecha: 2026-10-30 | Autor: MID
 > Aplica además los MINOR v1.1-1 (forma de la cabecera y `numstat` de `house_tests.move`) y v1.1-2 (forma exacta del
 > enum por RPC) de la revisión v1.1, y v1.1-3/v1.1-4 como notas para #6 y para el README.
 > Dos tasks, en orden: **TASK-1** (contracts) y **TASK-2** (docs). Un reporte por task (plantilla de
@@ -23,7 +24,7 @@ Verificado por el MID con `git log`, `git diff`, `gh run list` y `documents/STAT
 | CI en `master` | 🟢 job `contracts` success en el run push [41150550292](https://github.com/sdelvalle57/sui_battleship/actions/runs/41150550292) (`ae89cd5`, 26/26 con `--warnings-are-errors`) y en el run push 41150747000 (`b00c093`). `framework-drift` es informativo (warning H13 esperado) |
 | Protección de `master` | el check `contracts` debe estar verde para mergear el PR de #5 (D-20261030-13) |
 
-**Cero delta esperado en House:** los 26 tests de House siguen PASS sin cambios. El total sube a **≥ 51** (≥ 25 de Game).
+**Cero delta esperado en House:** los 26 tests de House siguen PASS sin cambios. El total sube a **≥ 52** (≥ 26 de Game).
 
 ## Decisiones del owner (no reabrir)
 
@@ -339,7 +340,7 @@ Helpers sugeridos (el DEV puede ajustarlos y lo declara):
 - **NO tocar:** `contracts/sources/house.move`, el resto de `house_tests.move`, `contracts/Move.toml`,
   `contracts/Move.lock`, `contracts/README.md`, `.gitignore`, `.github/`, `agents.md`, `documents/`.
 
-### 5. Tests obligatorios (≥ 25; nombres = comportamiento, LIM-11)
+### 5. Tests obligatorios (≥ 26; nombres = comportamiento, LIM-11)
 
 `expected_failure(abort_code = battleship::game::E…)` salvo el 9 (`battleship::house::EWrongVersion`). En los
 `expected_failure`, mantener las líneas de limpieza como en `house_tests.move`.
@@ -391,7 +392,7 @@ No aplica: el issue lo difiere a #6 (ciclo completo en localnet, donde además s
 
 - Firmas, visibilidades (`entry` sin `public` en las tres), struct, enum, eventos, abort codes y orden de aborts
   exactamente como §3.2.
-- Gates (§8) en verde: build 0 warnings, `--lint` 0 lints, test con **≥ 51 tests** (26 House + ≥ 25 Game) todos
+- Gates (§8) en verde: build 0 warnings, `--lint` 0 lints, test con **≥ 52 tests** (26 House + ≥ 26 Game) todos
   PASS, todo con `--warnings-are-errors`; `Move.lock` sin cambios; coverage informativo (objetivo 100 % de `battleship::game`).
 - Contra el merge-base: diff vacío en `Move.toml`, `Move.lock`, `house.move`; `house_tests.move` con `numstat` `3	0`.
 - `head -3` de los tres archivos `.move` tocados = §3.1.
@@ -435,7 +436,7 @@ git ls-files --others --exclude-standard -z | xargs -0 -r grep -inE 'suiprivkey|
 ```
 
 **Resultados esperados:** `sui 1.83.0-16d2dc1e05ed`; `active-env` = `testnet`; exits 0; 0 warnings; 0 lints;
-≥ 51 tests PASS; `Move.lock` exit 0; `git status` muestra solo `game.move`, `game_tests.move`, `house_tests.move` y,
+≥ 52 tests PASS; `Move.lock` exit 0; `git status` muestra solo `game.move`, `game_tests.move`, `house_tests.move` y,
 si existen, los reportes del ciclo (los artefactos de coverage están ignorados); `--stat` vacío; `numstat` = `3	0`;
 `head -3` = §3.1 en los tres; grep de legado vacío; `ctx.sender()` solo dentro de `create_game`, `cancel_game` y
 `reject_game`; las líneas de `cancel_game`/`reject_game`/`refund_creator` sin `House`; `version` solo en el `///` y
@@ -586,6 +587,8 @@ TASK-1 (solo líneas que contienen el propio patrón + la línea declarada de `P
 ---
 
 ## Para el orquestador (no es trabajo del DEV)
+
+- Notas para el plan de #6 (revisión MID de TASK-1; comentadas en el issue #6): tests de `cancel_game` y `reject_game` sobre una partida `Resolved` que aborten con `ENotPending` (llevan `game` al 100 %), y un test que fije "authZ antes que estado" en aceptar si tiene authZ.
 
 - Al aprobarse el ciclo: comentar en el issue #18 que `GameState` y el layout de `Game` se congelan en #8 y que la
   batalla naval real necesitará un objeto nuevo o dynamic fields (plan v1.1, hallazgo 5).
