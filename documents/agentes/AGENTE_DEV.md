@@ -60,7 +60,7 @@ No reportes hasta marcar todo.
 
 ## Smoke
 
-Ejecuta tú lo que puedas en localnet (`sui start --with-faucet --force-regenesis`, direcciones de
+Ejecuta tú lo que puedas en localnet **aislada** (`agents.md` §3, "Localnet aislada (smokes)"; nunca `sui start` a secas; direcciones de
 prueba de la CLI, `sui client ptb`/`call`) y la app con `npm run dev -w app`. Lo que exige la wallet
 del owner o testnet se entrega como checklist (formato `FLUJO_AGENTES.md` §6).
 

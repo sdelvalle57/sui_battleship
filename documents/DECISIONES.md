@@ -12,6 +12,18 @@
 
 ## Recientes
 
+### D-20261031-01 — Fixtures de lectura diferidas a #10 (H-1 del smoke de #6)
+- **Decisión:** las fixtures de `getObject` de un `Game` no se capturan en #6. El fullnode de `sui 1.83.0` no sirve JSON-RPC (404 en localnet, H-1 del smoke de #6), así que #10 elige la API de lectura (gRPC o GraphQL) y captura ahí las fixtures reales. En #6, `contracts/README.md` ("Lectura desde la app") deja de presentar JSON-RPC como vía de lectura; `contracts/fixtures/` no se crea.
+- **Alternativa descartada:** commitear ahora fixtures en el formato de `sui client object --json` (no es el formato que usará la app); capturar JSON-RPC con indexer + PostgreSQL.
+- **Motivo:** H-1 del smoke de #6 (`documents/REPORTES_ACCEPT.md`, TASK-3): todo `POST` al JSON-RPC local da 404 y `sui-node` 1.83 monta solo `sui_rpc_api::RpcService`.
+- **Aprobado por:** usuario ("Diferir al #10", 2026-10-31). **Fecha:** 2026-10-31.
+
+### D-20261030-16 — Aceptar, sorteo, pago y comisión (STOPs de #6)
+- **Decisión:** (1) **D2 = (a)** comisión redondeada hacia abajo (floor, intermedio `u128`): el resto queda para el ganador; nunca se cobra más que el porcentaje anunciado. (2) **D3 = (a)** la comisión se calcula sobre el **pozo completo** (`2 × bet`): ganador recibe `pozo − comisión`. (3) **D4 = (a)** un solo evento `GameResolved { game_id, creator, acceptor, winner, pot, fee, payout }` (sin `GameAccepted`). (4) **D5 = (a)** `entry fun accept_game(game, house, payment, r: &Random, ctx)` (no `public`); aborts nuevos 7 `EVersionMismatch`, 8 `EWrongHouse`, 9 `ESelfPlay`, 10 `EWrongStake`, reuso de 4 `ENotPending` y 5 `ENotInvited`; orden versión → House → authZ → estado → monto. (5) **D6 = (a)** sorteo sin ramas: índice `generate_u8_in_range(0, 1)` sobre `[creador, aceptante]`, mismo camino y gas para ambos resultados; `add_fees` siempre (también con comisión 0).
+- **Alternativa descartada:** redondeo hacia arriba; comisión sobre la ganancia; `GameAccepted` + `GameResolved`; estado antes que authZ; reutilizar el nombre `EWrongVersion`; `generate_bool` + `if` (gas distinto por resultado, ataque de presupuesto de gas); commit-reveal en dos transacciones (reabre D-06 §1).
+- **Motivo:** recomendaciones del plan v1 de #6 (`documents/PLAN_ACCEPT.md`); documentación oficial de aleatoriedad de Sui; D-06 §1 (resolución atómica).
+- **Aprobado por:** usuario (2026-10-30: "Sobre el pozo", "Hacia abajo", "Uno solo", "Sí, ambas"). **Fecha:** 2026-10-30.
+
 ### D-20261030-15 — Diseño de `battleship::game` (STOPs de #5)
 - **Decisión:** (1) **D3 = (a)** la partida terminada se conserva como objeto compartido en estado `Cancelled`/`Resolved` con `Balance` 0; el depósito de storage (≈ 0,002–0,003 SUI por partida, a medir en el smoke de #6) no se recupera; es reversible con un borrado futuro restringido al creador. (2) **D4 = (a)** sin módulo Escrow: la apuesta vive como `Balance<SUI>` dentro de cada `Game`. (3) **D6 = (c)** sin timestamp en el contrato: la app usa el `timestampMs` del evento `GameCreated`. (4) **D8 = (a)** una sola `create_game(..., opponent: Option<address>, ...)`; `create_game`, `cancel_game` y `reject_game` son `entry` (no `public`); el rechazo del invitado es una función propia. (5) **DV = (b)** el `Game` guarda `version` al crearse (= `house.version()`); se compara solo al aceptar (#6); cancelar y rechazar nunca la leen (invariante D-20261030-12 §4).
 - **Alternativa descartada:** borrar el objeto terminal; módulo Escrow separado; `&Clock` o `epoch_timestamp_ms`; dos funciones de creación o visibilidad `public`; un único cancelar para creador e invitado; `Game` sin versión o con `migrate` propio.
