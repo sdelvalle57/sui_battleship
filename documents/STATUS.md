@@ -36,11 +36,11 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 
 | Área @ ref | Gate | Resultado |
 |---|---|---|
-| contracts/ @ `feature/issue-6-accept` (`1630eaa`, TASK-1 de #6), CLI `1.83.0`, 2026-10-31 | `sui move build -e testnet --warnings-are-errors` | 🟢 exit 0. **0 warnings**. Módulos: `contracts/sources/house.move`, `contracts/sources/game.move` |
+| contracts/ @ `master` (`8fddbda`, merge de #32; medido en `1630eaa`, mismo código), CLI `1.83.0`, 2026-10-31 | `sui move build -e testnet --warnings-are-errors` | 🟢 exit 0. **0 warnings**. Módulos: `contracts/sources/house.move`, `contracts/sources/game.move` |
 | | `sui move build -e testnet --lint --warnings-are-errors` | 🟢 exit 0. **0 lints** |
 | | `sui move test -e testnet --warnings-are-errors` | 🟢 exit 0. **83 tests PASS** (26 `house_tests` + 57 `game_tests`); `Move.lock` sin delta |
 | | `sui move test -e testnet --coverage` + `sui move coverage summary -e testnet` | Informativo: `battleship::house` **100 %**, `battleship::game` **100 %**, total 100 % |
-| localnet aislada @ `feature/issue-6-accept` (`ac6dd57`), CLI `1.83.0`, 2026-10-31 (smoke de #6, evidencia) | `documents/SMOKE_ACCEPT.md` (18 tx) | 🟢 on-chain: `payout + fee = 2 × bet` (1950002 + 50000), reembolsos 100 %, `FeesWithdrawn` 250000 = Σ fee, Σ Δsaldos + Σ gas = 0. Storage (`storageRebate` del `Game`): **1953200 MIST** abierta, **2196400** invitación, **2439600** resuelta; `gasUsed` de aceptar 1000000/5943200/5456254/546 con ambos resultados. Sin fixtures (D-20261031-01) |
+| localnet aislada @ `feature/issue-6-accept` (`ac6dd57`; mergeado en `8fddbda`), CLI `1.83.0`, 2026-10-31 (smoke de #6, evidencia) | runbook del smoke (18 tx; `git show 8fddbda:documents/SMOKE_ACCEPT.md`) | 🟢 on-chain: `payout + fee = 2 × bet` (1950002 + 50000), reembolsos 100 %, `FeesWithdrawn` 250000 = Σ fee, Σ Δsaldos + Σ gas = 0. Storage (`storageRebate` del `Game`): **1953200 MIST** abierta, **2196400** invitación, **2439600** resuelta; `gasUsed` de aceptar 1000000/5943200/5456254/546 con ambos resultados. Sin fixtures (D-20261031-01) |
 | contracts/ @ `master` (`a69fe7c`, merge de #30; medido en `67fa60d`, mismo código), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet --warnings-are-errors` | 🟢 exit 0. **0 warnings**. Módulos: `contracts/sources/house.move`, `contracts/sources/game.move` |
 | | `sui move build -e testnet --lint --warnings-are-errors` | 🟢 exit 0. **0 lints** |
 | | `sui move test -e testnet --warnings-are-errors` | 🟢 exit 0. **52 tests PASS** (26 `house_tests` + 26 `game_tests`); `Move.lock` sin delta |
@@ -92,7 +92,8 @@ mismos conteos por archivo.
 | Licencia | ✅ 2026-10-30 | Apache-2.0 (D-20261030-14): `LICENSE` en la raíz y cabecera `// Copyright (c) 2025-2026 sdelvalle57` + SPDX en los fuentes Move |
 | #3 (CI) | ✅ 2026-10-30 | PR #27 mergeado (`ae89cd5`); MAYOR APPROVE; run `push` en `master` verde. Artefactos borrados en el housekeeping (`git show ae89cd5:documents/PLAN_CI.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_CI.md`) |
 | #5 (Game: crear/cancelar/rechazar) | ✅ 2026-10-31 | PR #30 mergeado (`a69fe7c`); MAYOR APPROVE; CI `contracts` verde (52/52). Artefactos borrados en el housekeeping (`git show a69fe7c:documents/PLAN_GAME.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_GAME.md`) |
-| #6 (Game: aceptar + coinflip, pago y comisión) | 🚧 2026-10-31 | Branch `feature/issue-6-accept`. Plan v2 aprobado por el MAYOR (D-20261030-16); `documents/PLAN_ACCEPT.md`, `REVISION_PLAN_ACCEPT.md`, `HANDOFF_ACCEPT.md`, `SMOKE_ACCEPT.md`, `REPORTES_ACCEPT.md`. TASK-1 ✅ (`1630eaa`, MID PASA: `accept_game`, `GameResolved`, aborts 7-10, 83 tests); TASK-2 ✅ (docs, MID PASA); TASK-3 smoke en localnet aislada ejecutado 2026-10-31: on-chain 100 % (crear, cancelar, rechazar, aceptar con `Random` real con ambos resultados, abort 5, PTB con comando tras `Random` rechazado, retiro de comisiones, conservación exacta); H-1 (fullnode 1.83.0 sin JSON-RPC) resuelto por D-20261031-01: fixtures → #10 |
+| #6 (Game: aceptar + coinflip, pago y comisión) | ✅ 2026-10-31 | PR #32 mergeado (`8fddbda`); MAYOR APPROVE; CI `contracts` verde (83/83, coverage 100 %); smoke en localnet aislada 16/16 on-chain; fixtures de lectura → #10 (D-20261031-01). Artefactos borrados en el housekeeping (`git show 8fddbda:documents/PLAN_ACCEPT.md`, `HANDOFF_`, `REVISION_PLAN_`, `SMOKE_`, `REPORTES_ACCEPT.md`) |
+| Siguiente | ⏳ | #7 (formato `contracts/deployments/<red>.json` + script de publicación; notas de #6: `test-publish` aislado, `Published.toml` vs `deployments/`) y #9 (scaffolding de `app/`; cliente gRPC/GraphQL por D-20261031-01). Pausa pedida por el usuario tras cerrar #6 |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -143,3 +144,4 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 | #4 House: `HouseCap`, límites, `add_fees`, eventos, versionado, 26 tests | #24 → `68d1afe` | 2026-10-30 |
 | #3 CI de contratos (`ci.yml`: `contracts` + `framework-drift`) | #27 → `ae89cd5` | 2026-10-30 |
 | #5 Game: crear/cancelar/rechazar, 26 tests | #30 → `a69fe7c` | 2026-10-31 |
+| #6 Game: aceptar + coinflip `sui::random`, pago y comisión, 31 tests | #32 → `8fddbda` | 2026-10-31 |

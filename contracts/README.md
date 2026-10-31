@@ -368,7 +368,7 @@ la House (aceptable en el MVP; ver Contención en la sección House). `Random` e
 La partida terminada se **conserva** como objeto compartido (`Cancelled`/`Resolved`, `stake == 0`): no hay
 función de borrado. Crearla deposita storage que **no se recupera**. Medido en el smoke de #6 (localnet, precio de
 storage 76 y rebate 99,99 %, iguales a testnet): `storageRebate` del `Game` = **1953200 MIST** abierta, **2196400**
-con invitación y **2439600** resuelta (≈ 0,0020–0,0024 SUI); la cancelada conserva el de su versión `Pending`. Al
+con invitación y **2439600** resuelta desde abierta (≈ 2682800 desde invitación, por cálculo; sin medir) (≈ 0,0020–0,0027 SUI); la cancelada conserva el de su versión `Pending`. Al
 aceptar, quien firma cobra el rebate de la versión `Pending` del objeto y paga el de la versión `Resolved`, así que
 el depósito sigue inmovilizado en el objeto terminal. Es reversible en una versión futura con una función de borrado
 **restringida al creador** (`sender == creator`), porque el rebate de storage va a quien firma la transacción que
