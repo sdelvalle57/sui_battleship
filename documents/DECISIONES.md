@@ -13,7 +13,7 @@
 ## Recientes
 
 ### D-20261031-01 — Fixtures de lectura diferidas a #10 (H-1 del smoke de #6)
-- **Decisión:** las fixtures de `getObject` de un `Game` no se capturan en #6. El fullnode de `sui 1.83.0` no sirve JSON-RPC (404 en localnet; los fullnodes públicos ya lo deprecaron, STATUS H13/#1), así que #10 elige la API de lectura (gRPC o GraphQL) y captura ahí las fixtures reales. En #6, `contracts/README.md` ("Lectura desde la app") deja de presentar JSON-RPC como vía de lectura; `contracts/fixtures/` no se crea.
+- **Decisión:** las fixtures de `getObject` de un `Game` no se capturan en #6. El fullnode de `sui 1.83.0` no sirve JSON-RPC (404 en localnet, H-1 del smoke de #6), así que #10 elige la API de lectura (gRPC o GraphQL) y captura ahí las fixtures reales. En #6, `contracts/README.md` ("Lectura desde la app") deja de presentar JSON-RPC como vía de lectura; `contracts/fixtures/` no se crea.
 - **Alternativa descartada:** commitear ahora fixtures en el formato de `sui client object --json` (no es el formato que usará la app); capturar JSON-RPC con indexer + PostgreSQL.
 - **Motivo:** H-1 del smoke de #6 (`documents/REPORTES_ACCEPT.md`, TASK-3): todo `POST` al JSON-RPC local da 404 y `sui-node` 1.83 monta solo `sui_rpc_api::RpcService`.
 - **Aprobado por:** usuario ("Diferir al #10", 2026-10-31). **Fecha:** 2026-10-31.

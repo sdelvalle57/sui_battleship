@@ -275,3 +275,16 @@ Valor propuesto para el README: 1953200 MIST abierta, 2196400 con invitación, 2
 - `documents/STATUS.md`: fila #6 con TASK-3 ejecutado (on-chain 100 %, H-1 → D-20261031-01) y línea de evidencia del smoke en Baselines.
 - `documents/SMOKE_ACCEPT.md`: estado **PASA (on-chain)** (veredicto inicial NO PASA por H-1, antes de la decisión); pasos 6/7/11/14/15 actualizados; evidencia del 404 intacta.
 - Verificación: `git diff --stat` de los 4 docs (98+/48−); secretos sobre los cambios → exit 1 (con `/usr/bin/grep`; en esta máquina `grep` es alias de `ugrep`); `Move.lock` sin delta.
+
+## Revisión TASK-3: PASA (con H1-H2 de texto, aplicados por el orquestador)
+
+> Revisión del MID transcrita por el orquestador.
+
+Smoke 16/16 con evidencia; conservación recalculada de forma independiente por el MID (cada `balanceChanges` contra su `gasUsed`; totales de ADMIN y ALICE exactos; 5 × 50000 = `FeesWithdrawn`); aislamiento correcto (prefijo + `smoke_guard`, sin `GUARD-FAIL`, cierre con `kill -0` antes de `rm -rf`, `~/.sui/sui_config/` idéntico, `Move.lock` mismo md5); procedimiento de `agents.md` §3 funcionó tal cual; storage dentro del rango de D-15 D3; STOP H-1 correcto y D-20261031-01 registrada; delta de docs revisado. Gates no re-corridos: aceptado (`git diff --stat 1630eaa HEAD -- contracts/sources contracts/tests contracts/Move.toml contracts/Move.lock` vacío; la CI del PR decide).
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| H1 | PROY-20 | `contracts/README.md:177` | Nombraba `timestampMs` (campo de JSON-RPC) | Texto literal del MID — aplicado |
+| H2 | Registro de decisiones | `DECISIONES.md:16` | Cita sin respaldo ("STATUS H13/#1") | `(404 en localnet, H-1 del smoke de #6)` — aplicado |
+| H3 | Info | `SMOKE_ACCEPT.md` (Precondiciones) | Describe el `curl` a JSON-RPC (histórico) | Sin acción |
+| H4 | Info (PROY-19) | — | Gates no re-corridos en TASK-3 | Sin acción; CI verde antes de mergear |

@@ -174,7 +174,7 @@ Significado de los campos de `Game`:
 | `stake` | Fondos custodiados: igual a `bet` mientras está `Pending`; 0 al terminar |
 | `fee_rate` | Comisión en basis points copiada de la House al crear (D-20261030-06 §3); es la que cobra `accept_game` |
 
-Sin campos de tiempo (D-20261030-15 D6): la hora de creación es el `timestampMs` del evento `GameCreated`.
+Sin campos de tiempo (D-20261030-15 D6): la hora de creación es la de la transacción que emitió `GameCreated` (el campo concreto depende de la API de lectura que elija #10).
 
 ### Estados
 
