@@ -28,15 +28,15 @@ se citan como `#N`.
 
 **Layout objetivo (D-20261030-03)** — `contracts/`, `package.json` y `.nvmrc` existen desde #2;
 `contracts/tests/` y `contracts/README.md` desde #4; `.github/workflows/` desde #3 (`ci.yml`: job
-`contracts`; el job `app` llega con #9); `contracts/fixtures/` (#6, smoke de localnet), `app/` (#9) y
-`contracts/deployments/` (#7) llegan con su issue:
+`contracts`; el job `app` llega con #9); `app/` (#9), `contracts/deployments/` (#7) y `contracts/fixtures/` (#10,
+D-20261031-01) llegan con su issue:
 
 ```
 sui_battleship/
 ├── agents.md                 # este archivo
 ├── documents/                # flujo multi-agente, estándares, decisiones, status, planes/handoffs
 ├── contracts/                # paquete Move (Move.toml, Move.lock, README.md, sources/, tests/)
-│   ├── fixtures/             # respuestas reales de RPC (localnet/jsonrpc/: getObject del Game por variante)
+│   ├── fixtures/             # (#10) respuestas reales del RPC de lectura (gRPC o GraphQL) del Game por variante
 │   └── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos)
 ├── app/                      # cliente React (Vite + TS + SDK TypeScript de Sui + wallet kit)
 ├── package.json              # npm workspaces: ["app"]
@@ -135,7 +135,8 @@ borradas al cerrar. Nada en `~/.sui/`.
    `genesis.blob`, YAML de validadores y fullnode, todos con claves en formatos que el grep de secretos no
    detecta) se lee, copia, muestra ni pega; solo los usan los comandos `sui`. Los logs (`genesis.log`,
    `sui-start.log`) no se pegan (solo líneas puntuales revisadas antes). Lo que vaya a docs o fixtures sale
-   **únicamente** del JSON-RPC local (`curl` a `http://127.0.0.1:9000`).
+   **únicamente** de lecturas de la red local por la CLI (`suic object`, `suic tx-block`) o por la API que elija #10;
+   el fullnode de `sui 1.83.0` no sirve JSON-RPC (`POST` a `:9000` → `404`, H-1 de #6, D-20261031-01).
 7. **Cierre:** `kill "$(cat <SMOKE_DIR>/sui.pid)"` (nunca `pkill`); en otra llamada, confirmar que terminó (`kill -0 "$(cat <SMOKE_DIR>/sui.pid)"` falla) y solo entonces `rm -rf <SMOKE_DIR>` (comprobar que ya no existe); sin cargar `env.sh`,
    `stat`/`ls` de `~/.sui/sui_config/` idénticos a la línea base; `git status --porcelain`;
    `git diff --exit-code -- contracts/Move.lock`; ni `contracts/Pub.*.toml` ni `contracts/Published.toml`.

@@ -366,11 +366,13 @@ la House (aceptable en el MVP; ver Contención en la sección House). `Random` e
 ### Objeto terminal y storage (D-20261030-15 D3)
 
 La partida terminada se **conserva** como objeto compartido (`Cancelled`/`Resolved`, `stake == 0`): no hay
-función de borrado. Crearla deposita storage (≈ 0,002–0,003 SUI; valor exacto: smoke de #6, TASK-3) que **no se
-recupera**: al aceptar, quien firma cobra el rebate de la versión `Pending` del objeto y paga el de la versión
-`Resolved`, así que el depósito sigue inmovilizado en el objeto terminal. Es reversible en una versión futura con
-una función de borrado **restringida al creador** (`sender == creator`), porque el rebate de storage va a quien
-firma la transacción que borra. La UI (#11) muestra ese costo al crear.
+función de borrado. Crearla deposita storage que **no se recupera**. Medido en el smoke de #6 (localnet, precio de
+storage 76 y rebate 99,99 %, iguales a testnet): `storageRebate` del `Game` = **1953200 MIST** abierta, **2196400**
+con invitación y **2439600** resuelta (≈ 0,0020–0,0024 SUI); la cancelada conserva el de su versión `Pending`. Al
+aceptar, quien firma cobra el rebate de la versión `Pending` del objeto y paga el de la versión `Resolved`, así que
+el depósito sigue inmovilizado en el objeto terminal. Es reversible en una versión futura con una función de borrado
+**restringida al creador** (`sender == creator`), porque el rebate de storage va a quien firma la transacción que
+borra. La UI (#11) muestra ese costo al crear.
 
 ### PTB
 
@@ -391,18 +393,22 @@ firma la transacción que borra. La UI (#11) muestra ese costo al crear.
 
 ### Lectura desde la app
 
-- La partida se lee con `getObject` con contenido: todos los campos llegan por RPC aunque no haya getters
-  Move (no hay accessors `public` a propósito, PROY-4; agregarlos después es compatible con upgrade).
-- **JSON-RPC** (`getObject`): cada variante del enum llega con **tres** claves:
-  `{"type": "<pkg>::game::GameState", "variant": "Pending", "fields": {}}`; `Resolved` trae
-  `"fields": {"acceptor": "0x…", "winner": "0x…"}` (`crates/sui-json-rpc-types/src/sui_move.rs:394-408,
-  474-486, 510-520` @ `testnet-v1.83.0`). Los `u64` (`bet`, `version`) llegan como **string** (`:457`);
-  `stake` (`Balance`) llega aplanado como su valor.
-- **gRPC/GraphQL:** los campos de la variante van **al mismo nivel** que `"@variant"`:
-  `{"@variant": "Resolved", "acceptor": "0x…", "winner": "0x…"}`
-  (`crates/sui-types/src/object/rpc_visitor/mod.rs:247-262`).
+- La partida se lee del objeto con su contenido: todos los campos llegan por RPC aunque no haya getters Move (no
+  hay accessors `public` a propósito, PROY-4; agregarlos después es compatible con upgrade).
+- **API de lectura: la elige #10 (gRPC o GraphQL), D-20261031-01.** El fullnode de `sui 1.83.0` **no sirve
+  JSON-RPC**: en el smoke de #6 todo `POST` al puerto RPC de la localnet devolvió `404` (H-1), y `sui-node` monta en
+  ese puerto solo `sui_rpc_api::RpcService` (`crates/sui-node/src/lib.rs:2956-3054` @ `testnet-v1.83.0`). #10
+  captura ahí las fixtures reales de cada variante (`Pending`, `Cancelled`, `Resolved`); #6 no crea
+  `contracts/fixtures/`.
+- **Referencia observada (no es el formato de la app):** `sui client object <id> --json` (CLI 1.83.0, smoke de #6)
+  devuelve `objType`, `owner`, `prevTx`, `storageRebate` (número) y `content` **aplanado** (los campos del `Game`
+  directamente, sin envoltorio). El enum llega como `{"@variant": "Pending"}`, `{"@variant": "Cancelled"}` y
+  `{"@variant": "Resolved", "acceptor": "0x…", "winner": "0x…"}`; `u64` (`bet`, `version`) y `stake` (`Balance`,
+  aplanado como su valor) como **string**; `u16` (`fee_rate`) como número con decimal (`250.0`); `opponent`
+  (`Option<address>`) como `null` o la dirección. En el `parsedJson` de los eventos de la CLI, igual: `u16` como
+  `250.0`, `Option` como `null` o la dirección. El formato exacto de gRPC/GraphQL lo fija #10 con fixtures.
 - El parser de #10 usa **un** formato y trata una variante desconocida como error, nunca como `Pending` (SEG-10).
 - El resultado de aceptar se lee del evento `GameResolved` de la transacción o del objeto
   (`Resolved { acceptor, winner }`).
-- La hora de creación es el `timestampMs` del evento `GameCreated` (D-20261030-15 D6;
-  `crates/sui-json-rpc-types/src/sui_event.rs:62`).
+- La hora de creación es el timestamp de la transacción del evento `GameCreated` (D-20261030-15 D6); el campo
+  concreto depende de la API que elija #10.

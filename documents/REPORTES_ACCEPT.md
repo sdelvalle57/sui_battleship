@@ -210,7 +210,68 @@ README 1:1 con `game.move` @ `1630eaa` (10 funciones, firmas carácter por cará
 | H4 | STATUS | `STATUS.md` fila #6 | "TASK-2 en revisión" | `TASK-2 ✅ (docs, MID PASA)` — aplicado |
 | H5 | Proceso | este archivo | build/lint resumidos | Sin acción; en TASK-3 output literal |
 
-Verificación del orquestador: `git diff --stat HEAD -- contracts/` vacío; `grep -rn force-regenesis documents/agentes/` vacío. **TASK-3 autorizado.**
+Verificación del orquestador: `git diff --stat HEAD -- contracts/sources contracts/tests contracts/Move.toml contracts/Move.lock` vacío (en `contracts/` solo cambia `README.md`; corregido tras el commit, la primera versión de esta línea decía `contracts/` a secas); `grep -rn force-regenesis documents/agentes/` vacío. **TASK-3 autorizado.**
 
 ### Mensaje de commit propuesto
 `docs: document accept_game and the isolated localnet procedure (#6)`.
+
+## Task completado: HANDOFF_ACCEPT — TASK-3 (smoke en localnet aislada) — NO PASA por H-1 (STOP), on-chain 100 %
+
+> Reporte del DEV transcrito por el orquestador. Las direcciones e IDs son de una localnet efímera ya destruida.
+
+**Resumen:** crear, cancelar, rechazar, aceptar con `Random` real (ambos resultados), retirar comisiones, abort 5, PTB rechazado y conservación exacta: todo PASA. Las 3 fixtures JSON-RPC **no se generaron**: el fullnode de `sui 1.83.0` no sirve JSON-RPC (STOP según el runbook). Branch @ `ac6dd57`, sin commits. Archivos: `documents/SMOKE_ACCEPT.md` (16 filas, tabla de storage, reporte final). `agents.md` sin cambios (el procedimiento funcionó tal cual).
+
+**Aislamiento:** todas las llamadas con el prefijo `. env.sh && … && smoke_guard &&` y `"$SUI"`/`suic`; ningún `GUARD-FAIL`; sin `--force-regenesis`, faucet, `new-address` ni `pkill`; de `net/` solo se listaron nombres.
+- Paso 0, línea base: `2026-10-30 17:52:52.515735237 -0500 244 /home/santiago/.sui/sui_config/client.yaml`; `ls` → `client.yaml`.
+- Paso 1: génesis exit 0; red PID 1846452; chain-identifier `f817b78e`.
+- Paso 2: 4 cuentas de la génesis (ADMIN, ALICE, BOB, CAROL) con `150000000000000000` MIST cada una.
+- Paso 3: `test-publish` digest `66SvbbFLS4cYLer23MG5xDUQUXQF4GJJPRK8TjeRX1SE` success; `0x8` = `0x2::random::Random`; `Move.lock` sin cambios.
+- Paso 4: `VhkUFYfLVZkjWXKR7VgDnKBNLMGFi2F1UrB2TufbM2L` — `FeeRateUpdated` 0 → 250.
+- Paso 5: `zZHMnX6Zmv58nXJpK7yeArC7gvmzcQtJxzEiB9EVx1f` — `GameCreated` bet `"1000001"`, fee_rate 250, opponent null.
+- Paso 6: `curl sui_getObject` → `HTTP/1.1 404 Not Found`, `content-length: 0` (H-1); por CLI: `Pending`, stake `"1000001"`, storageRebate 1953200.
+- Paso 7: crear `8w5SMNc3PV2ohpmvXXScxF1mABA9F72jaxkRzN5zX9SN`, cancelar `99sLMaghMkATM83rDhho56n1HSZrwZVmocJqKxb3KLGJ` — `GameCancelled` (cancelled_by = ALICE, refund 1000001); ALICE −988293 = +1000001 − gas neto; G2 `Cancelled`, stake "0".
+- Paso 8 (abort esperado): CAROL acepta la invitación G3 → digest `9afeXGW4xiXg8j2MGdPmExVEEAjnqSrWrur1UkepcX7e`, `status: failure`, `MoveAbort(… name: Identifier("game") …, function_name: Some("assert_acceptable") }, 5) in command 1`; CAROL solo pagó gas; G3 sigue `Pending`.
+- Paso 9: `4cEKMRhm6Fb8GTfM8qETGTSQFeNNPrzTQagCdezVQ8TT` — `GameCancelled` (cancelled_by = BOB, creator = ALICE); ALICE +1000001; BOB solo gas.
+- Paso 10 (PTB rechazado): `exit=1` sin digest: `Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins`; saldo de BOB igual antes y después; G4 `Pending`.
+- Paso 11: `9jQySPC1r2HhFTPxKU5bybXBwrkJRfpNkTcH72Ymk9dA` — `GameResolved` pot 2000002, fee 50000, payout 1950002, winner = BOB; fees_collected 0 → 50000; G1 `Resolved`, stake "0".
+- Paso 12: G4 `FmVSBzHZjTgjPGwdNm14yUitGJdLSNo95hrbzg7Bsa3i` (BOB), G6 `AnUpygz7EYM6xV7M6FjxzcKkKsjMfg8fBFqvkG5sxDcR` (BOB), G7 `77y8A48wPB12MeTY6TYFYUU8tZe2MtVszyK3UxoQF1VJ` (BOB), G8 `6nT3y5c9Pf1UmPAZxkqkQDKrv2GzaDjvd4bJ4zGoKdWY` (ALICE); en todas payout + fee = 2000002; gasUsed idéntico gane quien gane (consistente con D6, no es prueba).
+- Paso 13: `4ksPzuqEUtew7nYCFt1SVEQNUPogCWb4mfCrZqPPf7JY` — `FeesWithdrawn.amount` = 250000 = 5 × 50000; fees_collected → 0.
+- **Conservación global:** Σ variaciones de saldo (−85538671) = −(gas neto de las 18 tx) ⇒ suma 0; 7 partidas con stake "0"; House en 0.
+
+**Storage medido (MIST):**
+
+| Tx / objeto | computationCost | storageCost | storageRebate | nonRefundableStorageFee |
+|---|---|---|---|---|
+| Crear (paso 5) | 1000000 | 2941200 | 0 | 0 |
+| Crear (paso 7) | 1000000 | 2941200 | 987901 | 99 |
+| Cancelar (paso 7) | 1000000 | 3929200 | 2940906 | 294 |
+| Rechazar (paso 9) | 1000000 | 4172400 | 2196180 | 220 |
+| Aceptar (paso 11) | 1000000 | 5943200 | 4468353 | 447 |
+| Aceptar (paso 12) | 1000000 | 5943200 | 5456254 | 546 |
+| `Game` `Pending` abierta / invitación | — | — | 1953200 / 2196400 | — |
+| `Game` `Cancelled` (abierta / invitación) | — | — | 1953200 / 2196400 | — |
+| `Game` `Resolved` | — | — | 2439600 | — |
+
+Valor propuesto para el README: 1953200 MIST abierta, 2196400 con invitación, 2439600 resuelta (≈ 0,0020–0,0024 SUI).
+
+**Paso 15 (cierre):** `kill 1846452` exit 0; `kill -0` → `No such process`; puerto 9000 libre; `<SMOKE_DIR>` borrado y verificado; **`stat`/`ls` de `~/.sui/sui_config/` idénticos a la línea base**; `Move.lock` exit 0; sin `Pub.*.toml`/`Published.toml`; sin fixtures.
+
+**Estado del repo:** `M documents/REPORTES_ACCEPT.md` (orquestador), `M documents/SMOKE_ACCEPT.md` (DEV). Secretos: 9 líneas, todas el propio comando o citas en documentos del ciclo; 0 en `contracts/` y en `SMOKE_ACCEPT.md`.
+
+**Gates:** no corridos en este task — el clasificador de permisos del harness denegó al DEV la invocación del `sui` real sin `env.sh` ("Credential Exploration"); no se eludió. Sin cambios de código ni de `Move.lock`: se espera cero delta; lo confirma la CI del PR.
+
+**Desviaciones:** lecturas con `suic object --json` en vez de `curl` (por H-1); extracto del paso 8 vía `suic tx-block --json`; el bucle del paso 12 rotuló G4 como "G5"; README/STATUS no tocados (valores arriba).
+
+**H-1 (STOP):** el fullnode 1.83.0 no sirve JSON-RPC: todo `POST` a `:9000` (`/`, `/json-rpc`, `/rpc`, `/v1`, `/jsonrpc`) → 404 vacío; `/health` "up"; la CLI funciona por gRPC; `crates/sui-node/src/lib.rs:2956-3054` @ `testnet-v1.83.0` monta solo `sui_rpc_api::RpcService`; `--with-indexer` requiere un servidor PostgreSQL (no disponible). Opciones: (a) fixtures en formato gRPC/CLI; (b) capturar JSON-RPC en #8 contra testnet o con indexer + Postgres; (c) diferir las fixtures a #10, que elige la API de lectura. Recomendación del DEV: (a) o (c); además, revisar "Lectura desde la app" del README, que documenta JSON-RPC.
+
+**Menores:** `sui client object --json` y `parsedJson` de eventos usan un formato propio (`objType`, `content` aplanado, enum `{"@variant": …}`, `u16` como `250.0`, `Option` como `null`/dirección); la génesis creó un solo validador; la aleatoriedad funcionó al primer intento.
+
+## Cierre de TASK-3 tras D-20261031-01 (delta de docs, DEV)
+
+> Reporte del DEV transcrito por el orquestador. Sin `sui` ni red.
+
+- `contracts/README.md`: "Lectura desde la app" ya no presenta JSON-RPC; la API la elige #10 (gRPC o GraphQL, D-20261031-01) con fixtures reales; "Referencia observada (no es el formato de la app)" con lo visto en `sui client object --json` (`objType`, `content` aplanado, enum `{"@variant": …}`, `u64` como string, `u16` como `250.0`, `Option` `null`/dirección); "Objeto terminal y storage" con los valores medidos (1953200 / 2196400 / 2439600 MIST, ≈ 0,0020–0,0024 SUI; precio 76, rebate 99,99 %).
+- `agents.md`: §2 `contracts/fixtures/` → "(#10, D-20261031-01)"; §3 punto 6 ya no exige `curl` al JSON-RPC (lecturas por `suic object`/`suic tx-block` o la API de #10; adicional, la regla ya no era cumplible). §7/§9 sin cambios.
+- `documents/STATUS.md`: fila #6 con TASK-3 ejecutado (on-chain 100 %, H-1 → D-20261031-01) y línea de evidencia del smoke en Baselines.
+- `documents/SMOKE_ACCEPT.md`: estado **PASA (on-chain)** (veredicto inicial NO PASA por H-1, antes de la decisión); pasos 6/7/11/14/15 actualizados; evidencia del 404 intacta.
+- Verificación: `git diff --stat` de los 4 docs (98+/48−); secretos sobre los cambios → exit 1 (con `/usr/bin/grep`; en esta máquina `grep` es alias de `ugrep`); `Move.lock` sin delta.
