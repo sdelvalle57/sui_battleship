@@ -253,3 +253,108 @@ Logs completos guardados fuera del repo (scratchpad del orquestador, `runs/r{1,2
 4. `ORQUESTADOR.md` (punto 7): consulta de "CI verde" validada sobre #27 (`{"contracts":["SUCCESS"],"head":"44ff83a7…"}`); añadir que el rollup refleja el último attempt; check requerido = `contracts` (workflow `CI`).
 5. DEV: `printf 'n\n' |` literal delante de todo `sui`, también en el arranque.
 6. Body final del PR #27 (lo propone el MID al cerrar TASK-2): rojos en la branch desechable (#28); warning H13 esperado hasta el pre-vuelo de #8; protección de `master` y settings de Actions pendientes del usuario tras el merge.
+
+## Task completado: HANDOFF_CI — TASK-2 (docs alineadas con la CI)
+
+> Reporte del DEV transcrito por el orquestador. El diff completo (`git diff -U0`, 6 archivos, +40/−21) está en el commit de TASK-2; aquí van las verificaciones literales.
+
+6 docs vivos actualizados según TASK-2 §3 con los 6 ajustes del MID. Gates canónicos re-corridos sin delta. §5 da lo esperado. Sin commits/pushes; sin tocar `.github/`, `contracts/`, `DECISIONES.md`, `REPORTES_CI.md`, `PLAN_GAME.md`, `REVISION_PLAN_GAME.md`. Sin decisión nueva.
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-3-ci` @ `ce7c5e5`.
+
+### Archivos modificados/creados
+`agents.md`, `documents/STATUS.md`, `documents/ESTANDARES.md` (v1.4), `documents/agentes/ORQUESTADOR.md`, `documents/agentes/AGENTE_DEV.md`, `documents/FLUJO_AGENTES.md` (líneas del handoff válidas: sin cambios entre `c2a1e42` y `ce7c5e5`).
+
+### Qué se implementó (3 líneas máx)
+1. `agents.md`: §2 (`.github/workflows/` desde #3), Toolchain (CLI de CI del asset verificado), §3 (3 gates `--warnings-are-errors` bloqueantes, nota `error[ESL…]`, fila `git diff --exit-code -- Move.lock`; tabla = steps del job `contracts`), gate completo y `framework-drift` informativo, fila CI en §11.
+2. ESTANDARES v1.4 (PROY-17/18 por D-13); `ORQUESTADOR.md` con "CI verde" (consulta validada sobre #27, rollup = último attempt, check requerido `contracts`) y quién aplica la configuración del repo; `AGENTE_DEV.md:50` y `FLUJO_AGENTES.md:91` con la forma canónica.
+3. `STATUS.md`: fila CI en Toolchain, fila Gates, baselines CI con R1–R4 (links y tiempos), H11 de #3 ✅, H13 con `framework-drift`, ciclo activo y pendiente del usuario tras el merge.
+
+### Tests y gates (output pegado)
+```
+$ cd /home/santiago/Projects/Battleship/contracts && printf 'n\n' | sui --version
+sui 1.83.0-16d2dc1e05ed
+$ printf 'n\n' | sui move build -e testnet --warnings-are-errors; echo "exit=$?"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+$ printf 'n\n' | sui move build -e testnet --lint --warnings-are-errors; echo "exit=$?"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+$ printf 'n\n' | sui move test -e testnet --warnings-are-errors; echo "exit=$?"
+[… 26 líneas [ PASS ] battleship::house_tests::* …]
+Test result: OK. Total tests: 26; passed: 26; failed: 0
+exit=0
+$ cd /home/santiago/Projects/Battleship && git diff --exit-code -- contracts/Move.lock; echo "lock exit=$?"
+lock exit=0
+```
+
+**§5 (literal, recortado a los resultados):**
+```
+$ diff <(grep -oE "sui move (build|test) -e testnet[^|\`]*--warnings-are-errors" .github/workflows/ci.yml) <(grep -oE "\`sui move (build|test) -e testnet[^|\`]*--warnings-are-errors\`" agents.md | tr -d '\`'); echo "formas ci.yml = agents.md exit=$?"
+formas ci.yml = agents.md exit=0
+$ git diff --check; echo "diff --check exit=$?"
+diff --check exit=0
+$ grep -n -E 'informativo hasta|\| CI \| — \| ⬜' agents.md documents/STATUS.md; echo "exit=$?"
+exit=1
+$ grep -n -E 'D-20261030-1[3-9]' documents/DECISIONES.md
+15:### D-20261030-14 — Licencia del repo: Apache-2.0
+21:### D-20261030-13 — CI de contratos (STOPs de #3)
+$ git diff --stat
+ agents.md                        | 27 ++++++++++++++++-----------
+ documents/ESTANDARES.md          |  6 +++---
+ documents/FLUJO_AGENTES.md       |  2 +-
+ documents/STATUS.md              | 16 +++++++++++-----
+ documents/agentes/AGENTE_DEV.md  |  2 +-
+ documents/agentes/ORQUESTADOR.md |  8 ++++++++
+ 6 files changed, 40 insertions(+), 21 deletions(-)
+$ git diff -U0 -- . | grep -E '^\+' | grep -n -i -E 'suiprivkey|mnemonic|recovery phrase|private[ _-]?key|BEGIN [A-Z ]*PRIVATE KEY'; echo "exit=$?"
+exit=1
+$ git status --porcelain --untracked-files=all
+ M agents.md
+ M documents/ESTANDARES.md
+ M documents/FLUJO_AGENTES.md
+ M documents/STATUS.md
+ M documents/agentes/AGENTE_DEV.md
+ M documents/agentes/ORQUESTADOR.md
+?? documents/PLAN_GAME.md
+?? documents/REVISION_PLAN_GAME.md
+```
+Búsqueda de referencias vivas a "CI no existe"/"lint informativo": solo coinciden menciones a la app, el Escrow, el módulo Game y un ejemplo genérico (ninguna a la CI ni al lint).
+
+### Verificación manual
+No aplica (docs). Evidencia de CI = R1–R4 de TASK-1.
+
+### Desviaciones del handoff (o "ninguna")
+Redacción: (1) `agents.md:74` conserva "Baseline vigente de los tres gates: `documents/STATUS.md`"; (2) fila `Move.lock` con `git diff --exit-code -- Move.lock` en la columna Comando; (3) `AGENTE_DEV.md:50` suma el guard delante de todo `sui` (ajuste 5) y conserva H11; (4) "CI verde" como bullet nuevo bajo el de merge; (5) baselines CI en el formato de la tabla, R3/R4 en una fila "Evidencia de #3, no baseline"; (6) fila "#3 (CI) 🚧" y "Siguiente" ajustado; (7) `|` del `--jq` escapado en la fila CI de Toolchain.
+
+### Riesgos / pendientes (o "ninguno")
+1. Las filas de baseline de `master` siguen con la forma previa a #3 (históricas); el housekeeping puede agregar la fila de `master` con la forma nueva.
+2. `agents.md:58-60` dice "`sui move`/`sui client`" para el guard; no se amplió a "todo `sui`" (no lo pide TASK-2).
+3. El MID propone el body final del PR #27 (ajuste 6).
+
+### Documentación
+Actualizados (PROY-20): `agents.md`, STATUS, ESTANDARES, ORQUESTADOR, AGENTE_DEV, FLUJO. Al mergear, el housekeeping pasa "#3 (CI)" a ✅ y lo agrega a "Mergeadas".
+
+## Revisión TASK-2: PASA (con ediciones literales E1–E3)
+
+> Revisión del MID transcrita por el orquestador.
+
+Verificado (solo lecturas): diff de 6 archivos (+40/−21), `git diff --check` exit 0; `.github/`, `contracts/`, `DECISIONES.md` intactos; greps de §5 corridos por el MID (formas de `agents.md:69-71` = `ci.yml:107,109,111`; `informativo hasta` exit 1; secretos: solo `REPORTES_CI.md:84`, el propio comando transcrito). STATUS (R1–R4), ESTANDARES v1.4, `AGENTE_DEV.md:50`, `FLUJO_AGENTES.md:91`, `ORQUESTADOR.md:31-38` correctos. Gates del DEV sin delta. Desviaciones 1–7 aprobadas.
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| 1 | 🟡 PROY-18/20 (viene de `HANDOFF_CI.md:541`) | `agents.md:77-78` | "Son exactamente los steps del job" bajo una tabla que incluye cobertura, `sui start` y `publish` | E2 |
+| 2 | 🟡 D-07 / H11 (riesgo 2 del DEV) | `agents.md:60-61` | Guard limitado a `sui move`/`sui client` vs "todo `sui`" en `AGENTE_DEV.md:50` y D6 | E1 |
+| 3 | 🔵 Exactitud | `ORQUESTADOR.md:31` | "es el check requerido" aún no es cierto | E3 |
+| 4 | 🔵 Evidencia | reporte, §5 | Primer grep reemplazado por `diff`, tercero recortado | No bloquea (el MID lo corrió) |
+| 5 | Riesgo 1 del DEV | `STATUS.md:38-45` | Baselines de `master` con la forma previa a #3 | Housekeeping: fila nueva con el run `push` del merge commit |
+
+E1–E3 aplicadas por el DEV (literal) y verificadas por el orquestador con los tres `grep -n -F` y `git diff --check` (vacío).
+
+### Mensaje de commit propuesto
+`docs: align agents, status and standards with the CI workflow (#3)` (commit `9b02634`).
