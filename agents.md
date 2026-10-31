@@ -27,8 +27,8 @@ Un solo repo: **`sdelvalle57/sui_battleship`** (público), branch de integració
 se citan como `#N`.
 
 **Layout objetivo (D-20261030-03)** — `contracts/`, `package.json` y `.nvmrc` existen desde #2;
-`contracts/tests/` y `contracts/README.md` desde #4; `app/` (#9), `.github/workflows/` (#3) y
-`contracts/deployments/` (#7) llegan con su issue:
+`contracts/tests/` y `contracts/README.md` desde #4; `.github/workflows/` desde #3 (`ci.yml`: job
+`contracts`; el job `app` llega con #9); `app/` (#9) y `contracts/deployments/` (#7) llegan con su issue:
 
 ```
 sui_battleship/
@@ -39,7 +39,7 @@ sui_battleship/
 ├── app/                      # cliente React (Vite + TS + SDK TypeScript de Sui + wallet kit)
 ├── package.json              # npm workspaces: ["app"]
 ├── .nvmrc                    # versión de Node (PROY-17)
-└── .github/workflows/        # CI de contracts y app
+└── .github/workflows/        # ci.yml: job contracts (#3); el job app llega con #9
 ```
 
 | Área | Carpeta | Stack |
@@ -49,14 +49,16 @@ sui_battleship/
 
 ## 3. Comandos (por área, sin Makefile)
 
-**Toolchain:** Sui CLI instalada con `suiup` (versión fijada en `documents/STATUS.md`); Node (versión en
+**Toolchain:** Sui CLI instalada con `suiup` en local (versión fijada en `documents/STATUS.md`); en CI, el
+binario `sui` del mismo asset del release, verificado por SHA-256 (`.github/workflows/ci.yml`, `env`),
+siempre la misma versión (D-20261030-13); Node (versión en
 `.nvmrc`, PROY-17), npm. El `node` por defecto de la máquina puede ser otro: correr `nvm use` antes de cada gate. Instalada el 2026-10-30:
 Sui CLI `1.83.0` (release `testnet`) vía `suiup` en `~/.local/bin` (STATUS H1, sección Toolchain).
 
 **Prerrequisito de `sui move`:** `~/.sui/sui_config/client.yaml` **sin claves**, con `active_env: testnet`
 (D-20261030-07; STATUS Toolchain/H11). Sin ese archivo la CLI ofrece crear una config y genera una clave
-cuya frase imprime. Toda invocación de `sui move`/`sui client` va precedida de `printf 'n\n' |` para que,
-si la config falta, la CLI aborte en vez de crear la clave.
+cuya frase imprime. Toda invocación de `sui` (`sui --version`, `sui move …`, `sui client …`) va precedida
+de `printf 'n\n' |` para que, si la config falta, la CLI aborte en vez de crear la clave.
 
 ### Contratos (desde `contracts/`)
 
@@ -64,15 +66,17 @@ Los gates se corren con `cd contracts && printf 'n\n' | sui move …` (equivalen
 
 | Comando | Qué hace |
 |---|---|
-| `sui move build -e testnet` | Compila el paquete. Gate: sin errores y **sin warnings nuevos** |
-| `sui move build -e testnet --lint` | Lints de Sui (informativo hasta fijar baseline) |
-| `sui move test -e testnet` | Gate de tests unitarios (`#[test]`, `test_scenario`) |
+| `sui move build -e testnet --warnings-are-errors` | Compila. Gate bloqueante: sin errores ni warnings |
+| `sui move build -e testnet --lint --warnings-are-errors` | Lints de Sui. Gate bloqueante (D-20261030-13): con `--warnings-are-errors` un lint sale como `error[ESL…]` y corta el build (R4 de #3) |
+| `sui move test -e testnet --warnings-are-errors` | Tests unitarios (`#[test]`, `test_scenario`). Gate bloqueante |
+| `git diff --exit-code -- Move.lock` | Tras los gates: el lock no cambia (PROY-11) |
 | `sui move test -e testnet --coverage && sui move coverage summary -e testnet` | Cobertura (informativo) |
 | `sui start --with-faucet --force-regenesis` | Red local para smokes (localnet) |
 | `sui client publish` | Publicación — **solo el owner o con su autorización explícita** (§12) |
 
-`--warnings-are-errors` existe en `sui move build` y `sui move test` (para CI, #3). Baseline vigente de
-los tres gates: `documents/STATUS.md`.
+Las cuatro primeras filas son exactamente los steps de gate del job `contracts` de
+`.github/workflows/ci.yml` (PROY-18); el job además exige árbol limpio y cero claves. Baseline vigente
+de los tres gates: `documents/STATUS.md`.
 
 ### App (`app/`, cuando exista)
 
@@ -84,8 +88,9 @@ npm test -w app             # Vitest
 npm run build -w app
 ```
 
-Gate completo = el del workflow de CI (cuando exista): contracts build + test; app lint + typecheck +
-test + build.
+Gate completo = el del workflow de CI: job `contracts` (build, lint y test con `--warnings-are-errors`,
+`Move.lock` intacto, cero claves); app lint + typecheck + test + build cuando #9 agregue el job `app`.
+El job `framework-drift` es informativo (H13) y no condiciona el merge.
 
 ## 4. Arquitectura de Runtime
 
@@ -194,6 +199,7 @@ testnet con una wallet real.
 | Qué | Dónde | Nota |
 |---|---|---|
 | Sui CLI | `suiup` (`~/.local/bin`) | `1.83.0-16d2dc1e05ed`, release `testnet` (STATUS H1, Toolchain) |
+| CI | `.github/workflows/ci.yml` (`ubuntu-24.04`) | Versión en `env` (`SUI_VERSION`/`SUI_COMMIT`) = la de STATUS; config sin claves en `$RUNNER_TEMP`; sin secretos |
 | `client.yaml` | `~/.sui/sui_config/` | Sin claves hasta #8 (`active_env: testnet`, D-20261030-07). **Nunca** en el repo ni en logs |
 | Keystore / direcciones | `~/.sui/sui_config/` | **Nunca** en el repo ni en logs |
 | Node | nvm (20, 22 y 26 instalados) | Usar la de `.nvmrc` (`nvm use`) |

@@ -25,11 +25,12 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 | Ítem | Valor |
 |---|---|
 | Sui CLI | `sui 1.83.0-16d2dc1e05ed` (release `testnet`), `suiup 0.1.1`, binarios en `~/.local/bin` |
+| CI | `.github/workflows/ci.yml`, `ubuntu-24.04`, `SUI_VERSION 1.83.0` / `SUI_COMMIT 16d2dc1e05ed` = local (#3, D-20261030-13). Al subir de versión se actualizan `SUI_TGZ_SHA256` (`gh api repos/MystenLabs/sui/releases/tags/testnet-v<versión> --jq '.assets[] \| .name + " " + .digest'`) y `SUI_BIN_SHA256` (`sha256sum` del binario local de `suiup`) |
 | Node | `v26.13.0` tras `nvm use` (`.nvmrc` = 26, D-20261030-10) |
 | Prerrequisito de `sui move` | `~/.sui/sui_config/client.yaml` **sin claves** con `active_env: testnet` y `active_address: ~` (D-20261030-07). Sin ese archivo la CLI crea una clave e imprime su frase (H11). Nunca va al repo ni a logs; su contenido no se pega |
 | Framework | `std`/`sui` implícitas; fijados por `Move.lock` v4 a `719fb2960ccfbf9f4d33041f8ea5146d30671696`, el piso de la PV **139**; testnet en **140** desde la época 1269 (2026-10-30 21:24 UTC) → H13. Sin repin en #2 (rename puro) |
 | Entornos del lock | `Move.lock` v4 solo pinea `testnet`. Un gate con otro `-e` crearía una sección `[pinned.<env>]` nueva, y ese delta del lock hay que declararlo (PROY-11) |
-| Gates | Siempre desde `contracts/` (`cd contracts && …`), con `-e testnet`, con la respuesta `n` a la CLI por stdin (`printf 'n\n'` en pipe), ver agents.md §3 |
+| Gates | Siempre desde `contracts/` (`cd contracts && …`), con `-e testnet --warnings-are-errors` (build, `--lint` y test, los tres bloqueantes, D-20261030-13) y `Move.lock` sin delta, con la respuesta `n` a la CLI por stdin (`printf 'n\n'` en pipe): forma canónica de agents.md §3 = steps del job `contracts` de la CI (PROY-18) |
 
 ## Baselines de gates
 
@@ -43,7 +44,10 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 | | `sui move build -e testnet --lint` | 🟢 exit 0. 0 errores, 0 warnings; **1 lint de Sui:** `WSL06010` (`prefer_mut_tx_context`) en `contracts/sources/house.move:67` (`update_fee_rate` con `&TxContext`, H12 → #4) |
 | | `sui move test -e testnet` | 🟢 exit 0. 0 errores, 0 warnings. **0 tests** (`Test result: OK. Total tests: 0`) |
 | app | — | ⬜ no existe |
-| CI | — | ⬜ no existe |
+| CI @ `feature/issue-3-ci` (`44ff83a`, PR #27), 2026-10-30 | R1: job `contracts` ([run 41148825720, attempt 1](https://github.com/sdelvalle57/sui_battleship/actions/runs/41148825720/attempts/1)) | 🟢 success en 56 s (Install 31 s, cache miss): `.tgz` y binario `OK` (SHA-256), `sui 1.83.0-16d2dc1e05ed`, build, `--lint` y test con `--warnings-are-errors` exit 0, **26/26**, `Move.lock` y árbol sin cambios, guarda de cero claves en verde |
+| | R1: job `framework-drift` | 🟢 success en 5 s con el warning H13 esperado (lock PV 139 vs testnet PV 140; época 1269 en la medición local V4); sin "CLI atrasada" |
+| | R2: mismo run, [attempt 2](https://github.com/sdelvalle57/sui_battleship/actions/runs/41148825720/attempts/2) | 🟢 success en 14 s: cache hit de la CLI (Install y Save skipped) y de `~/.move/git`; Verify OK; 26/26 |
+| | R3 y R4: rojos provocados en el PR desechable #28 (cerrado sin merge) | Evidencia de #3, no baseline: R3 ([run 41149053353](https://github.com/sdelvalle57/sui_battleship/actions/runs/41149053353/attempts/1), `8653839`) Build failure `error[EC04007]`; R4 ([run 41149200767](https://github.com/sdelvalle57/sui_battleship/actions/runs/41149200767/attempts/1), `fc0a3d4`) Build success y **Lint failure** `error[ESL06010]` (D-20261030-13 confirmada) |
 
 Todo handoff declara en su §0 el baseline verificado del día (AGENTE_MID). Cero delta = mismos errores y
 mismos conteos por archivo.
@@ -62,9 +66,9 @@ mismos conteos por archivo.
 | H8 | legado | Borrador 2025 de tablero/barcos sin uso; `new_game` usaba `player1` tras moverlo (no compilaba). | ✅ 2026-10-30 (#2): borrado (D-20261030-10); se recupera con `git show f063a0e:sources/battleship.move` (#18) |
 | H9 | tests | El único archivo de tests estaba comentado entero. | 🚧 parcial: el test comentado se retiró en #2 (`git show f063a0e:tests/battleship_tests.move`); suite de House en #4 (26 tests, `040f3c0`); Game en #5/#6 |
 | H10 | docs | README dice "2 vs 2"; el diseño es 1 vs 1. Roadmap marca el Escrow como diseñado. | Actualizar README en el issue de docs |
-| H11 | toolchain | `sui move` exige `client.yaml`. Sin él, la CLI crea una clave e imprime su frase (`sui_commands.rs:584, 1630-1648` @ `testnet-v1.83.0`), y `-e` no lo evita. | ✅ 2026-10-30: resuelto con una config sin claves (D-20261030-07). **#3:** escribir la misma config en `$RUNNER_TEMP` con `SUI_CONFIG_DIR`; `--warnings-are-errors` existe en `sui move build` y en `sui move test`. **#7:** al publicar, la CLI escribe `Published.toml` (se commitea) y `Pub.*.toml` efímeros (ignorados en `.gitignore`). `Published.toml` se superpone con `contracts/deployments/<red>.json` (D-20261030-03, ARQ-6): #7 define cuál es la fuente del `packageId` y cuál se deriva. **#8:** el owner agrega su clave a este mismo `client.yaml` desde su terminal, sin agentes |
+| H11 | toolchain | `sui move` exige `client.yaml`. Sin él, la CLI crea una clave e imprime su frase (`sui_commands.rs:584, 1630-1648` @ `testnet-v1.83.0`), y `-e` no lo evita. | ✅ 2026-10-30: resuelto con una config sin claves (D-20261030-07). **#3:** ✅ 2026-10-30: el job `contracts` escribe la misma config sin claves en `$RUNNER_TEMP/sui_config`, exporta `SUI_CONFIG_DIR` y corre una guarda de cero claves (keystore `[]`, ningún otro keystore, sin `~/.sui`) en cada run (R1 de #3). **#7:** al publicar, la CLI escribe `Published.toml` (se commitea) y `Pub.*.toml` efímeros (ignorados en `.gitignore`). `Published.toml` se superpone con `contracts/deployments/<red>.json` (D-20261030-03, ARQ-6): #7 define cuál es la fuente del `packageId` y cuál se deriva. **#8:** el owner agrega su clave a este mismo `client.yaml` desde su terminal, sin agentes |
 | H12 | house | ✅ 2026-10-30 (#4, `040f3c0`). Antes, lint `WSL06010` (`prefer_mut_tx_context`): `update_fee_rate` era `public` y recibía `&TxContext`. Ahora es `entry` sin `ctx` y ninguna función recibe `&TxContext` inmutable; `sui move build -e testnet --lint` da 0 lints. | — |
-| H13 | toolchain | testnet en PV `140` (medida 2026-10-30, época 1269; `05ad86a3e86c522deea116f80dc2bf2309a53363` para 140) y el lock en el piso de 139 (`719fb29…`). La CLI no repinea ni avisa por sí sola (solo con `update-deps`, al cambiar las dependencias del manifest, con un digest de dependencia distinto o con otro `-e`; publish solo compara la CLI con la red). | Pre-vuelo de #8 (comentado en el issue): (1) CLI del canal testnet con PV máxima ≥ PV de testnet (si no, `suiup` y registrar en Toolchain); (2) `cd contracts && printf 'n\n' \| sui move update-deps -e testnet`; (3) delta del lock declarado y gates re-medidos |
+| H13 | toolchain | testnet en PV `140` (medida 2026-10-30, época 1269; `05ad86a3e86c522deea116f80dc2bf2309a53363` para 140) y el lock en el piso de 139 (`719fb29…`). La CLI no repinea ni avisa por sí sola (solo con `update-deps`, al cambiar las dependencias del manifest, con un digest de dependencia distinto o con otro `-e`; publish solo compara la CLI con la red). Desde #3, el job `framework-drift` lo avisa en cada run (informativo). | Pre-vuelo de #8 (comentado en el issue): (1) CLI del canal testnet con PV máxima ≥ PV de testnet (si no, `suiup` y registrar en Toolchain); (2) `cd contracts && printf 'n\n' \| sui move update-deps -e testnet`; (3) delta del lock declarado y gates re-medidos |
 
 ## Ciclo activo — backlog para terminar el MVP
 
@@ -76,7 +80,8 @@ mismos conteos por archivo.
 | #2 (monorepo) | ✅ 2026-10-30 | PR #22 mergeado (`48df3b4`); MAYOR APPROVE; primer baseline verde. Artefactos borrados en el housekeeping (`git show 48df3b4:documents/PLAN_MONOREPO.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_MONOREPO.md`) |
 | #4 (House) | ✅ 2026-10-30 | PR #24 mergeado (`68d1afe`); MAYOR APPROVE. 26 tests, coverage 100 %. Artefactos borrados en el housekeeping (`git show 68d1afe:documents/PLAN_HOUSE.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_HOUSE.md`) |
 | Licencia | ✅ 2026-10-30 | Apache-2.0 (D-20261030-14): `LICENSE` en la raíz y cabecera `// Copyright (c) 2025-2026 sdelvalle57` + SPDX en los fuentes Move |
-| Siguiente | ⏳ | #3 (CI) en curso; #5 (Game: crear/cancelar) desbloqueado |
+| #3 (CI) | 🚧 2026-10-30 | PR #27 (borrador): TASK-1 `ci.yml` (`44ff83a`, R1–R4 en `documents/REPORTES_CI.md`) y TASK-2 docs; al merge lo cierra el housekeeping |
+| Siguiente | ⏳ | Merge de #3; #5 (Game: crear/cancelar) desbloqueado |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -114,6 +119,7 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 ## Pendientes del usuario
 
 - Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #3 resuelto (D-20261030-13; protección de `master` y settings de Actions tras su merge); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06).
+- **Tras el merge de #3:** protección clásica de `master` con el check `contracts` requerido (sin reviews, sin 'up to date', sin bypass) y 'Require actions to be pinned to a full-length commit SHA' (D-20261030-13); los aplica el usuario, o el orquestador solo con autorización expresa del usuario en ese momento.
 - **Post-publicación (#8):** `update_fee_rate` antes de anunciar el juego (fee por defecto 0, D-20261030-11): las partidas creadas antes quedan con comisión 0 para siempre.
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 

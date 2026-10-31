@@ -47,7 +47,7 @@ NUNCA haces commits, pushes ni publicaciones (`sui client publish`/`upgrade`). I
 
 ## Antes de entregar (auto-revisión)
 
-- [ ] Contracts: `sui move build` sin errores ni warnings nuevos + `sui move test` en verde (con `sui --version` en el reporte), en la forma canónica de `agents.md` §3 (`-e testnet`, guard `printf 'n\n' |`; sin `client.yaml` la CLI crea una clave — H11)
+- [ ] Contracts: build, `--lint` y test con `-e testnet --warnings-are-errors` en verde y `Move.lock` sin delta (con `sui --version` en el reporte), en la forma canónica de `agents.md` §3 (= job `contracts` de la CI; guard `printf 'n\n' |` delante de todo `sui`; sin `client.yaml` la CLI crea una clave — H11)
 - [ ] App: lint + typecheck + `npm test` + `npm run build` en verde
 - [ ] Tablas de `contracts/README.md` y `app/src/sui/` sincronizadas si cambió el contrato
 - [ ] Cada línea del cambio pertenece a este task

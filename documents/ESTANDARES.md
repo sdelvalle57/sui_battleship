@@ -1,6 +1,6 @@
 # Estándares del Proyecto — Arquitectura, Seguridad y Limpieza (Sui Battleship)
 
-> **Versión:** 1.3 · **Fecha:** 2026-10-30 (adaptado de Cancerbero — D-20261030-01; PROY-17: `.nvmrc` = 26 por D-20261030-10; SEG-2 y PROY-9 por D-20261030-11; PROY-10 por D-20261030-11 y D-20261030-12, #4)
+> **Versión:** 1.4 · **Fecha:** 2026-10-30 (adaptado de Cancerbero — D-20261030-01; PROY-17: `.nvmrc` = 26 por D-20261030-10; SEG-2 y PROY-9 por D-20261030-11; PROY-10 por D-20261030-11 y D-20261030-12, #4; PROY-17 y PROY-18 por D-20261030-13, #3)
 > Fuente única de verdad. El DEV implementa contra estas reglas; el MID y el MAYOR revisan contra ellas.
 > Toda regla tiene ID: los hallazgos se citan como `SEG-4 violado en contracts/sources/game.move:120`.
 > §4 (reglas PROY) tiene prioridad sobre §1–§3.
@@ -80,8 +80,8 @@
 
 ### Proceso
 
-- **PROY-17 — Toolchain.** Node 26 (`.nvmrc`) y npm workspaces desde la raíz; Sui CLI instalada con `suiup`, versión registrada en STATUS.
-- **PROY-18 — CI.** Cuando exista el workflow, el gate local y el de CI son el mismo; un rojo de CI bloquea el merge.
+- **PROY-17 — Toolchain.** Node 26 (`.nvmrc`) y npm workspaces desde la raíz; Sui CLI instalada con `suiup` en local; en CI, el binario `sui` del mismo asset del release, verificado por SHA-256; versión registrada en STATUS y en el `env` del workflow, siempre iguales.
+- **PROY-18 — CI.** El gate local y el de CI son el mismo (`agents.md` §3 = steps del job `contracts`). Un rojo de `contracts` bloquea el merge; `framework-drift` es informativo.
 - **PROY-19 — Antes de entregar:** gate completo del área tocada con output pegado (agents.md §3). Rojos conocidos (STATUS.md) se reportan con su número, nunca como verdes.
 - **PROY-20 — Docs viven con el código.** Si el cambio toca arquitectura, layout, comandos, contrato on-chain o tests, se actualizan README del área, `agents.md` y `documents/STATUS.md` en el mismo PR.
 - **PROY-21 — Contratos primero.** Un cambio que afecte contrato y app: tasks de contrato antes que los de app; la app nunca consume una firma/evento que no esté implementado y testeado en la misma branch o en `master`. Publicación y `deployments/*.json` en el mismo PR.
