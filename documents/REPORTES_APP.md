@@ -115,3 +115,21 @@ TASK-7. Snippet STATUS: #9 TASK-1 (workspace, `.npmrc`, `engines`, lockfile v3, 
 
 ### Mensaje de commit propuesto
 `app: scaffold workspace with pinned toolchain and supply-chain policy (#9)` (commit `86816e7`).
+
+## Task completado: HANDOFF_APP — TASK-2 (job `app` de CI)
+
+> Reporte del DEV transcrito por el orquestador (resumen declarado de la salida local; el diff y los resultados son literales).
+
+- `.github/workflows/ci.yml`: el bloque `TODO(#9)` (líneas 131-132) reemplazado por el job `app` copiado del handoff; `contracts`, `framework-drift`, `env`, `on`, `concurrency` y `permissions` sin tocar. `git diff --stat`: 1 archivo, +40/−2, un solo hunk `@@ -131,2 +131,40 @@`.
+- Job `app`: `ubuntu-24.04`, 15 min, bash `-eo pipefail`; `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1` (v7.0.1, `persist-credentials: false`) y `actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1` (v7.1.0; `node-version-file: .nvmrc`, `cache: npm`, `cache-dependency-path: package-lock.json`); pasos: Node de `.nvmrc`, `npm ci`, `npm audit signatures`, `npm audit --omit=dev --audit-level=high`, lint, typecheck, test, build con `VITE_SUI_NETWORK=testnet`, árbol sin cambios (`if: !cancelled()`). Sin `needs`, `secrets`, `env` ni `permissions` propios; sin `npm audit` completo (Nota v1.1).
+- YAML válido (`yaml exit=0`); jobs `['contracts', 'app', 'framework-drift']`; `grep 'secrets\.'` exit 1; todas las `uses:` fijadas por SHA de 40 caracteres. SHAs verificados con `gh api` (tags → commits `949feb24…`/`3d3c42e5…`, últimas releases; inputs `node-version-file`, `cache`, `cache-dependency-path` existen; `using: 'node24'`). `actionlint` no disponible.
+- Pasos corridos en local con Node v26.13.0 / npm 11.20.0: Node de `.nvmrc` exit 0; `npm ci` exit 0; firmas `292 packages have verified registry signatures` exit 0; audit prod `found 0 vulnerabilities` exit 0; lint/typecheck exit 0; test `1 passed (1)` exit 0; build exit 0 (`index-CYi1jgMn.js 219.66 kB`); árbol sin delta respecto de antes de los gates. Chequeo de Node con Node 22 → exit 1.
+- Desviaciones: ninguna. Tablas de contrato / `app/src/sui/`: no aplica.
+- Riesgos: posible conflicto de cercanía con #7 en `ci.yml` al rebasar (resolver conservando ambos bloques); avisos nuevos pueden poner `app` en rojo (solo prod high); `app` aún no es check requerido (se aplica tras el merge de #9, D-20261102-02 (7)).
+
+### Anexo de runs (orquestador)
+
+- Commit `cada02f` (job `app`) pusheado; PR borrador **#36**.
+- **Verde:** run [41469633568](https://github.com/sdelvalle57/sui_battleship/actions/runs/41469633568) → `success`: `app` (15:14:34–15:15:53Z, ≈ 79 s), `contracts` y `framework-drift` en verde.
+- **Rojo provocado:** worktree desechable con `console.log("ci red check")` en `app/src/App.tsx`, PR borrador #37 → run [41469976365](https://github.com/sdelvalle57/sui_battleship/actions/runs/41469976365) `failure`: job `app`, paso **Lint** en `failure` (`3:1  error  Unexpected console statement  no-console`, `✖ 1 problem (1 error, 0 warnings)`); `contracts` y `framework-drift` en verde.
+- Limpieza: `git worktree remove`, `gh pr close 37 --delete-branch` (PR `CLOSED`, `mergedAt: null`), branch remota y local inexistentes, `git worktree list` sin el desechable.
