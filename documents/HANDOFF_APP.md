@@ -1,473 +1,418 @@
 # HANDOFF_APP
 > Plan: PLAN_APP v2 (aprobado por el MAYOR, "Revisión v2" de `documents/REVISION_PLAN_APP.md`) | Issue: #9 |
-> Branch: `feature/issue-9-app` | Worktree: **`/home/santiago/Projects/Battleship-issue9`** | Versión: v1 | Fecha: 2026-11-02
+> Branch: `feature/issue-9-app` | Worktree: **`/home/santiago/Projects/Battleship-issue9`** | Versión: **v2** | Fecha: 2026-11-02
 >
-> **Dónde se trabaja:** solo en el worktree `/home/santiago/Projects/Battleship-issue9`. El directorio
-> `/home/santiago/Projects/Battleship` es de #7 (otro DEV): no se toca. En este documento, `<repo>` =
-> `/home/santiago/Projects/Battleship-issue9`.
+> **v2 = Tramo B** (TASK-5, TASK-6, TASK-7 y el smoke). El Tramo A (TASK-1..4) está cerrado: sus revisiones PASA y sus
+> pendientes viven en `documents/REPORTES_APP.md` y se incorporan aquí. Texto completo de la v1 (Tramo A):
+> `git show db1a256:documents/HANDOFF_APP.md` (+ nota v1.1 en `611ad90`).
 >
-> **Tramos:**
-> - **Tramo A — TASK-1, TASK-2, TASK-3, TASK-4:** corren **ya**, en este worktree, uno por sesión y en orden.
-> - **Tramo B — TASK-5, TASK-6, TASK-7 y el smoke (`documents/SMOKE_APP.md`):** esperan a que **#7 esté mergeado en
->   `master`** y a que el orquestador **rebase `feature/issue-9-app`** sobre ese `master`. Antes de autorizar TASK-5, el
->   MID emite la **v2 de este handoff** con el esquema de `contracts/deployments/<red>.json` aprobado y el texto final
->   de `agents.md` §3 que deja #7. TASK-6 además exige TASK-4 en verde.
->
-> Sin commits ni pushes (los hace el orquestador). Un task por sesión; al terminar, reporte con la plantilla de
-> `documents/FLUJO_AGENTES.md` §5 (incluidos los tasks solo-UI) y esperar la revisión del MID.
+> **Dónde se trabaja:** solo en `/home/santiago/Projects/Battleship-issue9` (`<repo>` en este documento). #7 ya está en
+> `master` y la branch está rebasada: no hay otro DEV en el árbol de #9. Sin commits ni pushes (los hace el
+> orquestador). Un task por sesión, en orden; al terminar, reporte con la plantilla de `documents/FLUJO_AGENTES.md` §5 y
+> esperar la revisión del MID. **TASK-6 arranca solo con TASK-5 commiteada; TASK-7 con TASK-6; el smoke con TASK-7.**
 
-## 0. Baseline de gates verificado (2026-11-02 14:51Z)
+## 0. Baseline de gates verificado (2026-11-02, tras el rebase)
 
 | Ítem | Valor | Fuente |
 |---|---|---|
-| `master` | `8c67221` (merge de #34: D-20261102-01/02) | `git log` |
-| `feature/issue-9-app` | `8acf4d3` = `master` + `documents/PLAN_APP.md` y `documents/REVISION_PLAN_APP.md` (solo docs) | `git diff --stat 8c67221 HEAD` |
-| Contratos | build 0 warnings, lint 0 lints, **83 tests PASS** (26 `house_tests` + 57 `game_tests`), `Move.lock` sin delta, coverage 100 %. Medido en `1630eaa`; entre `1630eaa` y `8c67221` solo cambió `contracts/README.md` (`git diff --stat 1630eaa 8c67221 -- contracts .github`) | `documents/STATUS.md:39-42` |
-| CI en `master` | run [41462945220](https://github.com/sdelvalle57/sui_battleship/actions/runs/41462945220) (`8c67221`, push): `contracts` success, `framework-drift` success | `gh run list/view` |
-| Protección de `master` | checks requeridos: `["contracts"]`; `sha_pinning_required: true` | `gh api …/required_status_checks`, `…/actions/permissions` |
-| App | **`app/` no existe**; sin `package-lock.json`, sin `node_modules/`; `package.json` raíz = `{"name":"sui-battleship","private":true,"workspaces":["app"]}`; `.nvmrc` = `26` | árbol |
-| Toolchain | Sui CLI `1.83.0-16d2dc1e05ed` (`~/.local/bin/sui`); Node **`v26.13.0`** en `/home/santiago/.nvm/versions/node/v26.13.0/bin` (npm **11.20.0**); Node 22 en `/home/santiago/.nvm/versions/node/v22.23.4/bin` | STATUS Toolchain, `ls ~/.nvm/versions/node` |
-| `actions/setup-node` | `v7.1.0` = `949feb2413d6458794dcd2491c4babbbce0c15c1` (sigue siendo la latest) | `gh api repos/actions/setup-node/…` |
+| `master` | `c066143` (housekeeping de #7, PR #40; #7 mergeado en `6ff8353`, PR #38) | `git log master` |
+| `feature/issue-9-app` | **`c1caaba`** = `master` + Tramo A (commits de TASK-1..4 y docs); árbol limpio | `git log`, `git status` |
+| Contratos | `sui move build`/`--lint`/`test` con `--warnings-are-errors`: 0 warnings, 0 lints, **83 tests PASS**; `Move.lock` sin delta. Código Move sin cambios desde `1630eaa` (`git diff --stat 1630eaa c1caaba -- contracts/sources contracts/tests contracts/Move.lock contracts/Move.toml` vacío) | `documents/STATUS.md` Baselines; CI |
+| Scripts de #7 | `cd contracts && node --test scripts/*.test.mjs` → **94 tests PASS** (51 `deployment` + 43 `publish`); `node scripts/publish.mjs check` → **0 despliegues** | STATUS Baselines; CI |
+| App | lint 0, typecheck 0, **58 tests PASS** (4 archivos: `App` 1, `networks` 12, `format` 30, `explorer` 15), build OK (`index-*.js` ≈ 220 kB) | REPORTES_APP (TASK-3); CI |
+| CI | PR **#36** (borrador) @ `c1caaba`: run [41476596859](https://github.com/sdelvalle57/sui_battleship/actions/runs/41476596859) → `contracts`, `app` y `framework-drift` **success**; ambos jobs con `actions/setup-node` v7.1.0 fijada por SHA | `gh run view` |
+| Protección de `master` | requerido solo `contracts` (`app` se agrega tras el merge de #9, D7) | `gh api …/required_status_checks` |
+| Dependencias | tren **2.37.0 / 1.6.39 / 2.1.41** congelado en `package-lock.json` (TASK-1); 22 directas exactas; `npm audit --omit=dev --audit-level=high` 0; 11 *moderate* solo dev aceptadas (#35) | REPORTES_APP (TASK-1) |
+| Toolchain | Sui CLI `1.83.0-16d2dc1e05ed` (`~/.local/bin/sui`); Node `v26.13.0` / npm 11.20.0 en `/home/santiago/.nvm/versions/node/v26.13.0/bin` | STATUS Toolchain |
 
-**Prefijo de Node 26 (obligatorio en toda llamada con `node`/`npm`/`npx`; cada llamada es un shell nuevo y el Node
-por defecto de la máquina puede ser otro):**
+**Prefijo de Node 26** (obligatorio en toda llamada con `node`/`npm`/`npx`; cada llamada es un shell nuevo):
 
 ```sh
 export PATH=/home/santiago/.nvm/versions/node/v26.13.0/bin:$PATH && node --version && cd /home/santiago/Projects/Battleship-issue9 && …
 ```
 
-`node --version` debe imprimir `v26.13.0`; si no, se detiene y se reporta.
+`node --version` debe imprimir `v26.13.0`; si no, se detiene y se reporta. **Gate de la app** (= job `app` de la CI):
+`npm ci`, `npm audit signatures`, `npm audit --omit=dev --audit-level=high`, `npm run lint -w app`,
+`npm run typecheck -w app`, `npm test -w app`, `VITE_SUI_NETWORK=testnet npm run build -w app`, y
+`git status --porcelain --untracked-files=all` vacío al final.
+
+**Dependencias en el Tramo B: ninguna nueva ni actualizada.** El tren `@mysten/*` no se re-verifica (el lockfile lo
+congela). Si un task pareciera necesitar un paquete, es STOP (SEG-8, D3).
 
 ## Decisiones del owner (no reabrir)
 
 | # | Decisión | Fuente |
 |---|---|---|
-| D1 | Wallet kit `@mysten/dapp-kit-react` + `@mysten/dapp-kit-core`; lectura con `SuiGrpcClient` (gRPC-web). Nada de `@mysten/dapp-kit` ni JSON-RPC | D-20261102-02 (1), D-20261031-01 |
-| D2 | Una red por build: `VITE_SUI_NETWORK` ∈ {`localnet`, `testnet`}; `mainnet` y cualquier otro valor = error; sin selector en runtime | D-20261102-02 (2) |
-| D3 | Versiones exactas, `package-lock.json` commiteado, `.npmrc` con `min-release-age=7`, `ignore-scripts=true`, `save-exact=true`, `engine-strict=true`; en CI `npm audit signatures` y `npm audit --omit=dev --audit-level=high` **bloqueantes** | D-20261102-02 (3) |
-| D4 | Lista de paquetes de §"Paquetes" (con `react-router` y TypeScript 6.0.3); `@mysten/*` por tren | D-20261102-02 (4), revisión 🟠-1 |
+| D1 | Wallet kit `@mysten/dapp-kit-react` + `@mysten/dapp-kit-core`; lectura con `SuiGrpcClient` (gRPC-web). **Gate cumplido** (TASK-4: preflight CORS 200 con comodines, `listEvents` por tipo OK) | D-20261102-02 (1) |
+| D2 | Una red por build: `VITE_SUI_NETWORK` ∈ {`localnet`, `testnet`}; `mainnet` y cualquier otro valor = error | D-20261102-02 (2) |
+| D3 | Versiones exactas, lockfile, `.npmrc` (`min-release-age=7`, `ignore-scripts`, `save-exact`, `engine-strict`); en CI `npm audit signatures` y `npm audit --omit=dev --audit-level=high` bloqueantes | D-20261102-02 (3) |
+| D4 | Paquetes de PLAN_APP v2 (`react-router`, TypeScript 6.0.3), tren `@mysten/*` instalado | D-20261102-02 (4) |
 | D5 | Burner wallet solo con `network === 'localnet'` **y** `import.meta.env.DEV` | D-20261102-02 (5) |
 | D6 | Explorador: Suiscan en testnet; en localnet sin link | D-20261102-02 (6) |
-| D7 | Check `app` requerido en `master` tras el merge de #9 (lo aplica el orquestador; autorización ya dada) | D-20261102-02 (7) |
-| D8 | `~/.sui/` sin claves para siempre; ningún paso usa la clave del owner. Testnet, solo con la wallet del navegador del owner | D-20261102-03 |
-| D9 | Contrato on-chain **sin cambios** en #9 | PLAN_APP v2 |
+| D7 | Check `app` requerido en `master` tras el merge de #9: lo aplica el orquestador (autorización ya dada) y lo verifica con `gh api` | D-20261102-02 (7) |
+| D8 | `~/.sui/` sin claves; ningún paso usa la clave del owner; ningún agente corre nada contra testnet con claves | D-20261102-03 |
+| D9 | Contrato on-chain sin cambios en #9 | PLAN_APP v2 |
+| D10 | Esquema de `contracts/deployments/<red>.json` = `schemaVersion: 1`, 14 campos (`contracts/README.md` "Despliegues") | D-20261102-01 (1) |
+| D11 | 11 *moderate* solo dev (`minimatch <11.0.1`, GHSA-g3hv-75wg-m249) aceptadas hasta #35; el `npm audit` completo no es paso bloqueante de CI | Revisión TASK-1 (MID) |
+| D12 | `explorer.ts` valida pero **no normaliza** IDs; la normalización se hace en el borde de entrada (rutas/formularios, #10–#12) | Revisión TASK-3 (MID) |
 
-## Paquetes (re-verificados el 2026-11-02 14:51Z)
+## Resumen del Tramo A (cerrado)
 
-### `@mysten/*`: por tren (D4)
-
-Se usa el **tren más reciente cuyos cinco miembros tengan ≥ 7 días al momento del `npm install`**. Con el core como
-dependencia directa y exacta, los rangos `^` transitivos no pueden saltar a un tren más nuevo (ese tren está fuera de
-la ventana de 7 días) y el lockfile congela el resultado.
-
-| Si el `npm install` de TASK-1 corre… | `@mysten/sui` | `@mysten/dapp-kit-core` | `@mysten/dapp-kit-react` | (transitivos: `wallet-standard` / `slush-wallet`) |
-|---|---|---|---|---|
-| antes del **2026-11-02 15:31Z** | 2.37.0 | 1.6.39 | 2.1.41 | 0.21.35 / 1.3.5 |
-| entre el **2026-11-02 15:31Z** y el **2026-11-03 17:15Z** | 2.38.0 | 1.6.40 | 2.1.42 | 0.21.36 / 1.3.6 |
-| después del **2026-11-03 17:15Z** | 2.38.0 | 1.6.41 | 2.1.43 | 0.21.36 / 1.3.6 |
-
-**Re-verificación obligatoria antes del `npm install` (pegar el output):** para los cinco paquetes, `npm view <pkg>
-dist-tags.latest` y `npm view <pkg> time --json` de la versión elegida (fecha + 7 días < ahora, `date -u`). Si apareció
-un tren más nuevo que ya cumple 7 días, se usa ese y se declara en "Desviaciones". Si un tren tiene algún miembro con
-< 7 días, no es elegible.
-
-### Resto (exactas, todas con ≥ 7 días hoy)
-
-| Paquete | Versión | Rol | Licencia |
+| Task | Commit | Revisión | Resultado |
 |---|---|---|---|
-| `react`, `react-dom` | 19.3.1 | dependencies | MIT |
-| `@tanstack/react-query` | 5.105.0 | dependencies | MIT |
-| `react-router` | 8.5.0 | dependencies | MIT |
-| `typescript` | 6.0.3 | devDependencies (TS 7 no es compatible con `typescript-eslint`: peer `<6.1.0`) | Apache-2.0 |
-| `vite` / `@vitejs/plugin-react` | 8.3.5 / 6.1.2 | dev | MIT |
-| `vitest` / `jsdom` | 5.0.5 / 30.1.3 | dev | MIT |
-| `@testing-library/react` / `dom` / `jest-dom` | 16.3.3 / 10.4.2 / 7.0.1 | dev | MIT |
-| `eslint` / `@eslint/js` / `typescript-eslint` / `eslint-plugin-react-hooks` | 10.13.0 / 10.0.1 / 8.72.0 / 7.1.1 | dev | MIT |
-| `@types/react` / `@types/react-dom` / `@types/node` | 19.3.0 / 19.3.0 / 26.6.5 | dev | MIT |
-
-**No agregar nada más** (ni `user-event`, `globals`, `eslint-plugin-react-refresh`, Tailwind ni librerías de
-validación). Un paquete nuevo es STOP (SEG-8).
+| TASK-1 workspace y política de dependencias | `aab74cc` | PASA | `.npmrc`, `engines`, lockfile v3, 22 deps exactas, capas en ESLint, app mínima |
+| TASK-2 job `app` de CI | `720676c` | PASA | verde (run 41469633568) y rojo provocado en Lint (PR #37 cerrado) |
+| TASK-3 `sui/` base | `17a856d` | PASA | `networks.ts`, `format.ts`, `explorer.ts`, 58 tests |
+| TASK-4 sonda gRPC-web | (sin código) | PASA | CORS 200 `*`; `SuiGrpcClient` lee `getServiceInfo` y `listEvents` por tipo al primer intento |
 
 ---
 
-## TASK-1: workspace `app/`, toolchain y política de dependencias — área: app — Tramo A
+## TASK-5: `config.ts` y pantalla de error de configuración — área: app
 
 ### 1. Historia de usuario del task
-**Como** desarrollador, **quiero** un workspace `app/` que instala dependencias fijadas y auditadas y pasa lint,
-typecheck, tests y build con una app mínima, **para** que #9..#14 se construyan sobre una base reproducible y segura.
+**Como** desarrollador (y jugador), **quiero** que la app sepa en qué red está y con qué IDs del paquete trabaja, leyendo
+solo el archivo de despliegue de esa red y mostrando un error claro si falta o es inválido, **para** nunca operar con IDs
+de otra red ni ver una pantalla en blanco.
 
 ### 2. Contexto
-`app/` no existe (§0). `package.json` raíz con `"workspaces": ["app"]` (`package.json:4`). `package-lock.json` se borró
-en #2 (T3) para regenerarse aquí. `.gitignore:10-11` ya ignora `node_modules/` y `app/dist/`; `.gitignore:14-16`,
-`.env*` salvo `.env.example`. Comandos esperados: `agents.md:144-152`. Modelo: plantilla React + TS de Vite 8 y
-`react.mdx` de la doc oficial de dApp Kit (`MystenLabs/ts-sdks`, `packages/docs/content/dapp-kit/getting-started/react.mdx`).
+- Esquema (D10), `contracts/README.md` "Despliegues" → "Esquema (`schemaVersion: 1`)": 14 campos obligatorios para el
+  productor; para los consumidores, regla 3 de "Compatibilidad": **validar lo que se usa, rechazar `schemaVersion` ≠ 1 e
+  ignorar claves desconocidas**. Formatos: `network` `"localnet"|"testnet"` (= nombre del archivo); `chainId` 8 hex;
+  `packageId`, `originalPackageId`, `houseId` `0x` + 64 hex.
+- Fixture real (contrato de formato para la app, regla 4): `contracts/scripts/fixtures/localnet.deployment.json`
+  (`network: "localnet"`, `chainId` de una génesis de localnet; generado con `record`).
+- Archivos reales: `contracts/deployments/localnet.json` (ignorado, `.gitignore:7`; lo escribe el script, variante B de
+  `agents.md` §3 paso 4) y `contracts/deployments/testnet.json` (lo commitea #8; hoy **no existe**).
+- `app/src/vite-env.d.ts` ya declara `VITE_SUI_NETWORK?: string`. `app/src/sui/networks.ts` ya exporta `Network`,
+  `NETWORKS` (`grpcUrl`, `explorerBase`) e `isNetwork`.
 
 ### 3. Qué implementar
-1. **`.npmrc`** (raíz, nuevo; sin tokens):
-   ```ini
-   save-exact=true
-   engine-strict=true
-   min-release-age=7
-   ignore-scripts=true
-   ```
-2. **`package.json` raíz:** agregar `"engines": { "node": ">=26 <27" }`; nada más.
-3. **`app/package.json`:** `"name": "sui-battleship-app"`, `"private": true`, `"type": "module"`; dependencias de
-   §"Paquetes" **exactas** (sin `^`/`~`); scripts:
-   `dev: vite`, `build: vite build`, `preview: vite preview`, `lint: eslint . --max-warnings 0`,
-   `typecheck: tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json`, `test: vitest run`.
-   Instalar con `npm install -w app <pkg>@<versión> …` (y `-D` para dev) **desde la raíz**, con el prefijo de Node 26.
-4. **`app/tsconfig.json`** (`include: ["src"]`): `target`/`lib` ES2022 + DOM, `module: ESNext`, `moduleResolution:
-   bundler`, `jsx: react-jsx`, `types: ["vite/client"]`, `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`,
-   `noFallthroughCasesInSwitch`, `noUnusedLocals`, `noUnusedParameters`, `verbatimModuleSyntax`, `skipLibCheck`,
-   `noEmit`. **Sin `incremental` ni `composite`** (no debe aparecer ningún `*.tsbuildinfo`).
-   **`app/tsconfig.node.json`** (`include: ["vite.config.ts"]`, `types: ["node"]`), mismas banderas estrictas.
-5. **`app/vite.config.ts`:** `@vitejs/plugin-react`; bloque `test` con `environment: 'jsdom'`,
-   `setupFiles: ['./src/test/setup.ts']`, `include: ['src/**/*.test.{ts,tsx}']`.
-6. **`app/eslint.config.js`** (flat config): `@eslint/js` recomendado, `tseslint.configs.strictTypeChecked` con
-   `parserOptions.projectService`, `eslint-plugin-react-hooks` recomendado (usar la forma de flat config que documente
-   la versión instalada), `no-console: 'error'`, `no-restricted-syntax` contra `JSXAttribute[name.name='dangerouslySetInnerHTML']`,
-   `ignores: ['dist']`. **Regla de capas en lista blanca** (`no-restricted-imports`; en flat config el último bloque
-   que matchea un archivo reemplaza la configuración de la regla):
+**`app/src/sui/config.ts`** (único lector de `import.meta.env` y de los JSON de despliegue en toda la app; ARQ-8, PROY-15):
 
-   | Bloque `files` | `no-restricted-imports` |
-   |---|---|
-   | base `src/**/*.{ts,tsx}` | `patterns.group`: `@mysten/sui`, `@mysten/sui/*`, `@mysten/dapp-kit-core`, `@mysten/dapp-kit-core/*`; `paths`: `@mysten/dapp-kit-react` (exacto: así `@mysten/dapp-kit-react/ui` queda permitido). Mensaje: "El SDK de Sui solo se importa en src/sui/ o src/hooks/ (ARQ-1, PROY-13)" |
-   | `src/sui/**` | prohíbe `react`, `react-dom`, `react/*`, `@mysten/dapp-kit-react`, `@mysten/dapp-kit-react/*` y las capas superiores (`../hooks/*`, `../components/*`, `../pages/*`, `../providers/*` y sus variantes `**/hooks/**` etc.); permite `@mysten/sui*` y `@mysten/dapp-kit-core*` |
-   | `src/hooks/**` | prohíbe `@mysten/dapp-kit-core`, `@mysten/dapp-kit-core/*`; permite `@mysten/sui*` y `@mysten/dapp-kit-react` |
-   | `src/providers/**` | prohíbe `@mysten/sui`, `@mysten/sui/*`, `@mysten/dapp-kit-core`, `@mysten/dapp-kit-core/*`; permite `@mysten/dapp-kit-react` |
+```ts
+export type AppConfig = {
+  network: Network;
+  grpcUrl: string;               // NETWORKS[network].grpcUrl
+  chainId: string;               // 8 hex, del JSON
+  packageId: string;             // targets de llamada (#11, #12)
+  originalPackageId: string;     // prefijo de tipos de eventos/objetos (#10, #13, #14)
+  houseId: string;
+  burnerWalletEnabled: boolean;  // network === 'localnet' && DEV (D5)
+};
+export type ConfigResult = { ok: true; config: AppConfig } | { ok: false; error: string };
 
-7. **App mínima:** `app/index.html` (`<div id="root">`, título "Sui Battleship"), `app/src/main.tsx` (monta `<App />`
-   en `StrictMode`), `app/src/App.tsx` (encabezado "Sui Battleship"; el router llega en TASK-6), `app/src/index.css`
-   (CSS plano mínimo), `app/src/vite-env.d.ts` (`/// <reference types="vite/client" />` + `ImportMetaEnv` con
-   `readonly VITE_SUI_NETWORK?: string`), `app/src/test/setup.ts` (`import '@testing-library/jest-dom/vitest'`),
-   `app/src/App.test.tsx`.
+/** Pura (ARQ-3). `deployments`: ruta del glob → contenido JSON sin tipar. */
+export function resolveConfig(env: { VITE_SUI_NETWORK?: string; DEV: boolean },
+                              deployments: Record<string, unknown>): ConfigResult;
 
-### 4. Archivos
-- **Crear:** `.npmrc`, `package-lock.json` (lo genera npm), `app/package.json`, `app/index.html`, `app/vite.config.ts`,
-  `app/tsconfig.json`, `app/tsconfig.node.json`, `app/eslint.config.js`, `app/src/{main.tsx,App.tsx,App.test.tsx,index.css,vite-env.d.ts}`,
-  `app/src/test/setup.ts`.
-- **Modificar:** `package.json` (raíz, solo `engines`).
-- **NO tocar:** `contracts/`, `.github/`, `.gitignore`, `.nvmrc`, `agents.md`, `documents/` (salvo el reporte).
-
-### 5. Tests obligatorios
-- `App.test.tsx`: renderiza el título "Sui Battleship" (jsdom).
-
-### 6. Smoke
-No aplica (sin red ni navegador).
-
-### 7. Criterios de aceptación (pegar el output de cada punto)
-1. Re-verificación del tren de `@mysten/*` (§"Paquetes") y `date -u`.
-2. `npm ci` desde la raíz con Node 26: exit 0 y sin scripts de instalación ejecutados (con `ignore-scripts`).
-3. Gates: `npm run lint -w app`, `npm run typecheck -w app`, `npm test -w app`, `npm run build -w app`: todos exit 0
-   (`build` sin `VITE_SUI_NETWORK` está bien en este task).
-4. `npm ls @mysten/sui @mysten/dapp-kit-core @mysten/wallet-standard @mysten/slush-wallet`: **una sola versión de cada
-   uno**, sin `invalid`, `UNMET PEER` ni `deduped` a otra versión; las tres `@mysten/*` directas del mismo tren.
-5. `npm audit` (completo) y `npm audit signatures` pegados; `npm audit --omit=dev --audit-level=high` exit 0. Si hay
-   vulnerabilidades high/critical de producción: **STOP** (no `audit fix`, no excepciones por cuenta propia).
-6. Licencias del árbol desde `package-lock.json` (campo `license` de cada entrada de `packages`): lista de las que no
-   sean MIT, Apache-2.0, BSD-2/3-Clause, ISC (o "ninguna").
-7. `engine-strict`: con `export PATH=/home/santiago/.nvm/versions/node/v22.23.4/bin:$PATH`, `npm ci` falla con
-   `EBADENGINE` (pegar las líneas del error); después, con el prefijo de Node 26, `npm ci` vuelve a exit 0 y los gates
-   siguen verdes. Si con Node 22 **no** falla, se declara que el `engines` de la raíz es solo documental.
-8. Sondas de la regla de capas (crear, correr `npm run lint -w app`, pegar el error, **borrar**): (a)
-   `app/src/components/LintProbe.tsx` con `import { MIST_PER_SUI } from '@mysten/sui/utils'`; (b)
-   `app/src/features/LintProbe.ts` (carpeta nueva) con `import { SuiGrpcClient } from '@mysten/sui/grpc'`; (c)
-   `app/src/sui/lintProbe.ts` con `import { useState } from 'react'`. Las tres fallan con el mensaje de la regla; tras
-   borrarlas (y la carpeta `features/`), lint verde.
-9. `grep -nE '"[~^]' app/package.json` sin resultados; `git status --porcelain --untracked-files=all` sin
-   `*.tsbuildinfo`, sin `node_modules`/`dist` (ignorados).
-
-### 8. Al terminar
-Reporte con la plantilla de `FLUJO_AGENTES.md` §5. Riesgos esperables: un `EBADENGINE` transitivo o un paquete que
-exija script de instalación ⇒ **STOP** (nunca `--force` ni quitar `ignore-scripts`).
-
----
-
-## TASK-2: job `app` en la CI — área: ci — Tramo A
-
-### 1. Historia de usuario del task
-**Como** owner, **quiero** que cada PR corra el gate de la app en GitHub Actions, **para** que nada que rompa la app
-o traiga una dependencia vulnerable llegue a `master`.
-
-### 2. Contexto
-`.github/workflows/ci.yml:131-132` reserva el hueco (`TODO(#9)`). El job `contracts` (`ci.yml:28-129`) es el modelo:
-`ubuntu-24.04`, `shell: bash`, `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1` con
-`persist-credentials: false`, paso final de árbol limpio. `permissions: contents: read` a nivel workflow (`ci.yml:9-10`).
-El repo exige actions fijadas por SHA (§0).
-
-### 3. Qué implementar
-Reemplazar las líneas 131-132 (el comentario `TODO(#9)`) por:
-
-```yaml
-  app:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    defaults:
-      run:
-        shell: bash                 # -eo pipefail, como el job contracts
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Node de .nvmrc
-        run: |
-          node --version && npm --version
-          [[ "$(node --version)" == "v$(cat .nvmrc)."* ]]
-      - name: Install (lockfile; sin scripts de instalación por .npmrc)
-        run: npm ci
-      - name: Firmas del registry
-        run: npm audit signatures
-      - name: Vulnerabilidades de producción (high o más)
-        run: npm audit --omit=dev --audit-level=high
-      - name: Lint
-        run: npm run lint -w app
-      - name: Typecheck
-        run: npm run typecheck -w app
-      - name: Test
-        run: npm test -w app
-      - name: Build (testnet)
-        env:
-          VITE_SUI_NETWORK: testnet
-        run: npm run build -w app
-      - name: Árbol sin cambios tras los gates
-        if: ${{ !cancelled() }}
-        run: |
-          git status --porcelain --untracked-files=all
-          test -z "$(git status --porcelain --untracked-files=all)"
+/** Único punto que toca import.meta.env y el glob de deployments. */
+export function loadConfig(): ConfigResult {
+  return resolveConfig(
+    { VITE_SUI_NETWORK: import.meta.env.VITE_SUI_NETWORK, DEV: import.meta.env.DEV },
+    import.meta.glob<unknown>('../../../contracts/deployments/*.json', { eager: true, import: 'default' }),
+  );
+}
 ```
 
-Sin `needs`, sin `secrets`, sin `permissions` propios.
+Reglas de `resolveConfig`, en este orden (un mensaje en español por causa, que nombra el campo o archivo y la acción):
+1. `VITE_SUI_NETWORK` ausente o vacía → "Falta VITE_SUI_NETWORK (localnet o testnet); ver app/.env.example".
+2. Valor no admitido (`isNetwork` falso; `mainnet` con mensaje propio: "fuera de alcance del MVP").
+3. Buscar la entrada cuyo **nombre de archivo** sea `<red>.json` (por basename de la clave del glob). Ausente →
+   "Falta contracts/deployments/<red>.json: en localnet, generarlo con el script de #7 (agents.md §3, paso 4, variante B);
+   en testnet lo publica #8".
+4. El contenido no es un objeto → error. `schemaVersion !== 1` → error que nombra la versión encontrada.
+5. `network` del JSON distinto de la red elegida → error.
+6. `chainId` no matchea `^[0-9a-f]{8}$`; `packageId`, `originalPackageId`, `houseId` no matchean `^0x[0-9a-f]{64}$`
+   (formato exacto del productor, **en minúsculas**: así los IDs de config ya están normalizados, D12) → error por campo.
+7. Claves desconocidas o los otros 9 campos: se ignoran (no se validan).
+Constantes con nombre (LIM-6): `SCHEMA_VERSION = 1`, `CHAIN_ID_RE`, `OBJECT_ID_RE`.
+
+**`app/src/components/ConfigError.tsx`:** `({ message }: { message: string })` → `role="alert"`, título "La app no está
+configurada" y el mensaje tal cual (texto plano, sin `dangerouslySetInnerHTML`).
+
+**`app/src/main.tsx`:** `const result = loadConfig();` → si `!result.ok`, renderiza `<ConfigError message={result.error} />`;
+si `ok`, `<App />` (la config se conecta a los providers en TASK-6). Sin `import.meta.env` fuera de `config.ts`.
+
+**`app/.env.example`:** `VITE_SUI_NETWORK=localnet` con un comentario: valores admitidos, que todo `VITE_*` es público
+(se embebe en el bundle) y que nunca lleva secretos (SEG-3).
+
+**`app/vite.config.ts`:** solo si `vite` dev se niega a servir archivos fuera de `app/`, agregar `server.fs.allow` con
+`searchForWorkspaceRoot(process.cwd())` (declararlo). La raíz tiene `workspaces`, así que no debería hacer falta.
 
 ### 4. Archivos
-- **Modificar:** `.github/workflows/ci.yml` (solo el bloque `TODO(#9)`).
-- **NO tocar:** jobs `contracts` y `framework-drift`, `env`, `on`, `concurrency`, `permissions`.
+- **Crear:** `app/src/sui/config.ts`, `app/src/sui/config.test.ts`, `app/src/components/ConfigError.tsx`,
+  `app/src/components/ConfigError.test.tsx`, `app/.env.example`.
+- **Modificar:** `app/src/main.tsx`; `app/vite.config.ts` solo en el caso descrito.
+- **NO tocar:** `contracts/` (salvo la copia temporal del §7.3, que se borra), `.github/`, `package.json`,
+  `package-lock.json`, `.npmrc`, `app/eslint.config.js` (TASK-6), `agents.md`, `documents/`.
 
 ### 5. Tests obligatorios
-- YAML válido: `python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' .github/workflows/ci.yml` exit 0.
-- `git diff -- .github/workflows/ci.yml` pegado: solo el bloque nuevo.
-- Los mismos gates del job, corridos en local con el prefijo de Node 26 y `VITE_SUI_NETWORK=testnet` en el build
-  (pegados).
+`config.test.ts` (la fixture se carga con `import.meta.glob('../../../contracts/scripts/fixtures/localnet.deployment.json',
+{ eager: true, import: 'default' })` y se pasa a `resolveConfig` bajo la clave `'../../../contracts/deployments/localnet.json'`):
+- caso válido con la **fixture real** (devuelve `network`, `chainId`, IDs y `grpcUrl` de localnet);
+- caso válido de testnet con un JSON sintético (IDs ficticios del ejemplo de `contracts/README.md`, `chainId` `4c78adac`);
+- variable ausente; vacía; `mainnet`; `devnet`; JSON ausente para la red elegida (con otro `<red>.json` presente);
+- contenido no-objeto (`null`, array, string); `schemaVersion` 2 y ausente;
+- `network` distinto de la variable; archivo `testnet.json` cuyo `network` es `localnet`;
+- cada uno de `chainId`, `packageId`, `originalPackageId`, `houseId`: ausente, no-string, mayúsculas, sin `0x`, largo
+  incorrecto (un test por campo y causa, o tabla parametrizada);
+- claves desconocidas y campos no usados ausentes → sigue `ok`;
+- `burnerWalletEnabled`: `true` solo con localnet + `DEV: true`; `false` con localnet + `DEV: false` y con testnet + `DEV: true`.
+`ConfigError.test.tsx`: renderiza `role="alert"` con el mensaje literal.
 
 ### 6. Smoke
-No aplica. **Verificación en GitHub (la hace el orquestador tras commitear):** push de la branch y PR (draft) contra
-`master` → run con `app`, `contracts` y `framework-drift` en verde (link y tiempos); y un PR desechable con un
-`console.log` en `app/src/App.tsx` → `app` rojo en Lint; ese PR se cierra sin merge (patrón R3/R4 de #3). El MID revisa
-ambos links antes de autorizar TASK-3.
+No aplica en este task (se cubre en `SMOKE_APP.md`, pasos 10 y 15).
 
-### 7. Criterios de aceptación
-YAML válido; diff acotado; gates locales verdes; los dos runs de GitHub como se describe arriba.
+### 7. Criterios de aceptación (pegar output)
+1. Gate de la app completo en verde (§0), con los conteos de tests por archivo.
+2. `grep -rn "import.meta.env" app/src` → solo `app/src/sui/config.ts` (y `vite-env.d.ts`, tipos).
+3. Glob fuera de `app/`, **con y sin** `localnet.json`:
+   - sin archivo: `VITE_SUI_NETWORK=localnet npm run build -w app` exit 0 y `grep -c` del `packageId` de la fixture en
+     `app/dist/assets/*.js` = 0;
+   - con archivo: `mkdir -p contracts/deployments && cp contracts/scripts/fixtures/localnet.deployment.json contracts/deployments/localnet.json`,
+     el mismo build exit 0 y el `packageId` aparece en el bundle; `vite` dev en segundo plano del harness (con `exec`,
+     PID en el scratchpad) y `curl -s http://127.0.0.1:5173/src/sui/config.ts` muestra el import de
+     `contracts/deployments/localnet.json`; `kill` del PID y `kill -0` falla;
+   - limpieza: `rm -f contracts/deployments/localnet.json && rmdir contracts/deployments`; `git status --porcelain` vacío.
+   (La copia temporal es la salida real del script, no un JSON escrito a mano; se declara en el reporte.)
+4. Sin dependencias nuevas (`git diff --exit-code -- package.json app/package.json package-lock.json`).
 
 ### 8. Al terminar
-Reporte §5 (la sección de CI se completa con los links que pase el orquestador).
+Reporte §5 (incluir "Tablas de contrato / `app/src/sui/`: no aplica"; config no toca targets, eventos ni aborts).
 
 ---
 
-## TASK-3: capa `sui/` base — redes, montos y explorador — área: app — Tramo A
+## TASK-6: providers, wallet, router e indicador de red — área: app
 
 ### 1. Historia de usuario del task
-**Como** desarrollador de #10–#14, **quiero** funciones puras y probadas para convertir montos SUI ↔ MIST sin
-errores de redondeo, armar links al explorador y comparar el identificador de la red, **para** no reimplementarlas en
-cada pantalla y no perder dinero por un `number`.
+**Como** jugador, **quiero** ver siempre en qué red está la app y si el nodo responde ahora mismo, y poder conectar y
+desconectar mi wallet viendo mi dirección abreviada, **para** saber con qué cuenta y en qué red voy a jugar antes de
+apostar.
 
 ### 2. Contexto
-El SDK ya trae `parseToMist` (`@mysten/sui/utils`; sin floats, rechaza > 9 decimales; **acepta** negativos, `.5` y
-`-0`; no acota a u64), `formatAddress`, `fromBase58`, `toHex`, `isValidSuiObjectId`, `isValidTransactionDigest`. Las
-reglas de capas de TASK-1 permiten `@mysten/sui*` en `src/sui/`.
+- `app/src/App.tsx` es un placeholder cuyo JSDoc menciona "TASK-6" (LIM-7): se reescribe.
+- `app/eslint.config.js`: la regla base usa `paths` + `patterns.group` y **no** cubre otros `@mysten/*` transitivos
+  (p. ej. `@mysten/bcs`) ni subrutas de `dapp-kit-react` distintas de `/ui` (hallazgo 2 de la revisión de TASK-1).
+- `node_modules/@mysten/dapp-kit-react/dist/index.d.mts` **re-exporta todo** `@mysten/dapp-kit-core`
+  (`export * from "@mysten/dapp-kit-core"`): `createDAppKit` del core es la misma función. `DAppKitProvider` recibe
+  `dAppKit: DefaultExpectedDppKit`; `useCurrentClient()` devuelve `ReturnType<RegisteredDAppKit['getClient']>`.
+  `createDAppKit` acepta `enableBurnerWallet?: boolean` y `slushWalletConfig?: SlushWalletConfig | null`
+  (`dapp-kit-core/dist/types-*.d.mts`).
+- `getServiceInfo` (`node_modules/@mysten/sui/dist/grpc/proto/sui/rpc/v2/ledger_service.d.mts`): `chainId?: string`
+  (**base58** del digest génesis), `checkpointHeight?: bigint`. `getChainIdentifier()` **no** sirve (cachea para siempre).
+- `shortChainId` (`app/src/sui/networks.ts`) **lanza** con un base58 inválido (hallazgo 3 de la revisión de TASK-3).
+- TanStack Query v5 conserva `data` tras un error (`status: 'error'`, `isError: true`) y reintenta 3 veces por defecto.
 
 ### 3. Qué implementar
-- **`app/src/sui/networks.ts`:** `export type Network = 'localnet' | 'testnet'`; `NETWORKS: Record<Network, { grpcUrl:
-  string; explorerBase: string | null }>` = localnet `http://127.0.0.1:9000` / `null`; testnet
-  `https://fullnode.testnet.sui.io:443` / `https://suiscan.xyz/testnet`; `isNetwork(x: string): x is Network`;
-  `shortChainId(base58: string): string` = `toHex(fromBase58(base58)).slice(0, 8)`.
-- **`app/src/sui/format.ts`:**
-  - `U64_MAX = 2n ** 64n - 1n` (constante nombrada, LIM-6).
-  - `type ParseResult = { ok: true; mist: bigint } | { ok: false; reason: 'empty' | 'negative' | 'too_many_decimals' |
-    'too_large' | 'invalid' }`; `parseSuiToMist(input: string): ParseResult`. **Clasificación con chequeos propios
-    antes de llamar a `parseToMist`** (nunca leyendo el texto de un error del SDK): `''` → `empty`; empieza con `-` →
-    `negative`; no matchea `^(?:\d+(?:\.\d+)?|\.\d+)$` → `invalid`; más de 9 decimales → `too_many_decimals`; luego
-    `parseToMist(input)`; `> U64_MAX` → `too_large`. Sin `trim`.
-  - `formatMist(mist: bigint): string`: entero + hasta 9 decimales, sin ceros finales ni punto colgante, negativos con
-    signo, sin `number`.
-  - `shortAddress = formatAddress` (re-export del SDK).
-- **`app/src/sui/explorer.ts`:** `explorerTxUrl(network, digest): string | null` → `${explorerBase}/tx/${digest}`;
-  `explorerObjectUrl(network, id): string | null` → `${explorerBase}/object/${id}`; `null` si `explorerBase` es `null`;
-  **lanza** `Error` si el digest no pasa `isValidTransactionDigest` o el ID no pasa `isValidSuiObjectId`.
-- `///`/JSDoc en toda función exportada (LIM-7).
+1. **`app/eslint.config.js` — capas por regex** (lista blanca; cada bloque repite su lista entera, como hoy):
+
+   | Bloque | `no-restricted-imports` → `patterns` |
+   |---|---|
+   | base `src/**/*.{ts,tsx}` | `{ regex: '^@mysten/(?!dapp-kit-react/ui$)', message: SDK_LAYER_MESSAGE }` (reemplaza `paths` + `group`) |
+   | `src/sui/**` | `{ regex: '^@mysten/(?!sui(/|$)|dapp-kit-core(/|$))', … }` + el `group` actual de React y capas superiores |
+   | `src/hooks/**` | `{ regex: '^@mysten/(?!sui(/|$)|dapp-kit-react$)', … }` |
+   | `src/providers/**` | `{ regex: '^@mysten/(?!dapp-kit-react$)', … }` |
+
+   Si la versión instalada de ESLint no admite `regex` en `patterns`, STOP (no se inventa otra sintaxis).
+2. **`app/src/sui/nodeInfo.ts`:**
+   ```ts
+   export const NODE_STATUS_REFETCH_MS = 20_000;
+   export type NodeInfo = { chainId: string; checkpointHeight: bigint | null };  // chainId = 8 hex
+   /** Consulta viva (sin caché del SDK): ledgerService.getServiceInfo({}). Lanza si falta chainId o si no es base58. */
+   export async function fetchNodeInfo(client: SuiGrpcClient): Promise<NodeInfo>;
+   export type NodeStatus =
+     | { kind: 'loading' }
+     | { kind: 'ok'; checkpointHeight: bigint | null }
+     | { kind: 'wrong_chain'; expected: string; actual: string }
+     | { kind: 'offline'; reason: string };
+   /** Pura. Prioridad: isError → offline (aunque haya data previa); isPending → loading; chainId ≠ esperado → wrong_chain; si no, ok. */
+   export function deriveNodeStatus(q: { isPending: boolean; isError: boolean; error: unknown; data: NodeInfo | undefined },
+                                    expectedChainId: string): NodeStatus;
+   ```
+   `fetchNodeInfo`: `const { response } = await client.ledgerService.getServiceInfo({});` → si `!response.chainId`, lanza
+   `Error('El nodo no informó su chain id')`; `shortChainId(response.chainId)` sin `try/catch` (si lanza, es **error del
+   intento** → `offline`); `checkpointHeight: response.checkpointHeight ?? null`. `reason` de `offline` = `error.message`
+   si es `Error`, si no `String(error)`.
+3. **`app/src/sui/dappKit.ts`:**
+   ```ts
+   import { createDAppKit } from '@mysten/dapp-kit-core';
+   import { SuiGrpcClient } from '@mysten/sui/grpc';
+   export function createAppDAppKit(config: AppConfig) {
+     return createDAppKit({
+       networks: [config.network],
+       createClient: (network) => new SuiGrpcClient({ network, baseUrl: config.grpcUrl }),
+       enableBurnerWallet: config.burnerWalletEnabled,
+       ...(config.network === 'localnet' ? { slushWalletConfig: null } : {}),
+     });
+   }
+   export type AppDAppKit = ReturnType<typeof createAppDAppKit>;
+   ```
+4. **`app/src/providers/AppProviders.tsx`:** `({ dAppKit, config, children })` → `QueryClientProvider` (un `QueryClient`
+   creado una vez, p. ej. con `useState(() => new QueryClient())`) > `DAppKitProvider dAppKit={dAppKit}` >
+   `ConfigContext.Provider value={config}`. Registro global de tipos:
+   `declare module '@mysten/dapp-kit-react' { interface Register { dAppKit: AppDAppKit } }` con
+   `import type { AppDAppKit } from '../sui/dappKit'`. Si con eso `useCurrentClient()` no tipa como `SuiGrpcClient`,
+   augmentar `'@mysten/dapp-kit-core'` (sin importarlo: solo `declare module`) y declararlo.
+5. **Hooks** (`app/src/hooks/`): `useAppConfig()` (lee `ConfigContext`; lanza si no hay provider); `useNodeStatus()` =
+   `useQuery({ queryKey: ['sui', config.network, 'nodeInfo'], queryFn: () => fetchNodeInfo(client), refetchInterval:
+   NODE_STATUS_REFETCH_MS })` con `client = useCurrentClient()` y `deriveNodeStatus(query, config.chainId)`;
+   `useWalletAccount()` = `useCurrentAccount()` → `{ address: string | null; short: string | null }` (`shortAddress`).
+   Sin `useEffect` para datos (PROY-14).
+6. **Componentes** (`app/src/components/`): `Header` (título, `NetworkBadge`, `AccountBadge`, `ConnectButton` de
+   `@mysten/dapp-kit-react/ui`); `NetworkBadge` (nombre de la red **siempre** visible + "nodo OK" / "red equivocada
+   (esperada X, nodo Y)" / "sin conexión" con `reason` visible en texto chico o `title` / "conectando…"); `AccountBadge`
+   (dirección abreviada si hay cuenta; nada si no).
+7. **Páginas y router:** `app/src/pages/HomePage.tsx` (encabezado y una línea de texto del producto, sin TODOs),
+   `NotFoundPage.tsx` (mensaje + link a `#/`). **`app/src/App.tsx` reescrito:** exporta `appRoutes` (layout con `Header`
+   + `Outlet`; `/` → `HomePage`; `*` → `NotFoundPage`) y `App` = `RouterProvider` con `createHashRouter(appRoutes)`
+   (creado fuera del componente). JSDoc nuevo que explique **por qué** hash routing (hosting estático, #15) y sin
+   referencias a tasks. Usar el punto de entrada de `react-router` 8.5.0 que exporte `RouterProvider` para DOM según
+   sus tipos instalados.
+8. **`app/src/main.tsx`:** con config `ok`: `const dAppKit = createAppDAppKit(result.config)` y
+   `<AppProviders dAppKit={dAppKit} config={result.config}><App /></AppProviders>`; con error, `ConfigError` (TASK-5).
+9. **Normalización de IDs (D12, SEG-9):** #9 no tiene entradas de IDs (ni rutas con ID ni formularios): **no se
+   implementa** aquí. Los IDs de config ya llegan en el formato estricto del productor (TASK-5). La regla para #10–#12
+   ("validar con `isValidSuiObjectId`/`isValidSuiAddress` y normalizar con `normalizeSuiObjectId`/`normalizeSuiAddress`
+   en el borde de entrada, antes de consultar o armar un PTB") la documenta TASK-7.
 
 ### 4. Archivos
-- **Crear:** `app/src/sui/{networks.ts,networks.test.ts,format.ts,format.test.ts,explorer.ts,explorer.test.ts}`.
-- **NO tocar:** fuera de `app/src/sui/`.
+- **Crear:** `app/src/sui/{nodeInfo.ts,nodeInfo.test.ts,dappKit.ts,dappKit.test.ts}`,
+  `app/src/providers/AppProviders.tsx`, `app/src/hooks/{useAppConfig.ts,useNodeStatus.ts,useNodeStatus.test.tsx,useWalletAccount.ts}`,
+  `app/src/components/{Header.tsx,Header.test.tsx,NetworkBadge.tsx,NetworkBadge.test.tsx,AccountBadge.tsx,AccountBadge.test.tsx}`,
+  `app/src/pages/{HomePage.tsx,NotFoundPage.tsx}`.
+- **Modificar:** `app/src/App.tsx`, `app/src/App.test.tsx`, `app/src/main.tsx`, `app/eslint.config.js`.
+- **NO tocar:** dependencias, `contracts/`, `.github/`, `agents.md`, `documents/`, `app/src/sui/{networks,format,explorer,config}.ts`
+  (salvo un import).
 
 ### 5. Tests obligatorios
-`parseSuiToMist` (un caso por fila):
-
-| Entrada | Resultado |
-|---|---|
-| `"0"` | ok `0n` |
-| `"0.000000001"` | ok `1n` |
-| `"1"`, `"0.001"`, `"50"` | ok `1_000_000_000n`, `1_000_000n`, `50_000_000_000n` |
-| `".5"` | ok `500_000_000n` |
-| `"18446744073.709551615"` | ok `18_446_744_073_709_551_615n` |
-| `"18446744073.709551616"` | `too_large` |
-| `"1.0000000001"` | `too_many_decimals` |
-| `"-1"`, `"-0"`, `"-0.5"` | `negative` |
-| `""` | `empty` |
-| `"1."`, `" 1"`, `"1 "`, `"1e3"`, `"abc"`, `"0x10"`, `"1,5"` | `invalid` |
-
-`formatMist`: `0n` → `"0"`; `1n` → `"0.000000001"`; `1_500_000_000n` → `"1.5"`; `50_000_000_000n` → `"50"`; `U64_MAX` →
-`"18446744073.709551615"`; `-1n` → `"-0.000000001"`; ida y vuelta (`parseSuiToMist(formatMist(x))`) para
-`2n ** 53n + 1n` y `U64_MAX`. Explorer: tx y objeto de testnet con las URLs exactas; `null` en localnet; digest inválido
-y ID inválido lanzan. `shortChainId`: `69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD` → `4c78adac` (testnet),
-`4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S` → `35834a8a` (mainnet). `isNetwork('mainnet') === false`.
+- `nodeInfo.test.ts` (cliente falso con `ledgerService.getServiceInfo` mockeado): `chainId` base58 de testnet
+  (`69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD`) → `4c78adac` y `checkpointHeight` bigint; sin `chainId` → rechaza;
+  **base58 inválido** (p. ej. `'0OIl'`) → rechaza; `deriveNodeStatus`: pending → loading; data igual → ok; data distinta →
+  wrong_chain con `expected`/`actual`; error → offline con `reason`; **error con data previa → offline**.
+- `useNodeStatus.test.tsx` (wrapper con `QueryClient({ defaultOptions: { queries: { retry: false } } })`,
+  `vi.useFakeTimers()`, `useCurrentClient`/`useAppConfig` mockeados): 1.er poll OK → `ok`; tras
+  `advanceTimersByTimeAsync(NODE_STATUS_REFETCH_MS)` con el 2.º poll en error → `offline`; un poll posterior con otro
+  chain id → `wrong_chain`; un poll con base58 inválido → `offline`.
+- `dappKit.test.ts`: con `createDAppKit` mockeado (`vi.mock('@mysten/dapp-kit-core')`), verifica `networks`,
+  `enableBurnerWallet` (true/false según config), `slushWalletConfig: null` solo en localnet y que `createClient` crea un
+  `SuiGrpcClient` con `config.grpcUrl`.
+- `NetworkBadge`/`AccountBadge`/`Header` con los hooks propios mockeados (`vi.mock('../hooks/…')`) y el módulo
+  `@mysten/dapp-kit-react/ui` mockeado (el `ConnectButton` es un web component): cada red y cada `kind`; cuenta
+  conectada (abreviada) y desconectada.
+- `App.test.tsx`: con `createMemoryRouter(appRoutes, …)` y providers/hooks mockeados: `/` muestra el encabezado y la
+  home; una ruta inexistente muestra `NotFoundPage`.
 
 ### 6. Smoke
-No aplica.
+No en este task. El comportamiento en navegador (wallet, "nodo OK", POST gRPC-web en DevTools, error provocado legible,
+"sin conexión", "red equivocada", burner fuera del build de producción) se verifica en `SMOKE_APP.md`.
 
-### 7. Criterios de aceptación
-Gates verdes (pegar cuántos tests por archivo); ningún `number` para montos (`grep -n 'number' app/src/sui/format.ts`
-pegado y explicado si hay coincidencias); sin dependencias nuevas.
+### 7. Criterios de aceptación (pegar output)
+1. Gate de la app completo en verde, con conteos por archivo.
+2. **Sondas de capas** (crear, `npm run lint -w app`, pegar el error, borrar; al final lint verde):
+   (a) `src/components/LintProbe.tsx` → `@mysten/bcs`; (b) `src/sui/lintProbe.ts` → `import '../hooks/useAppConfig'`;
+   (c) `src/components/LintProbe.tsx` → `@mysten/dapp-kit-react` (raíz); (d) `src/sui/lintProbe.ts` →
+   `@mysten/dapp-kit-react/ui`; (e) `src/providers/LintProbe.tsx` → `@mysten/sui/grpc`; (f) `src/hooks/lintProbe.ts` →
+   `@mysten/dapp-kit-core`; (g) `src/features/LintProbe.ts` → `@mysten/sui`; (h) `src/sui/lintProbe.ts` → `react`.
+   Todas fallan. Y pasan (exit 0): `@mysten/dapp-kit-react/ui` en `components/`, `@mysten/sui/grpc` en `sui/` y `hooks/`,
+   `@mysten/dapp-kit-react` en `hooks/` y `providers/`.
+3. `grep -rnE "@mysten/" app/src --include=*.tsx --include=*.ts | grep -vE "^app/src/(sui|hooks|providers)/"` → solo
+   `@mysten/dapp-kit-react/ui` (y mocks de tests, declarados).
+4. `grep -rn "useEffect" app/src` sin usos para pedir datos; `grep -rn "getChainIdentifier" app/src` vacío.
+5. Sin dependencias nuevas (`git diff --exit-code -- package.json app/package.json package-lock.json`).
 
 ### 8. Al terminar
-Reporte §5.
+Reporte §5. Desviaciones esperables (declarar): punto de entrada de `RouterProvider`; módulo augmentado para
+`Register`; forma del mock del web component.
 
 ---
 
-## TASK-4: sonda gRPC-web en localnet (CORS + `listEvents`) — área: app (verificación) — Tramo A — gate de D1
+## TASK-7: documentación y baseline — área: docs
 
 ### 1. Historia de usuario del task
-**Como** owner, **quiero** comprobar con una red real que el navegador puede hablar con el nodo por gRPC-web y leer
-eventos por tipo, **para** no construir #10–#14 sobre un canal que después no funcione.
+**Como** quien retome el proyecto (agente o persona), **quiero** que las guías digan cómo levantar, probar y apuntar la
+app a una red, qué reglas de dependencias rigen y qué pasa ante un aviso de seguridad, **para** no redescubrir #9.
 
 ### 2. Contexto
-El código del nodo 1.83 sirve gRPC-web con CORS `Any` (`crates/sui-node/src/lib.rs:3002-3008`,
-`crates/sui-rpc-api/src/grpc/mod.rs:77` @ `testnet-v1.83.0`) y `sui start` activa el indexado
-(`crates/sui/src/sui_commands.rs:1048-1064`), pero nunca se probó. `update_fee_rate(house, cap, new_fee_rate: u16)` emite
-`FeeRateUpdated { house_id, old_fee_rate, new_fee_rate }` (`contracts/sources/house.move:48-52, 98-104`). Procedimiento
-base: localnet **aislada**, `agents.md` §3 "Localnet aislada (smokes)", pasos 1-7, **sin desvíos** (en este worktree,
-`<repo>/contracts`). **Una sola localnet a la vez en la máquina:** antes de empezar, confirmar con el orquestador que
-el DEV de #7 no tiene una red arriba (mismo puerto 9000).
+`agents.md:53` (kit "por definir"), `agents.md` §3 "App (`app/`, cuando exista)", §4 (diagrama con "Sui fullnode
+(RPC)"), §11 (wallet de navegador), §14; `documents/ESTANDARES.md` v1.7 (PROY-14 cita `useSuiClientQuery`, PROY-18 solo
+`contracts`, SEG-8 genérica); `contracts/README.md` "Lectura desde la app" ("la elige #10 (gRPC o GraphQL)").
+Evidencia a documentar: TASK-1 (lockfile y licencias), TASK-4 (CORS y `listEvents`), exit 144 de `sui start` ante
+SIGTERM (riesgo 1 del reporte de TASK-4), paquetes de producción por el peer de `gql.tada`.
 
-### 3. Qué implementar (procedimiento; nada se commitea)
-1. **Preparación** (§3 paso 2, más):
-   - Resolver `NODE=/home/santiago/.nvm/versions/node/v26.13.0/bin/node` (verificar `--version` = `v26.13.0`).
-   - Crear `<SMOKE_DIR>/app.env` (rutas **literales**; **no** toca `HOME` ni `SUI_CONFIG_DIR`; se carga en las llamadas
-     sin `sui`):
-     ```sh
-     # <SMOKE_DIR>/app.env — cargar en cada llamada con node/npm/curl del smoke: `. <SMOKE_DIR>/app.env && …`
-     SMOKE_DIR=<SMOKE_DIR>
-     REPO=/home/santiago/Projects/Battleship-issue9
-     NODE=/home/santiago/.nvm/versions/node/v26.13.0/bin/node
-     export PATH=/home/santiago/.nvm/versions/node/v26.13.0/bin:$PATH
-     [ "$("$NODE" --version)" = v26.13.0 ] && [ -d "$SMOKE_DIR" ] || { echo APPENV-FAIL; return 97; }
-     ```
-   - **Nunca** cargar `env.sh` y `app.env` en la misma llamada.
-2. Génesis, arranque en segundo plano del harness y `suic chain-identifier` (§3 paso 4); cuentas (§3 paso 5:
-   `ADMIN` en `ids.env`).
-3. Publicación efímera (§3 paso 4), guardando el JSON: prefijo del paso 3 y
-   `act_as "$ADMIN" && cd /home/santiago/Projects/Battleship-issue9/contracts && printf 'n\n' | "$SUI" client test-publish --build-env testnet --pubfile-path "$SMOKE_DIR/Pub.localnet.toml" --json > "$SMOKE_DIR/publish.json"; echo "exit=$?"`.
-   `publish.json` tiene direcciones de génesis: **no se pega**. Si `Move.lock` cambió: `git checkout -- contracts/Move.lock`
-   y declararlo.
-4. IDs **por tipo** (llamada con `app.env`):
-   ```sh
-   . <SMOKE_DIR>/app.env && "$NODE" -e '
-   const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).objectChanges;
-   const pub = o.filter((c) => c.type === "published");
-   const by = (s) => o.filter((c) => c.type === "created" && c.objectType.endsWith(s));
-   const h = by("::house::House"), k = by("::house::HouseCap");
-   if (pub.length !== 1 || h.length !== 1 || k.length !== 1) { console.error("IDS-FAIL"); process.exit(1); }
-   console.log(`export PKG=${pub[0].packageId}\nexport HOUSE=${h[0].objectId}\nexport CAP=${k[0].objectId}`);
-   ' "$SMOKE_DIR/publish.json" >> "$SMOKE_DIR/ids.env" && tail -n 3 "$SMOKE_DIR/ids.env"
-   ```
-5. Evento real (prefijo del paso 3 de §3): `act_as "$ADMIN" && suic call --package "$PKG" --module house --function update_fee_rate --args "$HOUSE" "$CAP" 250 --json > "$SMOKE_DIR/fee.json"; echo "exit=$?"`,
-   y con `app.env`, imprimir solo `effects.status` y, de `events`, `type` + `parsedJson` (nunca `sender`).
-6. **Preflight CORS** (con `app.env`, sin `env.sh`):
-   ```sh
-   curl -si -X OPTIONS -H 'Origin: http://127.0.0.1:5173' -H 'Access-Control-Request-Method: POST' \
-     -H 'Access-Control-Request-Headers: content-type,x-grpc-web,x-user-agent' \
-     http://127.0.0.1:9000/sui.rpc.v2.LedgerService/GetServiceInfo
-   ```
-7. **Cliente real del SDK** (con `app.env` y `ids.env`; desde `$REPO/app` para resolver `@mysten/sui` del workspace):
-   ```sh
-   . <SMOKE_DIR>/app.env && . <SMOKE_DIR>/ids.env && cd "$REPO/app" && "$NODE" --input-type=module -e '
-   import { SuiGrpcClient } from "@mysten/sui/grpc";
-   import { fromBase58, toHex } from "@mysten/sui/utils";
-   const client = new SuiGrpcClient({ network: "localnet", baseUrl: "http://127.0.0.1:9000" });
-   const { response } = await client.ledgerService.getServiceInfo({});
-   console.log("chainId", response.chainId, "short", toHex(fromBase58(response.chainId)).slice(0, 8), "checkpoint", String(response.checkpointHeight));
-   let page = await client.listEvents({ filter: { eventType: `${process.env.PKG}::house::FeeRateUpdated` }, order: "descending", limit: 5 });
-   for (let i = 0; page.events.length === 0 && page.hasNextPage && i < 5; i++) {
-     page = await client.listEvents({ filter: { eventType: `${process.env.PKG}::house::FeeRateUpdated` }, before: page.endCursor, limit: 5 });
-   }
-   console.log(JSON.stringify({ hasNextPage: page.hasNextPage, events: page.events.map((e) => ({ eventType: e.eventType, transactionDigest: e.transactionDigest, checkpoint: e.checkpoint, json: e.json })) }, null, 2));
-   '
-   ```
-   (`PKG` llega por el `export` de `ids.env`.) Si el indexado tarda, repetir el paso 7 hasta 3 veces con 10 s de
-   espera (Monitor/until, sin `sleep` en primer plano).
-8. **Cierre** (§3 paso 7) completo.
+### 3. Qué implementar
+1. **`app/README.md`** (nuevo): requisitos (Node 26 con `nvm use` o el prefijo de §0); scripts; `VITE_SUI_NETWORK` y
+   `app/.env.example` (todo `VITE_*` es público); **localnet**: localnet aislada de `agents.md` §3 con la variante B del
+   paso 4 (sin `--out` → `contracts/deployments/localnet.json`), `npm run dev -w app`, wallet de desarrollo (solo dev y
+   localnet), cierre del paso 7 (`rm -f` del JSON); **testnet**: `contracts/deployments/testnet.json` de #8; mapa de
+   `app/src/sui/` con sus issues dueños (tabla de PLAN_APP "Contrato on-chain"); regla de capas; consecuencia del glob
+   `eager` (un `localnet.json` local entra en cualquier build hecho en esa máquina; los builds publicados salen de un
+   checkout limpio); **regla de IDs para #10–#12** (D12, SEG-9: validar y normalizar en el borde de entrada);
+   **procedimiento ante un aviso de seguridad** (D3, D11):
+   - el job `app` falla solo con *high/critical* de **producción**. En el árbol de producción del lock quedan además
+     `typescript`, `gql.tada`, `@0no-co/graphqlsp`, `@0no-co/graphql.web`, `graphql`, `chalk` y `commander` (los arrastra
+     el peer de `gql.tada`, dependencia de `@mysten/sui`): un *high* en cualquiera de ellos pone `app` en rojo aunque no
+     lleguen al navegador;
+   - salida: PR de actualización; si el arreglo tiene < 7 días, `min-release-age-exclude` **temporal** solo para ese
+     paquete, con un issue que lo retire (LIM-10); un `EBADENGINE` transitivo es STOP, nunca `--force`;
+   - los *moderate* solo dev de `minimatch` están aceptados hasta **#35**.
+2. **`agents.md`:** §2 tabla de áreas (kit `@mysten/dapp-kit-react` + `@mysten/dapp-kit-core`, `SuiGrpcClient`, tren
+   fijado por el lockfile, `react-router`, TS 6.0.3); §3 "App (`app/`)": quitar "cuando exista", prefijo de Node 26,
+   gate = steps del job `app` (incluidas las dos auditorías y el build con `VITE_SUI_NETWORK=testnet`) y frase de
+   "Gate completo" con el job `app`; §3 "Localnet aislada" **paso 7: una línea** — "`sui start` 1.83 sale con código 144
+   ante SIGTERM; el harness marca el comando como fallido: es esperado, lo que vale es que `kill -0` falle" (la receta no
+   se reescribe); §4 diagrama (fullnode por gRPC-web); §11 fila de la wallet de desarrollo (burner: solo localnet y
+   `npm run dev`); §14 `app/README.md`.
+3. **`documents/ESTANDARES.md`** (v1.8, encabezado con #9/D-20261102-02): **PROY-14** — lecturas con `useQuery`/
+   `useInfiniteQuery` de TanStack sobre `useCurrentClient()`; mutaciones con `useDAppKit().signAndExecuteTransaction` +
+   `useMutation`; sin `useEffect` para datos; invalidar tras cada transacción exitosa. **PROY-18** — el gate local y el de
+   CI son el mismo para `contracts` y `app`; ambos bloquean el merge. **SEG-8** — sumar la política de D3: versiones
+   exactas, lockfile, `.npmrc`, `@mysten/*` por tren, ≥ 7 días.
+4. **`contracts/README.md`** "Lectura desde la app" (y la frase equivalente cerca de "Objetos" de `game`, si la hay):
+   la API es `SuiGrpcClient` (D-20261102-02 (1)); #10 captura las fixtures; la hora de creación sale de la
+   transacción (`getTransaction(...).timestampMs`), no de `listEvents`, que no trae hora.
+5. **`documents/STATUS.md`:** baseline de la app (gate y conteos de TASK-6), toolchain (npm 11.20.0, tren
+   2.37.0/1.6.39/2.1.41), evidencia de TASK-4 (CORS, `listEvents`), hallazgo del exit 144, fila de #9 en el ciclo activo,
+   pendiente del orquestador: check `app` requerido tras el merge (D7).
 
 ### 4. Archivos
-Ninguno del repo. Todo en `<SMOKE_DIR>`. **NO tocar:** `~/.sui/`, `contracts/` (salvo revertir un delta de
-`Move.lock`), nada fuera de `<SMOKE_DIR>`.
+- **Crear:** `app/README.md`. **Modificar:** `agents.md`, `documents/ESTANDARES.md`, `contracts/README.md`,
+  `documents/STATUS.md`.
+- **NO tocar:** código, dependencias, `.github/`, `documents/DECISIONES.md` (lo escribe el orquestador),
+  `documents/PLAN_APP.md`, `documents/REVISION_PLAN_APP.md`, `documents/REPORTES_APP.md`.
 
 ### 5. Tests obligatorios
-No aplica (verificación). Los outputs de los pasos 5, 6 y 7 son la evidencia.
+Gate de la app completo (los docs no deben romper nada) y, de contratos, solo `git diff --exit-code -- contracts/sources
+contracts/tests contracts/Move.lock`.
 
 ### 6. Smoke
-Es el propio task. Prohibiciones de §3 paso 6 (ningún archivo de `<SMOKE_DIR>/net` se lee ni se pega; logs no se pegan).
+No aplica (el smoke del ciclo va después de este task).
 
-### 7. Criterios de aceptación
-1. Paso 5: `effects.status` success y un evento `…::house::FeeRateUpdated` con `new_fee_rate` 250.
-2. Paso 6: `HTTP/1.1 200` (o `204`) con `access-control-allow-origin: *` y `access-control-allow-headers` presente.
-3. Paso 7: `short` igual a los 8 primeros hex del chain id de `suic chain-identifier`; **≥ 1 evento** con `eventType`
-   `<PKG>::house::FeeRateUpdated` y `json` legible con `new_fee_rate` 250.
-4. Cierre: `kill -0` falla, `<SMOKE_DIR>` borrado, `stat`/`ls` de `~/.sui/sui_config/` idénticos a la línea base,
-   `git status --porcelain` vacío, `git diff --exit-code -- contracts/Move.lock` exit 0, sin `Pub.*.toml`/`Published.toml`.
-
-**Si 2 o 3 fallan (aun con los reintentos), se detiene y se reporta: vuelve a STOP-1 (D1) antes de TASK-6.**
+### 7. Criterios de aceptación (pegar output)
+1. Cada comando citado en los docs existe tal cual en `ci.yml` o `app/package.json` (tabla comando → archivo:línea).
+2. `grep -rnE "@mysten/dapp-kit([^-]|$)|useSuiClientQuery|la elige #10" agents.md documents/ESTANDARES.md contracts/README.md app/README.md`
+   → vacío.
+3. `grep -rnE "suiprivkey|mnemonic|0x[0-9a-fA-F]{40,64}" app/README.md` → vacío (ejemplos solo con `0x…`).
 
 ### 8. Al terminar
-Reporte §5 con los outputs de 5-7 (sin `publish.json`, sin `sender`, sin logs) y el cierre.
+Reporte §5 con el snippet de STATUS ya aplicado.
 
 ---
 
-## TASK-5: `config.ts` y pantalla de error de configuración — área: app — **Tramo B (requiere #7 en `master` + rebase)**
+## Smoke del ciclo — `documents/SMOKE_APP.md`
 
-> Se detalla en la **v2 de este handoff**, que el MID emite tras el merge de #7 con el esquema aprobado
-> (`contracts/README.md` "Despliegues") y la fixture `contracts/scripts/fixtures/localnet.deployment.json`. Contenido
-> fijado por PLAN_APP v2 ("Configuración", TASK-5): `resolveConfig(env, deployments)` puro + `loadConfig()` único lector
-> de `import.meta.env`/`import.meta.glob('../../../contracts/deployments/*.json', { eager: true, import: 'default' })`;
-> valida `schemaVersion === 1`, `network` (= variable = nombre del archivo), `chainId` (`^[0-9a-f]{8}$`), `packageId`,
-> `originalPackageId`, `houseId` (`^0x[0-9a-f]{64}$`), ignora claves desconocidas; `burnerWalletEnabled = network ===
-> 'localnet' && DEV`; `ConfigError`; `app/.env.example` (`VITE_SUI_NETWORK=localnet`).
+Tras aprobar TASK-7, en este worktree. Runbook vivo (columnas de resultado durante la corrida). Reglas que manda:
+- **Una sola localnet a la vez** en la máquina (puerto 9000): el orquestador lo confirma antes de empezar.
+- **B4** (`agents.md` §3, reglas del script para agentes): ningún `sui client …` sin el prefijo de `env.sh` + `smoke_guard`,
+  **ni siquiera de solo lectura**; `SUI_CONFIG_DIR` solo `$SMOKE_DIR/net`.
+- Ningún agente corre nada contra testnet con claves (ni `publish.mjs … --network testnet`, ni con `--dry-run`). La
+  lectura pública de testnet **desde el navegador** (CORS y error provocado del paso 7) sí está prevista.
+- `sui start` sale con 144 ante SIGTERM: esperado.
 
-## TASK-6: providers, wallet, router e indicador de red — área: app — **Tramo B (requiere TASK-4 verde y TASK-5)**
+## Body del PR (propuesta del MID al cierre; pendientes ya conocidos)
 
-> Se detalla en la v2 de este handoff. Contenido fijado por PLAN_APP v2 (TASK-6) más estas precisiones:
-> `nodeInfo.ts` con `fetchNodeInfo(client)` sobre `client.ledgerService.getServiceInfo({})` (sin caché) y
-> `deriveNodeStatus` puro (`loading | ok | wrong_chain | offline`, el error del último intento manda sobre el dato
-> previo); `NODE_STATUS_REFETCH_MS = 20_000`; los tests de hooks usan un `QueryClient` con `retry: false` y timers
-> falsos; `dappKit.ts` con `createDAppKit` de `@mysten/dapp-kit-core`, `networks: [config.network]`,
-> `enableBurnerWallet: config.burnerWalletEnabled`, `slushWalletConfig: null` en localnet.
-
-## TASK-7: documentación y baseline — área: docs — **Tramo B**
-
-> Se detalla en la v2 de este handoff (PLAN_APP v2, TASK-7): `app/README.md`, `agents.md` §2/§3/§4/§11/§14 (la receta
-> de localnet aislada **no** se reescribe: se remite a la variante de salida por defecto y al `rm -f` del paso 7 que deja
-> #7), `ESTANDARES.md` (PROY-14, PROY-18, SEG-8), `contracts/README.md:177` y "Lectura desde la app", `STATUS.md`.
-
-## Smoke (Tramo B)
-
-`documents/SMOKE_APP.md` (ya creado, estado PENDIENTE): se ejecuta tras aprobar TASK-7, en este worktree, con #7 en
-`master`. Se completa **durante** la corrida.
-
-
-## Nota v1.1 (revisión MID de TASK-1, transcrita por el orquestador)
-
-> Decisión (2026-11-02): se aceptan los 11 moderate solo dev de minimatch <11.0.1 (GHSA-g3hv-75wg-m249) hasta que eslint/typescript-eslint publiquen versiones con minimatch ≥ 11.0.1 y cumplan los 7 días (issue #35), porque el patrón no lo controla un tercero y no hay arreglo upstream — aplica D-20261102-02 (3), que bloquea solo high/critical de producción. El `npm audit` completo **no** entra a la CI como paso bloqueante.
-
-Pendientes para la v2 (Tramo B): regla base de capas por `regex` `^@mysten/(?!dapp-kit-react/ui$)` + sondas de `@mysten/bcs` en `components/` y `../hooks/x` en `sui/` (TASK-6); JSDoc de `App.tsx` (TASK-6); en el procedimiento de avisos (TASK-7), que `typescript`/`gql.tada` quedan como producción por el peer de `gql.tada`.
+- `Closes #9`; decisiones D-20261102-02/03 y las del MID (D11, D12); gates y CI; smoke PASA/TOTAL.
+- **Pendiente del orquestador tras el merge (D7):** agregar `app` a los checks requeridos de `master` (manteniendo
+  `contracts`, `strict: false`, `enforce_admins: true`) y verificarlo con
+  `gh api repos/sdelvalle57/sui_battleship/branches/master/protection/required_status_checks --jq '.contexts'` →
+  `["contracts","app"]` (en cualquier orden).
+- Riesgo aceptado: 11 *moderate* solo dev (#35).
