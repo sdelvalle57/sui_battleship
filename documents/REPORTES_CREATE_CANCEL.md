@@ -35,3 +35,31 @@ Confirmado: M-4 (guarda solo `node:process`; fixture de #10 sin diff; `assertLoc
 | 4 | Info | S-1 bis | Evento vs checkpoint a ~447/440 ms | Sin cambio |
 
 **Verificación del orquestador de las 3 condiciones de la desviación 4 (respuesta del DEV):** (1) **sí**: las dos firmas con `suic … --serialize-signed-transaction` bajo `env.sh` + `ids.env` + `smoke_guard` (`SUI_CONFIG_DIR = <SMOKE_DIR>/net`), `exit=0`; (2) **no**: ningún proceso de Node leyó `<SMOKE_DIR>/net` (los scripts de sonda leyeron solo `signed-*.txt` = `SenderSignedData`, salidas `--json` de la CLI y la fixture; `publish.mjs` solo comprueba `existsSync` de `client.yaml`); (3) **no**: keystore y `client.yaml` nunca abiertos; `signed-*.txt` borrados con `<SMOKE_DIR>`; `<scratchpad>` sin firmas ni claves. **Condiciones cumplidas.**
+
+## Task completado: HANDOFF_CREATE_CANCEL (v1.2) — TASK-2 (maquinaria pura de transacciones)
+
+> Reporte del DEV transcrito por el orquestador (resumido; conteos y exit codes literales).
+
+- Branch @ `4d7523f`, sin commits. Nuevos (sin modificar nada existente): `app/src/sui/transactions/game.ts` (15 tests), `sui/errors.ts` (49), `sui/execution.ts` (20), `sui/gameTx.ts` (7).
+- **Builders** crear/cancelar/rechazar con la forma de V-11 (`SplitCoins{GasCoin}` → `MoveCall`, `NestedResult [0,0]`; `Pure` `u64` y `Option<address>` normalizada; House/`Game` como `UnresolvedObject`); lanzan con ID/`opponent`/`bet` inválidos; sin `sender` ni gas.
+- **`errors.ts`:** `findMoveAbort` (fuentes estructuradas `ExecutionError`/`SimulationError.executionError`/`ExecutionStatus`/resultado del nodo, texto con regex SDK y Rust, `cause` hasta 5 niveles); `transactionErrorMessage` traduce solo si el paquete es `packageId`/`originalPackageId`. Tests: todos los códigos `game` 0–10 y `house` 0–4 con texto exacto; 7 `SimulationError` reales (estructurados y por mensaje); fallo ejecutado real (gRPC y `extractStatusFromEffectsBcs`); `cause` 5 sí / 6 no; paquete corto/mayúsculas; `game`/99 crudo; otro paquete sin traducir; `Unknown`/`CongestedObjects` ⇒ "La red no ejecutó…"; **M-5** `abortCodeSuffix` = `'(código game/3)'` y mensaje completo exacto; **R-1 negativo** ⇒ `null` + fallback; `cliErrorText` ⇒ `game`/3.
+- **`execution.ts`:** preflight sobre copia (`sender` solo en la copia; `SimulationError` misma instancia); `UNAVAILABLE`/corte 20 s ⇒ `PreflightNetworkError` (M-3 a); no transitorio se relanza; `confirmTransaction` (`include`, `timeout: 30_000`); `waitForCheckpoint` (2.º intento, tras `UNAVAILABLE`, **`notFound` ×3 ⇒ `true`**, tope ⇒ `false`, `signal`); `classifyExecution` con `executed` reales; `digestFromError`; `networkCost` (`createOpen` = 3941200n, puede ser negativo).
+- **`gameTx.ts`:** `parseCreatedGame` (único `GameCreated` del firmante; `null` sin eventos, con dos, otro paquete, otro creador, bytes no canónicos); `cancelledRefund` (3000003n / 4000004n; `null` en los casos ajenos).
+- **Gates:** `npm ci` 0; firmas 292; audit prod 0; lint 0; typecheck 0; `Test Files 33 passed (33)` / `Tests 466 passed (466)`; build sin cambios (`index-AYrAkse-.js` 852.29 kB); `contracts`/`package*` sin delta. Greps de claves, rutas, hex, `console`, `any`: vacíos.
+- **Desviaciones:** (1) `findMoveAbort` mira también `ExecutionStatus.error` y `FailedTransaction.status.error`; (2) `abortCodeSuffix(MoveAbortInfo)`; (3) la preflight corta la espera, no el pedido (`build()` 2.37 sin `signal`); (4) exporta `NodeTransactionResult`; (5) `waitForCheckpoint` con tope total real (`AbortController` de `TX_INDEX_TIMEOUT_MS`).
+- **Riesgo menor:** un error de wallet que sea objeto plano sin `message` se mostraría como `[object Object]`.
+
+## Revisión TASK-2: PASA (con corrección corta aplicada por el DEV antes del commit)
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió gates.
+
+Confirmado: builders = `game.move:88-149` (target con `packageId`, sin `sender` ni gas, validación de entradas); `ABORT_MESSAGES` `game` 0–10 y `house` 0–4 literales, traducidos solo para nuestro paquete; tres fuentes de DL-4 con los 7 `SimulationError` reales, el fallo ejecutado real y `cliErrorText`; M-5 y R-1 con test; M-3 (a) (`PreflightNetworkError` con `cause`, `SimulationError` misma instancia, preflight sobre copia); "not found" como intento fallido con tope total; ningún éxito falso (`classifyExecution` solo por el nodo; `parseCreatedGame` exige un único `GameCreated` del firmante; `cancelledRefund` del evento; `networkCost` puede ser negativo). Desviaciones 1–5 aceptadas (la 3: `build()` 2.37 sin `signal`, la preflight corta la espera; la simulación sigue en segundo plano, solo lectura, sin *unhandled rejection*).
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | SEG-10 | `errors.ts:186` | Fallback `String(source)` ⇒ `[object Object]`/`undefined` | Aplicada por el DEV: "La wallet no completó la operación (sin detalle del error)" + tests (`{ code: 4001 }`, `undefined`, `Error('')`, `Error('User rejected')`); gate 467 tests en 33 archivos |
+| 2 | Honestidad (TASK-4) | Handoff TASK-4, etapa `preflight` | Un error de preflight que no es simulación ni red caería en "La wallet no completó…" sin haber abierto la wallet | Handoff v1.3 (`3524696`, aplicada por el orquestador): "No se pudo preparar la transacción: …" con test |
+| 3 | Info | `execution.ts:300-317` | Simulación cortada puede seguir en segundo plano | Aceptado; nota en TASK-6 (v1.3) |
+
+### Siguiente paso
+TASK-3 arranca; TASK-4 con la v1.3.
