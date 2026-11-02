@@ -1,6 +1,6 @@
 # SMOKE_DEPLOY
-> Plan: PLAN_DEPLOY v2.1 | Handoff: HANDOFF_DEPLOY v1.2 (tras TASK-3; incorpora B3 y B4 del "Addendum v1.2") | Issue: #7 |
-> Fecha: 2026-11-02 | Estado: **PASA** (12/12: pasos 0-11 y 13; el 12 fuera por D-20261102-03), corrido por el DEV
+> Plan: PLAN_DEPLOY v2.1 | Handoff: HANDOFF_DEPLOY v1.3 (B3/B4 de v1.2; re-corrida C3 de v1.3) | Issue: #7 |
+> Fecha: 2026-11-02 | Estado: **COMPLETADO** — primera corrida PASA 12/12 (pasos 0-11 y 13; el 12 fuera por D-20261102-03); re-corrida post-commit (C3) PASA 5/5 @ `b153808`; corrido por el DEV
 
 Runbook vivo: las columnas "Resultado obtenido" y "Estado" se llenan **durante la corrida**, nunca por adelantado.
 Un paso fallido ⇒ NO PASA.
@@ -58,19 +58,20 @@ excluyen. Además, sí invoca la CLI (`active-env`, aunque solo lee). Decisión 
 Variante segura si se autoriza: correrlo con un `SUI_BIN` centinela que solo responda `"localnet"` a `client --json
 active-env` y registre cada invocación. Así la CLI real nunca corre y se verifica que no se pidió `chain-identifier`.
 
-## Re-corrida post-commit (SHA …) — C3 del handoff v1.3
+## Re-corrida post-commit (SHA `b15380809ea8a781c53310c08b0906e4ff947f85`) — C3 del handoff v1.3
 
-> Pendiente. Se corre sobre el commit de C1+C2, con el árbol limpio durante toda la corrida y una sola génesis. Solo
-> los pasos 0, 1, 4, 7 y 13 de la tabla de arriba, con sus mismos comandos. Los resultados se anotan fuera del repo y
-> se transcriben aquí después del paso 13 (excepción declarada: el árbol debe estar limpio en el paso 4).
+> Corrida 2026-11-02 sobre `b153808` (C1+C2 y el ajuste H1 commiteados), con el árbol limpio durante toda la corrida y
+> una sola génesis (localnet chain `b051020e`). Solo los pasos 0, 1, 4, 7 y 13 de la tabla de arriba, con sus mismos
+> comandos. **Excepción declarada:** los resultados se anotaron fuera del repo (scratchpad del agente, fuera de
+> `<SMOKE_DIR>`) y se transcribieron aquí después del paso 13, para que el árbol estuviera limpio en el paso 4.
 
 | # | Resultado esperado (resumen) | Resultado obtenido | Estado |
 |---|---|---|---|
-| 0 | SHA de HEAD anotado; `git status --porcelain` vacío; `stat`/`ls` de `~/.sui/sui_config/` como línea base | | ⏳ |
-| 1 | génesis `exit=0`; red arriba; `ADMIN` en `ids.env` | | ⏳ |
-| 4 | `exit=0`; `sourceCommit` = SHA del paso 0 (40 hex) en `$SMOKE_DIR/localnet.json` y en `meta.json`; resto como en la primera corrida | | ⏳ |
-| 7 | `exit=1`; línea "Motivo de la CLI en …"; sin línea `Digest …`; sin stdout; `grep -c` de `ADMIN` = 0 | | ⏳ |
-| 13 | cierre completo; `git status --porcelain` vacío; `stat`/`ls` idénticos al paso 0 | | ⏳ |
+| 0 | SHA de HEAD anotado; `git status --porcelain` vacío; `stat`/`ls` de `~/.sui/sui_config/` como línea base | SHA `b15380809ea8a781c53310c08b0906e4ff947f85`; `git status --porcelain` vacío; `stat` = `2026-10-30 17:52:52.515735237 -0500 244 …/client.yaml`, `ls` = `client.yaml`; md5 `Move.lock` `e855b7fdb9d878bfc57e8179ed0c5a2e`; sin `contracts/deployments`; puertos 9000/9123/9184 libres | ✅ |
+| 1 | génesis `exit=0`; red arriba; `ADMIN` en `ids.env` | génesis `exit=0`; red arriba al primer intento (PID guardado); chain `b051020e`; 5 cuentas; `ADMIN` en `ids.env`; `smoke_guard` sin `GUARD-FAIL` | ✅ |
+| 4 | `exit=0`; `sourceCommit` = SHA del paso 0 (40 hex) en `$SMOKE_DIR/localnet.json` y en `meta.json`; resto como en la primera corrida | `exit=0` con `git status --porcelain` vacío antes y después; `sourceCommit` **`b15380809ea8a781c53310c08b0906e4ff947f85`** (= HEAD del paso 0) en `localnet.json` (14 claves) y en `meta.json`; paquete `0x14b4c15d58c999eab24fbd255fac63207728be4a9f817cc999f1b4cc320a5c4b`; digest **`GXhXnF6ntmGbJUPXzswza9UKYHSw76Ck2E4qry3FMZqH`**; dir `700` con `meta.json`/`publish-output.json`/`publish-stderr.txt` `600`; resumen con `update_fee_rate`; `grep -c` de `ADMIN` = 0; lock sin delta | ✅ |
+| 7 | `exit=1`; línea "Motivo de la CLI en …"; sin línea `Digest …`; sin stdout; `grep -c` de `ADMIN` = 0 | `exit=1`; mensaje: `Error: la CLI terminó con estado 1` / `Salida completa (sin mostrar): …` / `Directorio temporal: …` / **`Motivo de la CLI en …/publish-output.json (revísalo ahí; no lo pegues: puede traer tu dirección)`** / stderr (solo build) / `RETRY_ADVICE` nuevo (`printf 'n\n' \| SUI_CONFIG_DIR=<tu dir> sui client --json tx-block <digest>` + `record` …). Sin línea `Digest` (0, rechazo previo a la ejecución); `grep -c 'already published'`: `publish-output.json` = 1, stderr = 0, salida del script = 0 (sin stdout); `grep -c` de `ADMIN` = 0; `localnet-dup.json` no existe | ✅ |
+| 13 | cierre completo; `git status --porcelain` vacío; `stat`/`ls` idénticos al paso 0 | `kill -0` falla al primer intento (exit 144 del proceso en segundo plano = terminación por `kill`); sin `contracts/deployments`; `<SMOKE_DIR>` borrado y comprobado; `stat`/`ls` idénticos al paso 0; `git status --porcelain` vacío; lock `exit=0`; sin `Pub.*.toml`/`Published.toml`/`deployments`; puertos libres | ✅ |
 
 ## Si algo falla
 
@@ -94,5 +95,8 @@ active-env` y registre cada invocación. Así la CLI real nunca corre y se verif
     de datos. Consecuencia probable para C8: si una transacción enviada falla, el `Error executing transaction '<digest>'`
     también podría salir por stdout y el script no extraería el digest. Propuesta (issue o ajuste menor): ante
     `status ≠ 0` y stdout no-JSON, extraer de stdout solo el digest (misma regex) y/o mostrarlo pasado por
-    `redactAddresses`; decidirlo con el MID/MAYOR por v2-4.
+    `redactAddresses`; decidirlo con el MID/MAYOR por v2-4. → Resuelto por C1: solo el digest desde stdout, nunca el stdout (v2-4).
 - Veredicto: **PASA**.
+- **Re-corrida post-commit (C3, `b153808`): 5/5 PASA.** H3 de la revisión de TASK-3 cerrado (`sourceCommit` = SHA de HEAD con
+  el árbol limpio) y H-1 resuelto por C1: el paso 7 muestra la línea "Motivo de la CLI en …" sin pegar stdout. Digest de la
+  publicación: `GXhXnF6ntmGbJUPXzswza9UKYHSw76Ck2E4qry3FMZqH`. **Estado del runbook: COMPLETADO.**

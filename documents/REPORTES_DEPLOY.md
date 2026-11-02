@@ -295,3 +295,39 @@ Commitear C1 + C2; DEV aplica H1 + gate; commit; re-smoke C3 (pasos 0, 1, 4, 7, 
 - `publish.mjs:42-44`: `RETRY_ADVICE` → "No reintentes sin buscar antes el digest; si la transacción existe: `printf 'n\n' | SUI_CONFIG_DIR=<tu dir> sui client --json tx-block <digest>` + `record` (README → Recuperación; si falta `Published.toml`, STOP de #8)."
 - `publish.test.mjs`: test 1 de H-1 agrega `assert.match(message, /No reintentes sin buscar antes el digest/)` (H3).
 - Gate: build/lint/test `exit=0`, `Total tests: 83; passed: 83; failed: 0`, `Move.lock` sin delta; `node --test` `tests 94 / pass 94 / fail 0`; `check` → `0 despliegues`; `~/.sui/` idéntico. Desviaciones: ninguna.
+
+## Task completado: HANDOFF_DEPLOY v1.3 — C3 (re-smoke post-commit)
+
+> Reporte del DEV transcrito por el orquestador (resumido; salida del paso 7 literal).
+
+- HEAD `b15380809ea8a781c53310c08b0906e4ff947f85`, árbol limpio durante toda la corrida; una génesis, chain `b051020e`; sin testnet. Solo cambia `documents/SMOKE_DEPLOY.md` (sección "Re-corrida post-commit", estado COMPLETADO).
+- Paso 0 ✅ (línea base `~/.sui` `2026-10-30 17:52:52.515735237 -0500 244`, puertos libres). Paso 1 ✅ (génesis `exit=0`, red al primer intento). **Paso 4 ✅:** `sourceCommit` = `b15380809ea8a781c53310c08b0906e4ff947f85` en `localnet.json` (14 claves) y `meta.json`; digest `GXhXnF6ntmGbJUPXzswza9UKYHSw76Ck2E4qry3FMZqH`; dir `700`/archivos `600`; `ADMIN` ausente (`grep -c` = 0).
+- **Paso 7 ✅** (`exit=1`):
+  ```
+  Error: la CLI terminó con estado 1
+  Salida completa (sin mostrar): <SMOKE_DIR>/tmp/battleship-publish-md3Ssg/publish-output.json
+  Directorio temporal: <SMOKE_DIR>/tmp/battleship-publish-md3Ssg
+  Motivo de la CLI en <SMOKE_DIR>/tmp/battleship-publish-md3Ssg/publish-output.json (revísalo ahí; no lo pegues: puede traer tu dirección)
+  stderr de la CLI (direcciones ocultas):
+  INCLUDING DEPENDENCY MoveStdlib
+  INCLUDING DEPENDENCY Sui
+  BUILDING battleship
+  No reintentes sin buscar antes el digest; si la transacción existe: `printf 'n\n' | SUI_CONFIG_DIR=<tu dir> sui client --json tx-block <digest>` + `record` (README → Recuperación; si falta `Published.toml`, STOP de #8).
+  ```
+  Sin línea `Digest` (rechazo previo a la ejecución); `grep -c 'already published'`: `publish-output.json` 1, stderr 0, salida del script 0; `ADMIN` 0; sin `localnet-dup.json`; árbol y lock sin cambios.
+- Paso 13 ✅: red detenida por PID (exit 144 = terminación por `kill`), sin `contracts/deployments`, `<SMOKE_DIR>` borrado, `~/.sui` idéntico, árbol limpio, lock `exit=0`, puertos libres.
+- Desviaciones: solo la excepción declarada (notas en el scratchpad, transcritas tras el cierre). Riesgos: ninguno.
+
+## Revisión ajuste H1 + C3: PASA
+
+> Revisión del MID transcrita por el orquestador (resumida). Revisó `b153808`, el diff de `SMOKE_DEPLOY.md` y los reportes; no corrió gates ni `sui`.
+
+H1 (`publish.mjs:42-44`): `RETRY_ADVICE` con `printf 'n\n' | SUI_CONFIG_DIR=<tu dir> …` + `record`; el `\\n` sale como `\n` literal (visto en el paso 7); H3 cubierto. C3: `sourceCommit` = HEAD en json y `meta.json` (rama de árbol limpio, la de testnet, probada); paso 7 con línea "Motivo…", sin digest ni stdout, `already published` 0 y `ADMIN` 0 en la salida; pasos 0, 1, 13 verdes; excepción del scratchpad justificada; sin rutas personales.
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| H1 | 🔵 Trazabilidad | `SMOKE_DEPLOY.md:2` | Encabezado citaba v1.2 | Aplicado por el orquestador: "v1.3 (B3/B4 de v1.2; re-corrida C3 de v1.3)" |
+| H2 | 🔵 Trazabilidad | `SMOKE_DEPLOY.md:96-98` | La propuesta de H-1 figuraba abierta | Aplicado por el orquestador: "→ Resuelto por C1 …" |
+
+### Siguiente paso
+Commit, push, PR contra `master` (`Closes #7`), CI verde y revisión de integración del MAYOR.
