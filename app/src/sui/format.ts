@@ -52,3 +52,21 @@ export function formatMist(mist: bigint): string {
 
 /** Dirección abreviada para mostrar (`0x1234…abcd`): re-export de `formatAddress` del SDK. */
 export const shortAddress: (address: string) => string = formatAddress;
+
+/** Divisor para pasar basis points a porcentaje (LIM-6). */
+const BPS_PER_PERCENT = 100;
+
+/**
+ * Formatea una comisión en basis points como porcentaje con hasta 2 decimales, sin ceros finales: `250` → `"2.5 %"`,
+ * `1` → `"0.01 %"`. Aritmética entera, sin floats.
+ */
+export function formatBps(bps: number): string {
+  const whole = Math.trunc(bps / BPS_PER_PERCENT);
+  const fraction = String(bps % BPS_PER_PERCENT).padStart(2, '0').replace(/0+$/, '');
+  return fraction === '' ? `${String(whole)} %` : `${String(whole)}.${fraction} %`;
+}
+
+/** Fecha y hora en español (`dateStyle: 'medium'`, `timeStyle: 'short'`); sin `timeZone`, la del navegador. */
+export function formatTimestamp(ms: number, timeZone?: string): string {
+  return new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short', timeZone }).format(ms);
+}
