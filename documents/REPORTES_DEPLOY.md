@@ -259,3 +259,31 @@ Código: B1 (`publish.mjs:626-644` en `try/catch` → `formatPostPublishFailure`
 
 ### Siguiente paso
 Commitear TASK-3 tal cual (árbol del smoke); handoff v1.3 con C1 (código H1 + H6 opcional), C2 (README `:548`, `:558`, `:514`), C3 (re-smoke post-commit); el orquestador alinea H2; revisión MID de C1–C3; luego PR contra `master` (`Closes #7`) y revisión de integración del MAYOR.
+
+## Task completado: HANDOFF_DEPLOY (v1.3) — C1 + C2
+
+> Reporte del DEV transcrito por el orquestador (resumido; nombres de tests omitidos, conteos y exit codes literales).
+
+- Branch `feature/issue-7-deployments` @ `00a4539`, sin commits. Modificados: `contracts/scripts/publish.mjs`, `contracts/scripts/publish.test.mjs`, `contracts/README.md`, `documents/STATUS.md`.
+- **C1 (H-1):** `formatCliFailure({ reason, status = 1, stdout = '', stderr, dir, outputPath, afterPublish = false })`; `interpretCliRun` le pasa `status` y `stdout`. Con `status !== 0`: digest de stderr y, si no está, de stdout (solo el grupo capturado) → `Digest de la transacción: <digest>`; siempre `Motivo de la CLI en <outputPath> (revísalo ahí; no lo pegues: puede traer tu dirección)`. Con `status === 0` no se mira stdout. Nunca se muestra stdout. JSDoc actualizado. Callers existentes (`:531`, `:547`, `:550`) usan los defaults.
+- **H6:** "Si `Published.toml` falta o no coincide con el json (testnet), es STOP de #8: no lo edites a mano."
+- **C2:** README H5 (ruta absoluta), H1 (digest de stderr o de la salida `--json`, motivo en la ruta, nunca stdout), H4 (`printf 'n\n' | SUI_CONFIG_DIR=<su dir> sui client --json tx-block <digest> > <dir>/tx-block.json` + `record`, "Solo el owner … (B4)").
+- **Tests nuevos (4):** digest solo en stdout; stderr gana sobre stdout; sin digest con línea de motivo; estado 0 vía `interpretCliRun` sin mirar stdout. Todos verifican ausencia de `STDOUT-MARK` y de la dirección `sender` del fixture (con y sin `0x`). Mutaciones verificadas y revertidas: mirar stdout con estado 0 → 1 falla; imprimir stdout → 4 fallan; stdout antes que stderr → 1 falla.
+- **Gates:** contracts build/lint/test `exit=0`, `Total tests: 83; passed: 83; failed: 0`, `Move.lock diff exit=0`; `node --test` `tests 94 / pass 94 / fail 0` `exit=0`; `check` → `0 despliegues` `exit=0`. Grep de secretos sobre el diff añadido → 0. `~/.sui/sui_config/client.yaml` idéntico (`2026-10-30 17:52:52.515735237 -0500 244`). Sin `sui client`, sin localnet.
+- **Desviaciones:** ninguna. **Pendiente:** C3 (re-smoke post-commit).
+- STATUS: fila `contracts/scripts` → 94 PASS (51 + 43).
+
+## Revisión C1 + C2: PASA
+
+> Revisión del MID transcrita por el orquestador (resumida). Revisó el diff completo, el reporte y los campos del fixture con `jq`; no corrió gates ni `sui`.
+
+Decisión H-1 / v2-4 cumplida (`publish.mjs:345-357`): stdout solo se usa con `status !== 0` (incluido `null`) y solo el grupo capturado de `FAILED_TX_DIGEST_RE` (base58 ≤ 44, no arrastra hex); con `status === 0` no se mira; nunca se muestra; `interpretCliRun` (`:388`) es el único llamador. H6 bien (`:45-46`). Los 4 tests verifican lo que dicen (ausencia de `STDOUT-MARK` y del `sender`, con y sin `0x`). README `:517`, `:550-553`, `:561-569` correctos.
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| H1 | 🟡 H4 / B4 | `publish.mjs:42-44` (`RETRY_ADVICE`) | El consejo impreso sigue diciendo `sui client --json tx-block <digest>` sin `printf 'n\n' \|` ni `SUI_CONFIG_DIR` | "…`printf 'n\n' \| SUI_CONFIG_DIR=<tu dir> sui client --json tx-block <digest>` + `record` (README → Recuperación; si falta `Published.toml`, STOP de #8)". En la sesión de C3, antes del re-smoke |
+| H2 | 🔵 | test 4 de H-1 | stdout no JSON en vez de JSON con forma inválida | Aceptado (misma rama, más exigente) |
+| H3 | 🔵 | test 1 de H-1 | No comprueba "No reintentes" con `afterPublish` | Opcional (cubierto por el test de `interpretCliRun`) |
+
+### Siguiente paso
+Commitear C1 + C2; DEV aplica H1 + gate; commit; re-smoke C3 (pasos 0, 1, 4, 7, 13); revisión MID de C3; PR contra `master` y revisión de integración del MAYOR.

@@ -552,6 +552,73 @@ test('formatCliFailure: sin publicación real (dry run, record) no aconseja busc
   assert.ok(record.includes('/srv/out.json'));
 });
 
+// H-1 del smoke: con `--json` la CLI escribe el motivo de un fallo por stdout. Del stdout solo se extrae el digest.
+const ADDR = PUBLISH.objectChanges.find((c) => typeof c.sender === 'string').sender;
+const OTHER_DIGEST = PUBLISH.objectChanges.find((c) => c.type === 'published').digest;
+const FAILURE_BASE = { reason: 'la CLI terminó con estado 1', dir: '/tmp/d', outputPath: '/tmp/d/publish-output.json' };
+const MOTIVE_LINE = 'Motivo de la CLI en /tmp/d/publish-output.json (revísalo ahí; no lo pegues: puede traer tu dirección)';
+const assertNoStdout = (message) => {
+  assert.ok(!message.includes('STDOUT-MARK'));
+  assert.ok(!message.toLowerCase().includes(ADDR.toLowerCase()));
+  assert.ok(!message.toLowerCase().includes(ADDR.slice(2).toLowerCase()));
+  assertNoAccountAddress(message);
+};
+
+test('formatCliFailure (H-1): estado ≠ 0 con el digest solo en stdout ⇒ solo la línea del digest y el motivo', () => {
+  const message = formatCliFailure({
+    ...FAILURE_BASE,
+    status: 1,
+    stdout: `STDOUT-MARK ${ADDR} Error executing transaction '${PUBLISH.digest}'`,
+    stderr: '',
+    afterPublish: true,
+  });
+  assert.ok(message.includes(`Digest de la transacción: ${PUBLISH.digest}`));
+  assert.ok(message.includes(MOTIVE_LINE));
+  assertNoStdout(message);
+});
+
+test('formatCliFailure (H-1): digests distintos en stderr y stdout ⇒ gana el de stderr', () => {
+  assert.notEqual(OTHER_DIGEST, PUBLISH.digest);
+  const message = formatCliFailure({
+    ...FAILURE_BASE,
+    status: 1,
+    stdout: `STDOUT-MARK Error executing transaction '${OTHER_DIGEST}'`,
+    stderr: `Error executing transaction '${PUBLISH.digest}'\n`,
+  });
+  assert.ok(message.includes(`Digest de la transacción: ${PUBLISH.digest}`));
+  assert.ok(!message.includes(OTHER_DIGEST));
+  assertNoStdout(message);
+});
+
+test('formatCliFailure (H-1): estado ≠ 0 sin digest ⇒ sin línea Digest, con la línea del motivo', () => {
+  const message = formatCliFailure({
+    ...FAILURE_BASE,
+    status: 1,
+    stdout: `STDOUT-MARK Your package is already published ${ADDR}`,
+    stderr: '',
+  });
+  assert.doesNotMatch(message, /Digest de la transacción/);
+  assert.ok(message.includes(MOTIVE_LINE));
+  assertNoStdout(message);
+});
+
+test('interpretCliRun (H-1): estado 0 con stdout no JSON ⇒ no se mira el stdout (ni digest ni motivo)', () => {
+  const outcome = interpretCliRun({
+    result: {
+      status: 0,
+      stdout: `STDOUT-MARK ${ADDR} Error executing transaction '${PUBLISH.digest}'`,
+      stderr: '',
+    },
+    parse: (json) => json,
+    dir: '/tmp/d',
+    outputPath: '/tmp/d/publish-output.json',
+  });
+  assert.ok('error' in outcome);
+  assert.match(outcome.error, /no es JSON válido/);
+  assert.doesNotMatch(outcome.error, /Digest de la transacción|Motivo de la CLI/);
+  assertNoStdout(outcome.error);
+});
+
 test('formatPostPublishFailure: directorio temporal, digest y receta de record, sin direcciones (H2)', () => {
   const [address] = ACCOUNT_ADDRESSES;
   const message = formatPostPublishFailure({

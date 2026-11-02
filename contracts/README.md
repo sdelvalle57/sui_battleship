@@ -514,6 +514,8 @@ su `network`, si una red no-localnet no tiene su `[published.<red>]` (o al revé
   SUI_CONFIG_DIR=<dir>/net node scripts/publish.mjs publish --network localnet --pubfile-path <dir>/Pub.localnet.toml [--out <ruta>] [--dry-run]
   ```
 
+  `SUI_CONFIG_DIR=<dir>/net` va con ruta absoluta: el script rechaza una relativa (guarda de config).
+
   Sin `--out` escribe `contracts/deployments/localnet.json` (ignorado por git). En localnet se usa
   `sui client test-publish --build-env testnet`: el manifest no declara un entorno localnet y `publish` no puede.
 
@@ -545,9 +547,10 @@ la config propia, nunca en `~/.sui/`).
 
 Antes de invocar la publicación, el script crea un directorio temporal (`0700`) con `meta.json` (red, chain id,
 commit, CLI, `frameworkRev`) y guarda ahí la salida cruda (`publish-output.json`, `publish-stderr.txt`, `0600`). Si
-algo falla, imprime ese directorio, el digest si la CLI lo reporta y el stderr con las direcciones ocultas; nunca el
-stdout. **No se reintenta sin buscar antes el digest** (en el mensaje o en el explorador): una segunda publicación crea
-otro paquete.
+la CLI falla, el script imprime ese directorio, el digest si la CLI lo reporta (en stderr o en su salida `--json`), el
+stderr con las direcciones ocultas y la ruta del archivo con el motivo de la CLI, que se revisa ahí y no se pega (puede
+traer la dirección del publicador). Nunca imprime el stdout. **No se reintenta sin buscar antes el digest** (en el
+mensaje o en el explorador): una segunda publicación crea otro paquete.
 
 - Si la transacción existe y solo falló el registro: `record` rearma el json **sin republicar**:
 
@@ -555,8 +558,15 @@ otro paquete.
   node scripts/publish.mjs record --network testnet --from <dir>/publish-output.json
   ```
 
-  Si la salida no está en el directorio del script, se obtiene con `sui client --json tx-block <digest>` (misma forma)
-  y se pasa `--meta <dir>/meta.json`.
+  Si la salida no está en el directorio del script, el **owner** la obtiene con su config y la respuesta `n` (misma
+  forma que la salida de la publicación) y pasa `--meta`:
+
+  ```bash
+  printf 'n\n' | SUI_CONFIG_DIR=<su dir> sui client --json tx-block <digest> > <dir>/tx-block.json
+  node scripts/publish.mjs record --network testnet --from <dir>/tx-block.json --meta <dir>/meta.json
+  ```
+
+  Solo el owner: un agente no corre `tx-block` fuera de la localnet aislada (`agents.md` §3, B4).
 - Sin `meta.json`, `record` exige los cuatro valores de la publicación, nunca derivados del estado actual del repo:
   `--source-commit <sha>`, `--sui-cli-version <versión>`, `--framework-rev <sha>` y `--chain-id <hex>` (testnet:
   `4c78adac`). Si existe `meta.json`, se usa y los flags se ignoran.

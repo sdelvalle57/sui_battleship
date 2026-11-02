@@ -42,7 +42,8 @@ const FAILED_TX_DIGEST_RE = /Error executing transaction '([1-9A-HJ-NP-Za-km-z]{
 const RETRY_ADVICE =
   'No reintentes sin buscar antes el digest; si la transacción existe: `sui client --json tx-block <digest>` + ' +
   '`record` (si falta `Published.toml`, STOP de #8).';
-const MISSING_PUBLISHED_TOML_ADVICE = 'Si falta `Published.toml` (testnet), es STOP de #8.';
+const MISSING_PUBLISHED_TOML_ADVICE =
+  'Si `Published.toml` falta o no coincide con el json (testnet), es STOP de #8: no lo edites a mano.';
 
 /** Error de uso (subcomando u opción inválidos): sale con `EXIT.USAGE`. */
 export class UsageError extends Error {}
@@ -330,18 +331,26 @@ export function checkConfirmation({ isTTY, answer }) {
 }
 
 /**
- * Mensaje ante un fallo de la CLI o una salida que no se puede interpretar. Nunca incluye el stdout (contiene la
- * dirección del publicador, C9): solo la ruta del archivo, el digest si está en stderr (C8) y el stderr redactado.
- * El consejo de no reintentar solo aplica tras invocar una publicación real (`afterPublish`): un dry run o `record`
- * no envían transacciones.
- * @param {{ reason: string, stderr: string, dir: string|null, outputPath: string, afterPublish?: boolean }} args
+ * Mensaje ante un fallo de la CLI o una salida que no se puede interpretar. Nunca incluye el stdout ni un fragmento
+ * suyo (contiene la dirección del publicador, C9; v2-4). Con `--json`, la CLI 1.83.0 escribe el motivo de un fallo
+ * por **stdout** (H-1 del smoke de #7), así que con `status !== 0` el stdout solo se usa para extraer el digest
+ * (`Error executing transaction '<digest>'`, C8; primero en stderr, después en stdout) y el mensaje remite al archivo
+ * con el motivo. Con `status === 0` (JSON inválido o forma inesperada) el stdout no se mira. El consejo de no
+ * reintentar solo aplica tras invocar una publicación real (`afterPublish`): un dry run o `record` no envían
+ * transacciones.
+ * @param {{ reason: string, status?: number|null, stdout?: string, stderr: string, dir: string|null,
+ *   outputPath: string, afterPublish?: boolean }} args
  * @returns {string}
  */
-export function formatCliFailure({ reason, stderr, dir, outputPath, afterPublish = false }) {
+export function formatCliFailure({ reason, status = 1, stdout = '', stderr, dir, outputPath, afterPublish = false }) {
   const lines = [`Error: ${reason}`, `Salida completa (sin mostrar): ${outputPath}`];
   if (dir) lines.push(`Directorio temporal: ${dir}`);
-  const digest = FAILED_TX_DIGEST_RE.exec(stderr)?.[1];
+  const cliFailed = status !== 0;
+  const digest = FAILED_TX_DIGEST_RE.exec(stderr)?.[1] ?? (cliFailed ? FAILED_TX_DIGEST_RE.exec(stdout)?.[1] : undefined);
   if (digest) lines.push(`Digest de la transacción: ${digest}`);
+  if (cliFailed) {
+    lines.push(`Motivo de la CLI en ${outputPath} (revísalo ahí; no lo pegues: puede traer tu dirección)`);
+  }
   if (stderr.trim() !== '') lines.push('stderr de la CLI (direcciones ocultas):', redactAddresses(stderr).trimEnd());
   if (afterPublish) lines.push(RETRY_ADVICE);
   return lines.join('\n');
@@ -368,14 +377,23 @@ export function formatPostPublishFailure({ reason, network, digest, dir, outputP
 
 /**
  * Interpreta el resultado de una publicación o dry run: estado, JSON y forma (A4). Cualquier fallo devuelve el
- * mensaje de `formatCliFailure`, que nunca incluye el stdout.
+ * mensaje de `formatCliFailure`, que nunca incluye el stdout: se lo pasa solo para que, si la CLI falló, extraiga el
+ * digest (H-1).
  * @param {{ result: { status: number|null, stdout: string, stderr: string }, parse: (json: object) => unknown,
  *   dir: string|null, outputPath: string, afterPublish?: boolean }} args
  * @returns {{ value: unknown } | { error: string }}
  */
 export function interpretCliRun({ result, parse, dir, outputPath, afterPublish = false }) {
   const fail = (reason) => ({
-    error: formatCliFailure({ reason, stderr: result.stderr, dir, outputPath, afterPublish }),
+    error: formatCliFailure({
+      reason,
+      status: result.status,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      dir,
+      outputPath,
+      afterPublish,
+    }),
   });
   if (result.status !== 0) return fail(`la CLI terminó con estado ${result.status}`);
   let json;
