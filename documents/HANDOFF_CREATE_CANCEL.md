@@ -1,9 +1,23 @@
 # HANDOFF_CREATE_CANCEL
 > Plan: PLAN_CREATE_CANCEL v1 (MAYOR: APPROVE, 2026-11-02, 0 BLOCKER/MAJOR; `6e967f8`) | Issue: #11 | Branch:
-> `feature/issue-11-create-cancel` | Versión: v1.1 | Fecha: 2026-11-02
+> `feature/issue-11-create-cancel` | Versión: v1.2 | Fecha: 2026-11-02
 
 ## Changelog
 
+- **v1.2 (2026-11-02)**: tras TASK-1 (revisión del MID: PASA, sin STOP; `documents/REPORTES_CREATE_CANCEL.md`). Cambian
+  solo TASK-2 y TASK-4, más una nota en §3:
+  - **R-1:** el texto con que la CLI **presenta** un abort ("… aborted within function '0x…::game::<fn>' at instruction
+    N with code C") nunca llega a la app. **No** se agrega una tercera regex: un test negativo fija que ese texto cae en
+    el fallback (TASK-2).
+  - **S-1 bis:** en el camino de la wallet, justo después de ejecutar, `getObject` devuelve la versión vieja y
+    `getTransaction` lanza "not found" hasta que la transacción queda indexada; `waitForTransaction` vuelve ya con
+    `checkpoint`. Confirma DL-5 con dos precisiones: el "not found" es un intento fallido de `waitForCheckpoint`
+    (TASK-2) y, si `confirmTransaction` ya trae `checkpoint`, la etapa `indexing` se salta (TASK-4). Los cortes
+    20/30/30 s no cambian: son topes, y el smoke anota la latencia de testnet.
+  - **Fixture:** `cliErrorText` es `effects.status.error` del nodo (formato Rust, igual a la `description` de gRPC), no
+    la línea con que la CLI presenta el error. Es la entrada de la regex Rust de DL-4.
+  - **§3:** la técnica de S-1 bis (firmar con la CLI como una cuenta efímera de la génesis aislada) queda permitida solo
+    en la localnet aislada y con tres condiciones.
 - **v1.1 (2026-11-02)**: revisión del MAYOR del handoff v1: APPROVE (0 BLOCKER/MAJOR/MINOR) con 2 NIT. TASK-1 no
   cambia.
   - **NIT-1 (TASK-4):** si el nodo **ya confirmó el éxito** y después lanza `interpret`, el resultado es `success` con
@@ -150,6 +164,10 @@ Rutas relativas a `<repo>/node_modules/@mysten/`, `@mysten/sui` 2.37.0, `@mysten
   lectura; siempre `suic`/`"$SUI"`; `SUI_CONFIG_DIR` solo `$SMOKE_DIR/net`. **Una sola localnet a la vez** (puerto 9000):
   confirmar antes de la génesis que no hay otra. Para `node`/`npm`/`vite`, un `<SMOKE_DIR>/app.env` propio que no toca
   `HOME` ni `SUI_CONFIG_DIR` (patrón de #10); nunca `env.sh` y `app.env` en la misma llamada. Nunca `new-address`.
+- **Firmar como una cuenta de la génesis (técnica de S-1 bis de TASK-1):** permitido **solo** en la localnet aislada y
+  con tres condiciones: (1) la firma la hace la CLI bajo `PRE` (`suic …`, regla B4); (2) ningún proceso de Node (sondas,
+  scripts, la app) lee nada de `<SMOKE_DIR>/net`; (3) ninguna clave se imprime ni se pega. Las sondas en Node solo leen
+  la red por gRPC.
 - **Testnet:** nada con claves. Este ciclo no necesita ni lecturas públicas de testnet.
 - **Placeholders en todo lo commiteado y en el output pegado** (`FLUJO_AGENTES.md` §2): `<repo>`, `<HOME real>`,
   `<SMOKE_DIR>`, `<scratchpad>`. Direcciones e IDs abreviados (`0x1234…abcd`) en reportes; digests completos sí.
@@ -317,7 +335,8 @@ camino honesto y los mismos mensajes. **No entrega:** hooks ni UI.
      events: true }, timeout: TX_CONFIRM_TIMEOUT_MS, signal })`; relanza el error del corte.
    - `waitForCheckpoint(client, { digest, signal })`: `getTransaction` con `withReadTimeout` por intento, cada 500 ms,
      hasta que trae `checkpoint` (⇒ `true`) o vence `TX_INDEX_TIMEOUT_MS` (⇒ `false`); los errores de cada intento no
-     cortan el bucle (el tope sí).
+     cortan el bucle (el tope sí). En particular, el "not found" (`TransactionError` `notFound`) que da
+     `getTransaction` mientras la transacción no está indexada (S-1 bis de TASK-1) es un intento fallido.
    - `classifyExecution(result)`: por `status.success` del resultado del nodo.
    - `digestFromError(error)`: busca en el error y su `cause` (hasta 5 niveles) una propiedad `digest` string que pase
      `isValidTransactionDigest`; si no, `null` (M-3 (b)).
@@ -365,13 +384,19 @@ camino honesto y los mismos mensajes. **No entrega:** hooks ni UI.
   corta y en mayúsculas ⇒ se reconoce; `packageId` ≠ `originalPackageId`, ambos reconocidos; `game`/99 ⇒ "El contrato
   rechazó la operación (código game/99)"; abort de otro paquete; `house`/3 ≠ `game`/3; `Unknown`
   (`ExecutionCancelledDueToRandomnessUnavailable`) y `CongestedObjects` ⇒ "La red no ejecutó la transacción: …"; error
-  de wallet sin abort ⇒ su mensaje. **M-5:** `abortCodeSuffix({ module: 'game', code: '3', … }) === '(código game/3)'` y
+  de wallet sin abort ⇒ su mensaje. **R-1 (negativo):** `Error executing transaction '<digest>': 1st command aborted
+  within function '0x<PKG>::game::cancel_game' at instruction 16 with code 3` ⇒ `findMoveAbort` devuelve `null` y
+  `transactionErrorMessage` da el fallback "La wallet no completó la operación: …". **`cliErrorText`** de la fixture
+  (`effects.status.error` del nodo, formato Rust) ⇒ `{ module: 'game', code: '3' }` con el `packageId` normalizado.
+  **M-5:** `abortCodeSuffix({ module: 'game', code: '3', … }) === '(código game/3)'` y
   el mensaje completo de `game`/3 es exactamente `"Solo quien creó la partida puede cancelarla. (código game/3)"`.
 - **`execution.ts`** (cliente falso; timers falsos donde haya cortes): `preflightTransaction` éxito (la copia lleva el
   `sender`; el `tx` original queda sin `sender`), `SimulationError` relanzado tal cual, `RpcError`-like `UNAVAILABLE` ⇒
   `PreflightNetworkError` con su texto, corte de 20 s ⇒ `PreflightNetworkError`, error no transitorio (`Error('No valid
   gas coins found for the transaction.')`) relanzado tal cual; `confirmTransaction` devuelve la lectura del nodo y
   propaga el corte; `waitForCheckpoint` `true` al 2.º intento, `true` tras un intento que falla, `false` al tope;
+  **S-1 bis** (timers falsos): `TransactionError` `notFound` ×3 y luego `checkpoint` ⇒ `true`; siempre `notFound` ⇒
+  `false` al vencer `TX_INDEX_TIMEOUT_MS`;
   `classifyExecution` con los `executed` reales (éxito y fallo); `digestFromError` con digest en el error, en `cause`,
   digest inválido ⇒ `null`, sin digest ⇒ `null`; `networkCost` con el `gasUsed` real de `createOpen`.
 - **`gameTx.ts`:** `parseCreatedGame` con `createOpen` y `createInvite` reales (ID, `feeRate` 250, `opponent`); sin
@@ -501,7 +526,9 @@ mostrar un éxito falso ni mandar dos veces la misma transacción. **No entrega:
      de la acción) o sigue a `indexing`. Si `confirmTransaction` falla o vence: `unconfirmed` con el digest e
      invalidaciones de la acción (M-3 (b): **nunca** `failure` desde aquí). `unconfirmed` es **solo** para "el nodo no
      respondió o venció el corte".
-   - **`indexing`:** `waitForCheckpoint`; luego `await` de `resetQueries`/`invalidateQueries` de
+   - **`indexing`:** si el resultado de `confirmTransaction` ya trae `checkpoint` (S-1 bis: lo normal en el camino de la
+     wallet), la etapa se salta **sin pedidos** (`indexed: true`); si trae `checkpoint` `null`, va `waitForCheckpoint`.
+     Luego `await` de `resetQueries`/`invalidateQueries` de
      `transactionInvalidations(action, …)`; `outcome` = `success` con `value`, `indexed`, `cost =
      networkCost(effects.gasUsed)` y el digest. `value = input.interpret(nodeResult)` dentro de un `try`: si `interpret`
      lanza (el nodo **ya confirmó** el éxito), `value: null` (NIT-1 de v1.1, como DL-9); el éxito y las invalidaciones
@@ -547,7 +574,9 @@ Patrón `useGame.test.tsx` (`useCurrentClient`, `useAppConfig`, `useCurrentAccou
   `status.success: false` ⇒ `failure` con el mensaje de los efectos, el digest y `cost`.
 - **Otros:** preflight con `SimulationError` de la fixture ⇒ `failure` con el mensaje mapeado y la wallet no se llama; la
   wallet rechaza sin digest ⇒ `failure` con su mensaje; la wallet dice éxito y el nodo dice fallo ⇒ `failure` con el
-  mensaje de los efectos y el digest; `waitForCheckpoint` `false` ⇒ `success` con `indexed: false` e invalida igual; el
+  mensaje de los efectos y el digest; **S-1 bis:** `confirmTransaction` con `checkpoint` ⇒ ningún llamado a
+  `waitForCheckpoint` e invalidación inmediata; con `checkpoint` `null` ⇒ `waitForCheckpoint` y después la
+  invalidación (orden verificado con espías); `waitForCheckpoint` `false` ⇒ `success` con `indexed: false` e invalida igual; el
   componente se desmonta durante `confirming` ⇒ las invalidaciones ocurren igual; sin cuenta ⇒ `failure` sin llamadas.
 - `useCreateGame` devuelve el ID de `createOpen`; `useCancelGame`/`useRejectGame` el `refund` de la fixture;
   `transactionInvalidations` tabla completa; `useGame` tras `NOT_FOUND` no vuelve a pedir en 2 × 15 s y con
@@ -754,4 +783,4 @@ Reporte §5. Sin commits.
 
 El MID propone el body del PR (`Closes #11`; D-20261102-05; DL-1..16; M-1..5 y la precisión de M-3 (b); V-1..12; gates;
 smoke PASA/TOTAL; pendientes para #12: textos de "reintentar" para las cancelaciones del runtime, y para #17: wallets de
-extensión en testnet). Mensaje de commit de esta versión: `docs: address MAYOR NITs in #11 handoff, v1.1 (#11)`.
+extensión en testnet). Mensaje de commit de esta versión: `docs: update #11 handoff after TASK-1 findings, v1.2 (#11)`.
