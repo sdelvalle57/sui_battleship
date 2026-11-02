@@ -128,8 +128,46 @@ jobs:
           test ! -e "$HOME/.sui" \
             || { echo "::error::existe ~/.sui: la CLI ignoró SUI_CONFIG_DIR"; exit 1; }
 
-  # TODO(#9): job `app` (Node de .nvmrc con actions/setup-node fijada por SHA; npm ci; lint, typecheck,
-  # test y build -w app), sin `needs` sobre `contracts` para que corran en paralelo.
+  app:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash                 # -eo pipefail, como el job contracts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Node de .nvmrc
+        run: |
+          node --version && npm --version
+          [[ "$(node --version)" == "v$(cat .nvmrc)."* ]]
+      - name: Install (lockfile; sin scripts de instalación por .npmrc)
+        run: npm ci
+      - name: Firmas del registry
+        run: npm audit signatures
+      - name: Vulnerabilidades de producción (high o más)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Lint
+        run: npm run lint -w app
+      - name: Typecheck
+        run: npm run typecheck -w app
+      - name: Test
+        run: npm test -w app
+      - name: Build (testnet)
+        env:
+          VITE_SUI_NETWORK: testnet
+        run: npm run build -w app
+      - name: Árbol sin cambios tras los gates
+        if: ${{ !cancelled() }}
+        run: |
+          git status --porcelain --untracked-files=all
+          test -z "$(git status --porcelain --untracked-files=all)"
 
   framework-drift:
     # Informativo (STATUS H13): nunca bloquea ni será check requerido; avisa con ::warning:: y en el resumen.
