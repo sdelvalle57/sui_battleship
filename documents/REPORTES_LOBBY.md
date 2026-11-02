@@ -134,3 +134,33 @@ Desviaciones 1–6 aceptadas (1: clave `publishCheckpoint` es la decisión corre
 
 ### Recordatorios para TASK-5
 `NetworkBadge` con `retrying` (obligatorio, con test); fecha del piso con `useCheckpointTime(lowerBound.checkpoint)` (aproximación ≤ ~1 h aceptada; sin fecha si la hora no llega; `publish` sin fecha); con `stalled` no se ofrece "Buscar más atrás"; errores por `readErrorMessage`; filas `unreadable` visibles; hora podada "—"; "Última actividad" (nunca "la resolvió"); montos con `resolutionAmounts`; DL-11; opcional hallazgo 2. **Para TASK-6:** hallazgo 1, hallazgo 2 de TASK-3 (revisar `TransactionErrorReason`/`ObjectErrorReason` al subir `@mysten/*`) y la nota de `client.listEvents` en testnet.
+
+## Task completado: HANDOFF_LOBBY (v1.3) — TASK-5 (lobby, detalle y textos)
+
+> Reporte del DEV transcrito por el orquestador (resumido; conteos y exit codes literales; rutas con placeholders).
+
+- Branch @ `a3100ee`, sin commits. **Creados:** `components/{ReadState,LobbyList,GameDetail}.tsx` + tests; `pages/GameDetailPage.tsx` + test. **Modificados:** `HomePage.tsx`, `App.tsx` (+ test), `Header.tsx`, `NetworkBadge.tsx` (+ tests), `useLobby.ts` y `useGame.ts` (solo `isFetching`, desviación 1).
+- `ReadState`: "Cargando…", "Reintentando… (intento n de m)", pausa, error con `readErrorMessage` y "Reintentar" (deshabilitado con `busy`). `LobbyList`: filas (apuesta, comisión, creador, hora o "—", "(tuya)", link), ilegibles visibles, 4 estados vacíos (incluido el del piso con fecha y nota al pie), "Actualizar", "Cargar más"/"Buscar más atrás", "Cargando más…", error de la página siguiente; `stalled` ⇒ solo "Actualizar". `GameDetail` + `GameDetailPage` en `/game/:id` ("Última actividad", `resolutionAmounts` vía `format.ts`, Suiscan). `<ConnectButton>Conectar wallet</ConnectButton>`; `NetworkBadge` "reconectando… (intento n de m)".
+- **Recordatorios 1–7 cumplidos con test** (`retrying` en el badge; fecha del piso con y sin hora; `stalled`; `readErrorMessage`, ilegibles, "—"; "Última actividad" y montos del `GameResolved` de la fixture; DL-11; "Reintentar" deshabilitado mientras pide).
+- **Tests:** `ReadState` 6, `LobbyList` 15, `GameDetail` 4, `GameDetailPage` 5, `App` 3, `Header` 2, `NetworkBadge` 7.
+- **Gates (Node v26.13.0):** `npm ci` 0; firmas 292; audit prod 0; lint 0; typecheck 0; `Test Files 29 passed (29)` / `Tests 374 passed (374)`; build testnet 0 (`852.27 kB │ gzip 259.59 kB`); `contracts/`, `package*`, `eslint.config.js`, `app/src/sui/` sin delta. Capas: en `components/`/`pages/` solo `@mysten/dapp-kit-react/ui`; sin `dangerouslySetInnerHTML`. Primer intento con 3 errores de capas en tests (corregidos).
+- **Desviaciones:** (1) `isFetching` en `useLobby`/`useGame` (cierra hallazgo 2 de TASK-4); (2) "Cargando más…" aparte con `role="status"`; (3) "Actualizar" siempre visible; (4) `GameDetail` recibe `network`; (5) tests de `components/` sin SDK (fixture `json`).
+- **Riesgos:** bundle 852,27 kB (code-splitting en #15); sin CSS nuevo (aspecto en el smoke).
+
+## Revisión TASK-5: PASA
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió gates.
+
+Confirmado: textos honestos ("No hay partidas abiertas" solo con 0 filas, `!hasNextPage`, `!stalled` y sin `nextPageError`, `LobbyList.tsx:77`; `stalled` solo "Actualizar"; `PaginationStalledError` en la primera página ⇒ `ReadState` error; texto del piso con y sin fecha; nunca "cargando" eterno); sin `Pending` ni montos inventados (montos de `resolutionAmounts` = `GameResolved` real; estimación solo en `Pending`; "Última actividad", nunca "la resolvió"); capas; 5 tests de detalle; recordatorios 1–7 con test. Desviaciones 1–5 aceptadas.
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | React (claves), menor | `LobbyList.tsx:73` | Dos `GameCreated` ilegibles de la misma tx comparten clave `${txDigest}:` | En la sesión de TASK-6: `key` con `row.gameId ?? \`i${String(index)}\`` |
+| 2 | Eficiencia, menor | `useGame.ts` (`refetchInterval`) | Sigue pidiendo cada 15 s ante un error definitivo | #11/#12 (anotado en el body del PR) |
+| 3 | Info | Build | 852 kB | #15 |
+
+### Lista consolidada para TASK-6
+**`app/README.md`:** (1) mapa de `app/src/sui/` y hooks nuevos con `queryKeys`; (2) reglas de lectura: BCS exacto y `originalPackageId`, cota `max(publicación, piso + 16 000)` releída por página con `publishTxDigest` (M-1), calibración 50/2/20/16 000, cursor repetido = error (M-2), lobby manual y detalle 15 s + foco, política común (10 s por señal, solo transitorios, 2 reintentos a 1 s y 2 s, "reintentando (n de m)"); (3) montos de una resuelta = fórmula v1 y regla de upgrade (`agents.md` §5); (4) historial del nodo (D-20261102-04 (1)): ≈ 14,6 días, partidas viejas por ID en `/game/:id`, hora podada "—", "desde <fecha>" aproximado (≤ ~1 h); (5) listas por eventos: `client.listEvents` falla con `OUT_OF_RANGE` en el fullnode público, toda lista usa el crudo con `startCheckpoint` y `OUT_OF_RANGE` = fin del historial (lo hereda #13); la paginación del SDK solo vale sin poda; (6) indicador de red recalculado: ≤ ~25 s caído, ≤ ~55 s colgado, "reconectando… (intento n de m)"; quitar "se decide en #10"; (7) IDs en el borde implementado (`ids.ts`, `useGame`), regla para #11/#12; (8) wallet DL-11; (9) recaptura → `contracts/README.md`; (10) al subir `@mysten/*`, revisar `TransactionErrorReason`/`ObjectErrorReason`; (11) pendientes: 852 kB → #15, refetch ante error definitivo → #11/#12.
+**`agents.md`:** §2 `contracts/fixtures/` y `app/scripts/`; §5 regla de sincronización de `resolutionAmounts` (fórmula v1) y que la app no replica `MAX_FEE_BPS`.
+**`STATUS.md`:** baseline app 374/29 (conteos por archivo), 852 kB; contracts 83; `node --test` 99; fila #10 🚧 con TASK-1..5; pendientes de #9 resueltos (reintentos, test del `signal`); D-20261102-04; #35 abierto.
+**Cierre:** grep `"se decide en #10\|se definen en #10\|lo fija #10\|la elige #10"` vacío en los 4 archivos; sin rutas personales; números iguales a los reportes. Después: `documents/SMOKE_LOBBY.md` (MID).
