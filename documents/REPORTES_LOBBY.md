@@ -164,3 +164,29 @@ Confirmado: textos honestos ("No hay partidas abiertas" solo con 0 filas, `!hasN
 **`agents.md`:** §2 `contracts/fixtures/` y `app/scripts/`; §5 regla de sincronización de `resolutionAmounts` (fórmula v1) y que la app no replica `MAX_FEE_BPS`.
 **`STATUS.md`:** baseline app 374/29 (conteos por archivo), 852 kB; contracts 83; `node --test` 99; fila #10 🚧 con TASK-1..5; pendientes de #9 resueltos (reintentos, test del `signal`); D-20261102-04; #35 abierto.
 **Cierre:** grep `"se decide en #10\|se definen en #10\|lo fija #10\|la elige #10"` vacío en los 4 archivos; sin rutas personales; números iguales a los reportes. Después: `documents/SMOKE_LOBBY.md` (MID).
+
+## Task completado: HANDOFF_LOBBY (v1.3) — TASK-6 (docs del ciclo) + hallazgo 1 de TASK-5
+
+> Reporte del DEV transcrito por el orquestador (resumido; conteos y exit codes literales).
+
+- Branch @ `09be5a3`, sin commits. Modificados: `app/README.md` (+~100), `agents.md` (+7/−4), `documents/STATUS.md` (+11/−2), `app/src/components/LobbyList.tsx` (+6/−2) y su test (+15). `contracts/README.md` sin cambios (ya correcto desde TASK-1).
+- `app/README.md`: los 11 puntos de la lista consolidada (mapa de `sui/` y tabla de hooks; reglas de lectura con calibración 50/2/20/16 000; fórmula v1; historial ≈ 14,6 días y "desde" aproximado; listas por el crudo, `OUT_OF_RANGE` = fin, lo hereda #13; indicador ≤ ~25 s caído / ≤ ~55 s colgado; IDs en el borde; DL-11; "Fixtures de lectura" → `contracts/README.md`; revisar `TransactionErrorReason`/`ObjectErrorReason` al subir `@mysten/*`; pendientes #15 y #11/#12). `agents.md` §2 (`contracts/fixtures/`, `app/scripts/`) y §5 (layout BCS ↔ `game.ts`/`events.ts` + fixtures; `resolutionAmounts` v1; la app no replica `MAX_FEE_BPS`). `STATUS.md`: baselines app 375/29 (852 kB) y contratos (83 / 99 / 0 despliegues), fila #10 🚧, pendientes de #9 resueltos, D-20261102-04, #35.
+- **Hallazgo 1 de TASK-5:** `key` = `${row.txDigest}:${row.gameId ?? \`i${String(index)}\`}`; test nuevo falla con el código anterior (`Tests 1 failed | 15 skipped (16)`) y pasa con el nuevo (`16 passed`).
+- **Gates:** `npm ci` 0; firmas 292; audit prod 0; lint 0; typecheck 0; `Test Files 29 passed (29)` / `Tests 375 passed (375)`; build testnet 0 (`852.29 kB │ gzip 259.60 kB`); `contracts/`, `package*`, `eslint.config.js` sin delta; `node --test` 99/99; `check` "0 despliegues". Grep de cierre vacío en los 4 archivos; grep de claves/rutas/hex vacío.
+- Desviaciones: (1) 375 en STATUS (incluye el test nuevo); (2) `contracts/README.md` sin tocar; (3) fila de contratos en STATUS (Move medido en TASK-1, sin cambios desde entonces).
+
+## Revisión TASK-6: PASA (2 correcciones de texto aplicadas por el orquestador) + revisión del runbook del smoke: OK con 4 ajustes (aplicados)
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió gates.
+
+TASK-6: `app/README.md` cubre los 11 puntos; `agents.md` §2/§5; `STATUS.md`; hallazgo 1 de TASK-5 corregido con test (falla antes, pasa después); grep de cierre vacío; números coinciden; desviaciones 1–3 aceptadas.
+
+| # | Regla | Archivo | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | PROY-20 | `app/README.md` "Pendientes conocidos" | Decía que el detalle "queda en error"; `useGame` sigue pidiendo cada 15 s | Aplicada: viñeta reescrita (cortar el intervalo ante error definitivo → #11/#12) |
+| 2 | PROY-20 | `app/README.md` "Lecturas (#10)" | Faltaba el refetch al volver a la portada (montaje) | Aplicada |
+
+Runbook `SMOKE_LOBBY.md`: cubre los criterios del issue; textos y montos coinciden con el código (`G1` 0.002/0.00005/0.00195; `G3` estimación 0.006/0.00015/0.00585; paso 12 ⇒ 56 filas); firmas = `game.move:88-149`; reglas OK; paso 15 (`rm -f` de `localnet.json` antes del build) correcto. Ajustes aplicados: (1) puertos 9000/9123/9184/5003/5173/4173/9229 en pasos 0 y 16; (2) "todo `suic` lleva `PRE`"; (3) el `rm -f` del paso 15 pasa justo después del `kill` de `vite`; (4) verificación del bundle de testnet con `grep -c` del `packageId` antes de borrar `<SMOKE_DIR>`.
+
+### Siguiente paso
+Smoke autorizado tras commitear y confirmar que no hay otra localnet. Pendientes para el body del PR: #11/#12 (intervalo del detalle ante error definitivo; refresco tras una tx), #13 (hereda el `ListEvents` crudo), #15 (852 kB), #8 (rama testnet del smoke), #35.
