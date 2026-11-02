@@ -182,7 +182,7 @@ Significado de los campos de `Game`:
 | `stake` | Fondos custodiados: igual a `bet` mientras está `Pending`; 0 al terminar |
 | `fee_rate` | Comisión en basis points copiada de la House al crear (D-20261030-06 §3); es la que cobra `accept_game` |
 
-Sin campos de tiempo (D-20261030-15 D6): la hora de creación es la de la transacción que emitió `GameCreated` (el campo concreto depende de la API de lectura que elija #10).
+Sin campos de tiempo (D-20261030-15 D6): la hora de creación es la de la transacción que emitió `GameCreated` (`timestampMs` de `getTransaction`; ver "Lectura desde la app").
 
 ### Estados
 
@@ -403,23 +403,25 @@ borra. La UI (#11) muestra ese costo al crear.
 
 - La partida se lee del objeto con su contenido: todos los campos llegan por RPC aunque no haya getters Move (no
   hay accessors `public` a propósito, PROY-4; agregarlos después es compatible con upgrade).
-- **API de lectura: la elige #10 (gRPC o GraphQL), D-20261031-01.** El fullnode de `sui 1.83.0` **no sirve
-  JSON-RPC**: en el smoke de #6 todo `POST` al puerto RPC de la localnet devolvió `404` (H-1), y `sui-node` monta en
-  ese puerto solo `sui_rpc_api::RpcService` (`crates/sui-node/src/lib.rs:2956-3054` @ `testnet-v1.83.0`). #10
-  captura ahí las fixtures reales de cada variante (`Pending`, `Cancelled`, `Resolved`); #6 no crea
-  `contracts/fixtures/`.
+- **API de lectura: `SuiGrpcClient` (gRPC-web) de `@mysten/sui`** (D-20261102-02 (1)). El fullnode de `sui 1.83.0`
+  **no sirve JSON-RPC**: en el smoke de #6 todo `POST` al puerto RPC de la localnet devolvió `404` (H-1), y
+  `sui-node` monta en ese puerto solo `sui_rpc_api::RpcService` (`crates/sui-node/src/lib.rs:2956-3054` @
+  `testnet-v1.83.0`). La sonda de #9 (TASK-4) lo confirmó en localnet: preflight CORS `200` con comodines y
+  `listEvents` por `eventType` devuelve el evento real. #10 captura con esa API las fixtures reales de cada variante
+  (`Pending`, `Cancelled`, `Resolved`) en `contracts/fixtures/` (D-20261031-01); #6 no crea esa carpeta.
 - **Referencia observada (no es el formato de la app):** `sui client object <id> --json` (CLI 1.83.0, smoke de #6)
   devuelve `objType`, `owner`, `prevTx`, `storageRebate` (número) y `content` **aplanado** (los campos del `Game`
   directamente, sin envoltorio). El enum llega como `{"@variant": "Pending"}`, `{"@variant": "Cancelled"}` y
   `{"@variant": "Resolved", "acceptor": "0x…", "winner": "0x…"}`; `u64` (`bet`, `version`) y `stake` (`Balance`,
   aplanado como su valor) como **string**; `u16` (`fee_rate`) como número con decimal (`250.0`); `opponent`
   (`Option<address>`) como `null` o la dirección. En el `parsedJson` de los eventos de la CLI, igual: `u16` como
-  `250.0`, `Option` como `null` o la dirección. El formato exacto de gRPC/GraphQL lo fija #10 con fixtures.
+  `250.0`, `Option` como `null` o la dirección. El formato exacto de gRPC lo fija #10 con fixtures.
 - El parser de #10 usa **un** formato y trata una variante desconocida como error, nunca como `Pending` (SEG-10).
 - El resultado de aceptar se lee del evento `GameResolved` de la transacción o del objeto
   (`Resolved { acceptor, winner }`).
-- La hora de creación es el timestamp de la transacción del evento `GameCreated` (D-20261030-15 D6); el campo
-  concreto depende de la API que elija #10.
+- La hora de creación es el timestamp de la transacción del evento `GameCreated` (D-20261030-15 D6):
+  `client.getTransaction({ digest })` → `timestampMs` (hora del checkpoint, en ms; `null` si aún no está en un
+  checkpoint). `listEvents` **no** trae hora: cada evento trae `transactionDigest` y `checkpoint`.
 
 ## Despliegues (#7)
 
