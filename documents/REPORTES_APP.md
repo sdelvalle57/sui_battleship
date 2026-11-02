@@ -133,3 +133,18 @@ TASK-7. Snippet STATUS: #9 TASK-1 (workspace, `.npmrc`, `engines`, lockfile v3, 
 - **Verde:** run [41469633568](https://github.com/sdelvalle57/sui_battleship/actions/runs/41469633568) → `success`: `app` (15:14:34–15:15:53Z, ≈ 79 s), `contracts` y `framework-drift` en verde.
 - **Rojo provocado:** worktree desechable con `console.log("ci red check")` en `app/src/App.tsx`, PR borrador #37 → run [41469976365](https://github.com/sdelvalle57/sui_battleship/actions/runs/41469976365) `failure`: job `app`, paso **Lint** en `failure` (`3:1  error  Unexpected console statement  no-console`, `✖ 1 problem (1 error, 0 warnings)`); `contracts` y `framework-drift` en verde.
 - Limpieza: `git worktree remove`, `gh pr close 37 --delete-branch` (PR `CLOSED`, `mergedAt: null`), branch remota y local inexistentes, `git worktree list` sin el desechable.
+
+## Revisión TASK-2: PASA
+
+> Revisión del MID transcrita por el orquestador. Revisó `git show cada02f`, los dos runs (`gh run view --json` y log del job `app`), el diff del PR desechable (`gh api compare`) y el estado de #36/#37.
+
+Diff: un archivo (+40/−2), un hunk, job `app` idéntico línea a línea a HANDOFF §TASK-2.3; `contracts`, `framework-drift`, `env`, `on`, `concurrency`, `permissions` (`contents: read`) intactos. SHAs `checkout@3d3c42e5…` (v7.0.1, `persist-credentials: false`) y `setup-node@949feb24…` (v7.1.0, el de §0 y el que debe usar #7). Sin `needs`/`secrets`/`env`/`permissions` propios. Verde 41469633568: 12 pasos de `app` en verde, Node v26.13.0 / npm 11.20.0, `npm ci` 293 paquetes, firmas 292/143, audit prod 0, `1 passed (1)`, build OK, ≈79 s. Rojo 41469976365: PR #37 con un solo commit (`console.log` en `App.tsx`), `app` falla en **Lint**; Typecheck/Test/Build `skipped`; árbol limpio corre en verde; `contracts`/`framework-drift` verdes; #37 `CLOSED`, sin merge, branch borrada.
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | D-20261102-02 (7), D-09 | protección de `master` | `app` aún no es check requerido: un PR con `app` en rojo hoy podría mergearse | Tras el merge de #9: agregar `app` a los checks requeridos y verificarlo; anotarlo en el body del PR |
+| 2 | R9 | `ci.yml:131-170` | #7 también toca `ci.yml` | Al rebasar, conservar ambos bloques con el mismo SHA de `setup-node` y re-correr la CI |
+| 3 | Info | PR #36 | Run en curso sobre `9071c78` (solo docs) | Confirmar verde antes de seguir |
+
+### Siguiente paso
+TASK-3 autorizada sin cambios. TASK-4 autorizada con dos condiciones: TASK-3 revisada PASA y commiteada (el cierre de TASK-4 exige árbol limpio), y confirmación del orquestador de que no hay otra localnet arriba (puerto 9000).
