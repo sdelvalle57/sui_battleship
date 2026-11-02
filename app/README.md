@@ -43,7 +43,10 @@ la app muestra la pantalla "La app no está configurada" con la causa y la acci�
 
 1. Localnet **aislada** de `agents.md` §3 ("Localnet aislada (smokes)"), con la publicación del paso 4 en la
    **variante B** (sin `--out`): escribe `contracts/deployments/localnet.json` (ignorado por git).
-2. `VITE_SUI_NETWORK=localnet npm run dev -w app` y abrir `http://localhost:5173`.
+2. `VITE_SUI_NETWORK=localnet npm run dev -w app` y abrir `http://localhost:5173`. Si `localnet.json` se crea (o se
+   vuelve a crear) con `vite` dev ya arrancado, la app sigue en "La app no está configurada" aunque se recargue:
+   reiniciar `npm run dev -w app` (`vite` ve los cambios y el borrado del archivo, pero no uno nuevo fuera de `app/`;
+   el build no se ve afectado).
 3. **Wallet de desarrollo** (burner del kit): solo en localnet **y** con `npm run dev` (D-20261102-02 (5)). Para firmar
    con una wallet de navegador, esa wallet tiene que apuntar a la misma localnet.
 4. Al cerrar: el paso 7 de `agents.md` §3, que borra también `contracts/deployments/localnet.json` (pertenece a la

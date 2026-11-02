@@ -305,3 +305,20 @@ Confirmado: `app/README.md` cubre §3.1 y las 4 líneas extra de TASK-6; `agents
 
 ### Siguiente paso
 Smoke `SMOKE_APP.md` autorizado con árbol limpio, red libre confirmada por el orquestador, reglas B4/D8, exit 144 esperado, margen de 40 s en el paso 14 y resultados llenados durante la corrida.
+
+## Smoke del ciclo (`SMOKE_APP.md`): PASA 17/17
+
+> Reporte del DEV transcrito por el orquestador (resumido; el detalle por paso está en `documents/SMOKE_APP.md`).
+
+- @ `2403fd4`, localnet aislada (chain `e87aec56`), publicación con el script (variante B, sin `--out`). Pasos 🌐 por **Chrome headless + CDP con perfil desechable** (Chrome 156, `--user-data-dir`, `HOME`/`XDG_*` dentro de `<SMOKE_DIR>`, depuración solo en 127.0.0.1, cliente CDP propio sin dependencias) — indicación del orquestador.
+- Resultados clave: sonda (`update_fee_rate` + preflight + `listEvents` por `originalPackageId`) ✅; badge `localnet · nodo OK` ✅; POST `GetServiceInfo` 200 con `allow-origin: *` y `expose-headers: *`, sin errores CORS ✅; lectura pública localnet y testnet `GetServiceInfo` 200, `NoExiste` → `grpc-status: 12` ✅; burner en dev con dos direcciones distintas tras recargar ✅; `ConfigError` sin `localnet.json` ✅ (H-1); "red equivocada (esperada 00000000, nodo e87aec56)" ✅; build de producción sin burner ni Slush web, sin `warn` del burner ✅; "sin conexión (Failed to fetch)" a los **22,5 s** de matar la red ✅; build de testnet → `ConfigError` "Falta contracts/deployments/testnet.json…" sin requests RPC ✅; cierre completo ✅.
+- Desviaciones: modalidad 🌐; paso 7 con `Runtime.evaluate`; paso 13 con captura de consola repetida; paso 10 con reinicio de `vite` ante `ConfigError` persistente.
+- **H-1:** `vite` dev no detecta un `localnet.json` **nuevo** fuera de `app/` (sí borrado y modificación); hay que reiniciarlo. Solo dev. Propuesta: una línea en `app/README.md`. **H-2 (info):** al "Disconnect all" el kit loguea `WalletStandardError … does not support the standard:disconnect` para el burner; la desconexión funciona. Observaciones: `POST` abortado por `StrictMode` en dev, 404 de favicon, textos del `ConnectButton` en inglés.
+
+## Revisión del smoke: PASA 17/17
+
+> Revisión del MID transcrita por el orquestador (resumida). CI del PR #36 @ `2403fd4`: run 41483361440, `contracts`/`app`/`framework-drift` success.
+
+- Procedimiento conforme al runbook; resultados coherentes (paso 14: 22,5 s ≤ 40 s; paso 11 "red equivocada"; pasos 8-9 direcciones distintas).
+- **Modalidad 🌐 suficiente** para todos los pasos de #9: Chromium real (CORS, `fetch`, gRPC-web del SDK), evidencia más precisa (cabeceras exactas, shadow DOM, sondeo cada 250 ms), sin navegador ni claves del usuario. Paso 13 con perfil limpio = prueba más estricta. No cubierto (y no hace falta en #9): extensión real con firma (#11/#17) y la rama "con `testnet.json`" del paso 15 (**pendiente de #8**).
+- **H-1:** una línea en `app/README.md` (paso 2 de localnet) — aplicada por el orquestador. **H-2** y `ERR_ABORTED` por `StrictMode`: se ignoran (solo dev). **Favicon** → #15. **Textos del `ConnectButton` en inglés** → #10.
