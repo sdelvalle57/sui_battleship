@@ -194,3 +194,25 @@ TASK-4 lista para arrancar tras commitear TASK-3 y confirmar que el puerto 9000 
 - Desviaciones: ninguna de procedimiento; se imprimió además el digest del paso 5 (para cruzar con el paso 7; no es dato de cuenta).
 - Riesgos: (1) `sui start` sale con 144 al recibir SIGTERM (no 143); el harness lo marca "failed" pero el cierre es correcto. (2) El nodo responde `allow-headers: *` / `allow-origin: *`; suficiente para gRPC-web sin credenciales; testnet se cubre en el smoke del Tramo B desde el navegador.
 - Snippet STATUS propuesto: "#9 TASK-4 (gate de D1) ✅ 2026-11-02: preflight CORS gRPC-web 200 con comodines; `SuiGrpcClient` lee chain id y `listEvents` por tipo devuelve `FeeRateUpdated` al primer intento; cierre limpio."
+
+## Revisión TASK-4: PASA (gate de D1 cumplido; Tramo A cerrado)
+
+> Revisión del MID transcrita por el orquestador (resumida). Verificaciones pasivas del MID: base58→hex del chain id = `9a65bf10`; digest de 32 bytes; `stat` de `~/.sui/sui_config/client.yaml` idéntico; puertos libres; árbol limpio; `2e99f9e` solo toca este archivo.
+
+Procedimiento conforme a HANDOFF_APP §TASK-4 y `agents.md` §3. Criterios §7: 1 ✅, 2 ✅, 3 ✅ (mismo digest en pasos 5 y 7), 4 ✅.
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | Riesgo 1 (receta de smoke) | `agents.md` §3 paso 7 | `sui start` 1.83 sale con 144 ante SIGTERM; el harness lo marca "failed" | STATUS (hallazgo conocido) + v2: nota en el cierre de `SMOKE_APP.md`/TASK-7 y una línea en `agents.md` §3 paso 7, coordinada con #7 |
+| 2 | D1 (alcance de la evidencia) | §TASK-4.3 pasos 6-7 | Preflight con `curl` + SDK en Node (sin CORS): no se observó un POST real en navegador ni `access-control-expose-headers` (`grpc-status`/`grpc-message`); testnet sin probar. No bloquea | v2: en el smoke del Tramo B y la verificación de TASK-6, POST gRPC-web en DevTools (localnet y testnet) + error provocado legible |
+| 3 | Info | `contracts/build/` (ignorado) | `test-publish` deja `build/` | Sin acción |
+| 4 | Desviación declarada | Paso 5 | Digest impreso | Aceptada |
+
+### Pendientes para HANDOFF_APP v2 (tras el merge de #7 y el rebase)
+- Base de #7: esquema de `contracts/deployments/<red>.json`, fixture `localnet.deployment.json` (TASK-5), texto final de `agents.md` §3 (TASK-7), nuevo baseline §0.
+- TASK-6: regex de capas `^@mysten/(?!dapp-kit-react/ui$)` (+ sondas `@mysten/bcs` en `components/` y `../hooks/x` en `sui/`); reescritura de `App.tsx` con su JSDoc; `shortChainId` lanza con base58 inválido → error del intento con test; `getServiceInfo` = `response.chainId` (base58) y `checkpointHeight`; normalización de IDs en el borde (#11/#12, SEG-9); CORS en navegador (hallazgo 2).
+- TASK-7: nota de `typescript`/`gql.tada`/`@0no-co/graphqlsp`/`chalk`/`commander` en prod (🟡-7), issue #35; nota del exit 144.
+- Smoke: puerto 9000 coordinado con #7. Body del PR: agregar `app` como check requerido tras el merge (D-20261102-02 (7)) y verificar con `gh api`.
+
+### Siguiente paso
+Tramo A cerrado (TASK-1..4 PASA); PR #36 en borrador. Tramo B bloqueado hasta el merge de #7 + rebase (conflictos esperados en `ci.yml` y `agents.md` §3) y la CI del PR #36 en verde; entonces el MID emite HANDOFF_APP v2.
