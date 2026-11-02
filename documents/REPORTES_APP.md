@@ -178,3 +178,19 @@ Confirmado: `format.ts` (`U64_MAX` nombrada; orden de chequeos del handoff; rege
 
 ### Siguiente paso
 TASK-4 lista para arrancar tras commitear TASK-3 y confirmar que el puerto 9000 está libre.
+
+## Task completado: HANDOFF_APP — TASK-4 (sonda gRPC-web en localnet, gate de D1)
+
+> Reporte del DEV transcrito por el orquestador (resumido; salidas clave literales). Sin cambios en el repo; `<SMOKE_DIR>` en el scratchpad, ya borrado.
+
+- Branch `feature/issue-9-app` @ `c40ef94`; árbol limpio. Pasó al primer intento, sin reintentos ni STOP-1.
+- Línea base `~/.sui/sui_config/client.yaml`: `2026-10-30 17:52:52.515735237 -0500 244` (solo `stat`/`ls`); idéntica al cierre. Antes de empezar: 9000/9123/9184/5003 libres, sin procesos `sui`.
+- Génesis aislada (`sui genesis --working-dir`, `exit=0`, `sui 1.83.0-16d2dc1e05ed`); red en segundo plano con `exec` y PID guardado; sin `--force-regenesis`, faucet ni `new-address`. Chain id `Hex: 9a65bf10`. `ADMIN` = `active-address` de la génesis, escrito en `ids.env` sin imprimirse.
+- Paso 3: `sui client test-publish --build-env testnet --pubfile-path "$SMOKE_DIR/Pub.localnet.toml"` → `exit=0`; `Move.lock` sin delta.
+- Paso 5: `update_fee_rate(250)` → `effects.status {"status":"success"}`, digest `aiWb8Vw4GUwUmc62kKunuVzGMyVcisoKESrYFDhUz3A`, evento `<PKG>::house::FeeRateUpdated` `{new_fee_rate: 250, old_fee_rate: 0}`.
+- Paso 6 (preflight CORS `OPTIONS /sui.rpc.v2.LedgerService/GetServiceInfo`, `Origin: http://127.0.0.1:5173`, headers `content-type,x-grpc-web,x-user-agent`): `HTTP/1.1 200 OK`, `access-control-allow-origin: *`, `access-control-allow-headers: *`, `access-control-allow-methods: GET,POST`.
+- Paso 7 (`SuiGrpcClient`, `@mysten/sui` 2.37.0, desde `app/`): `chainId BPhmgkKZqWK5P3Q27htLabiaagqRThW4RszQY5pARdbi short 9a65bf10 checkpoint 236`; `listEvents` por tipo → 1 evento, mismo `transactionDigest` que el paso 5, `json.new_fee_rate: 250`; `exit=0`.
+- Criterios §7: 1 ✅, 2 ✅, 3 ✅ (`short` = CLI), 4 ✅ cierre: `kill` por PID, `kill -0` → exit 1, puertos libres, `pgrep sui` → exit 1, `<SMOKE_DIR>` borrado, `git status --porcelain` vacío, sin `Pub.*.toml`/`Published.toml`/`contracts/deployments/localnet.json`.
+- Desviaciones: ninguna de procedimiento; se imprimió además el digest del paso 5 (para cruzar con el paso 7; no es dato de cuenta).
+- Riesgos: (1) `sui start` sale con 144 al recibir SIGTERM (no 143); el harness lo marca "failed" pero el cierre es correcto. (2) El nodo responde `allow-headers: *` / `allow-origin: *`; suficiente para gRPC-web sin credenciales; testnet se cubre en el smoke del Tramo B desde el navegador.
+- Snippet STATUS propuesto: "#9 TASK-4 (gate de D1) ✅ 2026-11-02: preflight CORS gRPC-web 200 con comodines; `SuiGrpcClient` lee chain id y `listEvents` por tipo devuelve `FeeRateUpdated` al primer intento; cierre limpio."
