@@ -276,3 +276,32 @@ Confirmado: capas por regex (base, `sui/`, `hooks/` con `group` NIT-2, `provider
 
 ### Siguiente paso
 TASK-7 autorizada. Además de la v2.1, `app/README.md` suma: (1) latencia del indicador (≤ ~27 s / ≤ ~67 s; política en #10); (2) burner en el bundle, habilitada solo en localnet + DEV; (3) el build de testnet publicado sale de la CI o de un checkout limpio (hallazgo 1 de TASK-5); (4) aviso de chunk → #15.
+
+## Task completado: HANDOFF_APP (v2.1) — TASK-7 (documentación y baseline)
+
+> Reporte del DEV transcrito por el orquestador (resumido; gate literal en conteos y exit codes).
+
+- Branch @ `7465f0b`, sin commits. Creado `app/README.md` (150 líneas). Modificados `agents.md` (+37/−20), `contracts/README.md` (+11/−9), `documents/ESTANDARES.md` (+4/−4, v1.8), `documents/STATUS.md` (+13/−4). Sin código ni dependencias.
+- `app/README.md`: requisitos, scripts, gate, `VITE_SUI_NETWORK`, localnet (variante B y cierre), testnet y **origen del build publicado** (CI o checkout limpio), capas, mapa de `app/src/sui/`, D12, **indicador de red** (≤ ~27 s / ≤ ~67 s; política en #10), **wallet** (burner en el bundle, habilitada solo en localnet + `npm run dev`), dependencias y procedimiento ante avisos (7 paquetes de prod por el peer de `gql.tada`, `min-release-age-exclude` con issue, `EBADENGINE` = STOP, moderate hasta #35), licencias, pendientes (**chunk > 500 kB → #15**).
+- `agents.md` §2 (stack, layout), §3 App (prefijo Node 26, steps del job `app`), §3 paso 7 (exit 144, una línea), §4 (gRPC-web), §11 (wallet de desarrollo), §14. ESTANDARES v1.8: PROY-14, PROY-18, SEG-8. `contracts/README.md` "Lectura desde la app" (`SuiGrpcClient`, fixtures en #10, hora por `getTransaction(...).timestampMs`) y la frase equivalente en la tabla de campos del `Game` (`:185`). STATUS: toolchain (npm 11.20.0, tren 2.37.0/1.6.39/2.1.41), baselines (app @ `71c976e`: 142 tests en 12 archivos, build 826 kB; sonda TASK-4; CI TASK-2), H14 (exit 144), fila #9, pendiente D7.
+- **Gates:** contracts `git diff --exit-code -- contracts/sources contracts/tests contracts/Move.lock` → 0; `node --test` `tests 94 / pass 94 / fail 0`. App: `npm ci` 0; signatures 0; audit prod 0 vulnerabilities; lint 0; typecheck 0; `Test Files 12 passed (12)` / `Tests 142 passed (142)`; build testnet 0 (826.07 kB, aviso de chunk).
+- Criterio 1: cada comando citado existe en `ci.yml` o `app/package.json` (tabla con líneas). Criterios 2 y 3: greps vacíos. Grep de secretos y rutas personales en las líneas añadidas: solo la palabra "secretos" de la regla SEG-3.
+- **Desviaciones:** (1) retoques en `agents.md` §2 (layout y línea de fixtures "gRPC (SuiGrpcClient)"); (2) secciones extra en `app/README.md` (licencias, línea de `localnet.json` del cierre); (3) frase equivalente en `contracts/README.md:185`; (4) `node --test` corrido por tocar `contracts/README.md`.
+- **Riesgos:** (1) `agents.md` §3 paso 6 todavía dice "o por la API que elija #10" (no se reescribió por la regla del handoff); propuesta: "o por `SuiGrpcClient` (D-20261102-02 (1))". (2) El baseline de STATUS cita `71c976e`; ajustable al SHA de TASK-7 o al run de la CI del PR #36.
+
+## Revisión TASK-7: PASA (con 2 correcciones de una línea, aplicadas por el orquestador)
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió gates; verificó en el SDK `getTransaction(...).timestampMs: number | null` (`types.d.mts:284`) y `useDAppKit` (`index.d.mts:114`).
+
+Confirmado: `app/README.md` cubre §3.1 y las 4 líneas extra de TASK-6; `agents.md` §2/§3/§4/§11/§14 (paso 7 con una sola línea del exit 144); ESTANDARES v1.8 (PROY-14, PROY-18, SEG-8); `contracts/README.md` "Lectura desde la app" y `:185`; STATUS; coherencia con #7 (variante B `agents.md:149-151`, cierre `:163-166` intactos; reglas D-20261102-03 sin tocar); criterios 1–3; contracts sin delta; app 142/142.
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | D-20261102-02 (1) | `agents.md:159` | "o por la API que elija #10" | Aplicada: "o por `SuiGrpcClient` (D-20261102-02 (1))" |
+| 2 | PROY-20 / FLUJO §9 | `app/README.md:10` | Remitía a `documents/HANDOFF_APP.md` §0 (efímero) | Aplicada: "(`agents.md` §3, "App (`app/`)")" |
+| 3 | Riesgo 2 | `STATUS.md` baseline app | Cita `71c976e` | Se deja; en el housekeeping se cambia por el SHA del merge + run de CI en `master` |
+| 4 | Menor (temporal) | PROY-18; `agents.md` §3 | "Ambos bloquean el merge" será cierto tras D7 | Sin cambios; D7 en STATUS y en el body del PR |
+| 5 | Menor | `STATUS.md:106` | "TASK-7 en revisión" | Aplicada: "TASK-7 (docs) PASA; smoke pendiente" |
+
+### Siguiente paso
+Smoke `SMOKE_APP.md` autorizado con árbol limpio, red libre confirmada por el orquestador, reglas B4/D8, exit 144 esperado, margen de 40 s en el paso 14 y resultados llenados durante la corrida.
