@@ -19,6 +19,7 @@ const CONFIG: AppConfig = {
   packageId: `0x${'1'.repeat(64)}`,
   originalPackageId: `0x${'1'.repeat(64)}`,
   houseId: `0x${'3'.repeat(64)}`,
+  publishTxDigest: '11111111111111111111111111111111',
   burnerWalletEnabled: false,
 };
 

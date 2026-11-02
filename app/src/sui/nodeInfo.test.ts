@@ -43,13 +43,25 @@ describe('fetchNodeInfo', () => {
     await expect(fetchNodeInfo(fakeClient(getServiceInfo))).resolves.toEqual({
       chainId: '4c78adac',
       checkpointHeight: 1234n,
+      lowestAvailableCheckpoint: null,
     });
     expect(getServiceInfo).toHaveBeenCalledWith({}, { abort: expect.any(AbortSignal) as AbortSignal });
   });
 
   it('returns a null checkpoint height when the node does not report it', async () => {
     const client = fakeClient(() => Promise.resolve({ response: { chainId: TESTNET_CHAIN_ID_BASE58 } }));
-    await expect(fetchNodeInfo(client)).resolves.toEqual({ chainId: '4c78adac', checkpointHeight: null });
+    await expect(fetchNodeInfo(client)).resolves.toEqual({
+      chainId: '4c78adac',
+      checkpointHeight: null,
+      lowestAvailableCheckpoint: null,
+    });
+  });
+
+  it('returns the lowest available checkpoint (history floor) when the node reports it', async () => {
+    const client = fakeClient(() =>
+      Promise.resolve({ response: { chainId: TESTNET_CHAIN_ID_BASE58, checkpointHeight: 402_087_595n, lowestAvailableCheckpoint: 396_603_024n } }),
+    );
+    await expect(fetchNodeInfo(client)).resolves.toMatchObject({ lowestAvailableCheckpoint: 396_603_024n });
   });
 
   it('rejects when the node does not report a chain id', async () => {
@@ -101,7 +113,7 @@ describe('fetchNodeInfo', () => {
 });
 
 describe('deriveNodeStatus', () => {
-  const data: NodeInfo = { chainId: '4c78adac', checkpointHeight: 42n };
+  const data: NodeInfo = { chainId: '4c78adac', checkpointHeight: 42n, lowestAvailableCheckpoint: null };
   const base = { isPending: false, isError: false, error: null, data };
 
   it('is loading while the first attempt is pending', () => {

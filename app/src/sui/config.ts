@@ -1,3 +1,4 @@
+import { isValidTransactionDigest } from '@mysten/sui/utils';
 import { isNetwork, NETWORKS, type Network } from './networks';
 
 /** Única versión del esquema de `contracts/deployments/<red>.json` que entiende la app (`contracts/README.md`). */
@@ -9,6 +10,7 @@ const OBJECT_ID_RE = /^0x[0-9a-f]{64}$/;
 
 const CHAIN_ID_FORMAT = '8 caracteres hex en minúsculas';
 const OBJECT_ID_FORMAT = '0x seguido de 64 caracteres hex en minúsculas';
+const TX_DIGEST_FORMAT = 'digest base58 de transacción';
 const REGENERATE_HINT = 'regenerarlo con el script de #7 (contracts/scripts/publish.mjs), nunca a mano';
 
 /** Configuración de la app para la red del build: red, endpoint gRPC e IDs del despliegue. */
@@ -23,6 +25,11 @@ export type AppConfig = {
   /** Paquete original: prefijo de los tipos de eventos y objetos (#10, #13, #14). */
   originalPackageId: string;
   houseId: string;
+  /**
+   * Digest de la transacción de **publicación original**: alimenta la cota inferior del escaneo del lobby (M-1). No cambia
+   * en un upgrade (campo de la "publicación original" de `contracts/README.md`).
+   */
+  publishTxDigest: string;
   /** Burner wallet solo en localnet y en `npm run dev` (D5). */
   burnerWalletEnabled: boolean;
 };
@@ -101,7 +108,7 @@ export function resolveConfig(
     );
   }
 
-  const { chainId, packageId, originalPackageId, houseId } = data;
+  const { chainId, packageId, originalPackageId, houseId, publishTxDigest } = data;
   if (!matches(chainId, CHAIN_ID_RE)) {
     return fieldError(file, 'chainId', chainId, CHAIN_ID_FORMAT);
   }
@@ -114,6 +121,9 @@ export function resolveConfig(
   if (!matches(houseId, OBJECT_ID_RE)) {
     return fieldError(file, 'houseId', houseId, OBJECT_ID_FORMAT);
   }
+  if (typeof publishTxDigest !== 'string' || !isValidTransactionDigest(publishTxDigest)) {
+    return fieldError(file, 'publishTxDigest', publishTxDigest, TX_DIGEST_FORMAT);
+  }
 
   return {
     ok: true,
@@ -124,6 +134,7 @@ export function resolveConfig(
       packageId,
       originalPackageId,
       houseId,
+      publishTxDigest,
       burnerWalletEnabled: network === 'localnet' && env.DEV,
     },
   };
