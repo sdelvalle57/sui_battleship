@@ -1,17 +1,28 @@
 import { render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { appRoutes } from './App';
 import { useAppConfig } from './hooks/useAppConfig';
+import { useCheckpointTime } from './hooks/useCheckpointTime';
+import { useGame } from './hooks/useGame';
+import { useLobby } from './hooks/useLobby';
 import { useNodeStatus } from './hooks/useNodeStatus';
+import { useTransactionTime } from './hooks/useTransactionTime';
 import { useWalletAccount } from './hooks/useWalletAccount';
 import type { AppConfig } from './sui/config';
 
 vi.mock('./hooks/useAppConfig', () => ({ useAppConfig: vi.fn() }));
 vi.mock('./hooks/useNodeStatus', () => ({ useNodeStatus: vi.fn() }));
 vi.mock('./hooks/useWalletAccount', () => ({ useWalletAccount: vi.fn() }));
-vi.mock('@mysten/dapp-kit-react/ui', () => ({ ConnectButton: () => <button type="button">Connect Wallet</button> }));
+vi.mock('./hooks/useLobby', () => ({ useLobby: vi.fn() }));
+vi.mock('./hooks/useGame', () => ({ useGame: vi.fn() }));
+vi.mock('./hooks/useTransactionTime', () => ({ useTransactionTime: vi.fn() }));
+vi.mock('./hooks/useCheckpointTime', () => ({ useCheckpointTime: vi.fn() }));
+vi.mock('@mysten/dapp-kit-react/ui', () => ({
+  ConnectButton: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,
+}));
 
 const CONFIG: AppConfig = {
   network: 'localnet',
@@ -32,6 +43,22 @@ beforeEach(() => {
   vi.mocked(useAppConfig).mockReturnValue(CONFIG);
   vi.mocked(useNodeStatus).mockReturnValue({ kind: 'ok', checkpointHeight: 1n });
   vi.mocked(useWalletAccount).mockReturnValue({ address: null, short: null });
+  vi.mocked(useLobby).mockReturnValue({
+    items: [],
+    status: { kind: 'ready', refreshing: false },
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isFetching: false,
+    nextPageError: null,
+    stalled: false,
+    lowerBound: { checkpoint: 59n, kind: 'publish' },
+    end: 'bound',
+    loadMore: vi.fn(),
+    refresh: vi.fn(),
+  });
+  vi.mocked(useTransactionTime).mockReturnValue({ timestampMs: null, status: { kind: 'ready', refreshing: false } });
+  vi.mocked(useCheckpointTime).mockReturnValue({ timestampMs: null, status: { kind: 'ready', refreshing: false } });
+  vi.mocked(useGame).mockReturnValue({ kind: 'invalid_id' });
 });
 
 describe('App routes', () => {
@@ -39,6 +66,14 @@ describe('App routes', () => {
     renderAt('/');
     expect(screen.getByRole('heading', { level: 1, name: 'Sui Battleship' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Apuestas 1 vs 1 en Sui' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Partidas abiertas' })).toHaveTextContent('No hay partidas abiertas');
+  });
+
+  it('renders the game detail page at /game/:id', () => {
+    renderAt('/game/abc');
+    expect(useGame).toHaveBeenCalledWith('abc');
+    expect(screen.getByRole('heading', { level: 2, name: 'Partida' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('ID de partida inválido');
   });
 
   it('renders the not found page with a link home for an unknown route', () => {

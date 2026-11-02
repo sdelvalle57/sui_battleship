@@ -44,6 +44,12 @@ describe('NetworkBadge', () => {
     expect(screen.getByText('conectando…')).toBeInTheDocument();
   });
 
+  it('shows reconnecting with the attempt while retrying, never node OK nor empty', () => {
+    renderWith('testnet', { kind: 'retrying', attempt: 2, max: 3 });
+    expect(screen.getByText('reconectando… (intento 2 de 3)')).toBeInTheDocument();
+    expect(screen.queryByText('nodo OK')).toBeNull();
+  });
+
   it('shows node OK', () => {
     renderWith('testnet', { kind: 'ok', checkpointHeight: 10n });
     expect(screen.getByText('nodo OK')).toBeInTheDocument();

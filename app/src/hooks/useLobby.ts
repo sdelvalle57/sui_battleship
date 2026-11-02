@@ -18,6 +18,8 @@ export type UseLobbyResult = {
   status: ReadStatus;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
+  /** Alguna de las dos queries (publicación o lobby) está pidiendo: para deshabilitar "Reintentar". */
+  isFetching: boolean;
   nextPageError: unknown;
   stalled: boolean;
   lowerBound: LobbyLowerBound | null;
@@ -103,6 +105,7 @@ export function useLobby(): UseLobbyResult {
     status,
     hasNextPage: query.hasNextPage && !stalled,
     isFetchingNextPage: query.isFetchingNextPage,
+    isFetching: publish.isFetching || query.isFetching,
     nextPageError,
     stalled,
     lowerBound: lastPage?.lowerBound ?? null,

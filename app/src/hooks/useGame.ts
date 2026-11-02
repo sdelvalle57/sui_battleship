@@ -10,7 +10,16 @@ import { useAppConfig } from './useAppConfig';
 /** Resultado de `useGame`: ID inválido (sin consulta) o la lectura de la partida con su estado. */
 export type UseGameResult =
   | { kind: 'invalid_id' }
-  | { kind: 'read'; id: string; game: Game | null; previousTransaction: string | null; status: ReadStatus; refetch: () => void };
+  | {
+      kind: 'read';
+      id: string;
+      game: Game | null;
+      previousTransaction: string | null;
+      status: ReadStatus;
+      /** La query está pidiendo: para deshabilitar "Reintentar". */
+      isFetching: boolean;
+      refetch: () => void;
+    };
 
 /**
  * Partida por un ID crudo de la URL: se valida y normaliza en el borde (D12, SEG-9); inválido ⇒ `invalid_id` sin
@@ -35,6 +44,7 @@ export function useGame(rawId: string): UseGameResult {
     game: query.data?.game ?? null,
     previousTransaction: query.data?.previousTransaction ?? null,
     status: deriveReadStatus(query),
+    isFetching: query.isFetching,
     refetch: () => {
       void query.refetch();
     },
