@@ -12,7 +12,7 @@
 | **MID** | Del issue genera **plan** y **handoffs** (sin paso de spec), cada uno con historia de usuario. Revisa cada reporte de task del DEV contra `documents/ESTANDARES.md` antes de autorizar el siguiente handoff. No ejecuta gates. Genera el doc de smoke cuando aplica (§M5 de `agentes/AGENTE_MID.md`). |
 | **DEV** | Implementa tasks según handoffs, ejecuta los gates (es el único que corre `sui move build/test`, lint, Vitest, build), reporta con la plantilla §5. |
 | **Orquestador** | Sesión principal de Claude Code (`agentes/ORQUESTADOR.md`): pasa artefactos entre roles, crea branches, commitea, pushea, abre PRs y los mergea (D-20261030-09). |
-| **Usuario (owner)** | Decide STOPs y escalaciones, custodia keystore/`HouseCap`/`UpgradeCap`, publica en testnet (o autoriza cada publicación), corre los pasos de smoke que exigen su wallet. |
+| **Usuario (owner)** | Decide STOPs y escalaciones, custodia keystore/`HouseCap`/`UpgradeCap`, publica en testnet desde su terminal con su `SUI_CONFIG_DIR` propio (D-20261102-03), corre los pasos de smoke que exigen su wallet. |
 
 | Acción | MAYOR | MID | DEV | Orquestador | Usuario |
 |---|---|---|---|---|---|
@@ -22,7 +22,7 @@
 | Escribir código | ⬜ | ⬜ | ✅ | ⬜ | ⬜ |
 | Branches / commits / pushes / PRs | ⬜ | propone mensajes y body | ⬜ | ✅ (D-20261030-05) | ✅ |
 | Merges | ⬜ | ⬜ | ⬜ | ✅ (D-20261030-09) | ✅ |
-| Publicar en testnet | ⬜ | ⬜ | ⬜ | solo con autorización explícita | ✅ |
+| Publicar en testnet | ⬜ | ⬜ | ⬜ | ⬜ (D-20261102-03) | ✅, con su `SUI_CONFIG_DIR` propio |
 | Aprobar plan / PR | ✅ | ⬜ | ⬜ | ⬜ | ✅ |
 
 **Lectura obligatoria al arrancar (los tres agentes):**
