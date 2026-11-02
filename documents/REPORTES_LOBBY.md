@@ -105,3 +105,32 @@ Desviaciones 1–6 aceptadas (la 3 es mejor que lo pedido; la 5 se apoya en `Tra
 
 ### Siguiente paso
 TASK-4 arranca con la v1.3 (recordatorios: hallazgo 1 y MINOR-1 del MAYOR en `useLobby`).
+
+## Task completado: HANDOFF_LOBBY (v1.3) — TASK-4 (hooks y política en el `QueryClient`)
+
+> Reporte del DEV transcrito por el orquestador (resumido; conteos y exit codes literales; rutas con placeholders).
+
+- Branch @ `3383f7b`, sin commits. **Creados:** `hooks/queryKeys.ts`, `hooks/useLobby.ts` (+ `usePublishCheckpoint`) y test, `hooks/useGame.ts` y test, `hooks/useTransactionTime.ts` y test (cubre `useCheckpointTime`), `hooks/useCheckpointTime.ts`, `providers/AppProviders.test.tsx`, `test/queryHarness.tsx`. **Modificados:** `useNodeStatus.ts`/test, `AppProviders.tsx`, `sui/nodeInfo.ts` (`NodeStatus` + `deriveNodeStatus`) y su test.
+- `queryKeys` `['sui', red, recurso…]` (bigint como string); `QueryClient({ retry: shouldRetryRead, retryDelay: readRetryDelay })`; `NodeStatus` con `retrying` (prioridad sobre `offline`).
+- `useLobby`: `useInfiniteQuery` habilitada con la publicación resuelta (valor o `null`), sin intervalo ni refetch al foco; aplana, deduplica y marca `isMine` (`sameAddress`); **estado combinado con la publicación (MINOR-1 del MAYOR)**; `nextPageError` y `stalled`; `refresh` = refetch de la publicación si falló + `resetQueries`. `useGame` (ID inválido ⇒ `invalid_id` sin consulta; 15 s), `useTransactionTime`/`useCheckpointTime` (`staleTime: Infinity`; sin consulta con `null`/`''`, hallazgo 1 de TASK-3).
+- **Tests:** `useGame` 8 (incluye **`cancelQueries` aborta la señal del SDK**), `useLobby` 12 (publicación: espera, podada, `NotYetCheckpointedError` ⇒ `retrying`, `INVALID_ARGUMENT` ⇒ `error` sin `listEvents`, `UNAVAILABLE` ×3 ⇒ `error` y `refresh` recupera; páginas: primera, sin foco/intervalo, `loadMore` con `endCursor` y dedupe, `refresh` a una página, `isMine`, ilegibles, `stalled`), `useTransactionTime` 6, `useNodeStatus` 7 (**`cancelQueries` reemplaza el test débil**; `ok` ⇒ `retrying` 2/3 ⇒ 3/3 ⇒ `offline`), `nodeInfo` 19, `AppProviders` 1.
+- **Gates (Node v26.13.0):** `npm ci` 0; firmas 292; audit prod 0; lint 0; typecheck 0; `Test Files 25 passed (25)` / `Tests 342 passed (342)`; build testnet 0 (`827.42 kB │ gzip 252.00 kB`); `contracts/`, `package*`, `eslint.config.js` sin delta. Claves solo de `queryKeys.ts`; sin `useEffect` en `hooks/`/`providers/`; un solo `new QueryClient` de producción.
+- **Desviaciones:** (1) `queryKeys.publishCheckpoint` propia (no `txInfo`: datos distintos en caché); (2) `skipToken` en vez de `enabled: false`; (3) arnés compartido `queryHarness.tsx`; (4) formas de resultado de los hooks; (5) al cargar más, el `status` del lobby queda `ready` (estado propio de la página siguiente); (6) test extra de `AppProviders`.
+- **Riesgos:** `NetworkBadge` todavía no muestra `retrying` (sin texto de estado durante un reintento) → TASK-5; bundle 827.42 kB.
+
+## Revisión TASK-4: PASA
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió gates.
+
+Confirmado: una sola política (`AppProviders.tsx`; ningún hook sobrescribe `retry`; arnés con la misma política; test de `AppProviders`); claves solo de `queryKeys.ts`; `useLobby` combina el estado de la publicación (`enabled: publish.isSuccess`, `null` carga, `status` propio de la publicación, `refresh` la reintenta) — MINOR-1 cerrado; **`cancelQueries` prueba la propagación de verdad** (señal `false` → `true` con `advance(0)`, antes del corte) en `useNodeStatus` y `useGame` — LIM-11 de #9 cerrado; lobby sin intervalo ni foco, detalle 15 s (DL-4); reintento visible; `useGame` valida en el borde; hora sin consulta con `null`/`''` (hallazgo 1 de TASK-3 cerrado); sin `useEffect`.
+
+Desviaciones 1–6 aceptadas (1: clave `publishCheckpoint` es la decisión correcta; 5: lista sigue `ready` y el error de la página siguiente sale por `nextPageError`/`stalled`). `NetworkBadge` sin `retrying` hasta TASK-5: aceptado (estado interno de la branch; obligatorio en TASK-5).
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | Docs | `app/README.md` "Indicador de red" (#9) | Latencias ≤ ~27/67 s ya no valen (ahora ~23 s caído, ~53 s colgado, con "reintentando (n/3)") | TASK-6 |
+| 2 | UX (menor) | `readStatus.ts` + `useLobby.ts:113-116` | Tras `refresh`, el primer intento sigue mostrando `error` | Opcional en TASK-5: deshabilitar "Reintentar" mientras pide |
+| 3 | Info | `useLobby.ts:93-96` | Reintentos de "cargar más" no se ven como `retrying` | Aceptado; TASK-5 usa `isFetchingNextPage` |
+
+### Recordatorios para TASK-5
+`NetworkBadge` con `retrying` (obligatorio, con test); fecha del piso con `useCheckpointTime(lowerBound.checkpoint)` (aproximación ≤ ~1 h aceptada; sin fecha si la hora no llega; `publish` sin fecha); con `stalled` no se ofrece "Buscar más atrás"; errores por `readErrorMessage`; filas `unreadable` visibles; hora podada "—"; "Última actividad" (nunca "la resolvió"); montos con `resolutionAmounts`; DL-11; opcional hallazgo 2. **Para TASK-6:** hallazgo 1, hallazgo 2 de TASK-3 (revisar `TransactionErrorReason`/`ObjectErrorReason` al subir `@mysten/*`) y la nota de `client.listEvents` en testnet.
