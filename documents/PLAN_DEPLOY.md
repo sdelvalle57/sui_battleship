@@ -1,6 +1,6 @@
 # PLAN_DEPLOY v2
 > Issue: #7 (+ #8 publicación en testnet, #9 consumidor del formato) | Áreas: contracts (tooling), ci, docs | Fecha: 2026-11-02
-> Branch: `feature/issue-7-deployments` (al día con `master` @ `8c67221`) | Autor: MID | Estado: **v2 para re-revisión del MAYOR**
+> Branch: `feature/issue-7-deployments` (al día con `master` @ `8c67221`) | Autor: MID | Estado: **v2.1 — APROBADO por el MAYOR** (revisión v2; v2-1..v2-6 se aplican en `documents/HANDOFF_DEPLOY.md`, v2-7 aquí)
 > Decisiones del usuario: **D-20261102-01** (STOP-1..5 = (a)) y **D-20261102-03** (clave del owner en un `SUI_CONFIG_DIR`
 > propio, `~/.sui/` sin claves para siempre, confirmación por terminal solo como freno contra accidentes, ningún agente en
 > el camino testnet, publicación de una copia en la localnet aislada autorizada). Revisión aplicada:
@@ -46,7 +46,7 @@ json en un upgrade); `update_fee_rate` post-publicación (#8: el script solo imp
 - `documents/ESTANDARES.md:71` (PROY-11): `Published.toml` se commitea, `Pub.*.toml` nunca. `ESTANDARES.md:19`
   (ARQ-6): una sola fuente del contrato. STATUS H11 (`documents/STATUS.md:79`): `Published.toml` vs
   `deployments/<red>.json` (resuelto por D3) y la nota "#8: el owner agrega su clave a este mismo `client.yaml`",
-  que **reemplaza D-20261102-03** (TASK-3 la corrige).
+  que **D-20261102-03 reemplaza** (TASK-3 la corrige).
 - `contracts/README.md:147-151` ("ID de la House"): promete registrar la House y el `HouseCap` (coherente con D1).
 - `contracts/sources/house.move:82-93` (`init`): comparte la House, envía el `HouseCap` al publicador y, vía
   `claim_and_keep`, un `0x2::package::Publisher`. La House se crea en `init`: **no hay paso de inicialización
@@ -414,7 +414,7 @@ Sin STOPs abiertos.
   agente ejecuta `publish` fuera de la localnet aislada** (D4).
 - **Criterio de aceptación:** `node --test scripts/*.test.mjs` y `node scripts/publish.mjs check` en verde (output
   pegado). **Ninguna ejecución de `publish` con la config de `~/.sui/` ni contra testnet**: el camino testnet se prueba
-  solo con las funciones puras (abajo) y con el paso 8 del smoke. Gates de contratos sin delta (83 tests), `Move.lock`
+  solo con las funciones puras (abajo; `checkNetworkGuard` cubre el alias distinto, v2-1). Gates de contratos sin delta (83 tests), `Move.lock`
   intacto, YAML válido (`python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' .github/workflows/ci.yml`),
   `stat`/`ls` de `~/.sui/sui_config/` idénticos antes y después del task; CI del PR en verde.
 - **Tests esperados:** `runSui` (siempre `input === 'n\n'` y `shell: false` vía el `spawn` inyectado; rechaza `-y`,
@@ -477,9 +477,8 @@ Localnet **aislada** (`agents.md` §3) con el script; todo `publish.mjs publish`
 | 5 | `update_fee_rate` con el comando impreso (bps 250) y relectura | `FeeRateUpdated`, `fee_rate` 250 |
 | 6 | Repetir el paso 3 | falla ("already published", C2/C4) sin escribir el json; stderr mostrado con IDs/direcciones como `0x…` |
 | 7 | `record --network localnet --from <temporal>/publish-output.json --out "$SMOKE_DIR/localnet2.json"` | lee `meta.json`; idéntico al del paso 3 (`cmp`) |
-| 8 | `publish --network testnet --dry-run` (env activo `localnet`, config aislada) | falla en la guarda 3 por `active-env` ≠ `testnet`, **sin** `chain-identifier` ni transacción |
-| 9 | `env -u SUI_CONFIG_DIR "$NODE" scripts/publish.mjs publish --network localnet --pubfile-path …` | falla en la guarda 2, sin invocar `sui` |
-| 10 | Cierre (§3 paso 7) | `~/.sui/sui_config/` idéntico; sin `Pub.*.toml`/`Published.toml`/`localnet.json` en el repo; lock sin delta |
+| 8 | `env -u SUI_CONFIG_DIR "$NODE" scripts/publish.mjs publish --network localnet --pubfile-path …` | falla en la guarda 2, sin invocar `sui` |
+| 9 | Cierre (§3 paso 7) | `~/.sui/sui_config/` idéntico; sin `Pub.*.toml`/`Published.toml`/`localnet.json` en el repo; lock sin delta |
 
 El reporte pega el json del paso 3 (IDs de localnet) y los outputs del script, nunca la salida cruda.
 
