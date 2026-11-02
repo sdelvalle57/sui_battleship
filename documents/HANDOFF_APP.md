@@ -1,6 +1,13 @@
 # HANDOFF_APP
 > Plan: PLAN_APP v2 (aprobado por el MAYOR, "Revisión v2" de `documents/REVISION_PLAN_APP.md`) | Issue: #9 |
-> Branch: `feature/issue-9-app` | Worktree: **`/home/santiago/Projects/Battleship-issue9`** | Versión: **v2** | Fecha: 2026-11-02
+> Branch: `feature/issue-9-app` | Worktree: **`/home/santiago/Projects/Battleship-issue9`** | Versión: **v2.1** | Fecha: 2026-11-02
+>
+> **Changelog:** v2.1 — Revisión MAYOR v2: APPROVE (2026-11-02), MINOR-1/2 y NIT-1/2 incorporados (TASK-6: timeout y abort
+> en `fetchNodeInfo`, sin casts del cliente, `hooks/` sin capas superiores; smoke: pasos 0 y 16 sobre
+> `contracts/deployments/localnet.json`). Evidencia del MAYOR (por `curl` público, sin claves): testnet responde al
+> preflight gRPC-web con 200 y `access-control-allow-origin: *`; `GetServiceInfo` da 200 con
+> `access-control-expose-headers: *`; un método inexistente (`NoExiste`) devuelve `grpc-status: 12`. Los pasos 6-7 del
+> smoke lo confirman desde el navegador. · v2 — Tramo B (`64618a2`). · v1/v1.1 — Tramo A.
 >
 > **v2 = Tramo B** (TASK-5, TASK-6, TASK-7 y el smoke). El Tramo A (TASK-1..4) está cerrado: sus revisiones PASA y sus
 > pendientes viven en `documents/REPORTES_APP.md` y se incorporan aquí. Texto completo de la v1 (Tramo A):
@@ -210,16 +217,18 @@ apostar.
    |---|---|
    | base `src/**/*.{ts,tsx}` | `{ regex: '^@mysten/(?!dapp-kit-react/ui$)', message: SDK_LAYER_MESSAGE }` (reemplaza `paths` + `group`) |
    | `src/sui/**` | `{ regex: '^@mysten/(?!sui(/|$)|dapp-kit-core(/|$))', … }` + el `group` actual de React y capas superiores |
-   | `src/hooks/**` | `{ regex: '^@mysten/(?!sui(/|$)|dapp-kit-react$)', … }` |
+   | `src/hooks/**` | `{ regex: '^@mysten/(?!sui(/|$)|dapp-kit-react$)', … }` + `group` de capas superiores: `../components/*`, `../pages/*`, `../providers/*` y sus variantes `**/components/**`, `**/pages/**`, `**/providers/**` (NIT-2: los hooks no conocen la UI ni los providers; el `ConfigContext` vive en un módulo de `hooks/`, p. ej. `hooks/configContext.ts`, que `providers/` importa) |
    | `src/providers/**` | `{ regex: '^@mysten/(?!dapp-kit-react$)', … }` |
 
    Si la versión instalada de ESLint no admite `regex` en `patterns`, STOP (no se inventa otra sintaxis).
 2. **`app/src/sui/nodeInfo.ts`:**
    ```ts
    export const NODE_STATUS_REFETCH_MS = 20_000;
+   export const NODE_STATUS_TIMEOUT_MS = 10_000;   // un intento colgado se corta y cuenta como error (MINOR-1)
    export type NodeInfo = { chainId: string; checkpointHeight: bigint | null };  // chainId = 8 hex
-   /** Consulta viva (sin caché del SDK): ledgerService.getServiceInfo({}). Lanza si falta chainId o si no es base58. */
-   export async function fetchNodeInfo(client: SuiGrpcClient): Promise<NodeInfo>;
+   /** Consulta viva (sin caché del SDK) con corte por tiempo: ledgerService.getServiceInfo({}, { abort }).
+    *  Lanza si falta chainId, si no es base58, si se aborta o si vence el timeout. */
+   export async function fetchNodeInfo(client: SuiGrpcClient, signal?: AbortSignal): Promise<NodeInfo>;
    export type NodeStatus =
      | { kind: 'loading' }
      | { kind: 'ok'; checkpointHeight: bigint | null }
@@ -229,7 +238,13 @@ apostar.
    export function deriveNodeStatus(q: { isPending: boolean; isError: boolean; error: unknown; data: NodeInfo | undefined },
                                     expectedChainId: string): NodeStatus;
    ```
-   `fetchNodeInfo`: `const { response } = await client.ledgerService.getServiceInfo({});` → si `!response.chainId`, lanza
+   `fetchNodeInfo` (MINOR-1: sin corte, un nodo que acepta la conexión y no responde deja la query colgada, el
+   `refetchInterval` no lanza otra y el badge sigue en "nodo OK" con el dato viejo):
+   `const abort = signal ? AbortSignal.any([signal, AbortSignal.timeout(NODE_STATUS_TIMEOUT_MS)]) : AbortSignal.timeout(NODE_STATUS_TIMEOUT_MS);`
+   y `const { response } = await client.ledgerService.getServiceInfo({}, { abort });` (misma forma que usa el SDK en
+   `listEvents`, `node_modules/@mysten/sui/dist/grpc/core.mjs:384-386`; `abort?: AbortSignal` en las `RpcOptions` de
+   `@protobuf-ts/runtime-rpc`). Si con los timers falsos de Vitest `AbortSignal.timeout` no avanza en jsdom, armar el
+   corte con un `AbortController` + `setTimeout` limpiado en `finally` (equivalente) y declararlo. Luego: si `!response.chainId`, lanza
    `Error('El nodo no informó su chain id')`; `shortChainId(response.chainId)` sin `try/catch` (si lanza, es **error del
    intento** → `offline`); `checkpointHeight: response.checkpointHeight ?? null`. `reason` de `offline` = `error.message`
    si es `Error`, si no `String(error)`.
@@ -254,7 +269,7 @@ apostar.
    `import type { AppDAppKit } from '../sui/dappKit'`. Si con eso `useCurrentClient()` no tipa como `SuiGrpcClient`,
    augmentar `'@mysten/dapp-kit-core'` (sin importarlo: solo `declare module`) y declararlo.
 5. **Hooks** (`app/src/hooks/`): `useAppConfig()` (lee `ConfigContext`; lanza si no hay provider); `useNodeStatus()` =
-   `useQuery({ queryKey: ['sui', config.network, 'nodeInfo'], queryFn: () => fetchNodeInfo(client), refetchInterval:
+   `useQuery({ queryKey: ['sui', config.network, 'nodeInfo'], queryFn: ({ signal }) => fetchNodeInfo(client, signal), refetchInterval:
    NODE_STATUS_REFETCH_MS })` con `client = useCurrentClient()` y `deriveNodeStatus(query, config.chainId)`;
    `useWalletAccount()` = `useCurrentAccount()` → `{ address: string | null; short: string | null }` (`shortAddress`).
    Sin `useEffect` para datos (PROY-14).
@@ -277,7 +292,7 @@ apostar.
 
 ### 4. Archivos
 - **Crear:** `app/src/sui/{nodeInfo.ts,nodeInfo.test.ts,dappKit.ts,dappKit.test.ts}`,
-  `app/src/providers/AppProviders.tsx`, `app/src/hooks/{useAppConfig.ts,useNodeStatus.ts,useNodeStatus.test.tsx,useWalletAccount.ts}`,
+  `app/src/providers/AppProviders.tsx`, `app/src/hooks/{configContext.ts,useAppConfig.ts,useNodeStatus.ts,useNodeStatus.test.tsx,useWalletAccount.ts}`,
   `app/src/components/{Header.tsx,Header.test.tsx,NetworkBadge.tsx,NetworkBadge.test.tsx,AccountBadge.tsx,AccountBadge.test.tsx}`,
   `app/src/pages/{HomePage.tsx,NotFoundPage.tsx}`.
 - **Modificar:** `app/src/App.tsx`, `app/src/App.test.tsx`, `app/src/main.tsx`, `app/eslint.config.js`.
@@ -287,12 +302,17 @@ apostar.
 ### 5. Tests obligatorios
 - `nodeInfo.test.ts` (cliente falso con `ledgerService.getServiceInfo` mockeado): `chainId` base58 de testnet
   (`69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD`) → `4c78adac` y `checkpointHeight` bigint; sin `chainId` → rechaza;
-  **base58 inválido** (p. ej. `'0OIl'`) → rechaza; `deriveNodeStatus`: pending → loading; data igual → ok; data distinta →
+  **base58 inválido** (p. ej. `'0OIl'`) → rechaza; **nodo colgado** (MINOR-1): un `getServiceInfo` mockeado que nunca
+  resuelve por sí solo y rechaza cuando se dispara `options.abort` → con `vi.useFakeTimers()` y
+  `advanceTimersByTimeAsync(NODE_STATUS_TIMEOUT_MS)`, `fetchNodeInfo` rechaza; el mock recibió un `abort` definido; un
+  `signal` externo ya abortado también rechaza; `deriveNodeStatus`: pending → loading; data igual → ok; data distinta →
   wrong_chain con `expected`/`actual`; error → offline con `reason`; **error con data previa → offline**.
 - `useNodeStatus.test.tsx` (wrapper con `QueryClient({ defaultOptions: { queries: { retry: false } } })`,
   `vi.useFakeTimers()`, `useCurrentClient`/`useAppConfig` mockeados): 1.er poll OK → `ok`; tras
   `advanceTimersByTimeAsync(NODE_STATUS_REFETCH_MS)` con el 2.º poll en error → `offline`; un poll posterior con otro
-  chain id → `wrong_chain`; un poll con base58 inválido → `offline`.
+  chain id → `wrong_chain`; un poll con base58 inválido → `offline`; **un poll colgado** (mock que solo rechaza al
+  abortarse) después de uno OK → tras `advanceTimersByTimeAsync(NODE_STATUS_REFETCH_MS + NODE_STATUS_TIMEOUT_MS)` el
+  estado es `offline`, no `ok` con el dato viejo.
 - `dappKit.test.ts`: con `createDAppKit` mockeado (`vi.mock('@mysten/dapp-kit-core')`), verifica `networks`,
   `enableBurnerWallet` (true/false según config), `slushWalletConfig: null` solo en localnet y que `createClient` crea un
   `SuiGrpcClient` con `config.grpcUrl`.
@@ -312,13 +332,20 @@ No en este task. El comportamiento en navegador (wallet, "nodo OK", POST gRPC-we
    (a) `src/components/LintProbe.tsx` → `@mysten/bcs`; (b) `src/sui/lintProbe.ts` → `import '../hooks/useAppConfig'`;
    (c) `src/components/LintProbe.tsx` → `@mysten/dapp-kit-react` (raíz); (d) `src/sui/lintProbe.ts` →
    `@mysten/dapp-kit-react/ui`; (e) `src/providers/LintProbe.tsx` → `@mysten/sui/grpc`; (f) `src/hooks/lintProbe.ts` →
-   `@mysten/dapp-kit-core`; (g) `src/features/LintProbe.ts` → `@mysten/sui`; (h) `src/sui/lintProbe.ts` → `react`.
-   Todas fallan. Y pasan (exit 0): `@mysten/dapp-kit-react/ui` en `components/`, `@mysten/sui/grpc` en `sui/` y `hooks/`,
+   `@mysten/dapp-kit-core`; (g) `src/features/LintProbe.ts` → `@mysten/sui`; (h) `src/sui/lintProbe.ts` → `react`;
+   (i) `src/hooks/lintProbe.ts` → `import '../components/Header'`; (j) `src/hooks/lintProbe.ts` →
+   `import '../providers/AppProviders'` (i y j: NIT-2). Todas fallan. Y pasan (exit 0): `@mysten/dapp-kit-react/ui` en `components/`, `@mysten/sui/grpc` en `sui/` y `hooks/`,
    `@mysten/dapp-kit-react` en `hooks/` y `providers/`.
 3. `grep -rnE "@mysten/" app/src --include=*.tsx --include=*.ts | grep -vE "^app/src/(sui|hooks|providers)/"` → solo
    `@mysten/dapp-kit-react/ui` (y mocks de tests, declarados).
 4. `grep -rn "useEffect" app/src` sin usos para pedir datos; `grep -rn "getChainIdentifier" app/src` vacío.
 5. Sin dependencias nuevas (`git diff --exit-code -- package.json app/package.json package-lock.json`).
+6. **Sin casts del cliente ni del kit** en el código de producción de `hooks/` y `providers/` (NIT-1):
+   `grep -rnE " as (SuiGrpcClient|AppDAppKit|unknown)\b|<SuiGrpcClient>" app/src/hooks app/src/providers | grep -v '\.test\.'`
+   → vacío. Así el typecheck demuestra que el registro de `Register` hace que `useCurrentClient()` devuelva
+   `SuiGrpcClient` y que `DAppKitProvider` acepte la instancia.
+7. `grep -n "NODE_STATUS_TIMEOUT_MS\|abort" app/src/sui/nodeInfo.ts` muestra el corte por tiempo y el `abort` pasado a
+   `getServiceInfo`; el `queryFn` de `useNodeStatus` pasa el `signal` de TanStack.
 
 ### 8. Al terminar
 Reporte §5. Desviaciones esperables (declarar): punto de entrada de `RouterProvider`; módulo augmentado para
