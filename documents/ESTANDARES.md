@@ -1,6 +1,6 @@
 # Estándares del Proyecto — Arquitectura, Seguridad y Limpieza (Sui Battleship)
 
-> **Versión:** 1.6 · **Fecha:** 2026-10-31 (adaptado de Cancerbero — D-20261030-01; PROY-17: `.nvmrc` = 26 por D-20261030-10; SEG-2 y PROY-9 por D-20261030-11; PROY-10 por D-20261030-11 y D-20261030-12, #4; PROY-17 y PROY-18 por D-20261030-13, #3; PROY-7, PROY-8 y PROY-10 por D-20261030-15, #5; PROY-5 y PROY-7 por D-20261030-16, #6)
+> **Versión:** 1.7 · **Fecha:** 2026-11-02 (adaptado de Cancerbero — D-20261030-01; ARQ-6 por D-20261102-01, #7; PROY-17: `.nvmrc` = 26 por D-20261030-10; SEG-2 y PROY-9 por D-20261030-11; PROY-10 por D-20261030-11 y D-20261030-12, #4; PROY-17 y PROY-18 por D-20261030-13, #3; PROY-7, PROY-8 y PROY-10 por D-20261030-15, #5; PROY-5 y PROY-7 por D-20261030-16, #6)
 > Fuente única de verdad. El DEV implementa contra estas reglas; el MID y el MAYOR revisan contra ellas.
 > Toda regla tiene ID: los hallazgos se citan como `SEG-4 violado en contracts/sources/game.move:120`.
 > §4 (reglas PROY) tiene prioridad sobre §1–§3.
@@ -16,7 +16,7 @@
 - **ARQ-3 — Efectos inyectables.** RPC, wallet, reloj y aleatoriedad se acceden por dependencias sustituibles en test (cliente Sui por provider/parámetro; `Random`/`Clock` como parámetros de la función Move, nunca implícitos).
 - **ARQ-4 — Un patrón por preocupación.** Errores (abort codes ↔ mensajes), eventos, formato de montos y consultas se manejan igual en todo el repo. Un patrón nuevo requiere aprobación del MAYOR.
 - **ARQ-5 — Sin dependencias circulares** entre módulos Move ni entre carpetas de la app.
-- **ARQ-6 — Contrato en un solo lugar.** El paquete Move es la fuente; la app lo consume desde `app/src/sui/` y `contracts/deployments/<red>.json` (agents.md §5). Cambiarlo exige plan de migración en el plan.
+- **ARQ-6 — Contrato en un solo lugar.** El paquete Move es la fuente; la app lo consume desde `app/src/sui/` y `contracts/deployments/<red>.json` (agents.md §5). `Published.toml` (CLI) es la fuente de las direcciones del paquete; `deployments/<red>.json` se deriva con `contracts/scripts/publish.mjs` y la CI verifica la coherencia (D-20261102-01). Cambiarlo exige plan de migración en el plan.
 - **ARQ-7 — Sin abstracción prematura.** Las abstracciones nacen del segundo o tercer uso real. Sin refactors oportunistas fuera del task.
 - **ARQ-8 — Config solo en el borde.** Red y IDs se leen en un único módulo de config de la app (`import.meta.env` + `deployments/*.json`); ningún componente lee env ni hardcodea IDs.
 - **ARQ-9 — Datos vs comportamiento.** Structs Move y tipos TS transportan datos; las transiciones de estado viven en funciones del módulo dueño del struct.

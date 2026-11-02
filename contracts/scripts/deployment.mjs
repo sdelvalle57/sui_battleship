@@ -35,7 +35,8 @@ export const DEPLOYMENT_FIELDS = Object.freeze([
  */
 export const OPTIONAL_FIELDS = Object.freeze({});
 
-const NETWORKS = Object.freeze(['localnet', 'testnet']);
+/** Redes admitidas por el json y el script; mainnet está fuera de alcance sin decisión registrada. */
+export const NETWORKS = Object.freeze(['localnet', 'testnet']);
 const ID_RE = /^0x[0-9a-f]{64}$/;
 const HEX_RE = /^[0-9a-fA-F]+$/;
 const CHAIN_ID_RE = /^[0-9a-f]{8}$/;

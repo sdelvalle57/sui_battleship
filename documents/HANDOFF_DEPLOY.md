@@ -340,7 +340,7 @@ el módulo es el punto de entrada.
   - `checkConsistency` da diferencias.
 
 **3.2 `contracts/scripts/fixtures/localnet.deployment.json`** (contrato de formato para #9, ruta fija):
-- `node scripts/publish.mjs record --network localnet --from scripts/fixtures/localnet-publish.json --source-commit <SHA de HEAD al generarlo> --sui-cli-version 1.83.0-16d2dc1e05ed --framework-rev 719fb2960ccfbf9f4d33041f8ea5146d30671696 --out scripts/fixtures/localnet.deployment.json`
+- `node scripts/publish.mjs record --network localnet --from scripts/fixtures/localnet-publish.json --source-commit <SHA de HEAD al generarlo> --sui-cli-version 1.83.0-16d2dc1e05ed --framework-rev 719fb2960ccfbf9f4d33041f8ea5146d30671696 --chain-id 87818ef5 --out scripts/fixtures/localnet.deployment.json`
   (sin `meta.json` junto al fixture ⇒ se usan los flags);
 - el test compara `buildDeployment` del fixture con esos tres valores contra este archivo.
 

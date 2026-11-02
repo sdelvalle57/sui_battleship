@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import {
+  NETWORKS,
   buildDeployment,
   chainIdError,
   checkConsistency,
@@ -30,9 +31,6 @@ import {
 /** Raíz del paquete Move; la CLI y git corren siempre aquí, sin importar desde dónde se invoque el script. */
 export const CONTRACTS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Redes que el script acepta; mainnet está fuera de alcance sin decisión registrada. */
-export const NETWORKS = Object.freeze(['localnet', 'testnet']);
-
 /** Exit codes: 0 ok, 1 guarda o validación, 2 uso inválido (subcomando u opción). */
 export const EXIT = Object.freeze({ OK: 0, FAILURE: 1, USAGE: 2 });
 
@@ -44,6 +42,7 @@ const FAILED_TX_DIGEST_RE = /Error executing transaction '([1-9A-HJ-NP-Za-km-z]{
 const RETRY_ADVICE =
   'No reintentes sin buscar antes el digest; si la transacción existe: `sui client --json tx-block <digest>` + ' +
   '`record` (si falta `Published.toml`, STOP de #8).';
+const MISSING_PUBLISHED_TOML_ADVICE = 'Si falta `Published.toml` (testnet), es STOP de #8.';
 
 /** Error de uso (subcomando u opción inválidos): sale con `EXIT.USAGE`. */
 export class UsageError extends Error {}
@@ -316,8 +315,7 @@ export function confirmationRequired({ network, dryRun }) {
   return network === 'testnet' && !dryRun;
 }
 
-/** Texto de la confirmación de testnet. */
-export const CONFIRMATION_PROMPT =
+const CONFIRMATION_PROMPT =
   'Freno contra accidentes; la autorización es la del owner (D-20261030-09). ' +
   `Escribe "${CONFIRMATION_WORD}" para publicar: `;
 
@@ -334,27 +332,51 @@ export function checkConfirmation({ isTTY, answer }) {
 /**
  * Mensaje ante un fallo de la CLI o una salida que no se puede interpretar. Nunca incluye el stdout (contiene la
  * dirección del publicador, C9): solo la ruta del archivo, el digest si está en stderr (C8) y el stderr redactado.
- * @param {{ reason: string, stderr: string, dir: string, outputPath: string }} args
+ * El consejo de no reintentar solo aplica tras invocar una publicación real (`afterPublish`): un dry run o `record`
+ * no envían transacciones.
+ * @param {{ reason: string, stderr: string, dir: string|null, outputPath: string, afterPublish?: boolean }} args
  * @returns {string}
  */
-export function formatCliFailure({ reason, stderr, dir, outputPath }) {
-  const lines = [`Error: ${reason}`, `Salida completa (sin mostrar): ${outputPath}`, `Directorio temporal: ${dir}`];
+export function formatCliFailure({ reason, stderr, dir, outputPath, afterPublish = false }) {
+  const lines = [`Error: ${reason}`, `Salida completa (sin mostrar): ${outputPath}`];
+  if (dir) lines.push(`Directorio temporal: ${dir}`);
   const digest = FAILED_TX_DIGEST_RE.exec(stderr)?.[1];
   if (digest) lines.push(`Digest de la transacción: ${digest}`);
   if (stderr.trim() !== '') lines.push('stderr de la CLI (direcciones ocultas):', redactAddresses(stderr).trimEnd());
-  lines.push(RETRY_ADVICE);
+  if (afterPublish) lines.push(RETRY_ADVICE);
   return lines.join('\n');
+}
+
+/**
+ * Mensaje ante un error **después** de una publicación exitosa (json inválido, escritura, `Published.toml` ausente o
+ * incoherente): la transacción ya existe, así que se indica el directorio con la salida y cómo rearmar el json con
+ * `record` sin republicar.
+ * @param {{ reason: string, network: string, digest: string, dir: string, outputPath: string }} args
+ * @returns {string}
+ */
+export function formatPostPublishFailure({ reason, network, digest, dir, outputPath }) {
+  return [
+    `Error: ${redactAddresses(reason)}`,
+    `La publicación ya se ejecutó (digest ${digest}): no republiques.`,
+    `Salida completa (sin mostrar): ${outputPath}`,
+    `Directorio temporal: ${dir}`,
+    'Para rearmar el json sin republicar (usa el meta.json de ese directorio): ' +
+      `node scripts/publish.mjs record --network ${network} --from ${outputPath}`,
+    MISSING_PUBLISHED_TOML_ADVICE,
+  ].join('\n');
 }
 
 /**
  * Interpreta el resultado de una publicación o dry run: estado, JSON y forma (A4). Cualquier fallo devuelve el
  * mensaje de `formatCliFailure`, que nunca incluye el stdout.
  * @param {{ result: { status: number|null, stdout: string, stderr: string }, parse: (json: object) => unknown,
- *   dir: string, outputPath: string }} args
+ *   dir: string|null, outputPath: string, afterPublish?: boolean }} args
  * @returns {{ value: unknown } | { error: string }}
  */
-export function interpretCliRun({ result, parse, dir, outputPath }) {
-  const fail = (reason) => ({ error: formatCliFailure({ reason, stderr: result.stderr, dir, outputPath }) });
+export function interpretCliRun({ result, parse, dir, outputPath, afterPublish = false }) {
+  const fail = (reason) => ({
+    error: formatCliFailure({ reason, stderr: result.stderr, dir, outputPath, afterPublish }),
+  });
   if (result.status !== 0) return fail(`la CLI terminó con estado ${result.status}`);
   let json;
   try {
@@ -451,8 +473,9 @@ export function checkDeployments({ files, publishedTomlText }) {
       continue;
     }
     for (const error of validateDeployment(deployment)) errors.push(`deployments/${name}: ${error}`);
-    if (deployment?.network !== network) {
-      errors.push(`deployments/${name}: network (${deployment?.network}) no coincide con el nombre del archivo`);
+    if (deployment === null || typeof deployment !== 'object' || Array.isArray(deployment)) continue;
+    if (deployment.network !== network) {
+      errors.push(`deployments/${name}: network (${deployment.network}) no coincide con el nombre del archivo`);
     }
     const entry = published.get(network);
     if (!entry) {
@@ -491,14 +514,14 @@ function validatedOrThrow(deployment) {
 }
 
 // Ejecuta la CLI y guarda stdout/stderr crudos (0600) antes de interpretarlos, para no perder nunca una salida.
-function runAndKeep(sui, args, dir, prefix, parse) {
+function runAndKeep({ sui, args, dir, prefix, parse, afterPublish }) {
   const result = sui(args);
   const outputPath = path.join(dir, `${prefix}-output.json`);
   writePrivate(outputPath, result.stdout);
   writePrivate(path.join(dir, `${prefix}-stderr.txt`), result.stderr);
-  const interpreted = interpretCliRun({ result, parse, dir, outputPath });
+  const interpreted = interpretCliRun({ result, parse, dir, outputPath, afterPublish });
   if ('error' in interpreted) throw new Error(interpreted.error);
-  return interpreted.value;
+  return { value: interpreted.value, outputPath };
 }
 
 async function askConfirmation() {
@@ -568,7 +591,14 @@ async function commandPublish(values) {
   writePrivate(path.join(dir, 'meta.json'), `${JSON.stringify(meta, null, 2)}\n`);
 
   if (network === 'testnet' || dryRun) {
-    const dry = runAndKeep(sui, publishCliArgs({ network, pubfilePath, dryRun: true }), dir, 'dry-run', parseDryRunOutput);
+    const { value: dry } = runAndKeep({
+      sui,
+      args: publishCliArgs({ network, pubfilePath, dryRun: true }),
+      dir,
+      prefix: 'dry-run',
+      parse: parseDryRunOutput,
+      afterPublish: false,
+    });
     if (!dry.ok) throw new Error(`el dry run no dio success con un paquete, una House, un HouseCap y un UpgradeCap (${dir})`);
     const lockWarning = checkLockUnchanged({ network, before: lockBefore, after: fs.readFileSync(lockPath, 'utf8') });
     if (lockWarning) warn(lockWarning);
@@ -585,22 +615,33 @@ async function commandPublish(values) {
   }
 
   const lockBeforePublish = fs.readFileSync(lockPath, 'utf8');
-  const parsed = runAndKeep(sui, publishCliArgs({ network, pubfilePath, dryRun: false }), dir, 'publish', parsePublishOutput);
-  const deployment = validatedOrThrow(buildDeployment({ ...meta, parsed }));
-  writeDeployment(outPath, deployment);
-
-  if (network === 'testnet') {
-    const entry = parsePublishedToml(readTextOrNull(publishedTomlPath) ?? '').get('testnet');
-    if (!entry) throw new Error(`falta [published.testnet] en Published.toml (json escrito en ${outPath})`);
-    const differences = checkConsistency(deployment, entry);
-    if (differences.length > 0) {
-      throw new Error(`json escrito en ${outPath} pero no coincide con Published.toml:\n  ${differences.join('\n  ')}`);
+  const { value: parsed, outputPath } = runAndKeep({
+    sui,
+    args: publishCliArgs({ network, pubfilePath, dryRun: false }),
+    dir,
+    prefix: 'publish',
+    parse: parsePublishOutput,
+    afterPublish: true,
+  });
+  // Desde aquí la transacción ya existe: todo error indica el directorio y cómo rearmar el json con `record` (H2).
+  try {
+    const deployment = validatedOrThrow(buildDeployment({ ...meta, parsed }));
+    writeDeployment(outPath, deployment);
+    if (network === 'testnet') {
+      const entry = parsePublishedToml(readTextOrNull(publishedTomlPath) ?? '').get('testnet');
+      if (!entry) throw new Error(`falta [published.testnet] en Published.toml (json escrito en ${outPath})`);
+      const differences = checkConsistency(deployment, entry);
+      if (differences.length > 0) {
+        throw new Error(`json escrito en ${outPath} pero no coincide con Published.toml:\n  ${differences.join('\n  ')}`);
+      }
+    } else {
+      const lockWarning = checkLockUnchanged({ network, before: lockBeforePublish, after: fs.readFileSync(lockPath, 'utf8') });
+      if (lockWarning) warn(lockWarning);
     }
-  } else {
-    const lockWarning = checkLockUnchanged({ network, before: lockBeforePublish, after: fs.readFileSync(lockPath, 'utf8') });
-    if (lockWarning) warn(lockWarning);
+    info(formatSummary({ deployment, outPath, dir }));
+  } catch (error) {
+    throw new Error(formatPostPublishFailure({ reason: error.message, network, digest: parsed.digest, dir, outputPath }));
   }
-  info(formatSummary({ deployment, outPath, dir }));
 }
 
 function commandRecord(values) {
@@ -628,7 +669,7 @@ function commandRecord(values) {
     network: values.network,
   });
   const result = { status: 0, stdout: fs.readFileSync(fromPath, 'utf8'), stderr: '' };
-  const interpreted = interpretCliRun({ result, parse: parsePublishOutput, dir: path.dirname(fromPath), outputPath: fromPath });
+  const interpreted = interpretCliRun({ result, parse: parsePublishOutput, dir: null, outputPath: fromPath });
   if ('error' in interpreted) throw new Error(interpreted.error);
   const deployment = validatedOrThrow(buildDeployment({ ...meta, parsed: interpreted.value }));
   const outPath = path.resolve(values.out ?? defaultOut(meta.network));

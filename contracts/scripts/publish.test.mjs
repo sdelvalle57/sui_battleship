@@ -22,6 +22,7 @@ import {
   chainIdFromCli,
   confirmationRequired,
   formatCliFailure,
+  formatPostPublishFailure,
   formatSummary,
   interpretCliRun,
   isAllowedSuiArgs,
@@ -485,6 +486,14 @@ test('checkDeployments: testnet coherente con su [published.testnet]; una difere
   assert.match(errors[0], /^deployments\/testnet\.json: packageVersion \(2\) ≠ version/);
 });
 
+test('checkDeployments: json que no es un objeto ⇒ error legible, sin TypeError (H3)', () => {
+  const tomlText = asTestnetToml(PUBLISHED_TOML).replace(`chain-id = "${LOCALNET_CHAIN_ID}"`, `chain-id = "${TESTNET_CHAIN_ID}"`);
+  for (const text of ['null', '[]', '"testnet"']) {
+    const { errors } = checkDeployments({ files: [{ name: 'testnet.json', text }], publishedTomlText: tomlText });
+    assert.deepEqual(errors, ['deployments/testnet.json: el despliegue no es un objeto JSON'], text);
+  }
+});
+
 test('checkDeployments: Published.toml con formato inválido ⇒ error con su línea', () => {
   const { errors } = checkDeployments({ files: [], publishedTomlText: 'basura\n' });
   assert.deepEqual(errors, ['Published.toml:1: línea inesperada: basura']);
@@ -515,15 +524,52 @@ test('formatSummary: los 14 campos y el siguiente paso, sin direcciones de cuent
   assertNoAccountAddress(summary);
 });
 
-test('formatCliFailure: digest de stderr, stderr redactado con y sin 0x y consejo fijo', () => {
+test('formatCliFailure: digest de stderr, stderr redactado con y sin 0x y consejo fijo tras publicar', () => {
   const [address] = ACCOUNT_ADDRESSES;
   const digest = PUBLISH.digest;
   const stderr = `Error executing transaction '${digest}': sender 0x${address} owner ${address.toUpperCase()}\n`;
-  const message = formatCliFailure({ reason: 'la CLI terminó con estado 1', stderr, dir: '/tmp/d', outputPath: '/tmp/d/publish-output.json' });
+  const message = formatCliFailure({
+    reason: 'la CLI terminó con estado 1',
+    stderr,
+    dir: '/tmp/d',
+    outputPath: '/tmp/d/publish-output.json',
+    afterPublish: true,
+  });
   assert.ok(message.includes(`Digest de la transacción: ${digest}`));
   assert.ok(message.includes('/tmp/d/publish-output.json'));
+  assert.ok(message.includes('Directorio temporal: /tmp/d'));
   assert.ok(message.includes('sender 0x… owner 0x…'));
   assert.match(message, /No reintentes sin buscar antes el digest/);
+  assertNoAccountAddress(message);
+});
+
+test('formatCliFailure: sin publicación real (dry run, record) no aconseja buscar el digest; sin dir no lo nombra', () => {
+  const dryRun = formatCliFailure({ reason: 'x', stderr: '', dir: '/tmp/d', outputPath: '/tmp/d/dry-run-output.json' });
+  assert.doesNotMatch(dryRun, /No reintentes/);
+  assert.ok(dryRun.includes('Directorio temporal: /tmp/d'));
+  const record = formatCliFailure({ reason: 'x', stderr: '', dir: null, outputPath: '/srv/out.json' });
+  assert.doesNotMatch(record, /No reintentes|Directorio temporal/);
+  assert.ok(record.includes('/srv/out.json'));
+});
+
+test('formatPostPublishFailure: directorio temporal, digest y receta de record, sin direcciones (H2)', () => {
+  const [address] = ACCOUNT_ADDRESSES;
+  const message = formatPostPublishFailure({
+    reason: `falta [published.testnet] en Published.toml (sender 0x${address})`,
+    network: 'testnet',
+    digest: PUBLISH.digest,
+    dir: '/tmp/battleship-publish-x',
+    outputPath: '/tmp/battleship-publish-x/publish-output.json',
+  });
+  assert.ok(message.startsWith('Error: falta [published.testnet] en Published.toml'));
+  assert.ok(message.includes(`La publicación ya se ejecutó (digest ${PUBLISH.digest}): no republiques.`));
+  assert.ok(message.includes('Directorio temporal: /tmp/battleship-publish-x'));
+  assert.ok(
+    message.includes(
+      'node scripts/publish.mjs record --network testnet --from /tmp/battleship-publish-x/publish-output.json',
+    ),
+  );
+  assert.match(message, /STOP de #8/);
   assertNoAccountAddress(message);
 });
 
@@ -537,8 +583,9 @@ test('interpretCliRun: estado ≠ 0, stdout que no parsea o forma inválida ⇒ 
     [{ status: 0, stdout: PUBLISH_TEXT.replace('"published"', '"PUBLISHED"'), stderr: '' }, /forma inesperada/],
   ];
   for (const [result, expected] of cases) {
-    const outcome = interpretCliRun({ result, ...base });
+    const outcome = interpretCliRun({ result, ...base, afterPublish: true });
     assert.ok('error' in outcome);
+    assert.match(outcome.error, /No reintentes/);
     assert.match(outcome.error, expected);
     assert.ok(outcome.error.includes('/tmp/d/publish-output.json'));
     assert.ok(!outcome.error.includes('STDOUT-MARK'));
