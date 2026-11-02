@@ -148,3 +148,33 @@ Diff: un archivo (+40/−2), un hunk, job `app` idéntico línea a línea a HAND
 
 ### Siguiente paso
 TASK-3 autorizada sin cambios. TASK-4 autorizada con dos condiciones: TASK-3 revisada PASA y commiteada (el cierre de TASK-4 exige árbol limpio), y confirmación del orquestador de que no hay otra localnet arriba (puerto 9000).
+
+## Task completado: HANDOFF_APP — TASK-3 (capa `app/src/sui/` base)
+
+> Reporte del DEV transcrito por el orquestador (los 58 nombres de test de la salida `--reporter=verbose` se resumen por archivo; el resto, literal).
+
+- Branch `feature/issue-9-app` @ `c3f86f0`; sin commits. Creados: `app/src/sui/{networks,format,explorer}.ts` y sus `.test.ts`. Sin cambios en `package.json`, `app/package.json` ni `package-lock.json` (`git diff --exit-code` → 0).
+- **Nota del DEV sobre el encargo:** el orquestador mencionó `nodeInfo.ts`, pero el handoff lo ubica en TASK-6 (Tramo B); no se implementó (correcto según el handoff).
+- `networks.ts`: `Network` (`localnet | testnet`), `NETWORKS` (endpoints gRPC y Suiscan), `isNetwork` (con `Object.hasOwn`), `shortChainId` (`toHex(fromBase58(x)).slice(0, 8)`). `format.ts`: `U64_MAX`, `ParseResult`, `parseSuiToMist` con chequeos propios antes de `parseToMist` (razones `empty/negative/invalid/too_many_decimals/too_large`), `formatMist` solo `bigint`, `shortAddress = formatAddress`. `explorer.ts`: `explorerTxUrl`/`explorerObjectUrl` (lanzan con digest/ID inválidos —también en localnet—, `null` en localnet). JSDoc en todos los exports.
+- Gates (Node v26.13.0): `lint exit=0`, `typecheck exit=0`, test `Test Files  4 passed (4)` / `Tests  58 passed (58)` (networks 12, format 30 —incl. `.5` → 500000000n, `-0` → negative, `1.`/` 1`/`1e3` → invalid, `18446744073.709551615` OK y +1 MIST → too_large, round-trips—, explorer 15, App 1) `test exit=0`, `build exit=0` (`index-CYi1jgMn.js 219.66 kB`).
+- `grep -n 'number' app/src/sui/format.ts` → exit 1; `grep -rnE 'Number\(|parseFloat|parseInt|toFixed' app/src/sui/` → exit 1; único `number` es `SUI_DECIMALS` del SDK (cantidad de decimales). `src/sui/` importa solo `@mysten/sui/utils`.
+- Tablas de contrato / `app/src/sui/`: no aplica (contrato sin cambios; estos módulos no tocan targets, eventos ni aborts).
+- Desviaciones (internas): orden de validación en `explorer.ts` (dato antes que red); `Object.hasOwn` en `isNetwork`; tests extra; mensajes de error con `JSON.stringify` del valor.
+- Riesgos: `isValidSuiObjectId` (SDK 2.37.0) acepta hex de 64 sin `0x` y en mayúsculas, y la URL usa el ID tal cual (posible `normalizeSuiObjectId` más adelante); `parseSuiToMist` no atrapa excepciones de `parseToMist` (con los chequeos previos no puede lanzar).
+
+## Revisión TASK-3: PASA
+
+> Revisión del MID transcrita por el orquestador (comparada con el código del SDK instalado).
+
+Confirmado: `format.ts` (`U64_MAX` nombrada; orden de chequeos del handoff; regex pedida sin `trim`; `formatMist` solo `bigint`; `shortAddress` = `formatAddress`); `networks.ts` (URLs exactas, `isNetwork` con `Object.hasOwn`, `shortChainId` especificado); `explorer.ts` (valida antes de mirar la red, lanza, `null` en localnet); capas (`src/sui/` solo `@mysten/sui/utils` y `./networks`); JSDoc con el porqué; tests de todas las filas de la tabla de `parseSuiToMist`, 6 de `formatMist`, 2 round-trips, `shortChainId`, `isNetwork`, URLs exactas (12 + 30 + 15 + 1 = 58); gates del reporte en 0; desviaciones aceptadas. `nodeInfo.ts` correctamente fuera (TASK-6).
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | SEG-9 — decisión | `explorer.ts:21-25` | `isValidSuiObjectId` acepta hex sin `0x`/mayúsculas | No se normaliza en `explorer.ts`; la normalización va en el borde de entrada (#11/#12) |
+| 2 | LIM-8 — decisión | `format.ts:26-33` | `parseToMist` sin `try/catch` | Correcto así (ninguna rama puede lanzar; un catch sería código muerto o se tragaría un error real) |
+| 3 | Info TASK-6 | `networks.ts:27-29` | `shortChainId` lanza con base58 inválido | En TASK-6, `fetchNodeInfo`/`deriveNodeStatus` lo tratan como error del intento, con test |
+
+> Decisión (2026-11-02): explorer.ts valida pero no normaliza; la normalización de IDs se hace en el borde de entrada (rutas/formularios) porque los IDs internos ya vienen normalizados del SDK y normalizar aquí aceptaría IDs cortos — MID.
+
+### Siguiente paso
+TASK-4 lista para arrancar tras commitear TASK-3 y confirmar que el puerto 9000 está libre.
