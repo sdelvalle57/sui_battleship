@@ -16,7 +16,7 @@ del orquestador sobre `master`:
 | 4. Escrow module | ✅ absorbido en Game (D-20261030-15): la apuesta es `stake: Balance<SUI>` de cada `Game` |
 | 5. Tests | ✅ suites de House (26 tests, #4) y Game (57 tests: 26 de #5 + 31 de aceptar/coinflip en #6, `1630eaa`); coverage 100 % |
 | 6. Docs y despliegue | ⬜ |
-| UI React | 🚧 #9 (Tramo A y TASK-5/6 commiteados): workspace `app/`, capa `app/src/sui/`, job `app` de la CI, config por red, wallet kit e indicador de red; pantallas del juego en #10–#14 |
+| UI React | ✅ #9 (`9bf7a77`): workspace `app/`, capa `app/src/sui/`, job `app` de la CI (check requerido), config por red, wallet kit e indicador de red; pantallas del juego en #10–#14 |
 
 ## Toolchain
 
@@ -55,7 +55,7 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 | contracts/ @ `master` (anterior a #4: `48df3b4`, merge de #22; medido en `8325126`, mismo código de contratos que `f4b437c`), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🟢 exit 0. **0 errores, 0 warnings** de compilación. Único módulo: `contracts/sources/house.move` |
 | | `sui move build -e testnet --lint` | 🟢 exit 0. 0 errores, 0 warnings; **1 lint de Sui:** `WSL06010` (`prefer_mut_tx_context`) en `contracts/sources/house.move:67` (`update_fee_rate` con `&TxContext`, H12 → #4) |
 | | `sui move test -e testnet` | 🟢 exit 0. 0 errores, 0 warnings. **0 tests** (`Test result: OK. Total tests: 0`) |
-| app @ `feature/issue-9-app` (`71c976e`, TASK-6 de #9), Node `v26.13.0`, 2026-11-02 | `npm ci`, `npm audit signatures`, `npm audit --omit=dev --audit-level=high` | 🟢 exit 0. 293 paquetes; 292 firmas verificadas; 0 vulnerabilidades de producción (11 *moderate* solo dev, #35) |
+| app @ `master` (`9bf7a77`, merge de #9; CI run 41486316373), Node `v26.13.0`, 2026-11-02 | `npm ci`, `npm audit signatures`, `npm audit --omit=dev --audit-level=high` | 🟢 exit 0. 293 paquetes; 292 firmas verificadas; 0 vulnerabilidades de producción (11 *moderate* solo dev, #35) |
 | | `npm run lint -w app` / `npm run typecheck -w app` | 🟢 exit 0. **0 problemas** (ESLint `--max-warnings 0`, capas por regex) / **0 errores** |
 | | `npm test -w app` | 🟢 exit 0. **142 tests PASS** en 12 archivos (`config` 47, `format` 30, `explorer` 15, `nodeInfo` 14, `networks` 12, `NetworkBadge` 6, `useNodeStatus` 6, `dappKit` 5, `App` 2, `AccountBadge` 2, `Header` 2, `ConfigError` 1) |
 | | `VITE_SUI_NETWORK=testnet npm run build -w app` | 🟢 exit 0. `index-*.js` **826 kB** (251 kB gzip); aviso de chunk > 500 kB (informativo; code-splitting en #15) |
@@ -103,8 +103,8 @@ mismos conteos por archivo.
 | #5 (Game: crear/cancelar/rechazar) | ✅ 2026-10-31 | PR #30 mergeado (`a69fe7c`); MAYOR APPROVE; CI `contracts` verde (52/52). Artefactos borrados en el housekeeping (`git show a69fe7c:documents/PLAN_GAME.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_GAME.md`) |
 | #6 (Game: aceptar + coinflip, pago y comisión) | ✅ 2026-10-31 | PR #32 mergeado (`8fddbda`); MAYOR APPROVE; CI `contracts` verde (83/83, coverage 100 %); smoke en localnet aislada 16/16 on-chain; fixtures de lectura → #10 (D-20261031-01). Artefactos borrados en el housekeeping (`git show 8fddbda:documents/PLAN_ACCEPT.md`, `HANDOFF_`, `REVISION_PLAN_`, `SMOKE_`, `REPORTES_ACCEPT.md`) |
 | #7 (Deployments json + script de publicación) | ✅ 2026-11-02 | PR #38 mergeado (`6ff8353`); MAYOR APPROVE (0 BLOCKER/MAJOR; MINOR-2 y NIT-2 → #39, antes de #8); CI `contracts` verde (83/83, `node --test` 94/94, `check` "0 despliegues"). `contracts/deployments/<red>.json` (14 campos, sin direcciones; D-20261102-01), `contracts/scripts/{deployment,publish}.mjs` (7 guardas, `SUI_CONFIG_DIR` propio, D-20261102-03); smoke en localnet aislada 12/12 + re-corrida 5/5. Artefactos borrados en el housekeeping (`git show 6ff8353:documents/PLAN_DEPLOY.md`, `HANDOFF_`, `REVISION_PLAN_`, `SMOKE_`, `REPORTES_DEPLOY.md`) |
-| #9 (scaffolding de `app/` + capa `sui/` + job `app` de CI) | 🚧 2026-11-02 | Worktree `feature/issue-9-app`, PR borrador #36. Tramo A cerrado (TASK-1..4 PASA: lockfile y política de dependencias, job `app`, `sui/` base, sonda gRPC-web = gate de D1). Tramo B tras el rebase sobre #7: TASK-5 (config por red) y TASK-6 (providers, kit, router, indicador de red) PASA y commiteados; TASK-7 (docs) PASA; smoke pendiente (`documents/SMOKE_APP.md`). D-20261102-02/03 |
-| Siguiente | ⏳ | #9: revisión de TASK-7, smoke y PR. #8 (pre-vuelo H13 y publicación en testnet por el owner, sin `--out`) tras #39 |
+| #9 (scaffolding de `app/` + capa `sui/` + job `app` de CI) | ✅ 2026-11-02 | PR #36 mergeado (`9bf7a77`); MAYOR APPROVE (0 BLOCKER/MAJOR); CI `contracts` + `app` verde (142 tests app, 83 Move, 94 scripts). Smoke en localnet aislada 17/17 (pasos de navegador en Chrome headless con perfil desechable); rama "con `testnet.json`" del paso 15 pendiente de #8. Check `app` requerido en `master` desde 2026-11-02 (D-20261102-02 (7)). Artefactos borrados en el housekeeping (`git show 9bf7a77:documents/PLAN_APP.md`, `HANDOFF_`, `REVISION_PLAN_`, `SMOKE_`, `REPORTES_APP.md`) |
+| Siguiente | ⏳ | #39 (arreglos del script de publicación, antes de #8); #8 (pre-vuelo H13 y publicación en testnet por el owner, sin `--out`; después, build de testnet → "testnet · nodo OK"); #10 (lecturas: política de reintentos, `cancelQueries`, textos del kit, hora desde `getTransaction`, paginar `listEvents` por `hasNextPage`) |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -143,7 +143,7 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 - Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #3 resuelto (D-20261030-13; protección de `master` y SHA-pinning de Actions aplicados el 2026-10-30); #5 resuelto (D-20261030-15); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06); #6 resuelto (D-20261030-16).
 - **Post-publicación (#8):** `update_fee_rate` antes de anunciar el juego (fee por defecto 0, D-20261030-11): las partidas creadas antes quedan con comisión 0 para siempre.
-- **Tras el merge de #9 (orquestador, D-20261102-02 (7)):** agregar `app` a los checks requeridos de `master` (manteniendo `contracts`, `strict: false`, `enforce_admins: true`) y verificarlo con `gh api repos/sdelvalle57/sui_battleship/branches/master/protection/required_status_checks --jq '.contexts'` → `["contracts","app"]`.
+- ✅ 2026-11-02: check `app` agregado a los requeridos de `master` (`strict: false`, `enforce_admins: true` sin cambios); `gh api …/required_status_checks --jq '.contexts'` → `["contracts","app"]` (D-20261102-02 (7)).
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
 ## Mergeadas (histórico)
@@ -157,3 +157,5 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 | #3 CI de contratos (`ci.yml`: `contracts` + `framework-drift`) | #27 → `ae89cd5` | 2026-10-30 |
 | #5 Game: crear/cancelar/rechazar, 26 tests | #30 → `a69fe7c` | 2026-10-31 |
 | #6 Game: aceptar + coinflip `sui::random`, pago y comisión, 31 tests | #32 → `8fddbda` | 2026-10-31 |
+| #7 Deployments json + script de publicación guardado + check en CI | #38 → `6ff8353` | 2026-11-02 |
+| #9 Scaffolding de `app/`, capa `sui/`, wallet kit, indicador de red, job `app` | #36 → `9bf7a77` | 2026-11-02 |

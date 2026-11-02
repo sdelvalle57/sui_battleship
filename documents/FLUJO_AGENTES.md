@@ -49,6 +49,7 @@ issue #N (GitHub) → plan (documents/PLAN_<TEMA>.md)
 - **Cambios contracts + app:** si un issue toca ambos, los tasks de contratos van primero y la app solo consume firmas/eventos ya implementados en la misma branch (PROY-21).
 - **Tooling GitHub = CLI `gh`** con la sesión del owner (`gh issue view <N>`, `gh pr create`, …).
 - Todo artefacto referencia a su padre (issue, plan, PR); un artefacto huérfano es un hallazgo.
+- **Sin rutas personales en artefactos commiteados** (también en output pegado): usar placeholders (`<repo>`, `<HOME real>`, `<SMOKE_DIR>`, `<scratchpad>`). El repo es público y se mergea con merge commit, así que una ruta commiteada queda en el historial aunque el housekeeping la borre (MINOR-1 de la revisión de integración de #9).
 
 ## 3. Pipeline
 
