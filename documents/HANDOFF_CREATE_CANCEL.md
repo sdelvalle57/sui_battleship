@@ -1,9 +1,12 @@
 # HANDOFF_CREATE_CANCEL
 > Plan: PLAN_CREATE_CANCEL v1 (MAYOR: APPROVE, 2026-11-02, 0 BLOCKER/MAJOR; `6e967f8`) | Issue: #11 | Branch:
-> `feature/issue-11-create-cancel` | Versión: v1.2 | Fecha: 2026-11-02
+> `feature/issue-11-create-cancel` | Versión: v1.3 | Fecha: 2026-11-02
 
 ## Changelog
 
+- **v1.3 (2026-11-02)**: tras TASK-2 (revisión del MID: PASA). TASK-4: un error de la preflight que no es simulación ni de red
+  se muestra como "No se pudo preparar la transacción: …", no con el fallback de la wallet. TASK-6: nota de que `build()`
+  del SDK 2.37 no acepta `signal` (la preflight corta la espera, no la simulación). Aplicada por el orquestador.
 - **v1.2 (2026-11-02)**: tras TASK-1 (revisión del MID: PASA, sin STOP; `documents/REPORTES_CREATE_CANCEL.md`). Cambian
   solo TASK-2 y TASK-4, más una nota en §3:
   - **R-1:** el texto con que la CLI **presenta** un abort ("… aborted within function '0x…::game::<fn>' at instruction
@@ -517,7 +520,9 @@ mostrar un éxito falso ni mandar dos veces la misma transacción. **No entrega:
      cuenta)`. Errores: `PreflightNetworkError` (o error transitorio/corte del `precheck`) ⇒ `failure` con
      `PREFLIGHT_NETWORK_MESSAGE`, sin `errors.ts` (M-3 (a)); `SimulationError` ⇒ `failure` con
      `transactionErrorMessage` (y, si es un abort, se aplican las invalidaciones de la acción: el estado pudo cambiar);
-     otro ⇒ `failure` con `transactionErrorMessage`. En todos, la wallet **no** se llama.
+     otro (ni `SimulationError` ni de red) ⇒ `failure` con "No se pudo preparar la transacción: <mensaje del error>"
+     (la wallet nunca se abrió, así que no se usa el fallback "La wallet no completó…" de `errors.ts`); con un test. En
+     todos, la wallet **no** se llama.
    - **`signing`:** `dAppKit.signAndExecuteTransaction({ transaction: input.build() })` (el `Transaction` sin
      construir). Si lanza: `digestFromError(error)`; con digest ⇒ sigue a `confirming` con ese digest (M-3 (b)); sin
      digest ⇒ `failure` con `transactionErrorMessage(error)`.
@@ -682,6 +687,9 @@ Reportes de TASK-1..5; `app/README.md` (mapa de `sui/`, hooks, "Lecturas (#10)",
   su sufijo `(código <módulo>/<n>)` y fallbacks; reglas del formulario (límites y comisión de la House, reserva de gas,
   depósito de storage); "Wallet": la burner nace sin fondos y cambia de dirección al recargar, cómo fondearla por CLI en
   la localnet aislada; "Pendientes conocidos" sin el de `useGame` (resuelto) y sin "qué refrescar" (resuelto).
+- **`app/README.md`, dependencias (v1.3):** `build()` del SDK 2.37 no acepta `signal`: la preflight corta la espera a los 20 s,
+  no la simulación, que puede seguir en segundo plano (solo lectura, resultado descartado). Si una versión futura del SDK
+  acepta `signal` en `build()`, pasárselo.
 - **`contracts/README.md`:** "Abort codes": espejo implementado en `app/src/sui/errors.ts` (mensajes por módulo +
   código); "Objeto terminal y storage": la UI lo muestra al crear (nota previa + costo real).
 - **`agents.md` §5:** fila "Layout BCS de la House" ↔ `app/src/sui/house.ts` (fixture `game-tx.localnet.json`); §2 si el
