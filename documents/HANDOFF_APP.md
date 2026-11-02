@@ -464,3 +464,10 @@ Reporte §5 con los outputs de 5-7 (sin `publish.json`, sin `sender`, sin logs) 
 
 `documents/SMOKE_APP.md` (ya creado, estado PENDIENTE): se ejecuta tras aprobar TASK-7, en este worktree, con #7 en
 `master`. Se completa **durante** la corrida.
+
+
+## Nota v1.1 (revisión MID de TASK-1, transcrita por el orquestador)
+
+> Decisión (2026-11-02): se aceptan los 11 moderate solo dev de minimatch <11.0.1 (GHSA-g3hv-75wg-m249) hasta que eslint/typescript-eslint publiquen versiones con minimatch ≥ 11.0.1 y cumplan los 7 días (issue #35), porque el patrón no lo controla un tercero y no hay arreglo upstream — aplica D-20261102-02 (3), que bloquea solo high/critical de producción. El `npm audit` completo **no** entra a la CI como paso bloqueante.
+
+Pendientes para la v2 (Tramo B): regla base de capas por `regex` `^@mysten/(?!dapp-kit-react/ui$)` + sondas de `@mysten/bcs` en `components/` y `../hooks/x` en `sui/` (TASK-6); JSDoc de `App.tsx` (TASK-6); en el procedimiento de avisos (TASK-7), que `typescript`/`gql.tada` quedan como producción por el peer de `gql.tada`.
