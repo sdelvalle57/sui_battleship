@@ -190,3 +190,18 @@ Runbook `SMOKE_LOBBY.md`: cubre los criterios del issue; textos y montos coincid
 
 ### Siguiente paso
 Smoke autorizado tras commitear y confirmar que no hay otra localnet. Pendientes para el body del PR: #11/#12 (intervalo del detalle ante error definitivo; refresco tras una tx), #13 (hereda el `ListEvents` crudo), #15 (852 kB), #8 (rama testnet del smoke), #35.
+
+## Smoke del ciclo (`SMOKE_LOBBY.md`): PASA 17/17
+
+> Reporte del DEV transcrito por el orquestador (resumido; el detalle por paso está en `documents/SMOKE_LOBBY.md`).
+
+- @ `fbe46e8`, localnet aislada (chain `17974431`), publicación por la variante B, prefijo B4 en todo `suic`/`publish.mjs`; pasos 🌐 en Chrome headless + CDP con perfil desechable en `<SMOKE_DIR>`, depuración solo en 127.0.0.1.
+- Resultados: lobby vacío "No hay partidas abiertas" + "Conectar wallet" ✅; 3 abiertas en orden `G3`, `G2`, `G1` (texto de fila y hora = `Intl`), sin la invitación `G4` ✅; `G2` cancelada por CLI sigue hasta "Actualizar" y luego desaparece ✅; detalle "Cancelada" ✅; `G1` aceptada: "Resuelta", pozo 0.002, comisión 0.00005, "Pago al ganador 0.00195 SUI (según la fórmula del contrato)" = evento ✅; ID en mayúsculas ⇒ mismo detalle con la estimación de `G3`; `G4` "Invitación a <C>" ✅; ID inválido sin pedidos, inexistente y ajeno con su mensaje ✅; PTB de 55 ⇒ 50 filas con un `ListEvents` + "Cargar más" ⇒ 56 sin duplicados ✅; modal del kit en inglés, burner sin "(tuya)" ✅; red caída: badge "reconectando 2/3 ⇒ 3/3 ⇒ sin conexión" (7,8 s), lobby y detalle "Reintentando 2/3 ⇒ 3/3 ⇒ No se pudo leer la red" + "Reintentar", nada "cargando" eterno ✅; build de testnet ⇒ `ConfigError` sin pedidos RPC ✅; cierre completo (bundle sin el `packageId` antes del `rm -rf`, `~/.sui` idéntico, `Move.lock` sin delta) ✅.
+- Desviaciones: pestañas extra en el paso 11 (cerradas antes del 13); conteo de pedidos del paso 12 en pestaña aparte; forma corta de IDs no aplicable (cubierta por tests).
+- Informativos: `chain-identifier` transitorio al arrancar; pedidos abortados por `StrictMode` en dev; "sin conexión" a 7,8 s por el ciclo del intervalo. La rama "testnet · nodo OK" queda para #8.
+
+## Revisión del smoke: PASA 17/17
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió nada.
+
+Criterios del issue cubiertos con evidencia (pasos 4, 6–12, 14); reglas cumplidas (B4, variante B, Chrome headless desechable, una sola localnet, exit 144, sin testnet, sin direcciones); cierre completo coincidente con la verificación del orquestador. Hallazgos solo informativos (transitorio de arranque, `StrictMode` en dev, 7,8 s por el ciclo del intervalo).
