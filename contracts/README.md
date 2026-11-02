@@ -15,6 +15,7 @@ código discrepan, manda el código y se corrige la tabla en el mismo PR (`agent
 | `scripts/*.test.mjs`, `scripts/fixtures/` | Tests (`node --test`) y salidas reales de la CLI 1.83.0 en una localnet desechable |
 | `deployments/<red>.json`, `Published.toml` | Datos de cada publicación (los escribe la primera publicación en testnet, #8) |
 | `fixtures/game-reads.localnet.json` | Lecturas gRPC reales de cada variante de `Game` y de sus eventos, capturadas en una localnet desechable con `app/scripts/capture-read-fixtures.mjs` (#10, ver "Lectura desde la app") |
+| `fixtures/game-tx.localnet.json` | Transacciones reales de crear, cancelar y rechazar (éxitos, un fallo `MoveAbort` ejecutado y 7 `SimulationError` de simulaciones sin firmar) y el objeto House, capturados en una localnet desechable con `app/scripts/capture-tx-fixtures.mjs` (#11, ver "Lectura desde la app") |
 
 **Gates (build, lint, test, coverage):** forma canónica en `agents.md` §3 (desde `contracts/`, con
 `-e testnet` y `printf 'n\n' |` delante). Baselines vigentes en `documents/STATUS.md`.
@@ -432,6 +433,21 @@ borra. La UI (#11) muestra ese costo al crear.
   acepta `http://127.0.0.1:9000` (con otra `--url` sale con error antes de cualquier pedido), exige que el chain id del
   nodo coincida con `contracts/deployments/localnet.json` y es determinista: dos corridas sobre la misma red dan el mismo
   archivo salvo `_meta.capturedAt`. Un cambio de la fixture al recapturar se declara en el PR.
+- **Fixture de transacciones (#11):** `contracts/fixtures/game-tx.localnet.json` = `house` (el objeto, `content` en
+  base64), `simulationErrors` (7 casos `{ sender: <rol>, message, executionError }` del `SimulationError` real de
+  `build({ client })`: `game` 0 a 6), `executed` (`getTransaction` con efectos, eventos y `objectTypes` de crear abierta,
+  crear invitación, cancelar, rechazar y del `cancel_game` fallido; `effects.bcs` y `bcs` de eventos en base64, sin
+  `sender` ni `signatures`) y `cliErrorText` (el texto del abort en formato Rust, igual al `effects.status.error` de
+  `sui client tx-block`). Las simulaciones no firman (`setSender` de una cuenta de la génesis); las direcciones de los
+  datos son de cuentas efímeras (sin claves).
+- **Recaptura de la fixture de transacciones:** dentro de la localnet aislada, después de las transacciones por CLI de
+  `documents/HANDOFF_CREATE_CANCEL.md` (TASK-1: `update_fee_rate` 250; `A` crea `G_OPEN` abierta e invita a `B` en
+  `G_INV`; `A` crea y cancela `G_CANCEL`; `A` invita a `B` en `G_REJ` y `B` la rechaza; al final, `B` llama `cancel_game`
+  sobre `G_OPEN` con `--gas-budget`), con el mismo prefijo de Node 26: `node app/scripts/capture-tx-fixtures.mjs` desde
+  `<repo>`. Comparte la guarda con el script de #10 (`app/scripts/localnet-guard.mjs`: sin SDK ni red en el nivel
+  superior; con otra `--url` sale con código 2 antes de cualquier pedido) y es determinista igual (solo cambia
+  `_meta.capturedAt`). El fallo ejecutado se encuentra como la última transacción sobre `G_OPEN`: nada debe tocar esa
+  partida después.
 - **Listas (lobby, #10):** las partidas se descubren por eventos con `eventType` = `<originalPackageId>::game::<Evento>`
   (dirección **completa**: con `0x3` corto el nodo responde `INVALID_ARGUMENT`). En el fullnode público, `listEvents` del
   SDK (sin rango) falla con `OUT_OF_RANGE` ("requested data below earliest available"): el historial está podado
