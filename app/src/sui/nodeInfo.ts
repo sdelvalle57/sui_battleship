@@ -1,6 +1,6 @@
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { shortChainId } from './networks';
-import { READ_TIMEOUT_MS, withReadTimeout } from './readPolicy';
+import { READ_MAX_RETRIES, READ_TIMEOUT_MS, withReadTimeout } from './readPolicy';
 
 /** Cada cuánto el indicador de red vuelve a consultar el nodo. */
 export const NODE_STATUS_REFETCH_MS = 20_000;
@@ -38,19 +38,31 @@ export async function fetchNodeInfo(client: Pick<SuiGrpcClient, 'ledgerService'>
 /** Estado que muestra el indicador de red. */
 export type NodeStatus =
   | { kind: 'loading' }
+  | { kind: 'retrying'; attempt: number; max: number }
   | { kind: 'ok'; checkpointHeight: bigint | null }
   | { kind: 'wrong_chain'; expected: string; actual: string }
   | { kind: 'offline'; reason: string };
 
 /**
- * Deriva el estado del indicador a partir de la query del nodo. Pura. Prioridad: error del último intento → `offline`
- * (aunque haya un dato previo: TanStack Query lo conserva tras un error); pendiente → `loading`; chain id distinto del
- * esperado → `wrong_chain`; si no, `ok`.
+ * Deriva el estado del indicador a partir de la query del nodo. Pura. Prioridad: un reintento en curso → `retrying`
+ * (intento `failureCount + 1` de `READ_MAX_RETRIES + 1`, DL-5); error del último intento → `offline` (aunque haya un
+ * dato previo: TanStack Query lo conserva tras un error); pendiente → `loading`; chain id distinto del esperado →
+ * `wrong_chain`; si no, `ok`.
  */
 export function deriveNodeStatus(
-  q: { isPending: boolean; isError: boolean; error: unknown; data: NodeInfo | undefined },
+  q: {
+    isPending: boolean;
+    isError: boolean;
+    error: unknown;
+    data: NodeInfo | undefined;
+    fetchStatus: 'fetching' | 'paused' | 'idle';
+    failureCount: number;
+  },
   expectedChainId: string,
 ): NodeStatus {
+  if (q.fetchStatus === 'fetching' && q.failureCount > 0) {
+    return { kind: 'retrying', attempt: q.failureCount + 1, max: READ_MAX_RETRIES + 1 };
+  }
   if (q.isError) {
     return { kind: 'offline', reason: q.error instanceof Error ? q.error.message : String(q.error) };
   }

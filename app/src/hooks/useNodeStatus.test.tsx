@@ -1,9 +1,10 @@
 import { useCurrentClient } from '@mysten/dapp-kit-react';
-import type { SuiGrpcClient } from '@mysten/sui/grpc';
+import { RpcError, type SuiGrpcClient } from '@mysten/sui/grpc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { advance, createPolicyQueryClient } from '../test/queryHarness';
 import type { AppConfig } from '../sui/config';
 import { NODE_STATUS_REFETCH_MS, NODE_STATUS_TIMEOUT_MS } from '../sui/nodeInfo';
 import { useAppConfig } from './useAppConfig';
@@ -47,16 +48,6 @@ let queryClient: QueryClient;
 
 function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-}
-
-/**
- * Avanza los timers falsos `ms` y luego 1 ms más. TanStack Query notifica los cambios de estado en un lote con
- * `setTimeout(0)`; los timers falsos de Vitest (`@sinonjs/fake-timers`) agendan un timer de 0 ms creado durante un
- * avance en `ahora + 1 ms`, así que sin ese milisegundo el resultado del intento nunca llega al hook.
- */
-async function advance(ms: number) {
-  await act(() => vi.advanceTimersByTimeAsync(ms));
-  await act(() => vi.advanceTimersByTimeAsync(1));
 }
 
 beforeEach(() => {
@@ -117,10 +108,28 @@ describe('useNodeStatus', () => {
     expect(result.current).toEqual({ kind: 'offline', reason: 'El nodo no respondió en 10 s' });
   });
 
-  it('passes the TanStack Query signal down to the request', async () => {
-    getServiceInfo.mockImplementationOnce(answer(TESTNET_BASE58));
+  it('aborts the request it sent to the SDK on cancelQueries (LIM-11)', async () => {
+    getServiceInfo.mockImplementation(hang);
     renderHook(() => useNodeStatus(), { wrapper });
     await advance(0);
-    expect(getServiceInfo.mock.calls[0]?.[1]?.abort).toBeInstanceOf(AbortSignal);
+    const signal = getServiceInfo.mock.calls[0]?.[1]?.abort;
+    expect(signal?.aborted).toBe(false);
+    await act(() => queryClient.cancelQueries());
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('goes through retrying before offline with the real retry policy', async () => {
+    queryClient = createPolicyQueryClient();
+    getServiceInfo.mockImplementationOnce(answer(TESTNET_BASE58)).mockRejectedValue(new RpcError('node down', 'UNAVAILABLE'));
+    const { result } = renderHook(() => useNodeStatus(), { wrapper });
+    await advance(0);
+    expect(result.current.kind).toBe('ok');
+    await advance(NODE_STATUS_REFETCH_MS);
+    expect(result.current).toEqual({ kind: 'retrying', attempt: 2, max: 3 });
+    await advance(1000);
+    expect(result.current).toEqual({ kind: 'retrying', attempt: 3, max: 3 });
+    await advance(2000);
+    expect(result.current).toEqual({ kind: 'offline', reason: 'node down' });
+    expect(getServiceInfo).toHaveBeenCalledTimes(4);
   });
 });
