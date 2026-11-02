@@ -10,6 +10,12 @@
 
 ---
 
+### D-20261102-05 — "Rechazar invitación" en la app va en #11
+- **Decisión:** el botón "Rechazar invitación" (llamada `reject_game`, D-20261030-06 (4)) se entrega en #11, junto a "Cancelar", en el detalle de la partida: visible solo para el invitado y solo en `Pending`; usa la misma maquinaria de transacciones (preflight, confirmación por el nodo, mapeo de aborts, invalidación).
+- **Alternativa descartada:** dejarlo para #13 (lista de invitaciones recibidas) o sacarlo del MVP.
+- **Motivo:** STOP P-1 del plan de #11 (ningún issue tenía la pantalla); misma página y maquinaria que "Cancelar", costo ~medio task.
+- **Aprobado por:** usuario ("Sumarlo a #11", 2026-11-02). **Fecha:** 2026-11-02.
+
 ### D-20261102-04 — Historial del lobby en testnet y textos del kit de wallet (#10)
 - **Decisión:** (1) Para el MVP se acepta que el lobby de testnet solo cubra el historial que conserva el fullnode público (~14 días, piso `lowestAvailableCheckpoint`): las partidas abiertas más viejas no aparecen en la lista (el detalle por enlace sigue funcionando y se pueden cancelar por CLI). El lobby lo dice con un texto honesto ("No hay partidas abiertas en el historial disponible del nodo (desde <fecha>)") y queda documentado en `app/README.md`; se reevalúa en el plan de #13. (2) Se acepta la UI de conexión mixta: el botón dice "Conectar wallet" y el modal y el menú del kit quedan en inglés (el kit solo permite cambiar el texto del botón); documentado en `app/README.md`.
 - **Alternativa descartada:** (1) GraphQL para las listas en testnet (reabre D-20261102-02 (1); habría que medir la retención del indexer) o un indexador propio (fuera del MVP). (2) Una ventana de conexión propia en español.
