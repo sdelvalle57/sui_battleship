@@ -1,9 +1,10 @@
 // Publicación del paquete y registro de `contracts/deployments/<red>.json` (#7, D-20261102-01 y D-20261102-03).
 // Uso (desde `contracts/`):
-//   node scripts/publish.mjs publish --network localnet|testnet [--pubfile-path <archivo>] [--out <ruta>] [--dry-run]
+//   node scripts/publish.mjs publish --network localnet|testnet [--pubfile-path <archivo>] [--out <ruta>, solo localnet]
+//                                     [--dry-run]
 //   node scripts/publish.mjs record --network <red> --from <salida.json> [--meta <meta.json>]
 //                                    [--source-commit <sha> --sui-cli-version <v> --framework-rev <sha> --chain-id <hex>]
-//                                    [--out <ruta>]
+//                                    [--out <ruta>, solo localnet]
 //   node scripts/publish.mjs check
 // Toda decisión vive en funciones puras exportadas (testeadas en `publish.test.mjs`); `main()` solo hace I/O. La única
 // llamada a la CLI es `runSui` y la única a git es `runGit`. Ningún agente corre el camino testnet (D-20261102-03).
@@ -38,6 +39,8 @@ const MAX_CLI_OUTPUT_BYTES = 64 * 1024 * 1024;
 const FILE_MODE = 0o600;
 const DIR_MODE = 0o700;
 const CONFIRMATION_WORD = 'testnet';
+const FS_ERROR_CODE_RE = /^E[A-Z0-9_]+$/;
+const CONFIG_DIR_PLACEHOLDER = '<SUI_CONFIG_DIR>';
 const FAILED_TX_DIGEST_RE = /Error executing transaction '([1-9A-HJ-NP-Za-km-z]{32,44})'/;
 const RETRY_ADVICE =
   "No reintentes sin buscar antes el digest; si la transacción existe: `printf 'n\\n' | SUI_CONFIG_DIR=<tu dir> " +
@@ -180,22 +183,36 @@ export function publishCliArgs({ network, pubfilePath, dryRun }) {
 }
 
 /**
- * Guarda 1: red válida y `--pubfile-path` obligatorio en localnet (un pubfile de otra génesis hace fallar a la CLI, C2)
- * y prohibido en testnet (`publish` lo rechaza, C3).
- * @param {{ network: unknown, pubfilePath: unknown }} args
+ * Guarda de `--out` (#39): en testnet el json va siempre a `deployments/testnet.json`, el que `check` cruza con
+ * `[published.testnet]`; con otra ruta el json canónico no se escribiría y la CI fallaría recién en `check`. Se
+ * rechaza la presencia de la opción (también vacía). En localnet se admite (smokes, agents.md §3).
+ * @param {{ network: unknown, out: unknown }} args
  */
-export function checkPublishArgs({ network, pubfilePath }) {
+export function checkOutArg({ network, out }) {
+  if (network === 'testnet' && out !== undefined) {
+    throw new Error('--out no se admite en testnet (el json va siempre a deployments/testnet.json)');
+  }
+}
+
+/**
+ * Guarda 1: red válida y `--pubfile-path` obligatorio en localnet (un pubfile de otra génesis hace fallar a la CLI, C2)
+ * y prohibido en testnet (`publish` lo rechaza, C3), y `--out` prohibido en testnet (#39).
+ * @param {{ network: unknown, pubfilePath: unknown, out: unknown }} args
+ */
+export function checkPublishArgs({ network, pubfilePath, out }) {
   if (!NETWORKS.includes(network)) throw new Error(`--network inválida: ${network ?? '(falta)'} (localnet | testnet)`);
   if (network === 'localnet' && (typeof pubfilePath !== 'string' || pubfilePath.length === 0)) {
     throw new Error('--pubfile-path es obligatorio en localnet (uno nuevo por génesis)');
   }
   if (network === 'testnet' && pubfilePath !== undefined) throw new Error('--pubfile-path no se admite en testnet');
+  checkOutArg({ network, out });
 }
 
 /**
  * Guarda 2 (v2-2): `SUI_CONFIG_DIR` definido, absoluto, existente, con `client.yaml` y cuyo realpath no esté dentro
  * de `<home>/.sui` para ningún home (`os.homedir()` y `os.userInfo().homedir`, por si `HOME` está redefinido):
- * `~/.sui/` no tiene claves y nunca se usa para publicar (D-20261102-03). Los mensajes no incluyen la ruta.
+ * `~/.sui/` no tiene claves y nunca se usa para publicar (D-20261102-03). Los mensajes no incluyen la ruta, tampoco ante
+ * una excepción de `fs` (solo su código, #39).
  * @param {{ value: string|undefined, isAbsolute: (p: string) => boolean, exists: (p: string) => boolean,
  *   isDir: (p: string) => boolean, hasClientYaml: (dir: string) => boolean, realpath: (p: string) => string,
  *   homes: string[] }} probes
@@ -203,18 +220,32 @@ export function checkPublishArgs({ network, pubfilePath }) {
  */
 export function checkConfigDirGuard({ value, isAbsolute, exists, isDir, hasClientYaml, realpath, homes }) {
   const invalid = (reason) => new Error(`SUI_CONFIG_DIR inválido: ${reason}`);
+  // Una excepción de fs trae la ruta en su mensaje (`EACCES: permission denied, stat '<ruta>'`): se descarta el
+  // mensaje, sin `cause`, y solo se informa el código. Falla cerrada (#39, NIT-2).
+  const guarded = (probe) => (p) => {
+    try {
+      return probe(p);
+    } catch (error) {
+      const code = typeof error?.code === 'string' && FS_ERROR_CODE_RE.test(error.code) ? error.code : 'error de fs';
+      throw invalid(`no se pudo inspeccionar una ruta (${code}); revisa permisos y symlinks de la config y de ~/.sui`);
+    }
+  };
+  const safeExists = guarded(exists);
+  const safeIsDir = guarded(isDir);
+  const safeHasClientYaml = guarded(hasClientYaml);
+  const safeRealpath = guarded(realpath);
   if (typeof value !== 'string' || value.length === 0) {
     throw invalid('no está definido (owner: tu config propia; agentes: la localnet aislada de agents.md §3)');
   }
   if (!isAbsolute(value)) throw invalid('no es una ruta absoluta');
-  if (!exists(value) || !isDir(value)) throw invalid('no existe o no es un directorio');
-  if (!hasClientYaml(value)) throw invalid('no contiene client.yaml');
-  const real = realpath(value);
+  if (!safeExists(value) || !safeIsDir(value)) throw invalid('no existe o no es un directorio');
+  if (!safeHasClientYaml(value)) throw invalid('no contiene client.yaml');
+  const real = safeRealpath(value);
   for (const home of homes) {
     const suiDir = path.join(home, '.sui');
-    const resolvedSui = exists(suiDir)
-      ? realpath(suiDir)
-      : path.join(exists(home) ? realpath(home) : path.resolve(home), '.sui');
+    const resolvedSui = safeExists(suiDir)
+      ? safeRealpath(suiDir)
+      : path.join(safeExists(home) ? safeRealpath(home) : path.resolve(home), '.sui');
     if (real === resolvedSui || real.startsWith(resolvedSui + path.sep)) {
       throw invalid('está dentro de ~/.sui, que queda sin claves para siempre (D-20261102-03)');
     }
@@ -223,15 +254,37 @@ export function checkConfigDirGuard({ value, isAbsolute, exists, isDir, hasClien
 }
 
 /**
+ * Reemplaza la ruta de la config (realpath validado y valor original de `SUI_CONFIG_DIR`) por `<SUI_CONFIG_DIR>` en un
+ * texto de la CLI (#39): un error sobre el keystore o `client.yaml` la mostraría. Reemplazo literal (sin regex), de la
+ * ruta más larga a la más corta; sin separadores finales; ignora valores que no sean texto, vacíos o la raíz.
+ * @param {string} text
+ * @param {unknown[]} configDirs
+ * @returns {string}
+ */
+export function redactConfigDir(text, configDirs) {
+  const dirs = [
+    ...new Set(
+      configDirs
+        .filter((d) => typeof d === 'string')
+        .map((d) => d.replace(/[\\/]+$/, ''))
+        .filter((d) => d.length > 0),
+    ),
+  ].sort((a, b) => b.length - a.length);
+  return dirs.reduce((acc, dir) => acc.split(dir).join(CONFIG_DIR_PLACEHOLDER), text);
+}
+
+/**
  * Lee la salida `--json` de una consulta de la CLI (`active-env`, `chain-identifier`). Ante un fallo muestra el stderr
- * con las direcciones ocultas; nunca el stdout.
+ * con las direcciones y la ruta de la config ocultas; nunca el stdout.
  * @param {{ status: number|null, stdout: string, stderr: string }} result
  * @param {string} what nombre de la consulta, para el mensaje
+ * @param {unknown[]} [configDirs] rutas de la config a ocultar (`redactConfigDir`)
  * @returns {unknown}
  */
-export function readCliJson(result, what) {
+export function readCliJson(result, what, configDirs = []) {
   if (result.status !== 0) {
-    throw new Error(`sui client ${what} falló (estado ${result.status}): ${redactAddresses(result.stderr).trim()}`);
+    const stderr = redactAddresses(redactConfigDir(result.stderr, configDirs)).trim();
+    throw new Error(`sui client ${what} falló (estado ${result.status}): ${stderr}`);
   }
   try {
     return JSON.parse(result.stdout);
@@ -338,11 +391,21 @@ export function checkConfirmation({ isTTY, answer }) {
  * con el motivo. Con `status === 0` (JSON inválido o forma inesperada) el stdout no se mira. El consejo de no
  * reintentar solo aplica tras invocar una publicación real (`afterPublish`): un dry run o `record` no envían
  * transacciones.
+ * El stderr se reimprime con las direcciones y la ruta de la config (`configDirs`, #39) ocultas.
  * @param {{ reason: string, status?: number|null, stdout?: string, stderr: string, dir: string|null,
- *   outputPath: string, afterPublish?: boolean }} args
+ *   outputPath: string, afterPublish?: boolean, configDirs?: unknown[] }} args
  * @returns {string}
  */
-export function formatCliFailure({ reason, status = 1, stdout = '', stderr, dir, outputPath, afterPublish = false }) {
+export function formatCliFailure({
+  reason,
+  status = 1,
+  stdout = '',
+  stderr,
+  dir,
+  outputPath,
+  afterPublish = false,
+  configDirs = [],
+}) {
   const lines = [`Error: ${reason}`, `Salida completa (sin mostrar): ${outputPath}`];
   if (dir) lines.push(`Directorio temporal: ${dir}`);
   const cliFailed = status !== 0;
@@ -351,7 +414,12 @@ export function formatCliFailure({ reason, status = 1, stdout = '', stderr, dir,
   if (cliFailed) {
     lines.push(`Motivo de la CLI en ${outputPath} (revísalo ahí; no lo pegues: puede traer tu dirección)`);
   }
-  if (stderr.trim() !== '') lines.push('stderr de la CLI (direcciones ocultas):', redactAddresses(stderr).trimEnd());
+  if (stderr.trim() !== '') {
+    lines.push(
+      'stderr de la CLI (direcciones y config ocultas):',
+      redactAddresses(redactConfigDir(stderr, configDirs)).trimEnd(),
+    );
+  }
   if (afterPublish) lines.push(RETRY_ADVICE);
   return lines.join('\n');
 }
@@ -378,12 +446,12 @@ export function formatPostPublishFailure({ reason, network, digest, dir, outputP
 /**
  * Interpreta el resultado de una publicación o dry run: estado, JSON y forma (A4). Cualquier fallo devuelve el
  * mensaje de `formatCliFailure`, que nunca incluye el stdout: se lo pasa solo para que, si la CLI falló, extraiga el
- * digest (H-1).
+ * digest (H-1). `configDirs` se reenvía para ocultar la ruta de la config en el stderr (#39).
  * @param {{ result: { status: number|null, stdout: string, stderr: string }, parse: (json: object) => unknown,
- *   dir: string|null, outputPath: string, afterPublish?: boolean }} args
+ *   dir: string|null, outputPath: string, afterPublish?: boolean, configDirs?: unknown[] }} args
  * @returns {{ value: unknown } | { error: string }}
  */
-export function interpretCliRun({ result, parse, dir, outputPath, afterPublish = false }) {
+export function interpretCliRun({ result, parse, dir, outputPath, afterPublish = false, configDirs = [] }) {
   const fail = (reason) => ({
     error: formatCliFailure({
       reason,
@@ -393,6 +461,7 @@ export function interpretCliRun({ result, parse, dir, outputPath, afterPublish =
       dir,
       outputPath,
       afterPublish,
+      configDirs,
     }),
   });
   if (result.status !== 0) return fail(`la CLI terminó con estado ${result.status}`);
@@ -532,12 +601,12 @@ function validatedOrThrow(deployment) {
 }
 
 // Ejecuta la CLI y guarda stdout/stderr crudos (0600) antes de interpretarlos, para no perder nunca una salida.
-function runAndKeep({ sui, args, dir, prefix, parse, afterPublish }) {
+function runAndKeep({ sui, args, dir, prefix, parse, afterPublish, configDirs }) {
   const result = sui(args);
   const outputPath = path.join(dir, `${prefix}-output.json`);
   writePrivate(outputPath, result.stdout);
   writePrivate(path.join(dir, `${prefix}-stderr.txt`), result.stderr);
-  const interpreted = interpretCliRun({ result, parse, dir, outputPath, afterPublish });
+  const interpreted = interpretCliRun({ result, parse, dir, outputPath, afterPublish, configDirs });
   if ('error' in interpreted) throw new Error(interpreted.error);
   return { value: interpreted.value, outputPath };
 }
@@ -554,7 +623,7 @@ async function askConfirmation() {
 async function commandPublish(values) {
   const network = values.network;
   const dryRun = values['dry-run'] === true;
-  checkPublishArgs({ network, pubfilePath: values['pubfile-path'] });
+  checkPublishArgs({ network, pubfilePath: values['pubfile-path'], out: values.out });
   const pubfilePath = network === 'localnet' ? path.resolve(values['pubfile-path']) : undefined;
   const outPath = path.resolve(values.out ?? defaultOut(network));
 
@@ -567,12 +636,15 @@ async function commandPublish(values) {
     realpath: fs.realpathSync,
     homes: [os.homedir(), os.userInfo().homedir],
   });
+  // La CLI puede mostrar la config con cualquiera de las dos formas: se ocultan ambas en su stderr (#39).
+  const configDirs = [configDir, process.env.SUI_CONFIG_DIR];
   const sui = (args) => runSui(args, { configDir });
 
   const chainId = checkNetworkGuard({
     network,
-    activeEnv: readCliJson(sui(['client', '--json', 'active-env']), 'active-env'),
-    readChainId: () => chainIdFromCli(readCliJson(sui(['client', '--json', 'chain-identifier']), 'chain-identifier')),
+    activeEnv: readCliJson(sui(['client', '--json', 'active-env']), 'active-env', configDirs),
+    readChainId: () =>
+      chainIdFromCli(readCliJson(sui(['client', '--json', 'chain-identifier']), 'chain-identifier', configDirs)),
   });
 
   const versionResult = sui(['--version']);
@@ -616,6 +688,7 @@ async function commandPublish(values) {
       prefix: 'dry-run',
       parse: parseDryRunOutput,
       afterPublish: false,
+      configDirs,
     });
     if (!dry.ok) throw new Error(`el dry run no dio success con un paquete, una House, un HouseCap y un UpgradeCap (${dir})`);
     const lockWarning = checkLockUnchanged({ network, before: lockBefore, after: fs.readFileSync(lockPath, 'utf8') });
@@ -640,6 +713,7 @@ async function commandPublish(values) {
     prefix: 'publish',
     parse: parsePublishOutput,
     afterPublish: true,
+    configDirs,
   });
   // Desde aquí la transacción ya existe: todo error indica el directorio y cómo rearmar el json con `record` (H2).
   try {
@@ -663,6 +737,7 @@ async function commandPublish(values) {
 }
 
 function commandRecord(values) {
+  checkOutArg({ network: values.network, out: values.out });
   if (!values.from) throw new Error('--from es obligatorio');
   const fromPath = path.resolve(values.from);
   const metaPath = path.resolve(values.meta ?? path.join(path.dirname(fromPath), 'meta.json'));

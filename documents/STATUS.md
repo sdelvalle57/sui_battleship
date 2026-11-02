@@ -37,6 +37,8 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 
 | Área @ ref | Gate | Resultado |
 |---|---|---|
+| contracts/scripts @ `feature/issue-39-publish-guards` (TASK-1 de #39), Node `v26.13.0`, 2026-11-02 | `cd contracts && node --test scripts/*.test.mjs` | 🟢 exit 0. **99 tests PASS** (51 `deployment.test.mjs` + 48 `publish.test.mjs`); step del job `contracts` de la CI |
+| | `node scripts/publish.mjs check` | 🟢 exit 0. **0 despliegues** |
 | contracts/scripts @ `feature/issue-7-deployments` (C1 del addendum v1.3 de #7), Node `v26.13.0`, 2026-11-02 | `cd contracts && node --test scripts/*.test.mjs` | 🟢 exit 0. **94 tests PASS** (51 `deployment.test.mjs` + 43 `publish.test.mjs`); step del job `contracts` de la CI |
 | | `node scripts/publish.mjs check` | 🟢 exit 0. **0 despliegues** (sin `contracts/deployments/` ni `Published.toml` hasta #8); step del job `contracts` de la CI |
 | contracts/ @ `master` (`8fddbda`, merge de #32; medido en `1630eaa`, mismo código), CLI `1.83.0`, 2026-10-31 | `sui move build -e testnet --warnings-are-errors` | 🟢 exit 0. **0 warnings**. Módulos: `contracts/sources/house.move`, `contracts/sources/game.move` |
