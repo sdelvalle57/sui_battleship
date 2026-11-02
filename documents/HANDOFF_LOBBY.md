@@ -72,7 +72,7 @@ tasks.
 
 **Resuelto:** **P-1** = (a) y DL-11 = aceptar la mezcla (D-20261102-04).
 
-**Pendiente del usuario (no bloquea):** **DL-11**, la UI de conexión mixta (botón "Conectar wallet" en español; modal y menú
+**Resuelto por el usuario (D-20261102-04 (2)): DL-11 = aceptar**, la UI de conexión mixta (botón "Conectar wallet" en español; modal y menú
 del kit en inglés, sin API de textos). Por defecto se implementa así y se documenta en `app/README.md`; si el usuario
 decide otra cosa, se abre un issue aparte y este handoff no cambia.
 
