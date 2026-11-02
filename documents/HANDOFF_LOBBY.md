@@ -1,9 +1,24 @@
 # HANDOFF_LOBBY
-> Plan: PLAN_LOBBY v1.1 (MAYOR: APPROVE, 2026-11-02) | Issue: #10 | Branch: `feature/issue-10-lobby` | Versión: v1.2 |
+> Plan: PLAN_LOBBY v1.1 (MAYOR: APPROVE, 2026-11-02) | Issue: #10 | Branch: `feature/issue-10-lobby` | Versión: v1.3 |
 > Fecha: 2026-11-02
 
 ## Changelog
 
+- **v1.3 (2026-11-02)** — Tras TASK-1 (revisión del MID: PASA; `documents/REPORTES_LOBBY.md`). Cambia solo §0, §3 y
+  TASK-3 en adelante (TASK-1 y TASK-2 intactos):
+  - **§0:** baseline real `bee80e5` (`master` con #39): `node --test` 99, app 142, Move 83; desviación 1 de TASK-1
+    aceptada.
+  - **§3 y TASK-3:** constantes calibradas con P5/P7: `LOBBY_EVENTS_PER_REQUEST` 50, `LOBBY_MAX_REQUESTS_PER_PAGE` 2,
+    `LOBBY_PAGE_TARGET` 20, `LOBBY_FLOOR_MARGIN_CHECKPOINTS` 16 000.
+  - **Aviso al MAYOR — H-5 precisa M-4 con evidencia medida (P7, testnet):** un `RpcError` `OUT_OF_RANGE` del
+    `listEvents` crudo ("requested data below earliest available", sin frames) es el cruce del piso y pasa **directo** a
+    `HistoryPrunedError`, sin depender de la relectura del piso; cualquier otro `RpcError` que no sea `CANCELLED` mantiene
+    la relectura y NIT-1 de v1.1. Test nuevo (TASK-3).
+  - **TASK-3/5:** el `previousTransaction` de la fixture `resolved` es el `cancel_game` fallido de P6, no la aceptación;
+    ningún test ni vista lo asume. Paths de `getCheckpoint` confirmados en P7 (`sequence_number`, `summary.timestamp`).
+  - **TASK-6:** nota para `app/README.md`: en el fullnode público `client.listEvents` del SDK falla con `OUT_OF_RANGE`; toda
+    lista por eventos usa el crudo con `startCheckpoint` (#13 lo hereda).
+  - **Smoke, paso 9:** concretado con las constantes calibradas.
 - **v1.2 (2026-11-02)** — Revisión MAYOR del handoff v1.1: APPROVE con 1 MINOR y 1 NIT (P-1 = (a) y DL-11 = aceptar,
   D-20261102-04):
   - **MINOR-1 (TASK-4):** el `ReadStatus` de `useLobby` combina la query de la publicación y la infinita; un error de
@@ -47,11 +62,13 @@ por gRPC y una política de reintentos común a todas las lecturas.
 **Lo que NO entrega:** crear, cancelar o rechazar (#11), aceptar (#12), "mis partidas" e invitaciones recibidas (#13),
 panel admin (#14), indexador propio, ni cambios del contrato.
 
-## 0. Baseline de gates verificado (2026-11-02, `master` `dfb11ce`)
+## 0. Baseline de gates verificado (2026-11-02, `master` `bee80e5`)
 
-Verificado por el MID con `git log` y `documents/STATUS.md`. Entre `9bf7a77` (merge de #9, donde se midió la app) y
-`dfb11ce` no cambió nada en `app/`, `contracts/`, `.github/`, `package.json` ni `package-lock.json` (`git diff --stat
-9bf7a77 dfb11ce -- …` vacío): el baseline sigue vigente. La branch tiene encima solo el plan (`48a6c32`, `4b522ea`).
+Base real de la branch: `bee80e5` (`master` con #39: solo `contracts/scripts/`, su README y `STATUS.md`; nada de `app/`).
+La v1 a v1.2 citaba `dfb11ce`/94 por error del MID; el DEV midió en TASK-1 los valores de abajo, antes y después del task,
+y la **desviación 1 de TASK-1** (`node --test` 99 en vez de 94, +5 de #39) **quedó aceptada** (revisión de TASK-1,
+`documents/REPORTES_LOBBY.md`). Encima de la base, la branch suma el plan, el handoff y TASK-1 (`e5d125f`: fixture, script
+y `contracts/README.md`, sin cambios de gates).
 
 | Área | Gate | Baseline |
 |---|---|---|
@@ -61,9 +78,10 @@ Verificado por el MID con `git log` y `documents/STATUS.md`. Entre `9bf7a77` (me
 | App | `npm test -w app` | **142 tests PASS en 12 archivos** |
 | App | `VITE_SUI_NETWORK=testnet npm run build -w app` | exit 0; `index-*.js` 826 kB, con el aviso informativo de chunk > 500 kB (#15) |
 | Contracts | `sui move build` / `--lint` / `test` con `-e testnet --warnings-are-errors` | 0 warnings / 0 lints / **83 tests PASS**; `Move.lock` sin delta |
-| Contracts | `node --test scripts/*.test.mjs` / `node scripts/publish.mjs check` | **94 PASS** / "0 despliegues" |
+| Contracts | `node --test scripts/*.test.mjs` / `node scripts/publish.mjs check` | **99 PASS** / "0 despliegues" |
 
-**Primer paso de TASK-1:** correr el gate completo (`agents.md` §3, job `app` + job `contracts`) y pegarlo como
+**Primer paso de cada task desde TASK-3:** el gate de la app sin cambios respecto del último reporte (TASK-2 suma sus
+tests). **Primer paso de TASK-1 (histórico):** correr el gate completo (`agents.md` §3, job `app` + job `contracts`) y pegarlo como
 "verificación del baseline". Si algo difiere, se para y se reporta antes de tocar nada.
 
 ## 1. Decisiones (no reabrir)
@@ -143,7 +161,7 @@ decide otra cosa, se abre un issue aparte y este handoff no cambia.
 | `app/src/sui/ids.ts` | `parseObjectIdInput(raw: string): string \| null`; `sameAddress(a, b): boolean` |
 | `app/src/sui/transactionInfo.ts` | `fetchTransactionInfo(client, { digest, signal }): Promise<{ timestampMs: number \| null; checkpoint: bigint \| null }>`; `fetchPublishCheckpoint(client, { digest, signal }): Promise<bigint \| null>` (`null` = podada); `fetchCheckpointTime(client, { sequenceNumber, signal }): Promise<number \| null>` |
 | `app/src/sui/nodeInfo.ts` | `NodeInfo` suma `lowestAvailableCheckpoint: bigint \| null` |
-| `app/src/sui/lobby.ts` | `LOBBY_EVENTS_PER_REQUEST`, `LOBBY_MAX_REQUESTS_PER_PAGE`, `LOBBY_PAGE_TARGET` (calibrados con P5), `LOBBY_FLOOR_MARGIN_CHECKPOINTS` (calibrado con P7); `type LobbyItem = { kind: 'game'; game: Game; createdTxDigest: string } \| { kind: 'unreadable'; gameId: string \| null; txDigest: string }`; `type LobbyLowerBound = { checkpoint: bigint; kind: 'publish' \| 'node_floor' \| 'none' }`; `lobbyLowerBound({ publishCheckpoint: bigint \| null, nodeFloor: bigint \| null }): LobbyLowerBound` (pura); `fetchLobbyPage(client, { originalPackageId, publishCheckpoint: bigint \| null, before: string \| null, signal }): Promise<{ items: LobbyItem[]; endCursor: string \| null; hasNextPage: boolean; lowerBound: LobbyLowerBound; end: 'more' \| 'bound' \| 'history_pruned' }>` (cursor en base64) |
+| `app/src/sui/lobby.ts` | `LOBBY_EVENTS_PER_REQUEST = 50`, `LOBBY_MAX_REQUESTS_PER_PAGE = 2`, `LOBBY_PAGE_TARGET = 20`, `LOBBY_FLOOR_MARGIN_CHECKPOINTS = 16_000n` (calibrados en TASK-1: tablas de P5/P7 de `documents/REPORTES_LOBBY.md`; 1 pedido crudo de 50 cubrió ≈ 14 épocas de un tipo escaso en testnet, tope de `limit` ≥ 1000, 4,36 checkpoints/s ⇒ 16 000 ≈ 1 h); `type LobbyItem = { kind: 'game'; game: Game; createdTxDigest: string } \| { kind: 'unreadable'; gameId: string \| null; txDigest: string }`; `type LobbyLowerBound = { checkpoint: bigint; kind: 'publish' \| 'node_floor' \| 'none' }`; `lobbyLowerBound({ publishCheckpoint: bigint \| null, nodeFloor: bigint \| null }): LobbyLowerBound` (pura); `fetchLobbyPage(client, { originalPackageId, publishCheckpoint: bigint \| null, before: string \| null, signal }): Promise<{ items: LobbyItem[]; endCursor: string \| null; hasNextPage: boolean; lowerBound: LobbyLowerBound; end: 'more' \| 'bound' \| 'history_pruned' }>` (cursor en base64) |
 | `app/src/sui/gameDetail.ts` | `GAME_REFETCH_MS = 15_000`; `fetchGame(client, { id, originalPackageId, signal }): Promise<{ game: Game; previousTransaction: string \| null }>` |
 | `app/src/sui/config.ts` | `AppConfig` suma `publishTxDigest: string` |
 | `app/src/hooks/queryKeys.ts` | `queryKeys.nodeInfo(network)`, `.lobby(network, originalPackageId)`, `.game(network, id)`, `.txInfo(network, digest)`, `.checkpointTime(network, sequenceNumber)` |
@@ -338,11 +356,16 @@ termine con un "no hay más" honesto, **para** no quedarme mirando una búsqueda
 **No entrega:** hooks ni UI.
 
 ### 2. Contexto
-- **Precondición:** TASK-1 sin STOP contingente (o STOP resuelto por el usuario), con las constantes calibradas, y
-  **P-1 confirmada por el usuario** (este task asume la opción (a)).
-- Poda del fullnode público (M-4): piso ≈ 14,6 días detrás de la punta y en movimiento; por debajo, `getTransaction` y
-  `getCheckpoint` dan `NOT_FOUND` y `ListEvents` termina en error (`list_events.rs` @ `testnet-v1.83.0:179-190`); códigos
-  exactos en P7. `GetServiceInfoResponse.lowestAvailableCheckpoint` (`ledger_service.d.mts`, campo 6).
+- **Precondición cumplida:** TASK-1 sin STOP contingente (causas 1-3: no), constantes calibradas (§3: 50 / 2 / 20 /
+  16 000, tablas de P5/P7 en `documents/REPORTES_LOBBY.md`) y P-1 = (a) confirmada (D-20261102-04 (1)).
+- Poda del fullnode público (M-4), **medida en P7 (testnet)**: piso ≈ 14,6 días detrás de la punta, avanza parejo (~4
+  checkpoints/s); `listEvents` crudo con `startCheckpoint` < piso ⇒ **`RpcError` `OUT_OF_RANGE`** inmediato, sin frames
+  ("requested data below earliest available"); `getCheckpoint` < piso ⇒ `NOT_FOUND`; `getTransaction` podada ⇒
+  `TransactionError` `notFound`. Además, el `client.listEvents` del SDK (sin rango) también da `OUT_OF_RANGE` en el
+  fullnode público: **no se usa** para listas. `GetServiceInfoResponse.lowestAvailableCheckpoint` (campo 6).
+- Fixture `objects.resolved`: su `previousTransaction` es el **`cancel_game` fallido de P6** (P6 confirmó que una
+  transacción fallida cambia `previousTransaction`), **no** la aceptación. Ningún test de este task ni de TASK-5 asume que
+  `previousTransaction` de una resuelta es la transacción que la resolvió.
 - `nodeInfo.ts:24-39` (corte con `AbortController` + `setTimeout`, comentario de por qué no `AbortSignal.timeout`).
 - Transporte: un abort con razón `AbortError` llega como `RpcError` `CANCELLED`; un abort con un `Error` propio, como
   `INTERNAL` (`@protobuf-ts/grpcweb-transport/build/es2015/grpc-web-transport.js:101-110`).
@@ -377,11 +400,12 @@ termine con un "no hay más" honesto, **para** no quedarme mirando una búsqueda
   `TransactionError` ⇒ se relanza (no transitorio). `fetchPublishCheckpoint`: igual, pero `TransactionError` con `reason`
   `notFound` ⇒ `null` (publicación podada, M-4) y `checkpoint` `null` ⇒ `NotYetCheckpointedError` (NIT-2).
   `fetchCheckpointTime`: crudo `client.ledgerService.getCheckpoint({ checkpointId: { oneofKind: 'sequenceNumber',
-  sequenceNumber }, readMask: { paths: ['sequence_number', 'summary.timestamp'] } }, { abort })` (paths a confirmar en
-  P7) ⇒ milisegundos o `null`.
+  sequenceNumber }, readMask: { paths: ['sequence_number', 'summary.timestamp'] } }, { abort })` (paths confirmados
+  en P7, localnet) ⇒ milisegundos o `null`.
 - **`gameDetail.ts`:** `fetchGame` con `client.getObject({ objectId, include: { content: true, previousTransaction:
   true } })`; `ObjectError` con `reason` `notFound`/`deleted` ⇒ `GameNotFoundError`; `type` ajeno ⇒ `NotAGameError`
-  (antes de parsear); el resto por `parseGameObject`.
+  (antes de parsear); el resto por `parseGameObject`. `previousTransaction` se devuelve tal cual: es la última transacción
+  que tocó el objeto (puede ser una fallida, P6), solo para "Última actividad".
 - **`lobby.ts`** (DL-2, DL-3, M-1, M-2, M-4, H-1/H-2/H-4):
   0. **Cota (M-4):** al inicio de cada página, `fetchNodeInfo(client, signal)` ⇒ piso; `lobbyLowerBound({
      publishCheckpoint, nodeFloor })`: si el piso es > 0, `floorBound = piso + LOBBY_FLOOR_MARGIN_CHECKPOINTS`; la cota es
@@ -397,13 +421,15 @@ termine con un "no hay más" honesto, **para** no quedarme mirando una búsqueda
      `ReadDataError('malformed')`.
   3. `hasNextPage` = `reason ∈ {ITEM_LIMIT, SCAN_LIMIT}`; `CHECKPOINT_BOUND`, `LEDGER_TIP` o `CURSOR_BOUND` ⇒ `false`
      (`end: 'bound'`). **`UNKNOWN` o cualquier valor no listado ⇒ `ReadDataError('malformed')`** (NIT-1).
-  3b. **Piso a mitad del escaneo (M-4):** si un pedido falla con un `RpcError` que no sea `CANCELLED`, se relee
-     `fetchNodeInfo`; si el piso nuevo es mayor que la `startCheckpoint` usada, el error se convierte en
-     `HistoryPrunedError`, que el bucle captura: se descartan los eventos de ese pedido, la página devuelve lo reunido en
+  3b. **Piso a mitad del escaneo (M-4, precisado por H-5):** si un pedido falla con un `RpcError` con
+     **`code === 'OUT_OF_RANGE'`** (cruce del piso medido en P7), se convierte **directamente** en `HistoryPrunedError`, sin
+     releer el piso (H-5). Si falla con cualquier otro `RpcError` que no sea `CANCELLED`, se relee `fetchNodeInfo`; si el
+     piso nuevo es mayor que la `startCheckpoint` usada, el error se convierte en `HistoryPrunedError`. En ambos casos el
+     bucle lo captura: se descartan los eventos de ese pedido, la página devuelve lo reunido en
      los pedidos anteriores con `hasNextPage: false` y `end: 'history_pruned'`, y `lowerBound.kind` pasa a `'node_floor'`.
      Si el piso no explica el error, se relanza el original (y la política decide si se reintenta). **Si la relectura
      (`fetchNodeInfo`) también falla, se relanza el error original del pedido, no el de la relectura** (NIT-1 de v1.1).
-     El código medido en P7 se documenta en un comentario; la decisión no depende de él.
+     Un comentario cita la medición de P7 (`OUT_OF_RANGE`, "requested data below earliest available").
   4. **M-2:** si el cursor final es igual al `before` enviado (comparación de bytes) y `hasNextPage` es `true` ⇒
      `PaginationStalledError` (no transitorio). `endCursor` `null` con `hasNextPage` `true` ⇒ mismo error.
   5. Bucle acotado: repetir con `before = endCursor` mientras `hasNextPage`, haya menos de `LOBBY_PAGE_TARGET`
@@ -452,7 +478,12 @@ termine con un "no hay más" honesto, **para** no quedarme mirando una búsqueda
   relectura muestra un piso mayor) ⇒ solo los ítems del primer pedido, `hasNextPage: false`, `end: 'history_pruned'`, sin
   ítems del pedido fallido; el mismo error con un piso que **no** se movió ⇒ se relanza el original; **el pedido falla y
   la relectura del piso también falla (con otro error) ⇒ se relanza el error original del pedido**; el piso se relee en
-  cada página.
+  cada página. **H-5:** un pedido falla con `RpcError` `OUT_OF_RANGE` y el piso releído **no** se movió ⇒ igual
+  `end: 'history_pruned'` con los ítems de los pedidos anteriores, sin ítems del fallido, y **sin** llamar a
+  `fetchNodeInfo` por ese error (se cuenta solo la lectura del inicio de la página); si es el **primer** pedido de la
+  página ⇒ 0 ítems, `hasNextPage: false`, `end: 'history_pruned'` y `lowerBound.kind` `'node_floor'` (lo que TASK-5 muestra
+  como "No hay partidas abiertas en el historial disponible del nodo (desde <fecha>)"); `OUT_OF_RANGE` nunca se reintenta
+  (`shouldRetryRead` = `false`).
 - `fetchPublishCheckpoint`: valor; `TransactionError` `notFound` ⇒ `null`; `checkpoint` `null` ⇒
   `NotYetCheckpointedError` y `shouldRetryRead(0, e) === true` (NIT-2). `fetchCheckpointTime`: valor y `null`.
 - `nodeInfo`: `lowestAvailableCheckpoint` presente y ausente.
@@ -584,7 +615,9 @@ acciones (crear, aceptar…).
   una nota corta "según la fórmula del contrato"); "Última actividad: <hora>"; link al explorador del objeto si la red lo
   tiene.
 - **`GameDetailPage`** (`/game/:id`): `useParams().id` ⇒ `useGame`; `invalid_id` ⇒ "ID de partida inválido" (sin
-  consulta); errores con `ReadState`; datos ⇒ `GameDetail` + `useTransactionTime(previousTransaction)`.
+  consulta); errores con `ReadState`; datos ⇒ `GameDetail` + `useTransactionTime(previousTransaction)`. "Última
+  actividad" es la hora de `previousTransaction`, que puede ser una transacción fallida (P6; la fixture `resolved` apunta al
+  `cancel_game` fallido): nunca se rotula como "resuelta el" ni se usa para sacar montos.
 - **`HomePage`:** intro actual + `LobbyList`. **`App.tsx`:** ruta `game/:id`.
 - **`Header`:** `<ConnectButton>Conectar wallet</ConnectButton>` (DL-11, por defecto). **`NetworkBadge`:** `retrying` ⇒
   "reconectando… (intento n de m)".
@@ -641,6 +674,10 @@ mantener #11-#14 sin redescubrir #10. **No entrega:** código.
   - **historial del nodo (P-1 (a)):** en testnet el lobby solo cubre el historial que conserva el fullnode público
     (≈ 14 días; piso de `lowestAvailableCheckpoint`); las partidas abiertas más viejas no aparecen aunque sigan `Pending`
     (se ven por su ID en `/game/:id`, que lee el objeto); la hora de una transacción podada sale como "—";
+  - **listas por eventos:** en el fullnode público de testnet, `client.listEvents` del SDK (sin rango de checkpoints) falla
+    con `OUT_OF_RANGE` (medido en P7); toda lista por eventos usa el crudo `client.ledgerService.listEvents` con
+    `startCheckpoint` (cota de M-4) y trata `OUT_OF_RANGE` como fin del historial disponible. **#13 lo hereda.** La
+    paginación del SDK solo vale contra un nodo sin poda (p. ej. la localnet);
   - latencia del indicador recalculada (≤ ~25 s con el nodo caído, ≤ ~55 s colgado);
   - wallet: botón en español y modal/menú del kit en inglés (DL-11, D-20261102-04 (2));
   - cómo recapturar las fixtures.
@@ -686,8 +723,9 @@ Reporte §5. Sin commits. Después, el MID genera `documents/SMOKE_LOBBY.md`.
   6. `#/game/<ID en mayúsculas>` ⇒ el mismo detalle (y la forma corta si algún ID empieza con ceros).
   7. `#/game/xyz` ⇒ "ID de partida inválido" y **ningún** `POST …/BatchGetObjects` en CDP `Network.*`.
   8. ID válido inexistente ⇒ "no existe"; ID de la House ⇒ "no es una partida".
-  9. PTB con `LOBBY_PAGE_TARGET` + 5 `create_game` abiertas ⇒ `LOBBY_PAGE_TARGET` filas + "Cargar más" ⇒ el resto, sin
-     duplicados; al agotar, sin botón de seguir.
+  9. PTB con 55 `create_game` abiertas ⇒ la primera página es **un** pedido de 50 eventos (`ITEM_LIMIT`; ya supera
+     `LOBBY_PAGE_TARGET` = 20) con sus partidas abiertas y "Cargar más" ⇒ el resto, sin duplicados; al agotar
+     (`CHECKPOINT_BOUND` en la publicación), sin botón de seguir.
   10. Botón del kit "Conectar wallet" (shadow DOM vía CDP); conectar la burner. La marca "tuya" no se puede verificar en el
       navegador en #10 (la burner no crea partidas sin #11): la cubren los tests de TASK-4/5.
   11. Último: con el lobby abierto, `kill` de la red ⇒ "Actualizar" ⇒ "Reintentando… (intento 2 de 3)" y luego error con
