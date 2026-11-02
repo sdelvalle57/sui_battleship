@@ -37,7 +37,7 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 
 | Área @ ref | Gate | Resultado |
 |---|---|---|
-| contracts/scripts @ `feature/issue-39-publish-guards` (TASK-1 de #39), Node `v26.13.0`, 2026-11-02 | `cd contracts && node --test scripts/*.test.mjs` | 🟢 exit 0. **99 tests PASS** (51 `deployment.test.mjs` + 48 `publish.test.mjs`); step del job `contracts` de la CI |
+| contracts/scripts @ `master` (`380bce6`, merge de #39), Node `v26.13.0`, 2026-11-02 | `cd contracts && node --test scripts/*.test.mjs` | 🟢 exit 0. **99 tests PASS** (51 `deployment.test.mjs` + 48 `publish.test.mjs`); step del job `contracts` de la CI |
 | | `node scripts/publish.mjs check` | 🟢 exit 0. **0 despliegues** |
 | contracts/scripts @ `feature/issue-7-deployments` (C1 del addendum v1.3 de #7), Node `v26.13.0`, 2026-11-02 | `cd contracts && node --test scripts/*.test.mjs` | 🟢 exit 0. **94 tests PASS** (51 `deployment.test.mjs` + 43 `publish.test.mjs`); step del job `contracts` de la CI |
 | | `node scripts/publish.mjs check` | 🟢 exit 0. **0 despliegues** (sin `contracts/deployments/` ni `Published.toml` hasta #8); step del job `contracts` de la CI |
@@ -106,7 +106,7 @@ mismos conteos por archivo.
 | #6 (Game: aceptar + coinflip, pago y comisión) | ✅ 2026-10-31 | PR #32 mergeado (`8fddbda`); MAYOR APPROVE; CI `contracts` verde (83/83, coverage 100 %); smoke en localnet aislada 16/16 on-chain; fixtures de lectura → #10 (D-20261031-01). Artefactos borrados en el housekeeping (`git show 8fddbda:documents/PLAN_ACCEPT.md`, `HANDOFF_`, `REVISION_PLAN_`, `SMOKE_`, `REPORTES_ACCEPT.md`) |
 | #7 (Deployments json + script de publicación) | ✅ 2026-11-02 | PR #38 mergeado (`6ff8353`); MAYOR APPROVE (0 BLOCKER/MAJOR; MINOR-2 y NIT-2 → #39, antes de #8); CI `contracts` verde (83/83, `node --test` 94/94, `check` "0 despliegues"). `contracts/deployments/<red>.json` (14 campos, sin direcciones; D-20261102-01), `contracts/scripts/{deployment,publish}.mjs` (7 guardas, `SUI_CONFIG_DIR` propio, D-20261102-03); smoke en localnet aislada 12/12 + re-corrida 5/5. Artefactos borrados en el housekeeping (`git show 6ff8353:documents/PLAN_DEPLOY.md`, `HANDOFF_`, `REVISION_PLAN_`, `SMOKE_`, `REPORTES_DEPLOY.md`) |
 | #9 (scaffolding de `app/` + capa `sui/` + job `app` de CI) | ✅ 2026-11-02 | PR #36 mergeado (`9bf7a77`); MAYOR APPROVE (0 BLOCKER/MAJOR); CI `contracts` + `app` verde (142 tests app, 83 Move, 94 scripts). Smoke en localnet aislada 17/17 (pasos de navegador en Chrome headless con perfil desechable); rama "con `testnet.json`" del paso 15 pendiente de #8. Check `app` requerido en `master` desde 2026-11-02 (D-20261102-02 (7)). Artefactos borrados en el housekeeping (`git show 9bf7a77:documents/PLAN_APP.md`, `HANDOFF_`, `REVISION_PLAN_`, `SMOKE_`, `REPORTES_APP.md`) |
-| Siguiente | ⏳ | #39 (arreglos del script de publicación, antes de #8); #8 (pre-vuelo H13 y publicación en testnet por el owner, sin `--out`; después, build de testnet → "testnet · nodo OK"); #10 (lecturas: política de reintentos, `cancelQueries`, textos del kit, hora desde `getTransaction`, paginar `listEvents` por `hasNextPage`) |
+| Siguiente | ⏳ | #8 (pre-vuelo H13 y publicación en testnet por el owner, sin `--out`; después, build de testnet → "testnet · nodo OK"); #10 (lecturas: política de reintentos, `cancelQueries`, textos del kit, hora desde `getTransaction`, paginar `listEvents` por `hasNextPage`) |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -161,3 +161,4 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 | #6 Game: aceptar + coinflip `sui::random`, pago y comisión, 31 tests | #32 → `8fddbda` | 2026-10-31 |
 | #7 Deployments json + script de publicación guardado + check en CI | #38 → `6ff8353` | 2026-11-02 |
 | #9 Scaffolding de `app/`, capa `sui/`, wallet kit, indicador de red, job `app` | #36 → `9bf7a77` | 2026-11-02 |
+| #39 Guardas del script de publicación: `--out` rechazado en testnet, ruta de la config oculta en errores | #42 → `380bce6` | 2026-11-02 |
