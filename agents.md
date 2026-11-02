@@ -28,7 +28,8 @@ se citan como `#N`.
 
 **Layout objetivo (D-20261030-03)** — `contracts/`, `package.json` y `.nvmrc` existen desde #2;
 `contracts/tests/` y `contracts/README.md` desde #4; `.github/workflows/` desde #3 (`ci.yml`: job
-`contracts`; el job `app` llega con #9); `app/` (#9), `contracts/deployments/` (#7) y `contracts/fixtures/` (#10,
+`contracts`; el job `app` llega con #9); `contracts/scripts/` desde #7; `app/` (#9), `contracts/deployments/` y
+`contracts/Published.toml` (los escribe la primera publicación en testnet, #8) y `contracts/fixtures/` (#10,
 D-20261031-01) llegan con su issue:
 
 ```
@@ -36,8 +37,10 @@ sui_battleship/
 ├── agents.md                 # este archivo
 ├── documents/                # flujo multi-agente, estándares, decisiones, status, planes/handoffs
 ├── contracts/                # paquete Move (Move.toml, Move.lock, README.md, sources/, tests/)
+│   ├── scripts/              # (#7) publish.mjs (publish/record/check), deployment.mjs, tests y fixtures/ de la CLI
 │   ├── fixtures/             # (#10) respuestas reales del RPC de lectura (gRPC o GraphQL) del Game por variante
-│   └── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos)
+│   ├── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos); lo escribe el script
+│   └── Published.toml        # (#8) lo escribe `sui client publish`: fuente de los datos del paquete
 ├── app/                      # cliente React (Vite + TS + SDK TypeScript de Sui + wallet kit)
 ├── package.json              # npm workspaces: ["app"]
 ├── .nvmrc                    # versión de Node (PROY-17)
@@ -71,14 +74,25 @@ Los gates se corren con `cd contracts && printf 'n\n' | sui move …` (equivalen
 | `sui move build -e testnet --warnings-are-errors` | Compila. Gate bloqueante: sin errores ni warnings |
 | `sui move build -e testnet --lint --warnings-are-errors` | Lints de Sui. Gate bloqueante (D-20261030-13): con `--warnings-are-errors` un lint sale como `error[ESL…]` y corta el build (R4 de #3) |
 | `sui move test -e testnet --warnings-are-errors` | Tests unitarios (`#[test]`, `test_scenario`). Gate bloqueante |
+| `node --test scripts/*.test.mjs` | Tests de los scripts de despliegue (Node 26: `nvm use` o ruta absoluta). Gate bloqueante (#7) |
+| `node scripts/publish.mjs check` | Valida `deployments/*.json` y su coherencia con `Published.toml` (Node 26). Gate bloqueante (#7, ARQ-6) |
 | `git diff --exit-code -- Move.lock` | Tras los gates: el lock no cambia (PROY-11) |
 | `sui move test -e testnet --coverage && sui move coverage summary -e testnet` | Cobertura (informativo) |
 | Red local para smokes: **solo aislada** | Ver "Localnet aislada (smokes)" abajo; nunca `sui start` a secas |
-| `sui client publish` | Publicación — **solo el owner o con su autorización explícita** (§12) |
+| `node scripts/publish.mjs publish --network testnet` | Publicación — **solo el owner, con su `SUI_CONFIG_DIR` propio** (§12, D-20261102-03); agentes: solo `--network localnet` dentro de la localnet aislada |
 
-Las cuatro primeras filas son exactamente los steps de gate del job `contracts` de
+Las seis primeras filas son exactamente los steps de gate del job `contracts` de
 `.github/workflows/ci.yml` (PROY-18); el job además exige árbol limpio y cero claves. Baseline vigente
-de los tres gates: `documents/STATUS.md`.
+de los gates: `documents/STATUS.md`.
+
+**Quién corre qué** (`contracts/scripts/publish.mjs`, D-20261102-01 y D-20261102-03):
+
+| Comando | Agentes (DEV, MID, MAYOR, orquestador) | Owner |
+|---|---|---|
+| `node --test scripts/*.test.mjs`, `node scripts/publish.mjs check` | sí (gate) | sí |
+| `node scripts/publish.mjs record …` | sí (con salidas de localnet) | sí |
+| `node scripts/publish.mjs publish --network localnet …` | **solo** con el prefijo de la localnet aislada (`. env.sh && smoke_guard &&`, abajo) | sí, con su localnet aislada |
+| `node scripts/publish.mjs publish --network testnet …` (con o sin `--dry-run`) | **nunca** (D4) | sí, con `SUI_CONFIG_DIR` propio |
 
 #### Localnet aislada (smokes)
 
@@ -101,6 +115,7 @@ borradas al cerrar. Nada en `~/.sui/`.
    # <SMOKE_DIR>/env.sh — cargar al principio de CADA llamada que invoque sui: `. <SMOKE_DIR>/env.sh && …`
    SMOKE_DIR=<SMOKE_DIR>
    SUI=<ruta absoluta del binario sui>
+   NODE=<ruta absoluta de Node 26>     # p. ej. ~/.nvm/versions/node/v26.13.0/bin/node, escrita literal (HOME aislado: sin nvm)
    export SUI_CONFIG_DIR="$SMOKE_DIR/net" TMPDIR="$SMOKE_DIR/tmp" HOME="$SMOKE_DIR/home" MOVE_HOME=<HOME real>/.move
    [ -x "$SUI" ] && [ -d "$SUI_CONFIG_DIR" ] || { echo GUARD-FAIL; return 97; }
    smoke_guard() {
@@ -126,7 +141,11 @@ borradas al cerrar. Nada en `~/.sui/`.
      `exec` (así el PID guardado es el de la red): `. <SMOKE_DIR>/env.sh && smoke_guard && echo $$ > "$SMOKE_DIR/sui.pid" && exec "$SUI" start --network.config "$SUI_CONFIG_DIR" > "$SMOKE_DIR/sui-start.log" 2>&1`.
      Nunca `nohup … &` dentro de una llamada normal.
    - Comprobar que está arriba, en otra llamada: `. <SMOKE_DIR>/env.sh && smoke_guard && suic chain-identifier`.
-   - Publicación efímera del paquete, **después** del paso 5 (necesita `ADMIN` en `ids.env`), con el prefijo del paso 3: `act_as "$ADMIN" && cd <repo>/contracts && printf 'n\n' | "$SUI" client test-publish --build-env testnet --pubfile-path "$SMOKE_DIR/Pub.localnet.toml" --json`.
+   - Publicación efímera del paquete con el script (#7), **después** del paso 5 (necesita `ADMIN` en `ids.env`), con
+     el prefijo del paso 3 y desde `contracts/`. Un `--pubfile-path` nuevo por génesis (uno viejo hace fallar a la CLI):
+     - (A) smoke del script, salida dentro de `<SMOKE_DIR>`: `act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs publish --network localnet --pubfile-path "$SMOKE_DIR/Pub.localnet.toml" --out "$SMOKE_DIR/localnet.json"`;
+     - (B) cuando la app necesita la ruta por defecto: lo mismo **sin `--out`**, que escribe
+       `contracts/deployments/localnet.json` (ignorado por git; el script crea la carpeta y el cierre la borra).
      Si modifica `Move.lock`: `git checkout -- contracts/Move.lock` y declararlo.
 5. **Cuentas:** `suic addresses --json` (solo alias y direcciones); las que se usen se anotan en
    `<SMOKE_DIR>/ids.env` (`export ADMIN=0x…`), que también acumula los IDs (`PKG`, `HOUSE`, …). **Nunca**
@@ -137,9 +156,18 @@ borradas al cerrar. Nada en `~/.sui/`.
    `sui-start.log`) no se pegan (solo líneas puntuales revisadas antes). Lo que vaya a docs o fixtures sale
    **únicamente** de lecturas de la red local por la CLI (`suic object`, `suic tx-block`) o por la API que elija #10;
    el fullnode de `sui 1.83.0` no sirve JSON-RPC (`POST` a `:9000` → `404`, H-1 de #6, D-20261031-01).
-7. **Cierre:** `kill "$(cat <SMOKE_DIR>/sui.pid)"` (nunca `pkill`); en otra llamada, confirmar que terminó (`kill -0 "$(cat <SMOKE_DIR>/sui.pid)"` falla) y solo entonces `rm -rf <SMOKE_DIR>` (comprobar que ya no existe); sin cargar `env.sh`,
-   `stat`/`ls` de `~/.sui/sui_config/` idénticos a la línea base; `git status --porcelain`;
-   `git diff --exit-code -- contracts/Move.lock`; ni `contracts/Pub.*.toml` ni `contracts/Published.toml`.
+7. **Cierre:** `kill "$(cat <SMOKE_DIR>/sui.pid)"` (nunca `pkill`); en otra llamada, confirmar que terminó (`kill -0 "$(cat <SMOKE_DIR>/sui.pid)"` falla) y solo entonces `rm -rf <SMOKE_DIR>` (comprobar que ya no existe);
+   `rm -f contracts/deployments/localnet.json` y `rmdir contracts/deployments 2>/dev/null || true` (pertenece a la
+   génesis que se borra); sin cargar `env.sh`, `stat`/`ls` de `~/.sui/sui_config/` idénticos a la línea base;
+   `git status --porcelain`; `git diff --exit-code -- contracts/Move.lock`; ni `contracts/Pub.*.toml` ni
+   `contracts/Published.toml` ni `contracts/deployments/`.
+
+**Reglas del script de publicación para agentes (D-20261102-03):** ningún agente corre
+`publish.mjs publish --network testnet`, ni con `--dry-run`. Un agente solo define `SUI_CONFIG_DIR` como
+`$SMOKE_DIR/net`; la ruta de la config del owner nunca se escribe en el repo, issues, handoffs ni reportes. **Ninguna**
+llamada `sui client …` (ni `publish.mjs publish`) sin el prefijo del paso 3, tampoco las de solo lectura
+(`active-env`, `chain-identifier`, `addresses`): la única forma de ver la salida real de un `sui client` es esta
+localnet. Los gates `sui move …` siguen con su forma canónica.
 
 ### App (`app/`, cuando exista)
 
@@ -177,7 +205,7 @@ eventos y códigos de abort. La UI los consume desde un único módulo (`app/src
 
 | Artefacto | Dónde | Sincronización |
 |---|---|---|
-| Package ID / object IDs por red | `contracts/deployments/<red>.json` | Se actualiza en el mismo PR que la publicación; la app lo importa (nunca IDs hardcodeados en componentes) |
+| Package ID / object IDs por red | `contracts/deployments/<red>.json` | Lo escribe `contracts/scripts/publish.mjs` (nunca a mano), en el mismo PR que la publicación; `Published.toml` es la fuente de los datos del paquete y la CI verifica la coherencia (`publish.mjs check`). La app lo importa (nunca IDs hardcodeados en componentes) |
 | Firmas y eventos | `contracts/sources/*.move` | Tabla en `contracts/README.md`; cambios = STOP (§6 de FLUJO) |
 | Abort codes | constantes `E*` de cada módulo | Tabla en `contracts/README.md` + mapeo en `app/src/sui/errors.ts` |
 
@@ -293,7 +321,7 @@ testnet con una wallet real.
 |---|---|---|
 | Sui CLI | `suiup` (`~/.local/bin`) | `1.83.0-16d2dc1e05ed`, release `testnet` (STATUS H1, Toolchain) |
 | CI | `.github/workflows/ci.yml` (`ubuntu-24.04`) | Versión en `env` (`SUI_VERSION`/`SUI_COMMIT`) = la de STATUS; config sin claves en `$RUNNER_TEMP`; sin secretos |
-| `client.yaml` | `~/.sui/sui_config/` | Sin claves hasta #8 (`active_env: testnet`, D-20261030-07). **Nunca** en el repo ni en logs |
+| `client.yaml` | `~/.sui/sui_config/` | Sin claves **siempre** (`active_env: testnet`, D-20261030-07); la clave del owner vive en su `SUI_CONFIG_DIR` propio (D-20261102-03). **Nunca** en el repo ni en logs |
 | Keystore / direcciones | `~/.sui/sui_config/` | **Nunca** en el repo ni en logs |
 | Node | nvm (20, 22 y 26 instalados) | Usar la de `.nvmrc` (`nvm use`) |
 | Wallet de navegador | extensión de wallet Sui | Para smokes en testnet (owner) |
@@ -302,9 +330,15 @@ testnet con una wallet real.
 
 ## 12. Deploy
 
-- **Contratos:** `sui client publish` desde `contracts/` a testnet. Publicar, upgradear y custodiar el
-  `UpgradeCap`/`HouseCap` es del **owner** (o del orquestador con autorización explícita por publicación).
-  Tras publicar: `contracts/deployments/testnet.json` en el mismo PR.
+- **Contratos:** `node scripts/publish.mjs publish --network testnet` desde `contracts/`, **solo el owner**, en su
+  terminal y con su `SUI_CONFIG_DIR` propio (fuera de `~/.sui/`, D-20261102-03); ningún agente corre el camino testnet.
+  Publicar, upgradear y custodiar el `UpgradeCap`/`HouseCap` es del owner. Detalle y recuperación:
+  `contracts/README.md` → "Despliegues".
+- **Orden de #8:** pre-vuelo H13 (repin si hace falta, gates re-medidos y commiteados) →
+  `SUI_CONFIG_DIR=<su dir> node scripts/publish.mjs publish --network testnet --dry-run` → lo mismo sin `--dry-run`
+  (dry run interno + confirmación escribiendo `testnet`; escribe `deployments/testnet.json` y la CLI,
+  `Published.toml`) → `update_fee_rate` con el comando que imprime el script → entrega de `testnet.json` +
+  `Published.toml` + digest (sin direcciones) en el mismo PR → borrar el directorio temporal del script.
 - **Dirección publicadora:** recibe el `HouseCap` (`key` sin `store`, PROY-3). Si no es la wallet del
   navegador del panel admin (#14), el owner le pasa el cap con `transfer_house_cap` (no con "Send" de la
   wallet).

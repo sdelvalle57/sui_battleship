@@ -10,6 +10,10 @@ código discrepan, manda el código y se corrige la tabla en el mismo PR (`agent
 | `sources/game.move` | `battleship::game` |
 | `tests/house_tests.move` | Suite de `battleship::house` (`sui::test_scenario`) |
 | `tests/game_tests.move` | Suite de `battleship::game` (`sui::test_scenario`) |
+| `scripts/publish.mjs` | Publicación con guardas, `record` y `check` de los despliegues (#7, ver "Despliegues") |
+| `scripts/deployment.mjs` | Formato de `deployments/<red>.json`: funciones puras que usan el script y la CI |
+| `scripts/*.test.mjs`, `scripts/fixtures/` | Tests (`node --test`) y salidas reales de la CLI 1.83.0 en una localnet desechable |
+| `deployments/<red>.json`, `Published.toml` | Datos de cada publicación (los escribe la primera publicación en testnet, #8) |
 
 **Gates (build, lint, test, coverage):** forma canónica en `agents.md` §3 (desde `contracts/`, con
 `-e testnet` y `printf 'n\n' |` delante). Baselines vigentes en `documents/STATUS.md`.
@@ -137,6 +141,10 @@ afecta a las partidas `Pending` existentes, y aceptar solo exige igualar el mont
   de un paquete viejo aborta con `ENotUpgrade` (no se migra hacia atrás). En la v1, `migrate` siempre aborta:
   la House nace en `VERSION`.
 - `transfer_house_cap` no recibe la House y queda fuera del versionado.
+- **Procedimiento de upgrade** (lo extiende el issue de upgrades; el formato de despliegue ya lo soporta): `sui client
+  upgrade` → `migrate` de inmediato con el `HouseCap` → `deployments/testnet.json` actualizado en el **mismo PR** →
+  la app usa el paquete nuevo. Entre el `migrate` y el deploy de la app, crear y aceptar partidas desde la app vieja
+  aborta con `EWrongVersion` (cancelar y rechazar siguen funcionando: no leen la versión).
 
 ### Contención
 
@@ -146,9 +154,9 @@ el MVP.
 
 ### ID de la House
 
-El ID de la House (y el del `HouseCap`) sale de los efectos de la publicación y se registra en
-`contracts/deployments/<red>.json` (#7). La app lo lee desde ahí (`agents.md` §5); el contrato no expone un
-accessor de ID (dentro del paquete, `object::id(house)`).
+El ID de la House (y el del `HouseCap`) sale de los efectos de la publicación y lo registra el script en
+`contracts/deployments/<red>.json`: ver "Despliegues" al final. La app lo lee desde ahí (`agents.md` §5); el contrato
+no expone un accessor de ID (dentro del paquete, `object::id(house)`).
 
 ## `battleship::game`
 
@@ -412,3 +420,165 @@ borra. La UI (#11) muestra ese costo al crear.
   (`Resolved { acceptor, winner }`).
 - La hora de creación es el timestamp de la transacción del evento `GameCreated` (D-20261030-15 D6); el campo
   concreto depende de la API que elija #10.
+
+## Despliegues (#7)
+
+Un archivo por red en `contracts/deployments/<red>.json`: `localnet.json` (ignorado por git) y `testnet.json` (lo
+commitea #8). Lo escribe **solo** `scripts/publish.mjs` (nunca a mano), con `JSON.stringify(obj, null, 2)` y salto de
+línea final, a partir de la salida de la misma transacción de publicación (D-20261102-01).
+
+### Esquema (`schemaVersion: 1`)
+
+Ejemplo con IDs **ficticios**:
+
+```json
+{
+  "schemaVersion": 1,
+  "network": "testnet",
+  "chainId": "4c78adac",
+  "packageId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "originalPackageId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "packageVersion": 1,
+  "upgradeCapId": "0x2222222222222222222222222222222222222222222222222222222222222222",
+  "houseId": "0x3333333333333333333333333333333333333333333333333333333333333333",
+  "houseCapId": "0x4444444444444444444444444444444444444444444444444444444444444444",
+  "publishTxDigest": "11111111111111111111111111111111",
+  "publishTimestamp": "2026-11-05T14:03:12.345Z",
+  "sourceCommit": "5555555555555555555555555555555555555555",
+  "suiCliVersion": "1.83.0-16d2dc1e05ed",
+  "frameworkRev": "719fb2960ccfbf9f4d33041f8ea5146d30671696"
+}
+```
+
+| Campo | Formato | Significado y origen | Describe |
+|---|---|---|---|
+| `schemaVersion` | entero, `1` | Versión de este esquema | — |
+| `network` | `"localnet"` \| `"testnet"` | Red; igual al nombre del archivo | — |
+| `chainId` | 8 hex | `.hex` de `sui client --json chain-identifier`. testnet ⇒ `4c78adac`; una localnet nunca puede tener el de testnet ni el de mainnet (`35834a8a`) | la red |
+| `packageId` | `0x` + 64 hex | Última versión del paquete (= `published-at` de `Published.toml`); target de las llamadas | versión vigente |
+| `originalPackageId` | `0x` + 64 hex | Paquete original (= `original-id`); en la primera publicación = `packageId`. Prefijo de los **tipos** (eventos, `HouseCap`) | publicación original |
+| `packageVersion` | entero ≥ 1 | Versión del objeto paquete (= `version` de `Published.toml`); no es `house::VERSION` | versión vigente |
+| `upgradeCapId` | `0x` + 64 hex | `0x2::package::UpgradeCap` creado al publicar (= `upgrade-capability`) | publicación original |
+| `houseId` | `0x` + 64 hex | `house::House` compartida creada en `init` | publicación original |
+| `houseCapId` | `0x` + 64 hex | `house::HouseCap` creado en `init`; el ID no cambia aunque el cap cambie de manos | publicación original |
+| `publishTxDigest` | base58 (32-44) | Digest de la transacción de publicación | publicación original |
+| `publishTimestamp` | ISO 8601 UTC con ms y `Z` | `timestampMs` de la transacción (hora de la red). No confundir con `published-at` de `Published.toml`, que es una dirección | publicación original |
+| `sourceCommit` | 40 hex o `null` | `git rev-parse HEAD` al publicar; `null` solo en localnet con el árbol sucio | versión vigente |
+| `suiCliVersion` | texto | `sui --version` sin el prefijo `sui ` | versión vigente |
+| `frameworkRev` | 40 hex | `rev` de `[pinned.testnet.Sui]` en `Move.lock` al publicar (STATUS H13) | versión vigente |
+
+"Describe": **publicación original** no cambia nunca; **versión vigente** es la del código en `packageId` (en la v1
+coinciden; un upgrade reescribe estos campos y agrega el opcional `packageTxDigest`).
+
+**Qué no va, y por qué:** ninguna dirección de cuenta (publicador, dueño del `HouseCap`/`UpgradeCap`), ni claves ni
+frases (SEG-3): el script ignora `sender`/`owner` de la salida de la CLI y un test lo verifica. La dirección del
+publicador es visible on-chain (desde el digest o el `HouseCap`); sacarla del repo es higiene, no secreto. Tampoco:
+el `Publisher`, `0x8` (`Random`, igual en todas las redes), `initialSharedVersion` de la House (lo resuelve el SDK) ni
+estado on-chain (comisión, límites, `version` de la House).
+
+**Compatibilidad:**
+
+1. Los 14 campos de la v1 son **obligatorios**; el script y `check` rechazan uno faltante, con formato inválido o
+   una clave desconocida.
+2. Los campos posteriores a la v1 son **opcionales** (se validan solo si aparecen y se registran en el validador y en
+   esta tabla en el mismo PR). Hacer obligatorio un campo nuevo, renombrar, quitar o cambiar un significado ⇒
+   `schemaVersion: 2` + STOP.
+3. Los consumidores (la app, #9) validan lo que usan, rechazan `schemaVersion` ≠ 1 e **ignoran claves desconocidas**.
+4. Contrato de formato para la app: `scripts/fixtures/localnet.deployment.json` (real, generado con `record`).
+
+### `Published.toml` como fuente y `check` de la CI
+
+`sui client publish` escribe `contracts/Published.toml` (`[published.<env>]` con `chain-id`, `published-at`,
+`original-id`, `version`, `upgrade-capability`, …; sin direcciones de cuentas ni rutas). Se commitea: la CLI lo usa
+para upgrades y para impedir una doble publicación. Es la **fuente** de los datos del paquete; el json se deriva.
+`node scripts/publish.mjs check` (step del job `contracts` de la CI) falla si un json es inválido, si su nombre no es
+su `network`, si una red no-localnet no tiene su `[published.<red>]` (o al revés) o si `packageId`, `originalPackageId`,
+`packageVersion`, `upgradeCapId` o `chainId` no coinciden con `Published.toml`. `localnet` no se cruza (lo publica
+`test-publish`, que escribe un `Pub.*.toml` efímero, no `Published.toml`).
+
+### Uso en localnet
+
+- **Siempre una localnet aislada en un directorio propio**, nunca `sui start` a secas ni `--force-regenesis` sin
+  `SUI_CONFIG_DIR` (reescribirían `~/.sui/sui_config/client.yaml`); nada en `~/.sui/`. Variante corta para humanos:
+
+  ```bash
+  SUI_CONFIG_DIR=<dir>/net sui genesis --working-dir <dir>/net
+  SUI_CONFIG_DIR=<dir>/net sui start --network.config <dir>/net      # en otra terminal
+  ```
+
+  Agentes: el procedimiento completo de `agents.md` §3 ("Localnet aislada (smokes)").
+- Publicación con el script, desde `contracts/` y con un `--pubfile-path` **nuevo por génesis** (uno de otra génesis
+  hace fallar a la CLI):
+
+  ```bash
+  SUI_CONFIG_DIR=<dir>/net node scripts/publish.mjs publish --network localnet --pubfile-path <dir>/Pub.localnet.toml [--out <ruta>] [--dry-run]
+  ```
+
+  `SUI_CONFIG_DIR=<dir>/net` va con ruta absoluta: el script rechaza una relativa (guarda de config).
+
+  Sin `--out` escribe `contracts/deployments/localnet.json` (ignorado por git). En localnet se usa
+  `sui client test-publish --build-env testnet`: el manifest no declara un entorno localnet y `publish` no puede.
+
+### Uso en testnet (solo el owner)
+
+Ningún agente corre este camino, ni con `--dry-run` (D-20261102-03).
+
+1. **Config propia:** el owner crea, en su terminal, un `SUI_CONFIG_DIR` **fuera de `~/.sui/`** con su clave y el env
+   `testnet`; `~/.sui/sui_config/` queda sin claves para siempre. El script lo exige (absoluto, con `client.yaml`, y su
+   `realpath` fuera de `~/.sui`).
+2. **Pre-vuelo (STATUS H13):** si hace falta, repin con `update-deps -e testnet`, gates re-medidos y lock commiteado
+   **antes**; árbol limpio.
+3. `SUI_CONFIG_DIR=<su dir> node scripts/publish.mjs publish --network testnet --dry-run`: comprueba env activo y
+   chain id, la versión de la CLI contra `ci.yml`, el árbol limpio y que no exista una publicación previa; imprime el
+   gas estimado. Falla si el dry run cambia `Move.lock`.
+4. Lo mismo **sin `--dry-run`**: repite las guardas y el dry run, y pide escribir `testnet` en la terminal (freno
+   contra accidentes; la autorización es la del owner, D-20261030-09). Escribe `deployments/testnet.json`; la CLI
+   escribe `Published.toml`, y el script verifica que coincidan.
+5. **Comisión (#8):** la House nace con `fee_rate` 0; correr el comando `update_fee_rate` que imprime el script
+   (`sui client call --package <packageId> --module house --function update_fee_rate --args <houseId> <houseCapId> <bps>`)
+   y verificarlo con `sui client object <houseId> --json` (campo `fee_rate`).
+6. **Entrega:** `deployments/testnet.json` + `Published.toml` + digest (sin direcciones) en el mismo PR; luego borrar
+   el directorio temporal del script (`battleship-publish-*`, tiene la salida cruda con la dirección del publicador).
+
+El script guarda en la config activa el cache `chain_id` del env (efecto de `chain-identifier`; inocuo y siempre en
+la config propia, nunca en `~/.sui/`).
+
+### Recuperación (nunca reintentar sin mirar el digest)
+
+Antes de invocar la publicación, el script crea un directorio temporal (`0700`) con `meta.json` (red, chain id,
+commit, CLI, `frameworkRev`) y guarda ahí la salida cruda (`publish-output.json`, `publish-stderr.txt`, `0600`). Si
+la CLI falla, el script imprime ese directorio, el digest si la CLI lo reporta (en stderr o en su salida `--json`), el
+stderr con las direcciones ocultas y la ruta del archivo con el motivo de la CLI, que se revisa ahí y no se pega (puede
+traer la dirección del publicador). Nunca imprime el stdout. **No se reintenta sin buscar antes el digest** (en el
+mensaje o en el explorador): una segunda publicación crea otro paquete.
+
+- Si la transacción existe y solo falló el registro: `record` rearma el json **sin republicar**:
+
+  ```bash
+  node scripts/publish.mjs record --network testnet --from <dir>/publish-output.json
+  ```
+
+  Si la salida no está en el directorio del script, el **owner** la obtiene con su config y la respuesta `n` (misma
+  forma que la salida de la publicación) y pasa `--meta`:
+
+  ```bash
+  printf 'n\n' | SUI_CONFIG_DIR=<su dir> sui client --json tx-block <digest> > <dir>/tx-block.json
+  node scripts/publish.mjs record --network testnet --from <dir>/tx-block.json --meta <dir>/meta.json
+  ```
+
+  Solo el owner: un agente no corre `tx-block` fuera de la localnet aislada (`agents.md` §3, B4).
+- Sin `meta.json`, `record` exige los cuatro valores de la publicación, nunca derivados del estado actual del repo:
+  `--source-commit <sha>`, `--sui-cli-version <versión>`, `--framework-rev <sha>` y `--chain-id <hex>` (testnet:
+  `4c78adac`). Si existe `meta.json`, se usa y los flags se ignoran.
+- Si falta `Published.toml` tras una publicación en testnet, reconstruirlo es STOP de #8.
+
+### Tests
+
+```bash
+cd contracts && node --test scripts/*.test.mjs && node scripts/publish.mjs check     # Node 26 (.nvmrc)
+```
+
+Los fixtures de `contracts/scripts/fixtures/` son el stdout crudo de una localnet aislada y desechable. Contienen la
+dirección y la firma de una cuenta efímera de la génesis, sin valor y con la clave destruida. Al recapturarlos (por
+ejemplo al subir la CLI) se usa siempre el procedimiento de `agents.md` §3; nunca salida de testnet ni de una cuenta
+del owner.

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "network": "localnet",
+  "chainId": "87818ef5",
+  "packageId": "0x280be75013446e6acf6fe1291884cfd05889a12ce00e82c4f1a05b2235e2b06e",
+  "originalPackageId": "0x280be75013446e6acf6fe1291884cfd05889a12ce00e82c4f1a05b2235e2b06e",
+  "packageVersion": 1,
+  "upgradeCapId": "0xc13c18241f1157574188e5c7535612099754b50d7f8a6a8a7351bb55b5d874b3",
+  "houseId": "0xbcbcb0392aad3b13aeb43a007105a1467f4d33a3f40b28aff08f72f4c4da0930",
+  "houseCapId": "0xd37dee147b2f38e168ad47537974ae47a244b52b7caf02545712c3f35a0bc625",
+  "publishTxDigest": "C8teaea3BBUvqFnAJ7WidwvBYAgE7zpNWsZ1gEkiwBCz",
+  "publishTimestamp": "2026-11-02T14:52:59.013Z",
+  "sourceCommit": "ef1a72026cdf02ffbabf46c34016cc151cacc620",
+  "suiCliVersion": "1.83.0-16d2dc1e05ed",
+  "frameworkRev": "719fb2960ccfbf9f4d33041f8ea5146d30671696"
+}

@@ -27,7 +27,7 @@ contenido propio (issues, planes, handoffs, código o revisiones); sí opera git
   `feature/issue-<N>-<slug>` desde `master`; tras cada revisión MID PASA commitea el task con el
   mensaje del MID (staging parcial si el working tree mezcla tasks); pushea y abre el PR con el body
   del MID. Mergea con merge commit según D-20261030-09 (MAYOR sin BLOCKER/MAJOR, CI verde, sin STOP
-  abierto) y hace el housekeeping. **Nunca** publica en testnet sin autorización explícita.
+  abierto) y hace el housekeeping. **Nunca** publica en testnet: lo hace solo el owner (D-20261102-03).
 - **"CI verde"** = check `contracts` (workflow `CI`; el check que D-20261030-13 hace requerido) en verde sobre el head actual
   del PR: con la protección de `master` activa, `gh pr checks <N> --required`; antes,
   `gh pr view <N> --json headRefOid,statusCheckRollup --jq '{head: .headRefOid, contracts: [.statusCheckRollup[] | select(.name=="contracts") | .conclusion]}'`
