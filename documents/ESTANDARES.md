@@ -1,6 +1,6 @@
 # Estándares del Proyecto — Arquitectura, Seguridad y Limpieza (Sui Battleship)
 
-> **Versión:** 1.7 · **Fecha:** 2026-11-02 (adaptado de Cancerbero — D-20261030-01; ARQ-6 por D-20261102-01, #7; PROY-17: `.nvmrc` = 26 por D-20261030-10; SEG-2 y PROY-9 por D-20261030-11; PROY-10 por D-20261030-11 y D-20261030-12, #4; PROY-17 y PROY-18 por D-20261030-13, #3; PROY-7, PROY-8 y PROY-10 por D-20261030-15, #5; PROY-5 y PROY-7 por D-20261030-16, #6)
+> **Versión:** 1.8 · **Fecha:** 2026-11-02 (adaptado de Cancerbero — D-20261030-01; PROY-14, PROY-18 y SEG-8 por D-20261102-02, #9; ARQ-6 por D-20261102-01, #7; PROY-17: `.nvmrc` = 26 por D-20261030-10; SEG-2 y PROY-9 por D-20261030-11; PROY-10 por D-20261030-11 y D-20261030-12, #4; PROY-17 y PROY-18 por D-20261030-13, #3; PROY-7, PROY-8 y PROY-10 por D-20261030-15, #5; PROY-5 y PROY-7 por D-20261030-16, #6)
 > Fuente única de verdad. El DEV implementa contra estas reglas; el MID y el MAYOR revisan contra ellas.
 > Toda regla tiene ID: los hallazgos se citan como `SEG-4 violado en contracts/sources/game.move:120`.
 > §4 (reglas PROY) tiene prioridad sobre §1–§3.
@@ -32,7 +32,7 @@
 - **SEG-5 — Aleatoriedad.** Solo `sui::random::Random` (objeto `0x8`) con `RandomGenerator` creado dentro de la función. La función que consume aleatoriedad es `entry` **no `public`** (otro paquete no puede componerla y abortar si pierde) y su camino perdedor no consume más gas que el ganador. Nunca `ctx.epoch()`, timestamps ni IDs como fuente de azar.
 - **SEG-6 — Aritmética.** Comisiones en basis points con intermedio `u128` (`amount * fee_rate / 10_000`) para evitar overflow; redondeo definido y testeado (a favor de quién va el resto). Sin restas que puedan dar underflow sin `assert!` previo.
 - **SEG-7 — Objetos compartidos acotados.** Sin vectores ni loops que crezcan sin límite con input de usuarios en objetos compartidos (DoS/contención). Índices globales vía eventos o `Table`/dynamic fields.
-- **SEG-8 — Dependencias nuevas justificadas.** Todo paquete npm o dependencia Move nueva: necesidad, mantenimiento activo, licencia compatible.
+- **SEG-8 — Dependencias nuevas justificadas.** Todo paquete npm o dependencia Move nueva: necesidad, mantenimiento activo, licencia compatible. En npm (D-20261102-02 (3)): versiones **exactas**, `package-lock.json` commiteado, `.npmrc` de la raíz (`save-exact`, `engine-strict`, `min-release-age=7`, `ignore-scripts`), ninguna versión con menos de 7 días, y los `@mysten/*` acoplados **por tren** (una sola versión de cada uno en el árbol). Procedimiento ante un aviso de seguridad: `app/README.md`.
 - **SEG-9 — UI segura.** Sin `dangerouslySetInnerHTML`; IDs/direcciones de la URL validados (`isValidSuiObjectId`/`isValidSuiAddress`) antes de usarlos; la app nunca pide ni maneja claves o seeds — todo se firma en la wallet.
 - **SEG-10 — Resultado honesto de transacciones.** La UI solo muestra éxito si `effects.status` es `success`; un abort se mapea a mensaje claro con su código; nunca éxito optimista sin reconciliar.
 
@@ -74,14 +74,14 @@
 
 - **PROY-12 — Tipado.** TS `strict`, sin `any`; montos en MIST como `bigint` (nunca `number` ni floats para SUI); conversión a SUI solo en un util de formato.
 - **PROY-13 — Capa `sui/`.** Targets Move, builders de `Transaction`, tipos de eventos, parseo de objetos y mapeo de abort codes viven solo en `app/src/sui/`, con tests Vitest.
-- **PROY-14 — Data fetching.** Lecturas vía hooks del wallet kit / TanStack Query sobre el cliente Sui (`useSuiClientQuery` o equivalente); nada de `fetch` manual ni `useEffect` para pedir datos. Invalidar/refrescar tras cada transacción exitosa.
+- **PROY-14 — Data fetching.** Lecturas con `useQuery`/`useInfiniteQuery` de TanStack Query sobre el cliente del kit (`useCurrentClient()`, un `SuiGrpcClient`); mutaciones con `useDAppKit().signAndExecuteTransaction` dentro de `useMutation`; nada de `fetch` manual ni `useEffect` para pedir datos. Invalidar las queries afectadas tras cada transacción exitosa.
 - **PROY-15 — Red e IDs.** La red activa y los IDs salen de `contracts/deployments/<red>.json` vía el módulo de config (ARQ-8); la app indica claramente en qué red está.
 - **PROY-16 — UX de transacciones.** Toda acción muestra estados pendiente/éxito/error, deshabilita el doble envío y enlaza el digest a un explorador de la red activa.
 
 ### Proceso
 
 - **PROY-17 — Toolchain.** Node 26 (`.nvmrc`) y npm workspaces desde la raíz; Sui CLI instalada con `suiup` en local; en CI, el binario `sui` del mismo asset del release, verificado por SHA-256; versión registrada en STATUS y en el `env` del workflow, siempre iguales.
-- **PROY-18 — CI.** El gate local y el de CI son el mismo (`agents.md` §3 = steps del job `contracts`). Un rojo de `contracts` bloquea el merge; `framework-drift` es informativo.
+- **PROY-18 — CI.** El gate local y el de CI son el mismo, para `contracts` y para `app` (`agents.md` §3 = steps de los jobs `contracts` y `app`). Un rojo de cualquiera de los dos bloquea el merge; `framework-drift` es informativo.
 - **PROY-19 — Antes de entregar:** gate completo del área tocada con output pegado (agents.md §3). Rojos conocidos (STATUS.md) se reportan con su número, nunca como verdes.
 - **PROY-20 — Docs viven con el código.** Si el cambio toca arquitectura, layout, comandos, contrato on-chain o tests, se actualizan README del área, `agents.md` y `documents/STATUS.md` en el mismo PR.
 - **PROY-21 — Contratos primero.** Un cambio que afecte contrato y app: tasks de contrato antes que los de app; la app nunca consume una firma/evento que no esté implementado y testeado en la misma branch o en `master`. Publicación y `deployments/*.json` en el mismo PR.

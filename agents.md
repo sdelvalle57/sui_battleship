@@ -28,9 +28,9 @@ se citan como `#N`.
 
 **Layout objetivo (D-20261030-03)** — `contracts/`, `package.json` y `.nvmrc` existen desde #2;
 `contracts/tests/` y `contracts/README.md` desde #4; `.github/workflows/` desde #3 (`ci.yml`: job
-`contracts`; el job `app` llega con #9); `contracts/scripts/` desde #7; `app/` (#9), `contracts/deployments/` y
-`contracts/Published.toml` (los escribe la primera publicación en testnet, #8) y `contracts/fixtures/` (#10,
-D-20261031-01) llegan con su issue:
+`contracts`; el job `app` desde #9); `contracts/scripts/` desde #7; `app/`, `.npmrc` y `package-lock.json` desde #9;
+`contracts/deployments/` y `contracts/Published.toml` (los escribe la primera publicación en testnet, #8) y
+`contracts/fixtures/` (#10, D-20261031-01) llegan con su issue:
 
 ```
 sui_battleship/
@@ -38,19 +38,21 @@ sui_battleship/
 ├── documents/                # flujo multi-agente, estándares, decisiones, status, planes/handoffs
 ├── contracts/                # paquete Move (Move.toml, Move.lock, README.md, sources/, tests/)
 │   ├── scripts/              # (#7) publish.mjs (publish/record/check), deployment.mjs, tests y fixtures/ de la CLI
-│   ├── fixtures/             # (#10) respuestas reales del RPC de lectura (gRPC o GraphQL) del Game por variante
+│   ├── fixtures/             # (#10) respuestas reales de la lectura por gRPC (SuiGrpcClient) del Game por variante
 │   ├── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos); lo escribe el script
 │   └── Published.toml        # (#8) lo escribe `sui client publish`: fuente de los datos del paquete
-├── app/                      # cliente React (Vite + TS + SDK TypeScript de Sui + wallet kit)
-├── package.json              # npm workspaces: ["app"]
+├── app/                      # cliente React (Vite + TS + SDK de Sui + wallet kit); guía en app/README.md
+├── package.json              # npm workspaces: ["app"]; engines: Node 26
+├── package-lock.json         # versiones exactas congeladas (D-20261102-02 (3))
+├── .npmrc                    # save-exact, engine-strict, min-release-age=7, ignore-scripts
 ├── .nvmrc                    # versión de Node (PROY-17)
-└── .github/workflows/        # ci.yml: job contracts (#3); el job app llega con #9
+└── .github/workflows/        # ci.yml: jobs contracts (#3) y app (#9), framework-drift informativo
 ```
 
 | Área | Carpeta | Stack |
 |---|---|---|
 | Contratos | `contracts/` | Sui Move, edition `2024`, `std`/`sui` implícitas (sistema de paquetes de la CLI ≥ 1.63); framework fijado por `Move.lock` (repin con `-e testnet`; todo delta del lock se justifica) |
-| Cliente web | `app/` | Vite + React + TypeScript estricto + `@mysten/sui` + wallet kit de Mysten (`@mysten/dapp-kit` o su sucesor vigente; se fija en el issue de scaffolding) + TanStack Query + Vitest |
+| Cliente web | `app/` | Vite 8 + React 19 + TypeScript 6.0.3 estricto + `@mysten/sui` (lectura con `SuiGrpcClient`, gRPC-web) + wallet kit `@mysten/dapp-kit-react` + `@mysten/dapp-kit-core` (tren `@mysten/*` fijado por `package-lock.json`) + TanStack Query + `react-router` (router por hash) + Vitest. Detalle en `app/README.md` (D-20261102-02) |
 
 ## 3. Comandos (por área, sin Makefile)
 
@@ -154,13 +156,15 @@ borradas al cerrar. Nada en `~/.sui/`.
    `genesis.blob`, YAML de validadores y fullnode, todos con claves en formatos que el grep de secretos no
    detecta) se lee, copia, muestra ni pega; solo los usan los comandos `sui`. Los logs (`genesis.log`,
    `sui-start.log`) no se pegan (solo líneas puntuales revisadas antes). Lo que vaya a docs o fixtures sale
-   **únicamente** de lecturas de la red local por la CLI (`suic object`, `suic tx-block`) o por la API que elija #10;
+   **únicamente** de lecturas de la red local por la CLI (`suic object`, `suic tx-block`) o por `SuiGrpcClient` (D-20261102-02 (1));
    el fullnode de `sui 1.83.0` no sirve JSON-RPC (`POST` a `:9000` → `404`, H-1 de #6, D-20261031-01).
 7. **Cierre:** `kill "$(cat <SMOKE_DIR>/sui.pid)"` (nunca `pkill`); en otra llamada, confirmar que terminó (`kill -0 "$(cat <SMOKE_DIR>/sui.pid)"` falla) y solo entonces `rm -rf <SMOKE_DIR>` (comprobar que ya no existe);
    `rm -f contracts/deployments/localnet.json` y `rmdir contracts/deployments 2>/dev/null || true` (pertenece a la
    génesis que se borra); sin cargar `env.sh`, `stat`/`ls` de `~/.sui/sui_config/` idénticos a la línea base;
    `git status --porcelain`; `git diff --exit-code -- contracts/Move.lock`; ni `contracts/Pub.*.toml` ni
    `contracts/Published.toml` ni `contracts/deployments/`.
+   `sui start` 1.83 sale con código 144 ante SIGTERM; el harness marca el comando como fallido: es esperado, lo que
+   vale es que `kill -0` falle.
 
 **Reglas del script de publicación para agentes (D-20261102-03):** ningún agente corre
 `publish.mjs publish --network testnet`, ni con `--dry-run`. Un agente solo define `SUI_CONFIG_DIR` como
@@ -169,30 +173,41 @@ llamada `sui client …` (ni `publish.mjs publish`) sin el prefijo del paso 3, t
 (`active-env`, `chain-identifier`, `addresses`): la única forma de ver la salida real de un `sui client` es esta
 localnet. Los gates `sui move …` siguen con su forma canónica.
 
-### App (`app/`, cuando exista)
+### App (`app/`)
+
+Desde la raíz (npm workspaces), con Node 26: `nvm use`, o en agentes el prefijo
+`export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && node --version && …` (`node --version` debe dar
+`v26.13.0`; con otra versión `npm ci` falla con `EBADENGINE`). Steps del job `app` de la CI, en orden:
 
 ```bash
-npm ci                      # desde la raíz (workspaces)
-npm run lint -w app
-npm run typecheck -w app    # tsc --noEmit
-npm test -w app             # Vitest
-npm run build -w app
+npm ci                                          # lockfile; sin scripts de instalación (.npmrc)
+npm audit signatures                            # firmas del registry
+npm audit --omit=dev --audit-level=high         # high/critical de producción: bloqueante
+npm run lint -w app                             # ESLint --max-warnings 0, regla de capas
+npm run typecheck -w app                        # tsc --noEmit (src/ y vite.config.ts)
+npm test -w app                                 # Vitest
+VITE_SUI_NETWORK=testnet npm run build -w app   # build de testnet
 ```
 
+y al final `git status --porcelain --untracked-files=all` vacío. Desarrollo: `npm run dev -w app` con
+`VITE_SUI_NETWORK` (`app/README.md`). Procedimiento ante un aviso de seguridad: `app/README.md`.
+
 Gate completo = el del workflow de CI: job `contracts` (build, lint y test con `--warnings-are-errors`,
-`Move.lock` intacto, cero claves); app lint + typecheck + test + build cuando #9 agregue el job `app`.
-El job `framework-drift` es informativo (H13) y no condiciona el merge.
+`Move.lock` intacto, cero claves, `node --test` y `check` de los scripts) y job `app` (los steps de arriba); ambos
+bloquean el merge (PROY-18). El job `framework-drift` es informativo (H13) y no condiciona el merge.
 
 ## 4. Arquitectura de Runtime
 
 ```
-Navegador (app React) ──wallet (firma)──▶ Sui fullnode (RPC) ──▶ paquete battleship
-        │                                                      ├─ house::House   (shared)
-        └── lecturas: objetos + eventos ◀──────────────────────┤─ game::Game     (shared, una por partida)
-                                                               └─ 0x8 Random     (shared, sistema)
+Navegador (app React) ──wallet (firma)──▶ Sui fullnode (gRPC-web) ──▶ paquete battleship
+        │                                                           ├─ house::House   (shared)
+        └── lecturas: SuiGrpcClient ◀───────────────────────────────┤─ game::Game     (shared, una por partida)
+            (objetos, eventos, estado del nodo)                     └─ 0x8 Random     (shared, sistema)
 ```
 
-- **Sin backend propio:** la app lee objetos y eventos del RPC y arma transacciones que firma la wallet.
+- **Sin backend propio:** la app lee objetos y eventos del fullnode por gRPC-web (`SuiGrpcClient`; el fullnode 1.83
+  no sirve JSON-RPC y responde al preflight CORS con comodines, TASK-4 de #9) y arma transacciones que firma la
+  wallet.
 - **Redes:** `localnet` (smokes), `testnet` (despliegue del MVP). `mainnet` fuera de alcance sin decisión.
 - **Indexado:** las listas (partidas abiertas, mis partidas) salen de **eventos** del paquete; no hay
   registros globales en objetos compartidos (PROY-6).
@@ -325,6 +340,7 @@ testnet con una wallet real.
 | Keystore / direcciones | `~/.sui/sui_config/` | **Nunca** en el repo ni en logs |
 | Node | nvm (20, 22 y 26 instalados) | Usar la de `.nvmrc` (`nvm use`) |
 | Wallet de navegador | extensión de wallet Sui | Para smokes en testnet (owner) |
+| Wallet de desarrollo | burner del kit (`app/`) | Solo en localnet **y** con `npm run dev` (D-20261102-02 (5)); nunca en un build de testnet. Sin claves del owner |
 
 **Nunca** imprimir ni copiar mnemonics, claves privadas ni el contenido del keystore (SEG-3).
 
@@ -370,3 +386,4 @@ testnet con una wallet real.
 | `documents/agentes/*.md` | Prompts de rol (DEV / MID / MAYOR / ORQUESTADOR) |
 | `README.md` | Visión del producto y roadmap original (2025-03) |
 | `contracts/README.md` | Contrato on-chain: tablas de funciones, eventos y abort codes, authZ, versionado y operación |
+| `app/README.md` | App web: requisitos, scripts, red del build, localnet/testnet, capas, mapa de `app/src/sui/`, dependencias y avisos de seguridad |

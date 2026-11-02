@@ -16,7 +16,7 @@ del orquestador sobre `master`:
 | 4. Escrow module | ✅ absorbido en Game (D-20261030-15): la apuesta es `stake: Balance<SUI>` de cada `Game` |
 | 5. Tests | ✅ suites de House (26 tests, #4) y Game (57 tests: 26 de #5 + 31 de aceptar/coinflip en #6, `1630eaa`); coverage 100 % |
 | 6. Docs y despliegue | ⬜ |
-| UI React | ⬜ no existe (D-20261030-03) |
+| UI React | 🚧 #9 (Tramo A y TASK-5/6 commiteados): workspace `app/`, capa `app/src/sui/`, job `app` de la CI, config por red, wallet kit e indicador de red; pantallas del juego en #10–#14 |
 
 ## Toolchain
 
@@ -26,7 +26,8 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 |---|---|
 | Sui CLI | `sui 1.83.0-16d2dc1e05ed` (release `testnet`), `suiup 0.1.1`, binarios en `~/.local/bin` |
 | CI | `.github/workflows/ci.yml`, `ubuntu-24.04`, `SUI_VERSION 1.83.0` / `SUI_COMMIT 16d2dc1e05ed` = local (#3, D-20261030-13). Al subir de versión se actualizan `SUI_TGZ_SHA256` (`gh api repos/MystenLabs/sui/releases/tags/testnet-v<versión> --jq '.assets[] \| .name + " " + .digest'`) y `SUI_BIN_SHA256` (`sha256sum` del binario local de `suiup`) |
-| Node | `v26.13.0` tras `nvm use` (`.nvmrc` = 26, D-20261030-10) |
+| Node | `v26.13.0` / npm `11.20.0` tras `nvm use` (`.nvmrc` = 26, D-20261030-10); `engines` de la raíz `>=26 <27` con `engine-strict`: con Node 22 `npm ci` falla con `EBADENGINE` (#9) |
+| Dependencias de la app | `package-lock.json` v3 (#9, D-20261102-02 (3)); `.npmrc`: `save-exact`, `engine-strict`, `min-release-age=7`, `ignore-scripts`. Tren `@mysten/*` **2.37.0 / 1.6.39 / 2.1.41** (`sui` / `dapp-kit-core` / `dapp-kit-react`; `wallet-standard` 0.21.35, `slush-wallet` 1.3.5), una versión de cada uno. `npm audit --omit=dev --audit-level=high` 0; 11 *moderate* solo dev (`minimatch` < 11.0.1) aceptados hasta #35. Procedimiento ante avisos: `app/README.md` |
 | Prerrequisito de `sui move` | `~/.sui/sui_config/client.yaml` **sin claves para siempre** con `active_env: testnet` y `active_address: ~` (D-20261030-07). La clave de publicación del owner (#8) vive en un `SUI_CONFIG_DIR` propio, fuera de `~/.sui/` (D-20261102-03). Sin ese archivo la CLI crea una clave e imprime su frase (H11). Nunca va al repo ni a logs; su contenido no se pega |
 | Framework | `std`/`sui` implícitas; fijados por `Move.lock` v4 a `719fb2960ccfbf9f4d33041f8ea5146d30671696`, el piso de la PV **139**; testnet en **140** desde la época 1269 (2026-10-30 21:24 UTC) → H13. Sin repin en #2 (rename puro) |
 | Entornos del lock | `Move.lock` v4 solo pinea `testnet`. Un gate con otro `-e` crearía una sección `[pinned.<env>]` nueva, y ese delta del lock hay que declararlo (PROY-11) |
@@ -54,7 +55,12 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 | contracts/ @ `master` (anterior a #4: `48df3b4`, merge de #22; medido en `8325126`, mismo código de contratos que `f4b437c`), CLI `1.83.0`, 2026-10-30 | `sui move build -e testnet` | 🟢 exit 0. **0 errores, 0 warnings** de compilación. Único módulo: `contracts/sources/house.move` |
 | | `sui move build -e testnet --lint` | 🟢 exit 0. 0 errores, 0 warnings; **1 lint de Sui:** `WSL06010` (`prefer_mut_tx_context`) en `contracts/sources/house.move:67` (`update_fee_rate` con `&TxContext`, H12 → #4) |
 | | `sui move test -e testnet` | 🟢 exit 0. 0 errores, 0 warnings. **0 tests** (`Test result: OK. Total tests: 0`) |
-| app | — | ⬜ no existe |
+| app @ `feature/issue-9-app` (`71c976e`, TASK-6 de #9), Node `v26.13.0`, 2026-11-02 | `npm ci`, `npm audit signatures`, `npm audit --omit=dev --audit-level=high` | 🟢 exit 0. 293 paquetes; 292 firmas verificadas; 0 vulnerabilidades de producción (11 *moderate* solo dev, #35) |
+| | `npm run lint -w app` / `npm run typecheck -w app` | 🟢 exit 0. **0 problemas** (ESLint `--max-warnings 0`, capas por regex) / **0 errores** |
+| | `npm test -w app` | 🟢 exit 0. **142 tests PASS** en 12 archivos (`config` 47, `format` 30, `explorer` 15, `nodeInfo` 14, `networks` 12, `NetworkBadge` 6, `useNodeStatus` 6, `dappKit` 5, `App` 2, `AccountBadge` 2, `Header` 2, `ConfigError` 1) |
+| | `VITE_SUI_NETWORK=testnet npm run build -w app` | 🟢 exit 0. `index-*.js` **826 kB** (251 kB gzip); aviso de chunk > 500 kB (informativo; code-splitting en #15) |
+| localnet aislada @ `feature/issue-9-app` (TASK-4 de #9), CLI `1.83.0`, 2026-11-02 (evidencia de D1) | sonda gRPC-web sin navegador | 🟢 preflight `OPTIONS /sui.rpc.v2.LedgerService/GetServiceInfo` → `200` con `access-control-allow-origin: *` y `access-control-allow-headers: *`; `SuiGrpcClient` (`@mysten/sui` 2.37.0): `getServiceInfo` da el chain id (8 hex = `sui client chain-identifier`) y `listEvents` por `eventType` `<PKG>::house::FeeRateUpdated` devuelve el evento de `update_fee_rate(250)` al primer intento. Cierre limpio |
+| CI @ `feature/issue-9-app` (TASK-2 de #9), 2026-11-02 | job `app` ([run 41469633568](https://github.com/sdelvalle57/sui_battleship/actions/runs/41469633568)) | 🟢 `app` ≈ 79 s, `contracts` y `framework-drift` success. Rojo provocado en Lint (`no-console`, PR desechable #37 cerrado sin merge: [run 41469976365](https://github.com/sdelvalle57/sui_battleship/actions/runs/41469976365)) |
 | CI @ `master` (`ae89cd5`, merge de #27), 2026-10-30 | Primer run `push` ([run 41150550292](https://github.com/sdelvalle57/sui_battleship/actions/runs/41150550292)) | 🟢 `contracts` y `framework-drift` success (baseline de CI en `master`) |
 | CI @ `feature/issue-3-ci` (`44ff83a`, PR #27), 2026-10-30 (evidencia de #3) | R1: job `contracts` ([run 41148825720, attempt 1](https://github.com/sdelvalle57/sui_battleship/actions/runs/41148825720/attempts/1)) | 🟢 success en 56 s (Install 31 s, cache miss): `.tgz` y binario `OK` (SHA-256), `sui 1.83.0-16d2dc1e05ed`, build, `--lint` y test con `--warnings-are-errors` exit 0, **26/26**, `Move.lock` y árbol sin cambios, guarda de cero claves en verde |
 | | R1: job `framework-drift` | 🟢 success en 5 s con el warning H13 esperado (lock PV 139 vs testnet PV 140; época 1269 en la medición local V4); sin "CLI atrasada" |
@@ -81,6 +87,7 @@ mismos conteos por archivo.
 | H11 | toolchain | `sui move` exige `client.yaml`. Sin él, la CLI crea una clave e imprime su frase (`sui_commands.rs:584, 1630-1648` @ `testnet-v1.83.0`), y `-e` no lo evita. | ✅ 2026-10-30: resuelto con una config sin claves (D-20261030-07). **#3:** ✅ 2026-10-30: el job `contracts` escribe la misma config sin claves en `$RUNNER_TEMP/sui_config`, exporta `SUI_CONFIG_DIR` y corre una guarda de cero claves (keystore `[]`, ningún otro keystore, sin `~/.sui`) en cada run (R1 de #3). **#7:** ✅ 2026-11-02: `Published.toml` (lo escribe la CLI y se commitea) es la fuente de los datos del paquete; `contracts/deployments/<red>.json` se deriva con `contracts/scripts/publish.mjs` y la CI verifica la coherencia (`publish.mjs check`, D-20261102-01 §3); los `Pub.*.toml` de `test-publish` son efímeros (ignorados en `.gitignore`). **#8:** la clave del owner vive en un `SUI_CONFIG_DIR` propio, fuera de `~/.sui/`, que queda sin claves para siempre; el script lo exige (D-20261102-03) |
 | H12 | house | ✅ 2026-10-30 (#4, `040f3c0`). Antes, lint `WSL06010` (`prefer_mut_tx_context`): `update_fee_rate` era `public` y recibía `&TxContext`. Ahora es `entry` sin `ctx` y ninguna función recibe `&TxContext` inmutable; `sui move build -e testnet --lint` da 0 lints. | — |
 | H13 | toolchain | testnet en PV `140` (medida 2026-10-30, época 1269; `05ad86a3e86c522deea116f80dc2bf2309a53363` para 140) y el lock en el piso de 139 (`719fb29…`). La CLI no repinea ni avisa por sí sola (solo con `update-deps`, al cambiar las dependencias del manifest, con un digest de dependencia distinto o con otro `-e`; publish solo compara la CLI con la red). Desde #3, el job `framework-drift` lo avisa en cada run (informativo). Desde #7, `publish.mjs` exige la CLI de `ci.yml` (`SUI_VERSION`/`SUI_COMMIT`) para testnet, falla si el dry run cambia `Move.lock` ("repin pendiente") y registra `frameworkRev` en el json | Pre-vuelo de #8 (comentado en el issue): (1) CLI del canal testnet con PV máxima ≥ PV de testnet (si no, `suiup` y registrar en Toolchain); (2) `cd contracts && printf 'n\n' \| sui move update-deps -e testnet`; (3) delta del lock declarado y gates re-medidos |
+| H14 | toolchain | `sui start` 1.83 sale con código **144** ante SIGTERM (cierre de la localnet aislada); el harness del agente marca el comando como fallido (TASK-4 de #9, 2026-11-02). | ✅ Documentado en `agents.md` §3, paso 7: es esperado; lo que vale es que `kill -0` falle |
 
 ## Ciclo activo — backlog para terminar el MVP
 
@@ -96,7 +103,8 @@ mismos conteos por archivo.
 | #5 (Game: crear/cancelar/rechazar) | ✅ 2026-10-31 | PR #30 mergeado (`a69fe7c`); MAYOR APPROVE; CI `contracts` verde (52/52). Artefactos borrados en el housekeeping (`git show a69fe7c:documents/PLAN_GAME.md`, `HANDOFF_`, `REVISION_PLAN_`, `REPORTES_GAME.md`) |
 | #6 (Game: aceptar + coinflip, pago y comisión) | ✅ 2026-10-31 | PR #32 mergeado (`8fddbda`); MAYOR APPROVE; CI `contracts` verde (83/83, coverage 100 %); smoke en localnet aislada 16/16 on-chain; fixtures de lectura → #10 (D-20261031-01). Artefactos borrados en el housekeeping (`git show 8fddbda:documents/PLAN_ACCEPT.md`, `HANDOFF_`, `REVISION_PLAN_`, `SMOKE_`, `REPORTES_ACCEPT.md`) |
 | #7 (Deployments json + script de publicación) | ✅ 2026-11-02 | PR #38 mergeado (`6ff8353`); MAYOR APPROVE (0 BLOCKER/MAJOR; MINOR-2 y NIT-2 → #39, antes de #8); CI `contracts` verde (83/83, `node --test` 94/94, `check` "0 despliegues"). `contracts/deployments/<red>.json` (14 campos, sin direcciones; D-20261102-01), `contracts/scripts/{deployment,publish}.mjs` (7 guardas, `SUI_CONFIG_DIR` propio, D-20261102-03); smoke en localnet aislada 12/12 + re-corrida 5/5. Artefactos borrados en el housekeeping (`git show 6ff8353:documents/PLAN_DEPLOY.md`, `HANDOFF_`, `REVISION_PLAN_`, `SMOKE_`, `REPORTES_DEPLOY.md`) |
-| Siguiente | ⏳ | #9 Tramo B (rebase sobre `master` con #7, HANDOFF_APP v2, TASK-5..7 + smoke). #8 (pre-vuelo H13 y publicación en testnet por el owner, sin `--out`) tras #39 |
+| #9 (scaffolding de `app/` + capa `sui/` + job `app` de CI) | 🚧 2026-11-02 | Worktree `feature/issue-9-app`, PR borrador #36. Tramo A cerrado (TASK-1..4 PASA: lockfile y política de dependencias, job `app`, `sui/` base, sonda gRPC-web = gate de D1). Tramo B tras el rebase sobre #7: TASK-5 (config por red) y TASK-6 (providers, kit, router, indicador de red) PASA y commiteados; TASK-7 (docs) PASA; smoke pendiente (`documents/SMOKE_APP.md`). D-20261102-02/03 |
+| Siguiente | ⏳ | #9: revisión de TASK-7, smoke y PR. #8 (pre-vuelo H13 y publicación en testnet por el owner, sin `--out`) tras #39 |
 
 ## Backlog (issues de GitHub, 2026-10-30)
 
@@ -135,6 +143,7 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 - Resolver los STOP de los planes a medida que lleguen. #4 resuelto (D-20261030-11); #3 resuelto (D-20261030-13; protección de `master` y SHA-pinning de Actions aplicados el 2026-10-30); #5 resuelto (D-20261030-15); #5 D1/D2/D5/D7 ya resueltas (D-20261030-06); #6 resuelto (D-20261030-16).
 - **Post-publicación (#8):** `update_fee_rate` antes de anunciar el juego (fee por defecto 0, D-20261030-11): las partidas creadas antes quedan con comisión 0 para siempre.
+- **Tras el merge de #9 (orquestador, D-20261102-02 (7)):** agregar `app` a los checks requeridos de `master` (manteniendo `contracts`, `strict: false`, `enforce_admins: true`) y verificarlo con `gh api repos/sdelvalle57/sui_battleship/branches/master/protection/required_status_checks --jq '.contexts'` → `["contracts","app"]`.
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
 ## Mergeadas (histórico)
