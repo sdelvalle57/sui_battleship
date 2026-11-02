@@ -1,9 +1,18 @@
 # HANDOFF_CREATE_CANCEL
 > Plan: PLAN_CREATE_CANCEL v1 (MAYOR: APPROVE, 2026-11-02, 0 BLOCKER/MAJOR; `6e967f8`) | Issue: #11 | Branch:
-> `feature/issue-11-create-cancel` | Versión: v1 | Fecha: 2026-11-02
+> `feature/issue-11-create-cancel` | Versión: v1.1 | Fecha: 2026-11-02
 
 ## Changelog
 
+- **v1.1 (2026-11-02)**: revisión del MAYOR del handoff v1: APPROVE (0 BLOCKER/MAJOR/MINOR) con 2 NIT. TASK-1 no
+  cambia.
+  - **NIT-1 (TASK-4):** si el nodo **ya confirmó el éxito** y después lanza `interpret`, el resultado es `success` con
+    `value: null` (como DL-9: "Partida creada" con el digest, sin navegar, invalidaciones normales). `unconfirmed` queda
+    solo para cuando el nodo no respondió o venció el corte. Test nuevo. Se ajustan §4 (`value: T | null`) y TASK-5.
+  - **NIT-2 (smoke, paso 17):** el click en `T2` va por `Runtime.evaluate`, **sin** `Page.bringToFront`, porque el foco
+    dispara el refetch del detalle y cierra la ventana de la carrera.
+  - **§1:** el MAYOR acepta la precisión de M-3 (b). Un `failure` decidido por el nodo lleva también el costo de red
+    (`TxOutcome` `failure` suma `cost`).
 - **v1 (2026-11-02)**: primera versión. Integra **P-1 = (a)** (D-20261102-05, `490dcf5`: "Rechazar invitación" va en
   #11) y la revisión del MAYOR del plan:
   - MINOR-1: candado síncrono contra el doble envío (TASK-4, smoke 12);
@@ -97,10 +106,11 @@ el gate de la app igual al del último reporte aprobado.
 | M-4 (NIT-1) | `app/scripts/localnet-guard.mjs` **sin imports de `@mysten/sui` ni de red en el nivel superior** (solo `node:*`). Criterios: la fixture de #10 no cambia y `capture-read-fixtures.mjs` con otra URL sigue saliendo con 2 | TASK-1 |
 | M-5 (NIT-2) | Test que fija el formato exacto del sufijo de diagnóstico (`(código game/3)`), porque lo reutilizan #12 y #14 | TASK-2 |
 
-**Precisión del MID sobre M-3 (b)** (se declara en el PR): "nunca `failure`" se refiere a errores de la wallet o del SDK.
-Si el nodo devuelve la transacción con `status.success: false`, eso **sí** es `failure`, con el mensaje de sus efectos:
-lo decide el nodo (DL-2), no la wallet. Si el MAYOR quiere `unconfirmed` también en ese caso, es un cambio de una línea en
-TASK-4.
+**Precisión de M-3 (b), aceptada por el MAYOR (revisión del handoff v1, 2026-11-02):** "nunca `failure`" se refiere a
+errores de la wallet o del SDK. Si el nodo devuelve la transacción con `status.success: false`, eso **sí** es `failure`,
+con el mensaje de sus efectos, el digest y el costo de red (`networkCost(effects.gasUsed)`): lo decide el nodo (DL-2), no
+la wallet. Un error **después** de que el nodo confirmó el éxito (p. ej. en `interpret`) no es `unconfirmed` ni
+`failure`: es `success` con `value: null` (NIT-1 de v1.1).
 
 ## 2. Hechos verificados del SDK instalado (resumen del plan, sección "Verificación")
 
@@ -165,7 +175,7 @@ Rutas relativas a `<repo>/node_modules/@mysten/`, `@mysten/sui` 2.37.0, `@mysten
 | `sui/gameDetail.ts` | suma `gameRefetchInterval(state: { status: string; error: unknown }): number \| false` |
 | `hooks/queryKeys.ts` | suma `house(network, houseId)` y `balance(network, address)` |
 | `hooks/txInvalidation.ts` | `type TxAction = { kind: 'create' } \| { kind: 'cancel'; gameId: string } \| { kind: 'reject'; gameId: string }`; `transactionInvalidations(action, { network, originalPackageId, houseId, address }): { reset: QueryKey[]; invalidate: QueryKey[] }` |
-| `hooks/useExecuteTransaction.ts` | `type TxStage = 'idle' \| 'preflight' \| 'signing' \| 'confirming' \| 'indexing' \| 'done'`; `type TxOutcome<T> = { kind: 'success'; digest; value: T; indexed: boolean; cost: bigint } \| { kind: 'failure'; message: string; digest: string \| null } \| { kind: 'unconfirmed'; digest: string }`; `useExecuteTransaction<T>()` → `{ stage, outcome, isBusy, execute(input), reset }` con `input = { action: TxAction; build: () => Transaction; precheck?: (signal) => Promise<{ stop: string; invalidate?: QueryKey[] } \| null>; interpret: (nodeResult) => T }` |
+| `hooks/useExecuteTransaction.ts` | `type TxStage = 'idle' \| 'preflight' \| 'signing' \| 'confirming' \| 'indexing' \| 'done'`; `type TxOutcome<T> = { kind: 'success'; digest; value: T \| null; indexed: boolean; cost: bigint } \| { kind: 'failure'; message: string; digest: string \| null; cost: bigint \| null } \| { kind: 'unconfirmed'; digest: string }`; `useExecuteTransaction<T>()` → `{ stage, outcome, isBusy, execute(input), reset }` con `input = { action: TxAction; build: () => Transaction; precheck?: (signal) => Promise<{ stop: string; invalidate?: QueryKey[] } \| null>; interpret: (nodeResult) => T }` |
 | `hooks/useCreateGame.ts`, `useCancelGame.ts`, `useRejectGame.ts`, `useHouse.ts`, `useSuiBalance.ts` | hooks finos sobre lo anterior (TASK-4) |
 
 ---
@@ -487,12 +497,15 @@ mostrar un éxito falso ni mandar dos veces la misma transacción. **No entrega:
      construir). Si lanza: `digestFromError(error)`; con digest ⇒ sigue a `confirming` con ese digest (M-3 (b)); sin
      digest ⇒ `failure` con `transactionErrorMessage(error)`.
    - **`confirming`:** con el digest de la wallet, `confirmTransaction`. Si el nodo responde: `classifyExecution` ⇒
-     `failure` con el mensaje de sus efectos y el digest (más las invalidaciones de la acción) o sigue a `indexing`. Si
-     falla o vence: `unconfirmed` con el digest e invalidaciones de la acción (M-3 (b): **nunca** `failure` desde aquí).
-     Cualquier error lanzado después de tener digest (incluido `interpret`) ⇒ `unconfirmed` con el digest.
+     `failure` con el mensaje de sus efectos, el digest y `cost = networkCost(effects.gasUsed)` (más las invalidaciones
+     de la acción) o sigue a `indexing`. Si `confirmTransaction` falla o vence: `unconfirmed` con el digest e
+     invalidaciones de la acción (M-3 (b): **nunca** `failure` desde aquí). `unconfirmed` es **solo** para "el nodo no
+     respondió o venció el corte".
    - **`indexing`:** `waitForCheckpoint`; luego `await` de `resetQueries`/`invalidateQueries` de
-     `transactionInvalidations(action, …)`; `outcome` = `success` con `value = input.interpret(nodeResult)`,
-     `indexed`, `cost = networkCost(effects.gasUsed)` y el digest.
+     `transactionInvalidations(action, …)`; `outcome` = `success` con `value`, `indexed`, `cost =
+     networkCost(effects.gasUsed)` y el digest. `value = input.interpret(nodeResult)` dentro de un `try`: si `interpret`
+     lanza (el nodo **ya confirmó** el éxito), `value: null` (NIT-1 de v1.1, como DL-9); el éxito y las invalidaciones
+     no cambian.
    - Todo dentro de la `mutationFn`; nunca lanza hacia el componente (LIM-8: todo termina en un `outcome` con mensaje).
      `reset()` vuelve a `idle` (no con el candado tomado).
 4. **`useCreateGame.ts`:** `create({ bet, opponent, shown: HouseTerms })` ⇒ `execute({ action: { kind: 'create' }, build:
@@ -528,8 +541,10 @@ Patrón `useGame.test.tsx` (`useCurrentClient`, `useAppConfig`, `useCurrentAccou
 - **M-3 (a):** preflight con `PreflightNetworkError` ⇒ `failure` con `PREFLIGHT_NETWORK_MESSAGE` y la wallet no se llama;
   `precheck` con `UNAVAILABLE` ⇒ mismo texto; `transactionErrorMessage` no se llama en ninguno de los dos (espía).
 - **M-3 (b):** la wallet lanza un error con `digest` válido y el nodo confirma éxito ⇒ `success`; el mismo error y el nodo
-  no responde ⇒ `unconfirmed` con ese digest (nunca `failure`); la wallet devuelve digest y `interpret` lanza ⇒
-  `unconfirmed`; la wallet devuelve digest y `confirmTransaction` vence ⇒ `unconfirmed` e invalida.
+  no responde ⇒ `unconfirmed` con ese digest (nunca `failure`); la wallet devuelve digest y `confirmTransaction` vence ⇒
+  `unconfirmed` e invalida. **NIT-1:** el nodo confirma éxito y `interpret` lanza ⇒ `success` con `value: null`, el
+  digest, `cost` e `indexed`, con las invalidaciones normales (espías), nunca `unconfirmed`; el nodo responde
+  `status.success: false` ⇒ `failure` con el mensaje de los efectos, el digest y `cost`.
 - **Otros:** preflight con `SimulationError` de la fixture ⇒ `failure` con el mensaje mapeado y la wallet no se llama; la
   wallet rechaza sin digest ⇒ `failure` con su mensaje; la wallet dice éxito y el nodo dice fallo ⇒ `failure` con el
   mensaje de los efectos y el digest; `waitForCheckpoint` `false` ⇒ `success` con `indexed: false` e invalida igual; el
@@ -567,7 +582,7 @@ quedaron. **No entrega:** lógica nueva (todo sale de los hooks).
    wallet…", "Confirmando en la red…", "Actualizando datos…" (`role="status"`); `success`: el texto de éxito que recibe
    por props, el digest (link en testnet, texto en localnet), y si `indexed` es `false`, "La lista puede tardar unos
    segundos en mostrarlo"; `unconfirmed` (`role="alert"`): "La transacción se envió pero la red no la confirmó todavía;
-   revísala antes de volver a intentar" + digest; `failure` (`role="alert"`): el mensaje + digest si lo hay.
+   revísala antes de volver a intentar" + digest; `failure` (`role="alert"`): el mensaje + digest y costo de red si los hay.
 2. **`components/CreateGameForm.tsx`** (DL-8, DL-13, M-2): sin cuenta, deshabilitado con "Conecta tu wallet para crear
    una partida". Con cuenta: `useHouse` (con `ReadState` si no está lista: sin House no se puede crear), `useSuiBalance`,
    `useCreateGame`. Campos "Apuesta (SUI)" (`inputMode="decimal"`) e "Invitar a (opcional)". Muestra "Mínimo <min> SUI ·
@@ -581,7 +596,7 @@ quedaron. **No entrega:** lógica nueva (todo sale de los hooks).
    "Dirección inválida"; `self_invite` "No puedes invitarte a ti mismo"). "Crear partida" deshabilitado si no valida o
    `isBusy`; al enviar pasa `shown` = los términos de la House que se están mostrando (M-2). Con `success` y partida
    identificada ⇒ `navigate('/game/<id>', { state: { created: { digest, cost, invitation, feeChanged } } })`; sin
-   partida identificada ⇒ queda en la portada con "Partida creada" + "No se pudo identificar la partida creada" y el
+   partida identificada (`value` `null` o `created` `null`) ⇒ queda en la portada con "Partida creada" + "No se pudo identificar la partida creada" y el
    digest.
 3. **`components/GameActions.tsx`** (DL-10): "Cancelar" si `canCancel`, "Rechazar" si `canReject` (nunca los dos para la
    misma cuenta), deshabilitados con `isBusy`, cada uno con su `TransactionStatus`. Éxito: "Partida cancelada: se
@@ -718,7 +733,8 @@ Reporte §5. Sin commits.
   17. 🌐 **Abort real con mensaje mapeado (carrera):** `X` invita a `Y` (`G5`); `T2` abre `#/game/<G5>` ("Rechazar"
       visible). En `T1`, cancelar `G5` (éxito). Inmediatamente, en `T2` (verificar antes por DOM que sigue "Invitación a"
       con "Rechazar": el detalle se refresca cada 15 s; si ya se refrescó, repetir con otra invitación y anotarlo) ⇒
-      click en "Rechazar" ⇒ "La partida ya no está pendiente: se canceló, se rechazó o se aceptó antes. (código game/4)";
+      click en "Rechazar" por `Runtime.evaluate` (`button.click()`), **sin** `Page.bringToFront` ni ningún cambio de
+      pestaña activa (NIT-2 de v1.1: el foco dispara el refetch del detalle y cierra la ventana de la carrera) ⇒ "La partida ya no está pendiente: se canceló, se rechazó o se aceptó antes. (código game/4)";
       **ningún** `ExecuteTransaction`; saldo de `Y` sin cambios; el detalle de `T2` pasa a "Cancelada" (invalidación tras
       el abort).
   18. Cierre: paso 7 de `agents.md` §3 más la app: `kill` por PID de `vite` y Chrome (`kill -0` falla en `sui`, `vite` y
@@ -738,4 +754,4 @@ Reporte §5. Sin commits.
 
 El MID propone el body del PR (`Closes #11`; D-20261102-05; DL-1..16; M-1..5 y la precisión de M-3 (b); V-1..12; gates;
 smoke PASA/TOTAL; pendientes para #12: textos de "reintentar" para las cancelaciones del runtime, y para #17: wallets de
-extensión en testnet). Mensaje de commit de esta versión: `docs: add #11 create and cancel handoff, v1 (#11)`.
+extensión en testnet). Mensaje de commit de esta versión: `docs: address MAYOR NITs in #11 handoff, v1.1 (#11)`.
