@@ -287,3 +287,11 @@ Decisión H-1 / v2-4 cumplida (`publish.mjs:345-357`): stdout solo se usa con `s
 
 ### Siguiente paso
 Commitear C1 + C2; DEV aplica H1 + gate; commit; re-smoke C3 (pasos 0, 1, 4, 7, 13); revisión MID de C3; PR contra `master` y revisión de integración del MAYOR.
+
+## Ajuste H1 (+ H3 opcional) antes de C3
+
+> Reporte del DEV transcrito por el orquestador. La revisión MID de este ajuste va junto con la de C3.
+
+- `publish.mjs:42-44`: `RETRY_ADVICE` → "No reintentes sin buscar antes el digest; si la transacción existe: `printf 'n\n' | SUI_CONFIG_DIR=<tu dir> sui client --json tx-block <digest>` + `record` (README → Recuperación; si falta `Published.toml`, STOP de #8)."
+- `publish.test.mjs`: test 1 de H-1 agrega `assert.match(message, /No reintentes sin buscar antes el digest/)` (H3).
+- Gate: build/lint/test `exit=0`, `Total tests: 83; passed: 83; failed: 0`, `Move.lock` sin delta; `node --test` `tests 94 / pass 94 / fail 0`; `check` → `0 despliegues`; `~/.sui/` idéntico. Desviaciones: ninguna.

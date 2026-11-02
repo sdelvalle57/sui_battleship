@@ -574,6 +574,7 @@ test('formatCliFailure (H-1): estado ≠ 0 con el digest solo en stdout ⇒ solo
   });
   assert.ok(message.includes(`Digest de la transacción: ${PUBLISH.digest}`));
   assert.ok(message.includes(MOTIVE_LINE));
+  assert.match(message, /No reintentes sin buscar antes el digest/);
   assertNoStdout(message);
 });
 

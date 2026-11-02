@@ -40,8 +40,8 @@ const DIR_MODE = 0o700;
 const CONFIRMATION_WORD = 'testnet';
 const FAILED_TX_DIGEST_RE = /Error executing transaction '([1-9A-HJ-NP-Za-km-z]{32,44})'/;
 const RETRY_ADVICE =
-  'No reintentes sin buscar antes el digest; si la transacción existe: `sui client --json tx-block <digest>` + ' +
-  '`record` (si falta `Published.toml`, STOP de #8).';
+  "No reintentes sin buscar antes el digest; si la transacción existe: `printf 'n\\n' | SUI_CONFIG_DIR=<tu dir> " +
+  'sui client --json tx-block <digest>` + `record` (README → Recuperación; si falta `Published.toml`, STOP de #8).';
 const MISSING_PUBLISHED_TOML_ADVICE =
   'Si `Published.toml` falta o no coincide con el json (testnet), es STOP de #8: no lo edites a mano.';
 
