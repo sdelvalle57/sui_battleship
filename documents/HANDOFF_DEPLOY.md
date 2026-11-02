@@ -1,6 +1,6 @@
 # HANDOFF_DEPLOY
 > Plan: PLAN_DEPLOY v2.1 (aprobado por el MAYOR, `documents/REVISION_PLAN_DEPLOY.md` "Revisión v2") | Issue: #7 |
-> Branch: `feature/issue-7-deployments` | Versión: v1.2 — ajustes de las revisiones MID de TASK-1 y TASK-2 (ver "Addendum v1.1" y "Addendum v1.2" al final; prevalecen sobre el cuerpo) | Fecha: 2026-11-02
+> Branch: `feature/issue-7-deployments` | Versión: v1.3 — ajustes de las revisiones MID de TASK-1, TASK-2 y TASK-3 (ver "Addendum v1.1", "Addendum v1.2" y "Addendum v1.3" al final; prevalecen sobre el cuerpo; v1.3 prevalece sobre v1.2) | Fecha: 2026-11-02
 > Incorpora las correcciones obligatorias de la revisión v2: **v2-1** (smoke sin camino testnet), **v2-2** (guarda de
 > config), **v2-3** (`runSui` por vector completo), **v2-4** (`redactAddresses`), **v2-5** (receta §3 con dos salidas),
 > **v2-6** (publicación de la copia en segundo plano y control de `~/.move`).
@@ -554,3 +554,109 @@ Reporte §5 con el snippet para STATUS.
 - **B2 (TASK-3, README "Despliegues" y receta de recuperación; también el comando de `HANDOFF:343`):** `record` sin `meta.json` exige `--source-commit`, `--sui-cli-version`, `--framework-rev` y `--chain-id` (testnet: `4c78adac`); si existe `meta.json` se usa y los flags se ignoran; si la salida de `tx-block` se guardó fuera del directorio temporal, se pasa `--meta <dir>/meta.json`.
 - **B3 (smoke, lo incorpora el MID en `SMOKE_DEPLOY.md`; todo con el prefijo de la localnet aislada):** forma real de `active-env` y `chain-identifier` con `--json`; `publish --network localnet --dry-run`; variante A (`--out $SMOKE_DIR/…`) y variante B (ruta por defecto, `check` con `localnet.json` presente y cierre que lo borra); `record` desde el directorio del script; negativos que no invocan la CLI: sin `SUI_CONFIG_DIR`, `SUI_CONFIG_DIR` dentro de `~/.sui`, y `--network testnet` con env `localnet` (falla sin consultar el chain id).
 - **B4 (transversal):** la única forma de ver la salida real de un comando `sui client` es la localnet aislada; **ninguna** llamada `sui client …` sin el prefijo de `agents.md` §3, ni siquiera de solo lectura (`active-env` incluido). Los gates `sui move …` siguen con la forma canónica.
+
+
+## Addendum v1.3 — ronda corta C1–C3 de la revisión MID de TASK-3 (prevalece sobre el cuerpo y sobre v1.1/v1.2)
+
+> Fuente: "Revisión TASK-3" en `documents/REPORTES_DEPLOY.md` (PASA con ronda corta C1–C3). Base: `feature/issue-7-deployments`
+> @ `4579b0b`. Ya commiteados: TASK-3 (`b649bdc`) y la alineación de H2 en `FLUJO_AGENTES.md`/`agentes/ORQUESTADOR.md`
+> (`4579b0b`, orquestador). Siguen vigentes todas las reglas transversales, D1–D6, B4 y la prohibición de testnet.
+
+### Orden y commits (obligatorio)
+
+1. El DEV implementa **C1 + C2** en una sesión y entrega el reporte §5 con el gate completo. **No commitea.**
+2. El MID revisa y el orquestador commitea C1+C2.
+3. **Recién entonces**, sobre ese commit y con el árbol limpio, el DEV corre **C3** (re-smoke) en otra sesión y
+   entrega su reporte. No empieza C3 antes del commit de C1+C2.
+
+### C1 — Código (DEV): digest y motivo cuando la CLI falla (H1) + H6 opcional
+
+**Contexto (H-1 del smoke).** Con `--json`, la CLI 1.83.0 escribe el motivo de un rechazo por **stdout** (stdout 1 /
+stderr 0 en el paso 7 del smoke), así que hoy el script muestra solo `la CLI terminó con estado 1`. Si un
+`Error executing transaction '<digest>'` también saliera por stdout, el script no extraería el digest (C8).
+
+**Cambio** (`contracts/scripts/publish.mjs`, `formatCliFailure` `:340-349` e `interpretCliRun` `:376-392`):
+
+- `formatCliFailure({ reason, status, stdout, stderr, dir, outputPath, afterPublish = false })`; `interpretCliRun`
+  le pasa `status: result.status` y `stdout: result.stdout`.
+- **Con `status !== 0`:**
+  - el digest se busca con `FAILED_TX_DIGEST_RE` primero en `stderr` y, si no está, en `stdout`;
+  - del stdout solo se usa el grupo capturado y se imprime únicamente la línea `Digest de la transacción: <digest>`;
+  - se agrega siempre la línea fija `Motivo de la CLI en <outputPath> (revísalo ahí; no lo pegues: puede traer tu dirección)`.
+- **Con `status === 0`** (JSON inválido o forma inesperada): stdout **no se mira** (ni para el digest) y no va la
+  línea "Motivo …".
+- **Nunca** se muestra stdout ni un fragmento suyo (v2-4). El resto del mensaje no cambia: `Error:`, `Salida completa
+  (sin mostrar)`, `Directorio temporal` si hay `dir`, stderr redactado y `RETRY_ADVICE` solo con `afterPublish`.
+- Actualizar el JSDoc de ambas funciones (por qué stdout solo se usa para el digest).
+- Callers existentes (`publish.test.mjs:531`, `:547`, `:550`): pasar `status`/`stdout` o usar valores por defecto
+  (`status = 1`, `stdout = ''`), sin cambiar lo que verifican.
+
+**Tests nuevos (4) en `publish.test.mjs`.** En todos, `ADDR` es una dirección de cuenta **leída del fixture**
+`fixtures/localnet-publish.json` (`sender`), nunca un literal.
+
+1. `status: 1`, digest solo en stdout. `stdout = "STDOUT-MARK " + ADDR + " Error executing transaction '<digest base58 del fixture>'"`
+   y stderr vacío. El mensaje contiene `Digest de la transacción: <ese digest>` y la línea "Motivo de la CLI en
+   <outputPath>…". No contiene `STDOUT-MARK` ni `ADDR`, con y sin `0x`.
+2. `status: 1`, digests distintos en stderr y en stdout. Gana el de stderr (aparece solo ese) y no aparece
+   `STDOUT-MARK`.
+3. `status: 1`, sin digest en ningún lado (`stdout = "STDOUT-MARK Your package is already published " + ADDR`). No hay
+   línea `Digest …`, sí la línea "Motivo …", y no aparecen ni `STDOUT-MARK` ni `ADDR`.
+4. `status: 0` con stdout no JSON que trae `STDOUT-MARK`, `ADDR` y un `Error executing transaction '<digest>'`
+   (vía `interpretCliRun` con un `parse` cualquiera). No aparece la línea `Digest …`, ni "Motivo …", ni `STDOUT-MARK`,
+   ni `ADDR`.
+
+**H6 (opcional, mismo cambio).** `MISSING_PUBLISHED_TOML_ADVICE` (`publish.mjs:45`) pasa a cubrir los dos casos:
+"Si `Published.toml` falta o no coincide con el json (testnet), es STOP de #8: no lo edites a mano." Si un test verifica
+el texto viejo, se ajusta.
+
+**Gate completo** (output crudo pegado, A7):
+- `node --test scripts/*.test.mjs` con **≥ 94 tests** (90 + 4) y todas las líneas `ℹ`;
+- `node scripts/publish.mjs check` (⇒ `0 despliegues`);
+- los tres de contratos sin delta (0 / 0 / 83) y `git diff --exit-code -- Move.lock`;
+- `stat`/`ls` de `~/.sui/sui_config/` idénticos.
+
+Actualizar la fila de baseline de `documents/STATUS.md:39` (`contracts/scripts`) con el nuevo total por archivo. Sin
+otros cambios de código.
+
+### C2 — Docs (DEV, misma sesión que C1): `contracts/README.md`
+
+- **`:546-550` (H1):** cuando la CLI falla, el script imprime el directorio, el digest si la CLI lo reporta (en stderr o en
+  su salida `--json`), el stderr con las direcciones ocultas y la ruta del archivo con el motivo de la CLI, que se revisa
+  ahí y no se pega (puede traer la dirección del publicador). Nunca imprime el stdout.
+- **`:558` (H4):** la receta de `tx-block` queda con la config del owner y la respuesta `n`:
+  `printf 'n\n' | SUI_CONFIG_DIR=<su dir> sui client --json tx-block <digest> > <dir>/tx-block.json` (y `record … --from <dir>/tx-block.json --meta <dir>/meta.json`).
+  **Solo el owner**: un agente no corre `tx-block` fuera de la localnet aislada (B4).
+- **`:514` (H5):** `SUI_CONFIG_DIR=<dir>/net` con la aclaración "(ruta absoluta)", alineado con la guarda 2.
+- Grep de secretos sobre el diff (`/usr/bin/grep -nE '^\+'` + claves y `0x[0-9a-f]{64}`) sin hallazgos fuera de los
+  ejemplos ficticios.
+
+### C3 — Re-smoke post-commit (DEV, después del commit de C1+C2)
+
+**Objetivo:** cerrar H3 (con árbol sucio, `sourceCommit` quedó `null` y nunca corrió la rama `rev-parse HEAD`) y
+verificar el mensaje nuevo de C1.
+
+**Precondiciones:**
+- HEAD = el commit de C1+C2 y **árbol limpio** (`git status --porcelain` vacío) **durante toda la corrida**;
+- una sola génesis;
+- localnet aislada, prefijo B4 en toda llamada `sui client …` y `publish.mjs publish`;
+- **nada de testnet** (sin `--network testnet`, ni con `--dry-run`).
+
+**Registro de resultados.** Para no ensuciar el árbol antes del paso 4, los resultados se anotan **fuera del repo**
+(un archivo del scratchpad del agente, **no** dentro de `<SMOKE_DIR>`, que se borra). Se transcriben a
+`documents/SMOKE_DEPLOY.md` **después** del cierre (paso 13), en la sección "Re-corrida post-commit (SHA …)". Es la
+única excepción a "se llena durante la corrida" y se declara en el reporte.
+
+**Pasos de `SMOKE_DEPLOY.md`** (comandos y expectativas del runbook; el paso 7 ya está ajustado a C1):
+
+| Paso | Qué verifica |
+|---|---|
+| 0 | Preparación; anotar el **SHA de HEAD**; árbol limpio; línea base de `~/.sui/sui_config/` |
+| 1 | Génesis, arranque y `ADMIN` |
+| 4 | Variante A: `sourceCommit` = **SHA de HEAD del paso 0** (40 hex), `meta.json` con el mismo valor |
+| 7 | Doble publicación con el mensaje nuevo de C1: "Motivo de la CLI en …", sin línea `Digest …` (es un rechazo previo a la ejecución, no hay digest) y sin stdout |
+| 13 | Cierre completo; `git status --porcelain` vacío |
+
+Los pasos 2, 3, 5, 6 y 8-11 no se repiten (siguen válidos de la primera corrida) y el 12 sigue fuera.
+
+**Reporte §5:** la tabla de los cinco pasos con sus resultados, el SHA, los digests y la declaración de que el registro
+se hizo fuera del repo. El runbook pasa a `Estado: COMPLETADO` si los cinco pasos dan PASA.
