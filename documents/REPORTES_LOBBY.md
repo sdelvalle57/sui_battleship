@@ -45,3 +45,32 @@ Confirmado: guarda de URL antes de cargar el SDK (`:10-32`), exit 2 con cualquie
 
 ### Siguiente paso
 TASK-2 arranca ya; TASK-3 espera HANDOFF_LOBBY v1.3.
+
+## Task completado: HANDOFF_LOBBY (v1.2) — TASK-2 (tipos y parsers del `Game` y de sus eventos)
+
+> Reporte del DEV transcrito por el orquestador (resumido; conteos y exit codes literales; rutas con placeholders).
+
+- Branch @ `4fd9666`, sin commits. Creados: `app/src/sui/{game,events,readErrors}.ts` + tests. Modificados: `app/src/sui/format.ts` (+18) y `format.test.ts` (+19/−1).
+- `game.ts`: esquemas BCS privados con el layout de `game.move:31-84`, `gameType`, `resolutionAmounts` (doc comment de la fórmula v1 y regla de upgrade, `agents.md` §5) y `parseGameObject` en orden: tipo exacto (`wrong_type`), dueño `Shared` (`not_shared`), BCS exacto con re-serialización byte a byte (`malformed`), invariantes de `game.move` (`invariant`). `events.ts`: `RawGameEvent`, `rawEventFromEntry`, `gameEventType`, un parser por evento (`GameResolved` valida `pot == payout + fee` y ganador). `readErrors.ts`: 7 clases + `readErrorMessage`. `format.ts`: `formatBps` (enteros) y `formatTimestamp` (`Intl.DateTimeFormat('es')`).
+- **Tests nuevos:** `game.test.ts` 29 (5 variantes reales BCS ↔ `json`; truncado, byte sobrante, variante 3, tag 2 en `Option`, tipo ajeno, `AddressOwner`; invariantes; `fee_rate` 1001 parsea; `resolutionAmounts` = `GameResolved` de la fixture 2000010/50000/1950010), `events.test.ts` 17 (5 eventos reales; frames crudos de `rawListEventsPage` como `GameCreated`, H-4; malformados), `readErrors.test.ts` 12, `format.test.ts` +5.
+- **Gates (Node v26.13.0):** `npm ci` 0; firmas 292; audit prod 0; lint 0; typecheck 0; `Test Files 15 passed (15)` / `Tests 205 passed (205)`; build testnet 0 (826.07 kB, mismo hash); `contracts/`, `package*.json`, `eslint.config.js` sin delta. Primer intento con 1 error de lint y 6 de typecheck en tests (corregidos sin tocar producción).
+- Greps: sin `any`, sin red, sin claves, sin rutas personales, sin hex de 40-64 añadido. Capas: `sui/` solo `@mysten/sui/{bcs,client,grpc,utils}`.
+- **Desviaciones:** (1) exports de apoyo `parseExactBcs`, `isExactType`, `GameObjectInput`, `GameEventName`, `ReadDataReason`; (2) constructores con datos (`ReadTimeoutError(timeoutMs)` arma el texto); (3) eventos parseados con `transactionDigest`, sin `checkpoint`; (4) malformados por bytes alterados con offsets documentados; (5) test extra de frames crudos; (6) `formatTimestamp` fija el texto del ICU de Node 26.
+- **Riesgos:** el texto de `formatTimestamp` depende de la versión de ICU; `isExactType` normaliza el tipo recibido (cubre frames crudos de TASK-3).
+
+## Revisión TASK-2: PASA (con corrección corta aplicada por el DEV antes del commit)
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió gates.
+
+Confirmado: esquemas BCS = `game.move` campo por campo (`game.ts:30-45`, `events.ts:194-215`); comparación byte a byte (`parseExactBcs`, `game.ts:51-64`); invariantes solo de `game.move` (`:101-119`), `fee_rate` 1001 parsea; nunca `Pending` por defecto (`switch` exhaustivo, variante 3 → `malformed`); contrato §3 intacto; desviaciones 1–6 aceptadas; NIT-3 cumplido (`game.ts:134-141`); los tests prueban lo que dicen.
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | Contrato con TASK-3 | `readErrors.ts:351-356, 370-374` | Los constructores no aceptaban `ErrorOptions` (TASK-3 necesita `{ cause }`) | Aplicada por el DEV: `options?: ErrorOptions` en las 7 clases + test `keep the original error as cause` |
+| 2 | LIM-11 | `format.test.ts` | Texto exacto de ICU | Aplicada: espacios normalizados (`/\s/gu`) en ambos lados |
+| 3 | Info | `game.ts:101-119` | No valida `acceptor ≠ creator` ni `acceptor == opponent` | Sin acción (alcance del handoff); se evalúa en #12 si hace falta |
+
+Gate tras la corrección (DEV): `npm ci`/firmas/audit 0; lint 0; typecheck 0; **206 tests** en 15 archivos; build sin cambios; sin delta en `contracts/` ni `package*.json`.
+
+### Siguiente paso
+TASK-3 arranca con HANDOFF_LOBBY v1.3 tal como está.
