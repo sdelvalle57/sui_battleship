@@ -244,3 +244,35 @@ Confirmado: firmas del handoff (`config.ts:15-31, 64-67, 136-141`); reglas 1-7 e
 
 ### Siguiente paso
 TASK-5 commiteada; TASK-6 arranca con la v2.1 tal como está. El hallazgo 1 se suma a TASK-7.
+
+## Task completado: HANDOFF_APP (v2.1) — TASK-6 (providers, kit, estado del nodo, UI base, capas)
+
+> Reporte del DEV transcrito por el orquestador (resumido; nombres de tests agrupados; rutas locales reemplazadas).
+
+- Branch @ `acd71fb`, sin commits. **Creados (19):** `app/src/sui/{nodeInfo,dappKit}.ts` + tests; `app/src/providers/AppProviders.tsx`; `app/src/hooks/{configContext,useAppConfig,useNodeStatus,useWalletAccount}.ts(x)` + `useNodeStatus.test.tsx`; `app/src/components/{Header,NetworkBadge,AccountBadge}.tsx` + tests; `app/src/pages/{HomePage,NotFoundPage}.tsx`. **Modificados:** `app/eslint.config.js`, `App.tsx`, `App.test.tsx`, `main.tsx` y `app/src/test/setup.ts` (fuera de la lista; desviación 5).
+- **Gates (Node v26.13.0):** `npm ci` 0 (11 moderate solo dev); `audit signatures` 0; `audit --omit=dev --audit-level=high` → 0 vulnerabilities; lint 0; typecheck 0; `Test Files 12 passed (12)` / `Tests 142 passed (142)` (nodeInfo 14, dappKit 5, useNodeStatus 6, NetworkBadge 6, AccountBadge 2, Header 2, App 2, + 105 previos); build testnet exit 0, `index-*.js 826.07 kB │ gzip 251.42 kB` con aviso de chunk > 500 kB.
+- **Criterio 2 (capas):** sondas (a)–(j) en tres rondas, todas `no-restricted-imports` con su mensaje (`@mysten/bcs`/`@mysten/sui`/`@mysten/dapp-kit-react` fuera de las capas; `dapp-kit-core` y `../components`/`../providers` en `hooks/`; `@mysten/sui/grpc` en `providers/`; `../hooks`, `dapp-kit-react/ui` y `react` en `sui/`); permitidos (`ui` en components, `sui/grpc` en sui y hooks, raíz de `dapp-kit-react` en hooks y providers) → lint 0; sondas borradas, lint 0.
+- **Criterios 3–7:** fuera de las capas solo `@mysten/dapp-kit-react/ui` (más 2 `vi.mock` de tests); sin `useEffect` ni `getChainIdentifier`; deps sin diff; cero casts en `hooks/` y `providers/`; `NODE_STATUS_TIMEOUT_MS = 10_000`, `getServiceInfo({}, { abort })`, `queryFn: ({ signal }) => fetchNodeInfo(client, signal)`. `Register`: archivo temporal con `tsc` comprobó `useCurrentClient()` = `SuiGrpcClient` y `DefaultExpectedDppKit` = `AppDAppKit` (augment de `@mysten/dapp-kit-react` suficiente).
+- **Desviaciones:** (1) timeout con `AbortController` + `setTimeout` (alternativa del handoff: `AbortSignal.timeout` no avanza con timers falsos en jsdom), combinado con `AbortSignal.any`, limpiado en `finally`, test `vi.getTimerCount() === 0`; (2) `RouterProvider` desde `react-router/dom`; (3) augment en `AppProviders.tsx`; (4) `vi.mock` del web component; (5) `setup.ts` con `afterEach(cleanup)` (sin globals de Vitest los renders se acumulaban); (6) helper `advance(ms)` +1 ms por la planificación de timers de 0 ms; (7) textos visibles del `NetworkBadge`; (8) tests extra.
+- **Riesgos:** (1) `QueryClient` con `retry` por defecto (3 con backoff): "sin conexión" tarda ~7 s con nodo caído y ~47 s con nodo colgado; opción mínima `retry: false`/`1` en la query del nodo (no implementado sin indicación). (2) Bundle 826 kB (aviso de chunk; code-splitting → #15). (3) El código del burner está en el bundle de testnet, apagado en runtime (`burnerWalletEnabled` = localnet && DEV); el smoke verifica que no se ofrece.
+
+## Revisión TASK-6: PASA
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió gates; consultó el SDK instalado (`dapp-kit-core/dist/index.mjs:831,845`; `grpc-web-transport.js:174-183`).
+
+Confirmado: capas por regex (base, `sui/`, `hooks/` con `group` NIT-2, `providers/`), sondas (a)–(j); `nodeInfo.ts` (MINOR-1: `NODE_STATUS_REFETCH_MS = 20_000`, `NODE_STATUS_TIMEOUT_MS = 10_000`, `AbortController` + `AbortSignal.any`, `getServiceInfo({}, { abort })`, motivo legible vía `RpcError`, prioridad de `deriveNodeStatus`); `dappKit.ts` según el snippet; `AppProviders` sin casts (NIT-1) y `Register` tipado; hooks sin `useEffect`/`getChainIdentifier`; UI y router (JSDoc de `App.tsx` con el porqué; cierra hallazgo 3 de TASK-1); 142 tests cubren §5.
+
+**Decisiones:**
+> Decisión (2026-11-02): la desviación 5 (`app/src/test/setup.ts` con `afterEach(cleanup)`) se acepta: Vitest sin `globals` no registra la limpieza automática de Testing Library; es infraestructura de test sin efecto en producción — MID.
+> Decisión (2026-11-02): useNodeStatus conserva los reintentos por defecto de TanStack (3 con backoff): "sin conexión" tarda ≤ ~27 s con el nodo caído y ≤ ~67 s con el nodo colgado; la política de reintentos y el estado "reintentando" (fetchStatus/failureCount) se definen en #10 para todas las lecturas — MID.
+> Decisión (2026-11-02): el código de la burner wallet queda en el bundle de testnet pero nunca se habilita ni se ofrece (`createDAppKit` lo importa siempre, `index.mjs:845`); D-20261102-02 (5) se cumple — MID.
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | LIM-11 | `useNodeStatus.test.tsx:264-269` | El test del `signal` no prueba la propagación (la señal del timeout siempre existe); el criterio 7 lo cubre por grep | En #10: test con `cancelQueries()` y mock colgado |
+| 2 | LIM-3 | `Header.tsx:8`, `NetworkBadge.tsx:31`, `AccountBadge.tsx:10` | Clases sin reglas CSS | Sin acción (anclajes para #10/#15) |
+| 3 | Riesgo 2 | Build testnet | 826 kB, aviso de chunk | Pendiente en el body del PR: code-splitting en #15 |
+| 4 | Decisiones | — | Desviación 5, riesgos 1 y 3 | Registradas arriba; a `app/README.md` en TASK-7 |
+
+### Siguiente paso
+TASK-7 autorizada. Además de la v2.1, `app/README.md` suma: (1) latencia del indicador (≤ ~27 s / ≤ ~67 s; política en #10); (2) burner en el bundle, habilitada solo en localnet + DEV; (3) el build de testnet publicado sale de la CI o de un checkout limpio (hallazgo 1 de TASK-5); (4) aviso de chunk → #15.
