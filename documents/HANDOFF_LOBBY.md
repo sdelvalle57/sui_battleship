@@ -1,9 +1,16 @@
 # HANDOFF_LOBBY
-> Plan: PLAN_LOBBY v1.1 (MAYOR: APPROVE, 2026-11-02) | Issue: #10 | Branch: `feature/issue-10-lobby` | Versión: v1.1 |
+> Plan: PLAN_LOBBY v1.1 (MAYOR: APPROVE, 2026-11-02) | Issue: #10 | Branch: `feature/issue-10-lobby` | Versión: v1.2 |
 > Fecha: 2026-11-02
 
 ## Changelog
 
+- **v1.2 (2026-11-02)** — Revisión MAYOR del handoff v1.1: APPROVE con 1 MINOR y 1 NIT (P-1 = (a) y DL-11 = aceptar,
+  D-20261102-04):
+  - **MINOR-1 (TASK-4):** el `ReadStatus` de `useLobby` combina la query de la publicación y la infinita; un error de
+    `usePublishCheckpoint` (no transitorio o con los reintentos agotados) da `error` con su mensaje, nunca "cargando"
+    para siempre, y `refresh`/"Reintentar" también vuelve a pedir esa query. Con test.
+  - **NIT-1 (TASK-3, paso 3b):** si la relectura del piso también falla, se relanza el error **original** del pedido. Con
+    test.
 - **v1.1 (2026-11-02)** — Revisión MAYOR del handoff v1: REQUEST CHANGES (1 MAJOR, 2 NIT):
   - **MAJOR-1 (poda del fullnode público de testnet):** el piso `lowestAvailableCheckpoint` va ≈ 14,6 días por detrás de
     la punta y se mueve; `getCheckpoint`/`getTransaction` por debajo dan `NOT_FOUND` y un escaneo que cruza el piso termina
@@ -394,8 +401,9 @@ termine con un "no hay más" honesto, **para** no quedarme mirando una búsqueda
      `fetchNodeInfo`; si el piso nuevo es mayor que la `startCheckpoint` usada, el error se convierte en
      `HistoryPrunedError`, que el bucle captura: se descartan los eventos de ese pedido, la página devuelve lo reunido en
      los pedidos anteriores con `hasNextPage: false` y `end: 'history_pruned'`, y `lowerBound.kind` pasa a `'node_floor'`.
-     Si el piso no explica el error, se relanza el original (y la política decide si se reintenta). El código medido en
-     P7 se documenta en un comentario; la decisión no depende de él.
+     Si el piso no explica el error, se relanza el original (y la política decide si se reintenta). **Si la relectura
+     (`fetchNodeInfo`) también falla, se relanza el error original del pedido, no el de la relectura** (NIT-1 de v1.1).
+     El código medido en P7 se documenta en un comentario; la decisión no depende de él.
   4. **M-2:** si el cursor final es igual al `before` enviado (comparación de bytes) y `hasNextPage` es `true` ⇒
      `PaginationStalledError` (no transitorio). `endCursor` `null` con `hasNextPage` `true` ⇒ mismo error.
   5. Bucle acotado: repetir con `before = endCursor` mientras `hasNextPage`, haya menos de `LOBBY_PAGE_TARGET`
@@ -442,7 +450,8 @@ termine con un "no hay más" honesto, **para** no quedarme mirando una búsqueda
   `fetchLobbyPage` con **publicación podada** (`publishCheckpoint` `null`) ⇒ `startCheckpoint` = piso + margen y
   `lowerBound.kind` `'node_floor'`; **error de piso a mitad del escaneo** (primer pedido con eventos, el segundo falla y la
   relectura muestra un piso mayor) ⇒ solo los ítems del primer pedido, `hasNextPage: false`, `end: 'history_pruned'`, sin
-  ítems del pedido fallido; el mismo error con un piso que **no** se movió ⇒ se relanza el original; el piso se relee en
+  ítems del pedido fallido; el mismo error con un piso que **no** se movió ⇒ se relanza el original; **el pedido falla y
+  la relectura del piso también falla (con otro error) ⇒ se relanza el error original del pedido**; el piso se relee en
   cada página.
 - `fetchPublishCheckpoint`: valor; `TransactionError` `notFound` ⇒ `null`; `checkpoint` `null` ⇒
   `NotYetCheckpointedError` y `shouldRetryRead(0, e) === true` (NIT-2). `fetchCheckpointTime`: valor y `null`.
@@ -486,6 +495,12 @@ y cancelar, **para** ver siempre en qué está cada lectura ("reintentando", err
   `sameAddress(creator, cuenta)`. Devuelve `{ items, status: ReadStatus, hasNextPage, isFetchingNextPage, nextPageError,
   stalled: boolean, lowerBound, end, loadMore, refresh }` (`lowerBound` y `end` de la última página) con `refresh` = `queryClient.resetQueries({ queryKey })` y `stalled` = el error
   de la página siguiente es `PaginationStalledError`.
+  **`status` combinado (MINOR-1 de v1.1):** mientras `usePublishCheckpoint` no terminó, el estado es el **suyo**
+  (`deriveReadStatus` de esa query: `loading`, `retrying`, `paused` o `error`); si terminó con error (no transitorio, o
+  transitorio con los reintentos agotados), `status` = `{ kind: 'error', error }` con **ese** error (mensaje por
+  `readErrorMessage`), nunca `loading`; cuando terminó con éxito, el estado es el de la query infinita. `refresh` (y el
+  "Reintentar" de `ReadState`) hace `refetch` de la query de la publicación si está en error y `resetQueries` de la del
+  lobby; así un error de la publicación se puede reintentar desde la UI.
 - **`useGame(rawId)`:** `parseObjectIdInput`; `null` ⇒ `{ kind: 'invalid_id' }` sin consulta (`enabled: false`); si no,
   `useQuery` con `queryKeys.game(network, id)`, `fetchGame`, `refetchInterval: GAME_REFETCH_MS`.
 - **`useCheckpointTime(sequenceNumber | null)`:** `useQuery` sobre `fetchCheckpointTime`, `staleTime: Infinity`,
@@ -512,7 +527,10 @@ política real salvo donde se indique.)
   `NOT_FOUND`, `GameNotFoundError` y `ReadDataError` ⇒ `error` **sin** segunda llamada; corte por tiempo ⇒ se reintenta.
 - `useLobby`: espera a `usePublishCheckpoint` (antes no llama a `listEvents`); **publicación podada (`NOT_FOUND`) ⇒ el
   lobby carga igual** con la cota del piso (regresión del MAJOR-1: nunca queda deshabilitado);
-  `NotYetCheckpointedError` ⇒ `retrying` y luego carga; primera página; `loadMore` envía el
+  `NotYetCheckpointedError` ⇒ `retrying` y luego carga; **error no transitorio de la publicación (p. ej. `RpcError`
+  `INVALID_ARGUMENT`) ⇒ `status.kind === 'error'` con ese error, no `loading`, y sin llamar a `listEvents`**; un
+  transitorio que agota los reintentos ⇒ también `error`; tras ese error, `refresh` vuelve a pedir la publicación y, si
+  responde, el lobby carga (MINOR-1 de v1.1); primera página; `loadMore` envía el
   `endCursor`; `refresh` deja una sola página; `isMine` con la dirección en otro formato; sin cuenta, ningún `isMine`;
   deduplicación; `PaginationStalledError` en la página siguiente ⇒ `stalled: true` y sin `hasNextPage` útil.
 - `useGame`: ID inválido no llama al cliente; ID en mayúsculas consulta el normalizado.
