@@ -1,6 +1,6 @@
 # HANDOFF_DEPLOY
 > Plan: PLAN_DEPLOY v2.1 (aprobado por el MAYOR, `documents/REVISION_PLAN_DEPLOY.md` "Revisión v2") | Issue: #7 |
-> Branch: `feature/issue-7-deployments` | Versión: v1 | Fecha: 2026-11-02
+> Branch: `feature/issue-7-deployments` | Versión: v1.1 — ajustes de la revisión MID de TASK-1 (ver "Addendum v1.1" al final; prevalece sobre el cuerpo) | Fecha: 2026-11-02
 > Incorpora las correcciones obligatorias de la revisión v2: **v2-1** (smoke sin camino testnet), **v2-2** (guarda de
 > config), **v2-3** (`runSui` por vector completo), **v2-4** (`redactAddresses`), **v2-5** (receta §3 con dos salidas),
 > **v2-6** (publicación de la copia en segundo plano y control de `~/.move`).
@@ -535,3 +535,14 @@ Tras aprobar este task, el MID entrega `documents/SMOKE_DEPLOY.md` y el DEV lo c
 ### 8. Al terminar
 
 Reporte §5 con el snippet para STATUS.
+
+
+## Addendum v1.1 — ajustes de la revisión MID de TASK-1 (transcritos por el orquestador; prevalecen sobre el cuerpo)
+
+- **A1 (TASK-2 §3.1 y §4):** se permite extraer de `validateDeployment` (`deployment.mjs:219-226`) la función exportada `chainIdError(network, chainId)` ⇒ `string | null`, y usarla en `validateDeployment`, `checkNetworkGuard` y `resolveRecordMeta` (LIM-5). Refactor declarado; los tests de TASK-1 siguen en verde sin cambios.
+- **A2 (TASK-2 §5, `checkDeployments` coherente):** `Published.localnet.toml` es de la copia (D6), no de `localnet-publish.json`. El caso coherente, en memoria, reetiqueta la entrada (`[published.testnet]`, `chain-id = "4c78adac"`) **y además** toma `packageId`, `originalPackageId`, `packageVersion` y `upgradeCapId` del json de esa entrada. Comentarlo en el test.
+- **A3 (TASK-2 §4 y §5):** se permite tocar `deployment.test.mjs` para agregar los casos del parser estricto de `Published.toml`: clave desconocida, clave duplicada, sección duplicada, sección incompleta, `build-config` que no es tabla en línea, entero mal formado y texto sin comillas, cada uno verificando `Published.toml:<n>:` y el motivo. Agregar en el test de `checkConsistency` un comentario de que el TOML proviene de la copia.
+- **A4 (TASK-2 §3.1, guarda 6 y "Después de invocar"):** no depender de `suggestedGasPrice` (no existe en 1.83.0, C10 corregido) ni usar ni imprimir `effects.transactionDigest` del dry run como digest de publicación. Si `parseDryRunOutput` o `parsePublishOutput` lanzan por forma inválida, el script imprime su mensaje propio y la ruta del archivo, nunca el stdout (v2-4); agregar un test. Opcional: precisar el JSDoc ("lanza si la forma es inválida").
+- **A5 (TASK-3 §3.1, README "Despliegues", junto al comando de tests):** "Los fixtures de `contracts/scripts/fixtures/` son el stdout crudo de una localnet aislada y desechable. Contienen la dirección y la firma de una cuenta efímera de la génesis, sin valor y con la clave destruida. Al recapturarlos (por ejemplo al subir la CLI) se usa siempre el procedimiento de `agents.md` §3; nunca salida de testnet ni de una cuenta del owner."
+- **A6 (TASK-1 §2 y TASK-3 si documenta el dry run):** C10 real: el dry run `--json` de 1.83.0 trae `balanceChanges, effects, events, executionErrorSource, input, objectChanges`, **sin** `suggestedGasPrice`; trae `effects.transactionDigest` (simulación, no se usa ni se registra) y no trae `digest` ni `timestampMs` en la raíz.
+- **A7 (§8 de cada task):** el reporte pega el output crudo de `node --test` (todas las líneas `ℹ`) y de los gates.
