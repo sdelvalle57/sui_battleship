@@ -17,6 +17,7 @@ import {
   checkDeployments,
   checkLockUnchanged,
   checkNetworkGuard,
+  checkOutArg,
   checkPublishArgs,
   checkTestnetPreconditions,
   chainIdFromCli,
@@ -30,6 +31,7 @@ import {
   parseCliArgs,
   publishCliArgs,
   readCliJson,
+  redactConfigDir,
   resolveRecordMeta,
   runGit,
   runSui,
@@ -240,6 +242,38 @@ test('main: uso inválido ⇒ exit 2; guarda de argumentos ⇒ exit 1 (sin invoc
   }
 });
 
+test('main: --out con --network testnet ⇒ exit 1 sin leer la config ni invocar la CLI', async () => {
+  // Precedente de #38: `main` con --network testnet dentro de node --test, cortado antes de la config y de la CLI.
+  // Dos barreras más: sin SUI_CONFIG_DIR y con un SUI_BIN inexistente.
+  const saved = { SUI_CONFIG_DIR: process.env.SUI_CONFIG_DIR, SUI_BIN: process.env.SUI_BIN };
+  try {
+    delete process.env.SUI_CONFIG_DIR;
+    process.env.SUI_BIN = '/nonexistent/sui-bin-de-test';
+    const cases = [
+      ['publish', '--network', 'testnet', '--out', '/tmp/battleship-test/testnet.json'],
+      [
+        'record',
+        '--network',
+        'testnet',
+        '--from',
+        '/nonexistent/publish-output.json',
+        '--out',
+        '/tmp/battleship-test/testnet.json',
+      ],
+    ];
+    for (const argv of cases) {
+      const result = await mainCapturingStderr(argv);
+      assert.equal(result.code, EXIT.FAILURE, JSON.stringify(argv));
+      assert.match(result.stderr, /^--out no se admite en testnet/, JSON.stringify(argv));
+    }
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 // ---------- Guardas ----------
 
 test('checkPublishArgs: red válida y --pubfile-path obligatorio en localnet y prohibido en testnet', () => {
@@ -249,6 +283,23 @@ test('checkPublishArgs: red válida y --pubfile-path obligatorio en localnet y p
   assert.throws(() => checkPublishArgs({ network: 'testnet', pubfilePath: 'P' }), /no se admite en testnet/);
   checkPublishArgs({ network: 'localnet', pubfilePath: 'P' });
   checkPublishArgs({ network: 'testnet', pubfilePath: undefined });
+});
+
+test('checkPublishArgs y checkOutArg: --out prohibido en testnet (también vacío) y admitido en localnet', () => {
+  assert.throws(
+    () => checkPublishArgs({ network: 'testnet', out: '/tmp/battleship-test/testnet.json' }),
+    /--out no se admite en testnet/,
+  );
+  assert.throws(() => checkPublishArgs({ network: 'testnet', out: '' }), /--out no se admite en testnet/);
+  assert.throws(
+    () => checkPublishArgs({ network: 'testnet', pubfilePath: 'P', out: 'x' }),
+    /--pubfile-path no se admite en testnet/,
+  );
+  checkPublishArgs({ network: 'localnet', pubfilePath: 'P', out: '/tmp/battleship-test/localnet.json' });
+  checkPublishArgs({ network: 'testnet', out: undefined });
+  assert.throws(() => checkOutArg({ network: 'testnet', out: 'x' }), /--out no se admite en testnet/);
+  checkOutArg({ network: 'localnet', out: 'x' });
+  checkOutArg({ network: 'testnet', out: undefined });
 });
 
 // Sistema de archivos falso: directorios y archivos reales más symlinks (prefijo → destino).
@@ -304,6 +355,39 @@ test('checkConfigDirGuard acepta una config propia y devuelve su realpath', () =
   assert.equal(checkConfigDirGuard({ value: '/srv/battleship/net', ...FS, homes: ['/tmp/h'] }), '/srv/battleship/net');
 });
 
+test('checkConfigDirGuard: una excepción de fs ⇒ SUI_CONFIG_DIR inválido con solo su código, sin ruta ni mensaje original', () => {
+  const value = '/srv/battleship/net';
+  const fsThrow = (code) => (p) => {
+    throw Object.assign(new Error(`${code}: permission denied, stat '${p}'`), { code });
+  };
+  const cases = [
+    [{ isDir: fsThrow('EACCES') }, '(EACCES)'],
+    [{ exists: fsThrow('EACCES') }, '(EACCES)'],
+    [{ hasClientYaml: fsThrow('EACCES') }, '(EACCES)'],
+    [{ realpath: (p) => (p === value ? fsThrow('ELOOP')(p) : FS.realpath(p)) }, '(ELOOP)'],
+    [{ realpath: (p) => (p === `${HOME}/.sui` ? fsThrow('EACCES')(p) : FS.realpath(p)) }, '(EACCES)'],
+    [
+      {
+        isDir: (p) => {
+          throw new Error(`boom ${p}`);
+        },
+      },
+      '(error de fs)',
+    ],
+  ];
+  for (const [override, code] of cases) {
+    assert.throws(
+      () => checkConfigDirGuard({ value, ...FS, ...override, homes: [HOME] }),
+      (error) =>
+        error.message.startsWith('SUI_CONFIG_DIR inválido: no se pudo inspeccionar una ruta (') &&
+        error.message.includes(code) &&
+        ![value, HOME, '/srv', 'permission denied', 'boom'].some((s) => error.message.includes(s)) &&
+        error.cause === undefined,
+      code,
+    );
+  }
+});
+
 test('checkNetworkGuard: env activo distinto ⇒ error sin consultar el chain id', () => {
   let calls = 0;
   const readChainId = () => {
@@ -336,6 +420,60 @@ test('readCliJson y chainIdFromCli leen la salida --json de active-env y chain-i
     () => readCliJson({ status: 1, stdout: '', stderr: `cannot reach 0x${address}` }, 'chain-identifier'),
     (error) => /falló \(estado 1\)/.test(error.message) && !error.message.includes(address),
   );
+});
+
+test('redactConfigDir: realpath y valor original ⇒ <SUI_CONFIG_DIR>, la ruta más larga primero, sin tocar el resto', () => {
+  assert.equal(
+    redactConfigDir('open /srv/battleship/net/sui.keystore; /srv/own-link/client.yaml', [CONFIG_DIR, '/srv/own-link']),
+    'open <SUI_CONFIG_DIR>/sui.keystore; <SUI_CONFIG_DIR>/client.yaml',
+  );
+  assert.equal(redactConfigDir('/srv/battleship/net/x', ['/srv/battleship/net/']), '<SUI_CONFIG_DIR>/x');
+  assert.equal(redactConfigDir('/srv/a/b/x y /srv/a/y', ['/srv/a', '/srv/a/b']), '<SUI_CONFIG_DIR>/x y <SUI_CONFIG_DIR>/y');
+  assert.equal(redactConfigDir('/srv/c.d+e/x /srv/cXd+e/x', ['/srv/c.d+e']), '<SUI_CONFIG_DIR>/x /srv/cXd+e/x');
+  assert.equal(redactConfigDir('/srv/x', [undefined, '', '/', 42]), '/srv/x');
+  assert.equal(redactConfigDir('sin rutas', [CONFIG_DIR]), 'sin rutas');
+});
+
+test('readCliJson, formatCliFailure e interpretCliRun: el stderr de la CLI sale sin la ruta de la config ni direcciones', () => {
+  const [address] = ACCOUNT_ADDRESSES;
+  const stderr = `cannot open /srv/own-link/sui.keystore (real ${CONFIG_DIR}) for 0x${address}\n`;
+  const configDirs = [CONFIG_DIR, '/srv/own-link'];
+  assert.throws(
+    () => readCliJson({ status: 1, stdout: '', stderr }, 'active-env', configDirs),
+    (error) => {
+      assert.ok(error.message.includes('<SUI_CONFIG_DIR>/sui.keystore'));
+      assert.ok(error.message.includes('(real <SUI_CONFIG_DIR>)'));
+      assert.ok(!error.message.includes('/srv'));
+      assertNoAccountAddress(error.message);
+      return true;
+    },
+  );
+  const message = formatCliFailure({
+    reason: 'x',
+    status: 1,
+    stdout: '',
+    stderr,
+    dir: '/tmp/d',
+    outputPath: '/tmp/d/publish-output.json',
+    configDirs,
+  });
+  assert.ok(message.includes('stderr de la CLI (direcciones y config ocultas):'));
+  assert.ok(message.includes('<SUI_CONFIG_DIR>/sui.keystore'));
+  assert.ok(!message.includes('/srv'));
+  assertNoAccountAddress(message);
+  assert.ok(message.includes('/tmp/d/publish-output.json'));
+  const outcome = interpretCliRun({
+    result: { status: 1, stdout: '', stderr },
+    parse: (json) => json,
+    dir: '/tmp/d',
+    outputPath: '/tmp/d/publish-output.json',
+    configDirs,
+  });
+  assert.ok('error' in outcome);
+  assert.ok(outcome.error.includes('<SUI_CONFIG_DIR>'));
+  assert.ok(!outcome.error.includes('/srv'));
+  const legacy = formatCliFailure({ reason: 'x', status: 1, stdout: '', stderr, dir: '/tmp/d', outputPath: '/tmp/d/o.json' });
+  assert.ok(legacy.includes('/srv/own-link/sui.keystore'));
 });
 
 test('checkCliVersion compara con SUI_VERSION/SUI_COMMIT de ci.yml', () => {

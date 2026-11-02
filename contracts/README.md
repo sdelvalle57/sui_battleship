@@ -518,16 +518,20 @@ su `network`, si una red no-localnet no tiene su `[published.<red>]` (o al revé
 
   `SUI_CONFIG_DIR=<dir>/net` va con ruta absoluta: el script rechaza una relativa (guarda de config).
 
-  Sin `--out` escribe `contracts/deployments/localnet.json` (ignorado por git). En localnet se usa
+  Sin `--out` escribe `contracts/deployments/localnet.json` (ignorado por git). `--out` existe solo para localnet
+  (smokes); en testnet el script lo rechaza (#39). En localnet se usa
   `sui client test-publish --build-env testnet`: el manifest no declara un entorno localnet y `publish` no puede.
 
 ### Uso en testnet (solo el owner)
 
-Ningún agente corre este camino, ni con `--dry-run` (D-20261102-03).
+Ningún agente corre este camino, ni con `--dry-run` (D-20261102-03). No admite `--out` ni `--pubfile-path`: el json va
+siempre a `deployments/testnet.json`, el que `check` cruza con `[published.testnet]` (con otra ruta, la CI fallaría
+recién en `check`).
 
 1. **Config propia:** el owner crea, en su terminal, un `SUI_CONFIG_DIR` **fuera de `~/.sui/`** con su clave y el env
    `testnet`; `~/.sui/sui_config/` queda sin claves para siempre. El script lo exige (absoluto, con `client.yaml`, y su
-   `realpath` fuera de `~/.sui`).
+   `realpath` fuera de `~/.sui`). Si la guarda no puede inspeccionar una ruta (permisos, symlinks en bucle), aborta con
+   el código del error (`EACCES`, `ELOOP`), nunca con la ruta.
 2. **Pre-vuelo (STATUS H13):** si hace falta, repin con `update-deps -e testnet`, gates re-medidos y lock commiteado
    **antes**; árbol limpio.
 3. `SUI_CONFIG_DIR=<su dir> node scripts/publish.mjs publish --network testnet --dry-run`: comprueba env activo y
@@ -550,11 +554,13 @@ la config propia, nunca en `~/.sui/`).
 Antes de invocar la publicación, el script crea un directorio temporal (`0700`) con `meta.json` (red, chain id,
 commit, CLI, `frameworkRev`) y guarda ahí la salida cruda (`publish-output.json`, `publish-stderr.txt`, `0600`). Si
 la CLI falla, el script imprime ese directorio, el digest si la CLI lo reporta (en stderr o en su salida `--json`), el
-stderr con las direcciones ocultas y la ruta del archivo con el motivo de la CLI, que se revisa ahí y no se pega (puede
-traer la dirección del publicador). Nunca imprime el stdout. **No se reintenta sin buscar antes el digest** (en el
-mensaje o en el explorador): una segunda publicación crea otro paquete.
+stderr con las direcciones y la ruta de la config ocultas (`<SUI_CONFIG_DIR>`: el valor de `SUI_CONFIG_DIR` y su ruta
+real; otra ruta que cite la CLI, p. ej. la del keystore en `client.yaml`, no se oculta) y la ruta del archivo con el motivo de
+la CLI, que se revisa ahí y no se pega (puede traer la dirección del publicador). Nunca imprime el stdout. **No se
+reintenta sin buscar antes el digest** (en el mensaje o en el explorador): una segunda publicación crea otro paquete.
 
-- Si la transacción existe y solo falló el registro: `record` rearma el json **sin republicar**:
+- Si la transacción existe y solo falló el registro: `record` rearma el json **sin republicar** (`record --network
+  testnet` tampoco admite `--out`):
 
   ```bash
   node scripts/publish.mjs record --network testnet --from <dir>/publish-output.json
