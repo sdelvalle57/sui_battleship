@@ -74,3 +74,34 @@ Gate tras la corrección (DEV): `npm ci`/firmas/audit 0; lint 0; typecheck 0; **
 
 ### Siguiente paso
 TASK-3 arranca con HANDOFF_LOBBY v1.3 tal como está.
+
+## Task completado: HANDOFF_LOBBY (v1.3) — TASK-3 (lecturas, política común, IDs y config)
+
+> Reporte del DEV transcrito por el orquestador (resumido; conteos y exit codes literales; rutas con placeholders).
+
+- Branch @ `6530f3c`, sin commits. **Creados** (`app/src/sui/`, con su `.test.ts`): `readPolicy`, `readStatus`, `ids`, `transactionInfo`, `gameDetail`, `lobby`. **Modificados:** `nodeInfo.ts`/test, `config.ts`/test y, solo para `publishTxDigest` en literales `AppConfig`: `App.test.tsx`, `Header.test.tsx`, `NetworkBadge.test.tsx`, `useNodeStatus.test.tsx`, `dappKit.test.ts`.
+- **Política común:** `withReadTimeout` (corte propio 10 s ⇒ `ReadTimeoutError({ cause })` transitorio; abort de TanStack ⇒ error original, no transitorio), `isTransientReadError`, `shouldRetryRead`, `readRetryDelay`, `deriveReadStatus`; `ids.ts` (`parseObjectIdInput`, `sameAddress`).
+- **Lecturas:** `fetchTransactionInfo`; `fetchPublishCheckpoint` (podada ⇒ `null`; sin checkpoint ⇒ `NotYetCheckpointedError`); `fetchCheckpointTime` (paths de P7); `fetchGame` (`GameNotFoundError`/`NotAGameError`; `previousTransaction` tal cual); `nodeInfo` con piso y `withReadTimeout`; `config` con `publishTxDigest`.
+- **`fetchLobbyPage`:** relee el piso por página; cota `lobbyLowerBound`; ≤ 2 pedidos crudos descendentes sin `sender`; `getObjects` en lote; filas ilegibles sin ocultar sanas; fin por cota, objetivo o historial podado; H-5 (`OUT_OF_RANGE` ⇒ `HistoryPrunedError` sin relectura); otros `RpcError` ≠ `CANCELLED` releen el piso y, si falla, relanzan el original (NIT-1); `PaginationStalledError`; `reason` desconocido o sin `QueryEnd` ⇒ `malformed`.
+- **Tests:** `readPolicy` 32, `readStatus` 8, `ids` 12, `transactionInfo` 10, `gameDetail` 8, `lobby` 28 (calibración, cota en 6 casos, pedidos y filtros, `SCAN_LIMIT` vacíos, tope de 2, objetivo 20, `CHECKPOINT_BOUND`, `ObjectError`, ilegibles, cursor repetido/`null`, `UNKNOWN`/99, publicación podada, piso que se mueve/no se mueve/relectura que falla, `OUT_OF_RANGE` a mitad y en el primer pedido, `CANCELLED`), `nodeInfo` 15, `config` 52.
+- **Gates (Node v26.13.0):** `npm ci` 0; firmas 292; audit prod 0; lint 0; typecheck 0; `Test Files 21 passed (21)` / `Tests 310 passed (310)`; build testnet 0 (`826.57 kB │ gzip 251.62 kB`); `contracts/`, `package*`, `eslint.config.js` sin delta.
+- Verificado: todas las llamadas al SDK pasan por `withReadTimeout`; sin `any` ni `useEffect`; capas OK; sin claves, rutas personales ni hex añadido.
+- **Desviaciones:** (1) `NODE_STATUS_TIMEOUT_MS` alias de `READ_TIMEOUT_MS`; `fetchNodeInfo` recibe `Pick<SuiGrpcClient, 'ledgerService'>`; (2) `parseObjectIdInput` rechaza `'0x'`; (3) el tipo del evento se pasa sin normalizar (lo normaliza `isExactType`; un tipo basura da fila ilegible en vez de excepción); (4) cursores comparados por base64; (5) `fetchPublishCheckpoint` trata todo `TransactionError` como podada (único `reason` en 2.37); (6) tests extra.
+- **Riesgos:** hasta 4–5 pedidos por clic (1 `getServiceInfo` + 2 `ListEvents` + 1 `getObjects` [+1 relectura]); la política aún no está en el `QueryClient` (TASK-4).
+
+## Revisión TASK-3: PASA
+
+> Revisión del MID transcrita por el orquestador (resumida). Contrastó con el SDK instalado (`client/core.mjs:24-33`, `grpc/core.mjs:41-71`, `client/errors.d.mts:31`); no corrió gates.
+
+Confirmado: `withReadTimeout` decide por señal (`readPolicy.ts:27-43`; el test usa el `RpcError INTERNAL` real tras el corte); `isTransientReadError` con los 6 códigos + 2 clases; `fetchLobbyPage` cumple M-1/M-4 (piso por página, `lobbyLowerBound` 5 casos), H-5 (sin relectura), NIT-1 del MAYOR, NIT-1 de v1.1, M-2, bucle acotado, constantes 50/2/20/`16_000n`, `readMask` sin `sender`, poda a mitad de escaneo; sin `Pending` ni montos inventados; `readStatus`, `ids`, `config`, `nodeInfo` correctos; todas las llamadas por `withReadTimeout`; los 28 tests de `lobby` cubren §5.
+
+Desviaciones 1–6 aceptadas (la 3 es mejor que lo pedido; la 5 se apoya en `TransactionErrorReason = 'notFound'` único en 2.37). **Riesgo de pedidos por clic aceptado** (hasta 6: 1 `getServiceInfo` + 2 `ListEvents` + ≤ 2 `BatchGetObjects` + 1 relectura; acotado y disparado por el usuario).
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | SEG-10 (menor) | `lobby.ts:162-167` | Frame sin `transactionDigest` ⇒ `createdTxDigest: ''` | TASK-4/5: no pedir `txInfo` con digest vacío (`enabled: digest !== ''`); opcional fila `unreadable` |
+| 2 | Proceso | `transactionInfo.ts:348-349` | La desviación 5 depende de un solo motivo de `TransactionError` | TASK-6: al subir el tren `@mysten/*`, revisar `TransactionErrorReason`/`ObjectErrorReason` |
+| 3 | Aviso TASK-5 | `lobby.ts:258-260` | Con H-5, la fecha "desde" usa la cota usada (≤ ~1 h antes del piso real) | Aceptado como aproximación en TASK-5 |
+
+### Siguiente paso
+TASK-4 arranca con la v1.3 (recordatorios: hallazgo 1 y MINOR-1 del MAYOR en `useLobby`).
