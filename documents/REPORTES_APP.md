@@ -216,3 +216,31 @@ Procedimiento conforme a HANDOFF_APP §TASK-4 y `agents.md` §3. Criterios §7: 
 
 ### Siguiente paso
 Tramo A cerrado (TASK-1..4 PASA); PR #36 en borrador. Tramo B bloqueado hasta el merge de #7 + rebase (conflictos esperados en `ci.yml` y `agents.md` §3) y la CI del PR #36 en verde; entonces el MID emite HANDOFF_APP v2.
+
+## Task completado: HANDOFF_APP (v2) — TASK-5 (config por red)
+
+> Reporte del DEV transcrito por el orquestador (resumido; nombres de los 48 tests nuevos agrupados; rutas locales reemplazadas por `<repo>`/`<scratchpad>`).
+
+- Branch `feature/issue-9-app` @ `64618a2`, sin commits. Creados: `app/src/sui/config.ts`, `app/src/sui/config.test.ts`, `app/src/components/ConfigError.tsx`, `app/src/components/ConfigError.test.tsx`, `app/.env.example`. Modificado: `app/src/main.tsx` (+5/−3). `vite.config.ts` sin cambios (`server.fs.allow` no hizo falta).
+- `resolveConfig` pura, reglas 1-7 en orden, mensajes en español con campo/archivo y acción; `SCHEMA_VERSION`, `CHAIN_ID_RE`, `OBJECT_ID_RE` privadas. `loadConfig` único lector de `import.meta.env` y del glob `../../../contracts/deployments/*.json`. `ConfigError` ("La app no está configurada", `role="alert"`, texto plano). `main.tsx` elige `<ConfigError>` o `<App />`. `.env.example` con `VITE_SUI_NETWORK=localnet` y aviso de que todo `VITE_*` es público.
+- **Gates (Node v26.13.0):** `npm ci` exit 0 (11 moderate, solo dev, #35); `npm audit signatures` exit 0; `npm audit --omit=dev --audit-level=high` → `found 0 vulnerabilities`; lint 0; typecheck 0; `Test Files 6 passed (6)` / `Tests 106 passed (106)` (config 47, ConfigError 1, format 30, explorer 15, networks 12, App 1); `VITE_SUI_NETWORK=testnet` build exit 0 (`index-*.js 222.08 kB`).
+- Criterio 2: `import.meta.env` solo en `config.ts` (`:133` JSDoc, `:138` lectura).
+- Criterio 3: sin `contracts/deployments` → build localnet exit 0 y el `packageId` de la fixture aparece 0 veces en el bundle; con copia de la fixture (`cmp` idéntica, ignorada por `.gitignore:7`) → build exit 0 y 1 aparición; `vite` dev (binario directo con `exec`, PID guardado, `127.0.0.1:5173 --strictPort`) sirve el JSON por `/@fs/<repo>/contracts/deployments/localnet.json?import` con 200, log sin errores; detenido por PID (143). Limpieza: `rm -f` + `rmdir`, rebuild testnet (0 apariciones en `dist`).
+- Criterio 4: `git diff --exit-code -- package.json app/package.json package-lock.json` → 0; `~/.sui/sui_config/client.yaml` idéntico (`2026-10-30 17:52:52.515735237 -0500 244`).
+- **Desviaciones (internas):** vite por binario directo; constantes privadas (LIM-3); mensajes con `JSON.stringify` del valor o "ausente" (mainnet: "fuera de alcance del MVP"); `role="alert"` en un `<div>` dentro de `<main>`; tests extra (upgrade `packageId` ≠ `originalPackageId`, ambos archivos, nombre exacto `old-testnet.json`, `Testnet`/`toString`); helper que quita la clave para "ausente"; primer intento con 1 error de lint en el helper de test y 3 tests "uppercase" que pasaban por accidente (corregidos sin tocar producción).
+- **Riesgos:** (1) el build de testnet muestra `ConfigError` hasta #8 (esperado); (2) el test de la fixture fija sus literales y fallará a propósito si #7 la regenera; (3) un `localnet.json` creado con vite ya arrancado puede requerir recarga (lo cubre el smoke).
+
+## Revisión TASK-5: PASA
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió gates (D-20261030-02). La v2.1 no cambia TASK-5 (`git diff 64618a2 beea93f`).
+
+Confirmado: firmas del handoff (`config.ts:15-31, 64-67, 136-141`); reglas 1-7 en orden (variable, mainnet, `isNetwork` con `hasOwn`, basename exacto, objeto + `schemaVersion`, `network`, formatos en minúsculas D12, claves desconocidas ignoradas) conforme a la regla 3 de "Compatibilidad"; `burnerWalletEnabled` (:127, D5); `import.meta.env` solo en `:138`; literales de la fixture real; 47 + 1 tests cubren §5 (SEG-9 en `ConfigError`); capas; `.env.example` exceptuado en `.gitignore:16` y sin secretos; criterios 3 y 4; desviaciones internas aceptadas.
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | Info (#8/#15) | `config.ts:139` | El glob `eager` mete todos los `deployments/*.json` en el bundle; un build de testnet en una máquina con `localnet.json` embebería IDs efímeros (no secretos) | TASK-7: una línea en `app/README.md` (el build de testnet publicado sale de la CI o de un checkout limpio) |
+| 2 | Riesgo 2 | `config.test.ts:47-60` | Literales de la fixture fijos | Aceptado: la fixture es el contrato de formato; debe romper si se regenera |
+| 3 | Riesgos 1 y 3 | `SMOKE_APP.md` | `ConfigError` en testnet hasta #8; recarga tras crear `localnet.json` | Sin acción (cubierto por el smoke) |
+
+### Siguiente paso
+TASK-5 commiteada; TASK-6 arranca con la v2.1 tal como está. El hallazgo 1 se suma a TASK-7.
