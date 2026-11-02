@@ -71,14 +71,25 @@ Los gates se corren con `cd contracts && printf 'n\n' | sui move …` (equivalen
 | `sui move build -e testnet --warnings-are-errors` | Compila. Gate bloqueante: sin errores ni warnings |
 | `sui move build -e testnet --lint --warnings-are-errors` | Lints de Sui. Gate bloqueante (D-20261030-13): con `--warnings-are-errors` un lint sale como `error[ESL…]` y corta el build (R4 de #3) |
 | `sui move test -e testnet --warnings-are-errors` | Tests unitarios (`#[test]`, `test_scenario`). Gate bloqueante |
+| `node --test scripts/*.test.mjs` | Tests de los scripts de despliegue (Node 26: `nvm use` o ruta absoluta). Gate bloqueante (#7) |
+| `node scripts/publish.mjs check` | Valida `deployments/*.json` y su coherencia con `Published.toml` (Node 26). Gate bloqueante (#7, ARQ-6) |
 | `git diff --exit-code -- Move.lock` | Tras los gates: el lock no cambia (PROY-11) |
 | `sui move test -e testnet --coverage && sui move coverage summary -e testnet` | Cobertura (informativo) |
 | Red local para smokes: **solo aislada** | Ver "Localnet aislada (smokes)" abajo; nunca `sui start` a secas |
-| `sui client publish` | Publicación — **solo el owner o con su autorización explícita** (§12) |
+| `node scripts/publish.mjs publish --network testnet` | Publicación — **solo el owner, con su `SUI_CONFIG_DIR` propio** (§12, D-20261102-03); agentes: solo `--network localnet` dentro de la localnet aislada |
 
-Las cuatro primeras filas son exactamente los steps de gate del job `contracts` de
+Las seis primeras filas son exactamente los steps de gate del job `contracts` de
 `.github/workflows/ci.yml` (PROY-18); el job además exige árbol limpio y cero claves. Baseline vigente
-de los tres gates: `documents/STATUS.md`.
+de los gates: `documents/STATUS.md`.
+
+**Quién corre qué** (`contracts/scripts/publish.mjs`, D-20261102-01 y D-20261102-03):
+
+| Comando | Agentes (DEV, MID, MAYOR, orquestador) | Owner |
+|---|---|---|
+| `node --test scripts/*.test.mjs`, `node scripts/publish.mjs check` | sí (gate) | sí |
+| `node scripts/publish.mjs record …` | sí (con salidas de localnet) | sí |
+| `node scripts/publish.mjs publish --network localnet …` | **solo** con el prefijo de la localnet aislada (`. env.sh && smoke_guard &&`, abajo) | sí, con su localnet aislada |
+| `node scripts/publish.mjs publish --network testnet …` (con o sin `--dry-run`) | **nunca** (D4) | sí, con `SUI_CONFIG_DIR` propio |
 
 #### Localnet aislada (smokes)
 

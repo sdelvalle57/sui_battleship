@@ -257,7 +257,44 @@ test('parsePublishedToml rechaza una línea inesperada con su número', () => {
   assert.throws(() => parsePublishedToml(`version = 1\n${PUBLISHED_TOML}`), /Published\.toml:1:/);
 });
 
+// Variantes en memoria del fixture, por número de línea (1-based): 5 = `[published.localnet]`, 6 = chain-id,
+// 9 = version, 11 = build-config, 12 = upgrade-capability.
+const tomlWithLine = (n, line) => PUBLISHED_TOML.split('\n').toSpliced(n - 1, 1, line).join('\n');
+const tomlInsertingAt = (n, line) => PUBLISHED_TOML.split('\n').toSpliced(n - 1, 0, line).join('\n');
+const strictTomlCases = [
+  ['clave desconocida', () => tomlInsertingAt(13, 'foo = "x"'), /^Error: Published\.toml:13: clave desconocida: foo$/],
+  ['clave duplicada', () => tomlInsertingAt(13, 'version = 2'), /^Error: Published\.toml:13: clave duplicada: version$/],
+  [
+    'sección duplicada',
+    () => `${PUBLISHED_TOML}${PUBLISHED_TOML.split('\n').slice(4, 12).join('\n')}\n`,
+    /^Error: Published\.toml:13: sección \[published\.localnet\] duplicada$/,
+  ],
+  [
+    'sección incompleta',
+    () => PUBLISHED_TOML.split('\n').toSpliced(11, 1).join('\n'),
+    /^Error: Published\.toml:5: \[published\.localnet\] sin upgradeCapability$/,
+  ],
+  [
+    'build-config que no es tabla en línea',
+    () => tomlWithLine(11, 'build-config = "sui"'),
+    /^Error: Published\.toml:11: build-config debe ser una tabla en línea$/,
+  ],
+  ['entero mal formado', () => tomlWithLine(9, 'version = 1.0'), /^Error: Published\.toml:9: version debe ser un entero$/],
+  [
+    'texto sin comillas',
+    () => tomlWithLine(6, 'chain-id = 87818ef5'),
+    /^Error: Published\.toml:6: chain-id debe ser un texto entre comillas$/,
+  ],
+];
+for (const [name, make, expected] of strictTomlCases) {
+  test(`parsePublishedToml rechaza: ${name}, con su número de línea`, () => {
+    assert.throws(() => parsePublishedToml(make()), expected);
+  });
+}
+
 test('checkConsistency: igual ⇒ [] y cada campo distinto ⇒ una diferencia', () => {
+  // El TOML es el de la copia publicada en TASK-1 (D6), no el de `localnet-publish.json`: el caso coherente se arma
+  // con los valores de la propia entrada.
   const entry = parsePublishedToml(PUBLISHED_TOML).get('localnet');
   const matching = {
     ...localnetDeployment(),

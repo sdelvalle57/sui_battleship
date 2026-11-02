@@ -117,6 +117,7 @@ function extractPublishedObjects(objectChanges) {
 /**
  * Interpreta la salida `sui client --json publish|test-publish` (o `tx-block --json`, misma forma). Solo devuelve
  * IDs y metadatos públicos: nunca `sender`/`owner`, que son direcciones de cuentas (D-20261102-01 §1, SEG-3).
+ * Lanza si la transacción no terminó en success o si la forma es inválida.
  * @param {object} json salida ya parseada
  * @returns {{ digest: string, timestampMs: string, packageId: string, packageVersion: number, houseId: string,
  *   houseCapId: string, upgradeCapId: string }}
@@ -142,7 +143,8 @@ export function parsePublishOutput(json) {
 
 /**
  * Interpreta la salida `--json --dry-run` (claves `effects`, `objectChanges`, `executionErrorSource`, …; sin `digest`
- * ni `timestampMs`). No lanza por un resultado malo: `ok` lo resume para que el script aborte antes de publicar.
+ * ni `timestampMs`; `effects.transactionDigest` es de la simulación y no se usa). No lanza por un resultado malo:
+ * `ok` lo resume para que el script aborte antes de publicar; sí lanza si la forma es inválida.
  * `gasEstimate` es el costo neto en MIST: cómputo + almacenamiento − reembolso.
  * @param {object} json salida ya parseada
  * @returns {{ ok: boolean, gasEstimate: bigint, created: { packageId: string|null, houseId: string|null,
@@ -193,6 +195,22 @@ export function buildDeployment({ network, chainId, parsed, sourceCommit, suiCli
 }
 
 /**
+ * Regla única del chain id por red (json, guarda de red del script y `record`): 8 hex; testnet exige el suyo y una
+ * localnet no puede reportar el de testnet ni el de mainnet (señal de que la CLI apunta a otra red).
+ * @param {string} network
+ * @param {unknown} chainId
+ * @returns {string|null} motivo del error, o `null` si es válido
+ */
+export function chainIdError(network, chainId) {
+  if (typeof chainId !== 'string' || !CHAIN_ID_RE.test(chainId)) return '8 hex minúsculas';
+  if (network === 'testnet' && chainId !== TESTNET_CHAIN_ID) return `testnet exige ${TESTNET_CHAIN_ID}`;
+  if (network === 'localnet' && [TESTNET_CHAIN_ID, MAINNET_CHAIN_ID].includes(chainId)) {
+    return 'una localnet no puede tener el chain id de testnet ni el de mainnet';
+  }
+  return null;
+}
+
+/**
  * Valida un json de despliegue y devuelve la lista de errores (vacía = válido). Rechaza claves desconocidas para
  * que no entre por descuido ningún dato extra (p. ej. una dirección de cuenta); los opcionales se registran en
  * `OPTIONAL_FIELDS` (inyectable para tests) y se validan solo si aparecen.
@@ -215,14 +233,9 @@ export function validateDeployment(obj, { optionalFields = OPTIONAL_FIELDS } = {
   };
   check('schemaVersion', (v) => v === SCHEMA_VERSION, `debe ser ${SCHEMA_VERSION}`);
   check('network', (v) => NETWORKS.includes(v), `debe ser ${NETWORKS.join(' o ')}`);
-  check('chainId', (v) => typeof v === 'string' && CHAIN_ID_RE.test(v), '8 hex minúsculas');
-  if (has('chainId') && typeof obj.chainId === 'string' && CHAIN_ID_RE.test(obj.chainId)) {
-    if (obj.network === 'testnet' && obj.chainId !== TESTNET_CHAIN_ID) {
-      errors.push(`chainId inválido: testnet exige ${TESTNET_CHAIN_ID}`);
-    }
-    if (obj.network === 'localnet' && [TESTNET_CHAIN_ID, MAINNET_CHAIN_ID].includes(obj.chainId)) {
-      errors.push('chainId inválido: una localnet no puede tener el chain id de testnet ni el de mainnet');
-    }
+  if (has('chainId')) {
+    const error = chainIdError(obj.network, obj.chainId);
+    if (error) errors.push(`chainId inválido: ${error}`);
   }
   for (const key of ['packageId', 'originalPackageId', 'upgradeCapId', 'houseId', 'houseCapId']) {
     check(key, (v) => typeof v === 'string' && ID_RE.test(v), '0x + 64 hex minúsculas');
@@ -274,10 +287,11 @@ export function parsePublishedToml(text) {
   const fail = (n, msg) => {
     throw new Error(`Published.toml:${n}: ${msg}`);
   };
-  const finish = (n) => {
+  // Una sección incompleta se reporta en la línea de su cabecera.
+  const finish = () => {
     if (!current) return;
     for (const { field } of Object.values(PUBLISHED_KEYS)) {
-      if (!(field in current.entry)) fail(n, `[published.${current.env}] sin ${field}`);
+      if (!(field in current.entry)) fail(current.line, `[published.${current.env}] sin ${field}`);
     }
     result.set(current.env, current.entry);
   };
@@ -287,9 +301,9 @@ export function parsePublishedToml(text) {
     if (line === '' || line.startsWith('#')) return;
     const section = /^\[published\.([A-Za-z0-9_-]+)\]$/.exec(line);
     if (section) {
-      finish(n);
+      finish();
       if (result.has(section[1])) fail(n, `sección [published.${section[1]}] duplicada`);
-      current = { env: section[1], entry: {}, seen: new Set() };
+      current = { env: section[1], entry: {}, seen: new Set(), line: n };
       return;
     }
     const kv = /^([A-Za-z0-9_-]+)\s*=\s*(.+)$/.exec(line);
@@ -312,7 +326,7 @@ export function parsePublishedToml(text) {
       current.entry[spec.field] = str[1];
     }
   });
-  finish(lines.length);
+  finish();
   return result;
 }
 
