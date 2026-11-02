@@ -28,9 +28,9 @@ se citan como `#N`.
 
 **Layout objetivo (D-20261030-03)** — `contracts/`, `package.json` y `.nvmrc` existen desde #2;
 `contracts/tests/` y `contracts/README.md` desde #4; `.github/workflows/` desde #3 (`ci.yml`: job
-`contracts`; el job `app` desde #9); `contracts/scripts/` desde #7; `app/`, `.npmrc` y `package-lock.json` desde #9;
-`contracts/deployments/` y `contracts/Published.toml` (los escribe la primera publicación en testnet, #8) y
-`contracts/fixtures/` (#10, D-20261031-01) llegan con su issue:
+`contracts`; el job `app` desde #9); `contracts/scripts/` desde #7; `app/`, `.npmrc` y `package-lock.json` desde #9; `contracts/fixtures/` y
+`app/scripts/` desde #10 (D-20261031-01); `contracts/deployments/` y `contracts/Published.toml` (los escribe la primera
+publicación en testnet, #8) llegan con su issue:
 
 ```
 sui_battleship/
@@ -38,10 +38,11 @@ sui_battleship/
 ├── documents/                # flujo multi-agente, estándares, decisiones, status, planes/handoffs
 ├── contracts/                # paquete Move (Move.toml, Move.lock, README.md, sources/, tests/)
 │   ├── scripts/              # (#7) publish.mjs (publish/record/check), deployment.mjs, tests y fixtures/ de la CLI
-│   ├── fixtures/             # (#10) respuestas reales de la lectura por gRPC (SuiGrpcClient) del Game por variante
+│   ├── fixtures/             # (#10) game-reads.localnet.json: lecturas gRPC reales del Game y sus eventos por variante
 │   ├── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos); lo escribe el script
 │   └── Published.toml        # (#8) lo escribe `sui client publish`: fuente de los datos del paquete
 ├── app/                      # cliente React (Vite + TS + SDK de Sui + wallet kit); guía en app/README.md
+│   └── scripts/              # (#10) capture-read-fixtures.mjs: recaptura de contracts/fixtures/ en la localnet aislada
 ├── package.json              # npm workspaces: ["app"]; engines: Node 26
 ├── package-lock.json         # versiones exactas congeladas (D-20261102-02 (3))
 ├── .npmrc                    # save-exact, engine-strict, min-release-age=7, ignore-scripts
@@ -223,6 +224,8 @@ eventos y códigos de abort. La UI los consume desde un único módulo (`app/src
 | Package ID / object IDs por red | `contracts/deployments/<red>.json` | Lo escribe `contracts/scripts/publish.mjs` (nunca a mano), en el mismo PR que la publicación; `Published.toml` es la fuente de los datos del paquete y la CI verifica la coherencia (`publish.mjs check`). La app lo importa (nunca IDs hardcodeados en componentes) |
 | Firmas y eventos | `contracts/sources/*.move` | Tabla en `contracts/README.md`; cambios = STOP (§6 de FLUJO) |
 | Abort codes | constantes `E*` de cada módulo | Tabla en `contracts/README.md` + mapeo en `app/src/sui/errors.ts` |
+| Layout BCS de `Game` y de sus eventos | `contracts/sources/game.move` | Esquemas en `app/src/sui/game.ts` y `events.ts`; fixtures en `contracts/fixtures/game-reads.localnet.json` (se recapturan si cambia el layout) |
+| Fórmula de la comisión y del pago | `game.move` (`accept_game`) | `resolutionAmounts` de `app/src/sui/game.ts` = fórmula de la v1 (D-20261030-16 D2/D3). Un upgrade que la cambie conserva la vieja para las partidas resueltas con el código viejo (por versión del `Game` o leyendo `GameResolved`) en el mismo PR. La app no replica `house::MAX_FEE_BPS`; si una vista lo replica (#14), entra en esta tabla |
 
 **Regla:** tras la primera publicación en testnet, un cambio incompatible con upgrade (firma pública,
 layout de struct con `key`/`store`, eliminar función pública) es **STOP**: se decide entre upgrade

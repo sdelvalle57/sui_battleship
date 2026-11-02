@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useNodeStatus } from '../hooks/useNodeStatus';
@@ -10,7 +11,9 @@ vi.mock('../hooks/useAppConfig', () => ({ useAppConfig: vi.fn() }));
 vi.mock('../hooks/useNodeStatus', () => ({ useNodeStatus: vi.fn() }));
 vi.mock('../hooks/useWalletAccount', () => ({ useWalletAccount: vi.fn() }));
 // El ConnectButton real es un web component (Lit) que necesita la instancia del kit: se sustituye por un botón.
-vi.mock('@mysten/dapp-kit-react/ui', () => ({ ConnectButton: () => <button type="button">Connect Wallet</button> }));
+vi.mock('@mysten/dapp-kit-react/ui', () => ({
+  ConnectButton: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,
+}));
 
 const CONFIG: AppConfig = {
   network: 'testnet',
@@ -19,6 +22,7 @@ const CONFIG: AppConfig = {
   packageId: `0x${'1'.repeat(64)}`,
   originalPackageId: `0x${'1'.repeat(64)}`,
   houseId: `0x${'3'.repeat(64)}`,
+  publishTxDigest: '11111111111111111111111111111111',
   burnerWalletEnabled: false,
 };
 
@@ -32,7 +36,7 @@ describe('Header', () => {
     expect(screen.getByText('testnet')).toBeInTheDocument();
     expect(screen.getByText('nodo OK')).toBeInTheDocument();
     expect(screen.getByText('0xabab…abab')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Connect Wallet' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Conectar wallet' })).toBeInTheDocument();
   });
 
   it('renders no account badge when disconnected', () => {
@@ -41,6 +45,6 @@ describe('Header', () => {
     vi.mocked(useWalletAccount).mockReturnValue({ address: null, short: null });
     render(<Header />);
     expect(screen.queryByTitle(/^0x/)).toBeNull();
-    expect(screen.getByRole('button', { name: 'Connect Wallet' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Conectar wallet' })).toBeInTheDocument();
   });
 });

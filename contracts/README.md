@@ -14,6 +14,7 @@ código discrepan, manda el código y se corrige la tabla en el mismo PR (`agent
 | `scripts/deployment.mjs` | Formato de `deployments/<red>.json`: funciones puras que usan el script y la CI |
 | `scripts/*.test.mjs`, `scripts/fixtures/` | Tests (`node --test`) y salidas reales de la CLI 1.83.0 en una localnet desechable |
 | `deployments/<red>.json`, `Published.toml` | Datos de cada publicación (los escribe la primera publicación en testnet, #8) |
+| `fixtures/game-reads.localnet.json` | Lecturas gRPC reales de cada variante de `Game` y de sus eventos, capturadas en una localnet desechable con `app/scripts/capture-read-fixtures.mjs` (#10, ver "Lectura desde la app") |
 
 **Gates (build, lint, test, coverage):** forma canónica en `agents.md` §3 (desde `contracts/`, con
 `-e testnet` y `printf 'n\n' |` delante). Baselines vigentes en `documents/STATUS.md`.
@@ -404,24 +405,50 @@ borra. La UI (#11) muestra ese costo al crear.
 - La partida se lee del objeto con su contenido: todos los campos llegan por RPC aunque no haya getters Move (no
   hay accessors `public` a propósito, PROY-4; agregarlos después es compatible con upgrade).
 - **API de lectura: `SuiGrpcClient` (gRPC-web) de `@mysten/sui`** (D-20261102-02 (1)). El fullnode de `sui 1.83.0`
-  **no sirve JSON-RPC**: en el smoke de #6 todo `POST` al puerto RPC de la localnet devolvió `404` (H-1), y
-  `sui-node` monta en ese puerto solo `sui_rpc_api::RpcService` (`crates/sui-node/src/lib.rs:2956-3054` @
-  `testnet-v1.83.0`). La sonda de #9 (TASK-4) lo confirmó en localnet: preflight CORS `200` con comodines y
-  `listEvents` por `eventType` devuelve el evento real. #10 captura con esa API las fixtures reales de cada variante
-  (`Pending`, `Cancelled`, `Resolved`) en `contracts/fixtures/` (D-20261031-01); #6 no crea esa carpeta.
-- **Referencia observada (no es el formato de la app):** `sui client object <id> --json` (CLI 1.83.0, smoke de #6)
-  devuelve `objType`, `owner`, `prevTx`, `storageRebate` (número) y `content` **aplanado** (los campos del `Game`
-  directamente, sin envoltorio). El enum llega como `{"@variant": "Pending"}`, `{"@variant": "Cancelled"}` y
-  `{"@variant": "Resolved", "acceptor": "0x…", "winner": "0x…"}`; `u64` (`bet`, `version`) y `stake` (`Balance`,
-  aplanado como su valor) como **string**; `u16` (`fee_rate`) como número con decimal (`250.0`); `opponent`
-  (`Option<address>`) como `null` o la dirección. En el `parsedJson` de los eventos de la CLI, igual: `u16` como
-  `250.0`, `Option` como `null` o la dirección. El formato exacto de gRPC lo fija #10 con fixtures.
+  **no sirve JSON-RPC** (H-1 del smoke de #6: todo `POST` al puerto RPC devuelve `404`; `sui-node` monta ahí solo
+  `sui_rpc_api::RpcService`, `crates/sui-node/src/lib.rs:2956-3054` @ `testnet-v1.83.0`).
+- **Formato de la app = BCS** (#10, DL-1): el `Game` sale de `content` de `getObjects` y cada evento de `bcs` de
+  `listEvents`, con esquemas que replican el layout Move (`Game` = `id`, `version: u64`, `house_id`, `creator`,
+  `opponent: Option<address>`, `bet: u64`, `stake` (`Balance` = `u64`), `fee_rate: u16`, `state`; `GameState` =
+  `Pending` (0) \| `Cancelled` (1) \| `Resolved { acceptor, winner }` (2)). El parser exige el tipo exacto
+  (`<originalPackageId>::game::Game`, dueño `Shared`), re-serializa y **compara los bytes**: `bcs` lanza ante una variante
+  desconocida o bytes truncados, pero acepta bytes sobrantes sin error. El `json` del nodo es solo referencia: el SDK
+  advierte que su forma puede variar entre fullnodes.
+- **Fixtures reales:** `contracts/fixtures/game-reads.localnet.json` (5 variantes de objeto —`pendingOpen`,
+  `pendingInvite`, `cancelledByCreator`, `cancelledByInvitee`, `resolved`—, sus 5 eventos, `transactions` y una página
+  cruda de `ListEvents`). Guarda `content`/`bcs` en base64 y el `json`; los eventos van **sin** `sender`. Las direcciones e
+  IDs son de cuentas efímeras de una génesis desechable (sin claves). Forma del `json` de gRPC de un `Game` (extracto de
+  `pendingOpen`):
+
+  ```json
+  { "bet": "1000001", "creator": "0x…", "fee_rate": 250, "house_id": "0x…", "id": "0x…", "opponent": null,
+    "stake": "1000001", "state": { "@variant": "Pending" }, "version": "1" }
+  ```
+
+  `u64` como string, `u16` como número, `Balance` aplanado a su valor, `Option` como `null` o la dirección y el enum
+  como `{"@variant": "Resolved", "acceptor": "0x…", "winner": "0x…"}`. En los eventos, igual.
+- **Recaptura:** dentro de la localnet aislada (`agents.md` §3, publicación variante B y las transacciones de partidas),
+  con Node 26 (prefijo de `agents.md` §3, "App (`app/`)"): `node app/scripts/capture-read-fixtures.mjs` desde `<repo>`. El script solo
+  acepta `http://127.0.0.1:9000` (con otra `--url` sale con error antes de cualquier pedido), exige que el chain id del
+  nodo coincida con `contracts/deployments/localnet.json` y es determinista: dos corridas sobre la misma red dan el mismo
+  archivo salvo `_meta.capturedAt`. Un cambio de la fixture al recapturar se declara en el PR.
+- **Listas (lobby, #10):** las partidas se descubren por eventos con `eventType` = `<originalPackageId>::game::<Evento>`
+  (dirección **completa**: con `0x3` corto el nodo responde `INVALID_ARGUMENT`). En el fullnode público, `listEvents` del
+  SDK (sin rango) falla con `OUT_OF_RANGE` ("requested data below earliest available"): el historial está podado
+  (≈ 14,6 días, medido en #10; `lowestAvailableCheckpoint` de `getServiceInfo`). Por eso el lobby usa el crudo
+  `client.ledgerService.listEvents` descendente con `startCheckpoint` = máx(checkpoint de la publicación, piso + margen)
+  (#10, D-20261102-04): el escaneo termina con `QueryEndReason.CHECKPOINT_BOUND` al
+  llegar a la cota, sin eventos anteriores.
 - El parser de #10 usa **un** formato y trata una variante desconocida como error, nunca como `Pending` (SEG-10).
 - El resultado de aceptar se lee del evento `GameResolved` de la transacción o del objeto
   (`Resolved { acceptor, winner }`).
 - La hora de creación es el timestamp de la transacción del evento `GameCreated` (D-20261030-15 D6):
   `client.getTransaction({ digest })` → `timestampMs` (hora del checkpoint, en ms; `null` si aún no está en un
   checkpoint). `listEvents` **no** trae hora: cada evento trae `transactionDigest` y `checkpoint`.
+- `previousTransaction` del objeto es la **última transacción que lo tocó**, también una **fallida**: un `cancel_game`
+  que aborta con `ENotPending` sobre una partida resuelta sube la versión del objeto y pasa a ser su
+  `previousTransaction` (sonda P6 de #10; la fixture `resolved` lo muestra). Por eso el detalle lo llama "Última
+  actividad".
 
 ## Despliegues (#7)
 

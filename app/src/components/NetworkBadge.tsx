@@ -6,6 +6,12 @@ function NodeStatusText({ status }: { status: NodeStatus }) {
   switch (status.kind) {
     case 'loading':
       return <span>conectando…</span>;
+    case 'retrying':
+      return (
+        <span>
+          reconectando… (intento {status.attempt} de {status.max})
+        </span>
+      );
     case 'ok':
       return <span>nodo OK</span>;
     case 'wrong_chain':

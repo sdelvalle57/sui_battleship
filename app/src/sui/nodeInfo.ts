@@ -1,59 +1,68 @@
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { shortChainId } from './networks';
+import { READ_MAX_RETRIES, READ_TIMEOUT_MS, withReadTimeout } from './readPolicy';
 
 /** Cada cuánto el indicador de red vuelve a consultar el nodo. */
 export const NODE_STATUS_REFETCH_MS = 20_000;
 /**
- * Corte por tiempo de cada intento: un nodo que acepta la conexión y no responde cuenta como error. Sin él, la query
- * quedaría colgada, `refetchInterval` no lanzaría otra y el indicador seguiría en "nodo OK" con el dato viejo.
+ * Corte por tiempo de cada intento del indicador. Alias de `READ_TIMEOUT_MS` (DL-5: un único corte para toda lectura),
+ * conservado para sus usos existentes. Un nodo que acepta la conexión y no responde cuenta como error: sin corte, la
+ * query quedaría colgada, `refetchInterval` no lanzaría otra y el indicador seguiría en "nodo OK" con el dato viejo.
  */
-export const NODE_STATUS_TIMEOUT_MS = 10_000;
-
-/** Estado del nodo en un intento: chain id corto (8 hex) y altura del último checkpoint, si la informa. */
-export type NodeInfo = { chainId: string; checkpointHeight: bigint | null };
+export const NODE_STATUS_TIMEOUT_MS = READ_TIMEOUT_MS;
 
 /**
- * Consulta viva del nodo (no el chain id que el SDK cachea para siempre) con corte por tiempo:
- * `ledgerService.getServiceInfo({}, { abort })`. Lanza si falta el chain id, si no es base58, si `signal` se aborta o
- * si vence `NODE_STATUS_TIMEOUT_MS`; quien la llama trata cualquier error como un intento fallido.
- *
- * El corte usa `AbortController` + `setTimeout` (limpiado en `finally`) y no `AbortSignal.timeout`: es equivalente,
- * pero `AbortSignal.timeout` no avanza con los timers falsos de Vitest en jsdom y el caso del nodo colgado no se
- * podría probar.
+ * Estado del nodo en un intento: chain id corto (8 hex), altura del último checkpoint y piso del historial que conserva
+ * (`lowestAvailableCheckpoint`, M-4; un nodo sin poda informa 0 o nada), si los informa.
  */
-export async function fetchNodeInfo(client: SuiGrpcClient, signal?: AbortSignal): Promise<NodeInfo> {
-  const timeout = new AbortController();
-  const timer = setTimeout(() => {
-    timeout.abort(new Error(`El nodo no respondió en ${String(NODE_STATUS_TIMEOUT_MS / 1000)} s`));
-  }, NODE_STATUS_TIMEOUT_MS);
-  const abort = signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal;
-  try {
-    const { response } = await client.ledgerService.getServiceInfo({}, { abort });
-    if (!response.chainId) {
-      throw new Error('El nodo no informó su chain id');
-    }
-    return { chainId: shortChainId(response.chainId), checkpointHeight: response.checkpointHeight ?? null };
-  } finally {
-    clearTimeout(timer);
+export type NodeInfo = { chainId: string; checkpointHeight: bigint | null; lowestAvailableCheckpoint: bigint | null };
+
+/**
+ * Consulta viva del nodo (no el chain id que el SDK cachea para siempre) con el corte común de lecturas
+ * (`withReadTimeout`): `ledgerService.getServiceInfo({}, { abort })`. Lanza si falta el chain id, si no es base58, si
+ * `signal` se aborta o si vence el corte (`ReadTimeoutError`, "El nodo no respondió en 10 s"); quien la llama trata
+ * cualquier error como un intento fallido.
+ */
+export async function fetchNodeInfo(client: Pick<SuiGrpcClient, 'ledgerService'>, signal?: AbortSignal): Promise<NodeInfo> {
+  const { response } = await withReadTimeout(signal, async (abort) => client.ledgerService.getServiceInfo({}, { abort }));
+  if (!response.chainId) {
+    throw new Error('El nodo no informó su chain id');
   }
+  return {
+    chainId: shortChainId(response.chainId),
+    checkpointHeight: response.checkpointHeight ?? null,
+    lowestAvailableCheckpoint: response.lowestAvailableCheckpoint ?? null,
+  };
 }
 
 /** Estado que muestra el indicador de red. */
 export type NodeStatus =
   | { kind: 'loading' }
+  | { kind: 'retrying'; attempt: number; max: number }
   | { kind: 'ok'; checkpointHeight: bigint | null }
   | { kind: 'wrong_chain'; expected: string; actual: string }
   | { kind: 'offline'; reason: string };
 
 /**
- * Deriva el estado del indicador a partir de la query del nodo. Pura. Prioridad: error del último intento → `offline`
- * (aunque haya un dato previo: TanStack Query lo conserva tras un error); pendiente → `loading`; chain id distinto del
- * esperado → `wrong_chain`; si no, `ok`.
+ * Deriva el estado del indicador a partir de la query del nodo. Pura. Prioridad: un reintento en curso → `retrying`
+ * (intento `failureCount + 1` de `READ_MAX_RETRIES + 1`, DL-5); error del último intento → `offline` (aunque haya un
+ * dato previo: TanStack Query lo conserva tras un error); pendiente → `loading`; chain id distinto del esperado →
+ * `wrong_chain`; si no, `ok`.
  */
 export function deriveNodeStatus(
-  q: { isPending: boolean; isError: boolean; error: unknown; data: NodeInfo | undefined },
+  q: {
+    isPending: boolean;
+    isError: boolean;
+    error: unknown;
+    data: NodeInfo | undefined;
+    fetchStatus: 'fetching' | 'paused' | 'idle';
+    failureCount: number;
+  },
   expectedChainId: string,
 ): NodeStatus {
+  if (q.fetchStatus === 'fetching' && q.failureCount > 0) {
+    return { kind: 'retrying', attempt: q.failureCount + 1, max: READ_MAX_RETRIES + 1 };
+  }
   if (q.isError) {
     return { kind: 'offline', reason: q.error instanceof Error ? q.error.message : String(q.error) };
   }

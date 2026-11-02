@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { ConfigContext } from '../hooks/configContext';
 import type { AppConfig } from '../sui/config';
 import type { AppDAppKit } from '../sui/dappKit';
+import { readRetryDelay, shouldRetryRead } from '../sui/readPolicy';
 
 declare module '@mysten/dapp-kit-react' {
   interface Register {
@@ -14,6 +15,7 @@ declare module '@mysten/dapp-kit-react' {
 /**
  * Providers de la app: TanStack Query (un `QueryClient` por montaje), el wallet kit y la config resuelta. El
  * `Register` de arriba tipa los hooks del kit con la instancia de la app (`useCurrentClient()` → `SuiGrpcClient`).
+ * Todas las lecturas comparten la política de DL-5: solo se reintenta lo transitorio, 2 veces, a 1 s y 2 s.
  */
 export function AppProviders({
   dAppKit,
@@ -24,7 +26,9 @@ export function AppProviders({
   config: AppConfig;
   children: ReactNode;
 }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: shouldRetryRead, retryDelay: readRetryDelay } } }),
+  );
   return (
     <QueryClientProvider client={queryClient}>
       <DAppKitProvider dAppKit={dAppKit}>

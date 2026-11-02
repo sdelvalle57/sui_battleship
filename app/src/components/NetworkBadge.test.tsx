@@ -18,6 +18,7 @@ function configFor(network: Network): AppConfig {
     packageId: `0x${'1'.repeat(64)}`,
     originalPackageId: `0x${'1'.repeat(64)}`,
     houseId: `0x${'3'.repeat(64)}`,
+    publishTxDigest: '11111111111111111111111111111111',
     burnerWalletEnabled: false,
   };
 }
@@ -41,6 +42,12 @@ describe('NetworkBadge', () => {
   it('shows connecting while loading', () => {
     renderWith('testnet', { kind: 'loading' });
     expect(screen.getByText('conectando…')).toBeInTheDocument();
+  });
+
+  it('shows reconnecting with the attempt while retrying, never node OK nor empty', () => {
+    renderWith('testnet', { kind: 'retrying', attempt: 2, max: 3 });
+    expect(screen.getByText('reconectando… (intento 2 de 3)')).toBeInTheDocument();
+    expect(screen.queryByText('nodo OK')).toBeNull();
   });
 
   it('shows node OK', () => {

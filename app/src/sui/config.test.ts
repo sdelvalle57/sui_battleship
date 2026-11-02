@@ -54,6 +54,7 @@ describe('resolveConfig: valid deployments', () => {
         packageId: '0x280be75013446e6acf6fe1291884cfd05889a12ce00e82c4f1a05b2235e2b06e',
         originalPackageId: '0x280be75013446e6acf6fe1291884cfd05889a12ce00e82c4f1a05b2235e2b06e',
         houseId: '0xbcbcb0392aad3b13aeb43a007105a1467f4d33a3f40b28aff08f72f4c4da0930',
+        publishTxDigest: 'C8teaea3BBUvqFnAJ7WidwvBYAgE7zpNWsZ1gEkiwBCz',
         burnerWalletEnabled: false,
       },
     });
@@ -69,6 +70,7 @@ describe('resolveConfig: valid deployments', () => {
         packageId: TESTNET_DEPLOYMENT.packageId,
         originalPackageId: TESTNET_DEPLOYMENT.originalPackageId,
         houseId: TESTNET_DEPLOYMENT.houseId,
+        publishTxDigest: TESTNET_DEPLOYMENT.publishTxDigest,
         burnerWalletEnabled: false,
       },
     });
@@ -87,8 +89,8 @@ describe('resolveConfig: valid deployments', () => {
   });
 
   it('ignores unknown keys and absent unused fields', () => {
-    const { schemaVersion, network, chainId, packageId, originalPackageId, houseId } = TESTNET_DEPLOYMENT;
-    const minimal = { schemaVersion, network, chainId, packageId, originalPackageId, houseId, futureField: { x: 1 } };
+    const { schemaVersion, network, chainId, packageId, originalPackageId, houseId, publishTxDigest } = TESTNET_DEPLOYMENT;
+    const minimal = { schemaVersion, network, chainId, packageId, originalPackageId, houseId, publishTxDigest, futureField: { x: 1 } };
     expect(resolveConfig(TESTNET_ENV, { [TESTNET_KEY]: minimal }).ok).toBe(true);
   });
 });
@@ -185,8 +187,16 @@ describe('resolveConfig: field formats', () => {
     ['too short', '4c78ada'],
     ['too long', '4c78adac0'],
   ];
+  const digestCases: [string, unknown][] = [
+    ['missing', undefined],
+    ['not a string', 123],
+    ['not base58', '0OIl0OIl0OIl0OIl0OIl0OIl0OIl0OIl'],
+    ['too short', 'abc'],
+    ['hex instead of base58', `0x${validId}`],
+  ];
   const cases = [
     ...chainIdCases.map(([cause, value]) => ['chainId', cause, value] as const),
+    ...digestCases.map(([cause, value]) => ['publishTxDigest', cause, value] as const),
     ...['packageId', 'originalPackageId', 'houseId'].flatMap((field) =>
       idCases.map(([cause, value]) => [field, cause, value] as const),
     ),

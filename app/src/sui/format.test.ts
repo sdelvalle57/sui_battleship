@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMist, parseSuiToMist, shortAddress, U64_MAX } from './format';
+import { formatBps, formatMist, formatTimestamp, parseSuiToMist, shortAddress, U64_MAX } from './format';
 
 describe('U64_MAX', () => {
   it('is 2^64 - 1', () => {
@@ -61,5 +61,25 @@ describe('formatMist', () => {
 describe('shortAddress', () => {
   it('abbreviates a full address', () => {
     expect(shortAddress(`0x${'ab'.repeat(16)}${'cd'.repeat(16)}`)).toBe('0xabab…cdcd');
+  });
+});
+
+describe('formatBps', () => {
+  it.each([
+    [0, '0 %'],
+    [1, '0.01 %'],
+    [250, '2.5 %'],
+    [1000, '10 %'],
+  ])('formats %i bps as %j', (bps, expected) => {
+    expect(formatBps(bps)).toBe(expected);
+  });
+});
+
+describe('formatTimestamp', () => {
+  it('formats in Spanish with medium date and short time in the given time zone', () => {
+    // ICU puede usar espacios especiales (p. ej. U+202F) según la versión: se comparan normalizados.
+    const spaces = (s: string) => s.replace(/\s/gu, ' ');
+    expect(spaces(formatTimestamp(1_793_641_224_118, 'UTC'))).toBe(spaces('2 nov 2026, 17:40'));
+    expect(spaces(formatTimestamp(0, 'UTC'))).toBe(spaces('1 ene 1970, 0:00'));
   });
 });

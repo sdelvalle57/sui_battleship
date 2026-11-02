@@ -43,13 +43,25 @@ describe('fetchNodeInfo', () => {
     await expect(fetchNodeInfo(fakeClient(getServiceInfo))).resolves.toEqual({
       chainId: '4c78adac',
       checkpointHeight: 1234n,
+      lowestAvailableCheckpoint: null,
     });
     expect(getServiceInfo).toHaveBeenCalledWith({}, { abort: expect.any(AbortSignal) as AbortSignal });
   });
 
   it('returns a null checkpoint height when the node does not report it', async () => {
     const client = fakeClient(() => Promise.resolve({ response: { chainId: TESTNET_CHAIN_ID_BASE58 } }));
-    await expect(fetchNodeInfo(client)).resolves.toEqual({ chainId: '4c78adac', checkpointHeight: null });
+    await expect(fetchNodeInfo(client)).resolves.toEqual({
+      chainId: '4c78adac',
+      checkpointHeight: null,
+      lowestAvailableCheckpoint: null,
+    });
+  });
+
+  it('returns the lowest available checkpoint (history floor) when the node reports it', async () => {
+    const client = fakeClient(() =>
+      Promise.resolve({ response: { chainId: TESTNET_CHAIN_ID_BASE58, checkpointHeight: 402_087_595n, lowestAvailableCheckpoint: 396_603_024n } }),
+    );
+    await expect(fetchNodeInfo(client)).resolves.toMatchObject({ lowestAvailableCheckpoint: 396_603_024n });
   });
 
   it('rejects when the node does not report a chain id', async () => {
@@ -101,8 +113,8 @@ describe('fetchNodeInfo', () => {
 });
 
 describe('deriveNodeStatus', () => {
-  const data: NodeInfo = { chainId: '4c78adac', checkpointHeight: 42n };
-  const base = { isPending: false, isError: false, error: null, data };
+  const data: NodeInfo = { chainId: '4c78adac', checkpointHeight: 42n, lowestAvailableCheckpoint: null };
+  const base = { isPending: false, isError: false, error: null, data, fetchStatus: 'idle' as const, failureCount: 0 };
 
   it('is loading while the first attempt is pending', () => {
     expect(deriveNodeStatus({ ...base, isPending: true, data: undefined }, '4c78adac')).toEqual({ kind: 'loading' });
@@ -134,6 +146,21 @@ describe('deriveNodeStatus', () => {
       kind: 'offline',
       reason: 'timeout',
     });
+  });
+
+  it.each([
+    [1, 2],
+    [2, 3],
+  ])('is retrying while a retry is in flight (failureCount %i ⇒ attempt %i of 3), even with data', (failureCount, attempt) => {
+    expect(deriveNodeStatus({ ...base, fetchStatus: 'fetching', failureCount }, '4c78adac')).toEqual({ kind: 'retrying', attempt, max: 3 });
+  });
+
+  it('shows retrying over a previous error while retrying', () => {
+    expect(deriveNodeStatus({ ...base, isError: true, error: new Error('x'), fetchStatus: 'fetching', failureCount: 1 }, '4c78adac').kind).toBe('retrying');
+  });
+
+  it('is not retrying on a normal refetch without failures', () => {
+    expect(deriveNodeStatus({ ...base, fetchStatus: 'fetching' }, '4c78adac').kind).toBe('ok');
   });
 
   it('stringifies a non-Error reason', () => {

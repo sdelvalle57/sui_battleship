@@ -10,6 +10,12 @@
 
 ---
 
+### D-20261102-04 — Historial del lobby en testnet y textos del kit de wallet (#10)
+- **Decisión:** (1) Para el MVP se acepta que el lobby de testnet solo cubra el historial que conserva el fullnode público (~14 días, piso `lowestAvailableCheckpoint`): las partidas abiertas más viejas no aparecen en la lista (el detalle por enlace sigue funcionando y se pueden cancelar por CLI). El lobby lo dice con un texto honesto ("No hay partidas abiertas en el historial disponible del nodo (desde <fecha>)") y queda documentado en `app/README.md`; se reevalúa en el plan de #13. (2) Se acepta la UI de conexión mixta: el botón dice "Conectar wallet" y el modal y el menú del kit quedan en inglés (el kit solo permite cambiar el texto del botón); documentado en `app/README.md`.
+- **Alternativa descartada:** (1) GraphQL para las listas en testnet (reabre D-20261102-02 (1); habría que medir la retención del indexer) o un indexador propio (fuera del MVP). (2) Una ventana de conexión propia en español.
+- **Motivo:** revisión del MAYOR del handoff v1 de #10 (MAJOR-1: poda del fullnode público medida con lecturas públicas) y del plan v1 (MINOR-2, DL-11).
+- **Aprobado por:** usuario ("Aceptar para el MVP", "Aceptar la mezcla", 2026-11-02). **Fecha:** 2026-11-02.
+
 ## Recientes
 
 ### D-20261102-03 — Clave del owner fuera de `~/.sui/` y publicación de prueba en localnet (revisión del plan de #7)
