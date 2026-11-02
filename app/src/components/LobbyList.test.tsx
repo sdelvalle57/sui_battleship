@@ -150,6 +150,21 @@ describe('LobbyList: rows', () => {
     expect(within(items[2] as HTMLElement).queryByRole('link')).toBeNull();
   });
 
+  it('renders two unreadable rows of the same transaction without a duplicate key', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    renderWith(
+      lobby({
+        items: [
+          { kind: 'unreadable', gameId: null, txDigest: 'tx-ptb', isMine: false },
+          { kind: 'unreadable', gameId: null, txDigest: 'tx-ptb', isMine: false },
+        ],
+      }),
+    );
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(consoleError.mock.calls.flat().join(' ')).not.toContain('same key');
+    consoleError.mockRestore();
+  });
+
   it('adds the node history note below the rows when bounded by the node floor', () => {
     renderWith(lobby({ items: [row(game(1))], lowerBound: { checkpoint: 1n, kind: 'node_floor' } }));
     expect(screen.getByText(/^Solo se muestra el historial disponible del nodo \(desde .+\)$/)).toBeInTheDocument();

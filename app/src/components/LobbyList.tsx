@@ -69,8 +69,12 @@ export function LobbyList() {
         <>
           {items.length > 0 && (
             <ul className="lobby-rows">
-              {items.map((row) => (
-                <LobbyRowView key={row.kind === 'game' ? row.game.id : `${row.txDigest}:${row.gameId ?? ''}`} row={row} />
+              {items.map((row, index) => (
+                <LobbyRowView
+                  // Dos ilegibles de la misma transacción sin ID (un PTB con varios `GameCreated`) no deben compartir key.
+                  key={row.kind === 'game' ? row.game.id : `${row.txDigest}:${row.gameId ?? `i${String(index)}`}`}
+                  row={row}
+                />
               ))}
             </ul>
           )}
