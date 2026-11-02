@@ -1,6 +1,6 @@
 # HANDOFF_DEPLOY
 > Plan: PLAN_DEPLOY v2.1 (aprobado por el MAYOR, `documents/REVISION_PLAN_DEPLOY.md` "Revisión v2") | Issue: #7 |
-> Branch: `feature/issue-7-deployments` | Versión: v1.1 — ajustes de la revisión MID de TASK-1 (ver "Addendum v1.1" al final; prevalece sobre el cuerpo) | Fecha: 2026-11-02
+> Branch: `feature/issue-7-deployments` | Versión: v1.2 — ajustes de las revisiones MID de TASK-1 y TASK-2 (ver "Addendum v1.1" y "Addendum v1.2" al final; prevalecen sobre el cuerpo) | Fecha: 2026-11-02
 > Incorpora las correcciones obligatorias de la revisión v2: **v2-1** (smoke sin camino testnet), **v2-2** (guarda de
 > config), **v2-3** (`runSui` por vector completo), **v2-4** (`redactAddresses`), **v2-5** (receta §3 con dos salidas),
 > **v2-6** (publicación de la copia en segundo plano y control de `~/.move`).
@@ -546,3 +546,11 @@ Reporte §5 con el snippet para STATUS.
 - **A5 (TASK-3 §3.1, README "Despliegues", junto al comando de tests):** "Los fixtures de `contracts/scripts/fixtures/` son el stdout crudo de una localnet aislada y desechable. Contienen la dirección y la firma de una cuenta efímera de la génesis, sin valor y con la clave destruida. Al recapturarlos (por ejemplo al subir la CLI) se usa siempre el procedimiento de `agents.md` §3; nunca salida de testnet ni de una cuenta del owner."
 - **A6 (TASK-1 §2 y TASK-3 si documenta el dry run):** C10 real: el dry run `--json` de 1.83.0 trae `balanceChanges, effects, events, executionErrorSource, input, objectChanges`, **sin** `suggestedGasPrice`; trae `effects.transactionDigest` (simulación, no se usa ni se registra) y no trae `digest` ni `timestampMs` en la raíz.
 - **A7 (§8 de cada task):** el reporte pega el output crudo de `node --test` (todas las líneas `ℹ`) y de los gates.
+
+
+## Addendum v1.2 — ajustes de la revisión MID de TASK-2 (transcritos por el orquestador; prevalecen sobre el cuerpo)
+
+- **B1 (TASK-3, excepción de código acotada):** corregir H2 en `publish.mjs` con su test en `publish.test.mjs`: todo error posterior a la invocación de `publish` (incluidos `validatedOrThrow`, `parsePublishedToml` y los `throw` de testnet de `:589`, `:593-598`) incluye `Directorio temporal: <dir>` y el consejo de `record`, mediante una función pura testeada (p. ej. reusar `formatCliFailure` con su motivo o una `formatPostPublishFailure`). Opcional en el mismo cambio: H3 (`check` hace `continue` si el json no es un objeto, sin `TypeError`), H4 (`RETRY_ADVICE` solo tras una publicación real) y H5 (exportar `NETWORKS` desde `deployment.mjs` y reusarla; no exportar `CONFIRMATION_PROMPT`). Declararlo en el reporte con el gate completo (≥ 87 tests node + gates de contratos). Sin otros cambios de código.
+- **B2 (TASK-3, README "Despliegues" y receta de recuperación; también el comando de `HANDOFF:343`):** `record` sin `meta.json` exige `--source-commit`, `--sui-cli-version`, `--framework-rev` y `--chain-id` (testnet: `4c78adac`); si existe `meta.json` se usa y los flags se ignoran; si la salida de `tx-block` se guardó fuera del directorio temporal, se pasa `--meta <dir>/meta.json`.
+- **B3 (smoke, lo incorpora el MID en `SMOKE_DEPLOY.md`; todo con el prefijo de la localnet aislada):** forma real de `active-env` y `chain-identifier` con `--json`; `publish --network localnet --dry-run`; variante A (`--out $SMOKE_DIR/…`) y variante B (ruta por defecto, `check` con `localnet.json` presente y cierre que lo borra); `record` desde el directorio del script; negativos que no invocan la CLI: sin `SUI_CONFIG_DIR`, `SUI_CONFIG_DIR` dentro de `~/.sui`, y `--network testnet` con env `localnet` (falla sin consultar el chain id).
+- **B4 (transversal):** la única forma de ver la salida real de un comando `sui client` es la localnet aislada; **ninguna** llamada `sui client …` sin el prefijo de `agents.md` §3, ni siquiera de solo lectura (`active-env` incluido). Los gates `sui move …` siguen con la forma canónica.
