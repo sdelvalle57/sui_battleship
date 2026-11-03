@@ -1,3 +1,4 @@
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 import type { Network } from '../sui/networks';
 
 /**
@@ -19,6 +20,10 @@ export const queryKeys = {
    * (`bigint | null`, `null` = podada) y compartir la clave mezclaría los dos en la caché.
    */
   publishCheckpoint: (network: Network, digest: string) => ['sui', network, 'publishCheckpoint', digest] as const,
+  /** Objeto House (comisión y límites): se relee al montar y al foco, y se invalida si cambió (M-2). */
+  house: (network: Network, houseId: string) => ['sui', network, 'house', houseId] as const,
+  /** Saldo de SUI de una cuenta, con la dirección normalizada (una cuenta, una clave). */
+  balance: (network: Network, address: string) => ['sui', network, 'balance', normalizeSuiAddress(address)] as const,
   /** Hora de un checkpoint por número (inmutable). */
   checkpointTime: (network: Network, sequenceNumber: bigint) =>
     ['sui', network, 'checkpointTime', sequenceNumber.toString()] as const,

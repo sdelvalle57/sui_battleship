@@ -1,7 +1,7 @@
 import { useCurrentClient } from '@mysten/dapp-kit-react';
 import { skipToken, useQuery } from '@tanstack/react-query';
 import type { Game } from '../sui/game';
-import { fetchGame, GAME_REFETCH_MS } from '../sui/gameDetail';
+import { fetchGame, gameRefetchInterval } from '../sui/gameDetail';
 import { parseObjectIdInput } from '../sui/ids';
 import { deriveReadStatus, type ReadStatus } from '../sui/readStatus';
 import { queryKeys } from './queryKeys';
@@ -23,7 +23,7 @@ export type UseGameResult =
 
 /**
  * Partida por un ID crudo de la URL: se valida y normaliza en el borde (D12, SEG-9); inválido ⇒ `invalid_id` sin
- * consultar. Se refresca cada `GAME_REFETCH_MS` y al volver el foco (DL-4).
+ * consultar. Se refresca cada `GAME_REFETCH_MS` y al volver el foco (DL-4), salvo tras un error definitivo (DL-7).
  */
 export function useGame(rawId: string): UseGameResult {
   const config = useAppConfig();
@@ -35,7 +35,8 @@ export function useGame(rawId: string): UseGameResult {
       id === null
         ? skipToken
         : ({ signal }) => fetchGame(client, { id, originalPackageId: config.originalPackageId, signal }),
-    refetchInterval: GAME_REFETCH_MS,
+    // DL-7: cada 15 s salvo ante un error definitivo (no existe, no es una partida, ilegible).
+    refetchInterval: (q) => gameRefetchInterval(q.state),
   });
   if (id === null) return { kind: 'invalid_id' };
   return {
