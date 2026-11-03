@@ -2,8 +2,9 @@ import { ObjectError } from '@mysten/sui/client';
 import type { SuiClientTypes } from '@mysten/sui/client';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { fromBase64 } from '@mysten/sui/utils';
+import { RpcError } from '@mysten/sui/grpc';
 import { describe, expect, it, vi } from 'vitest';
-import { fetchGame } from './gameDetail';
+import { fetchGame, GAME_REFETCH_MS, gameRefetchInterval } from './gameDetail';
 import { GameNotFoundError, NotAGameError, ReadDataError } from './readErrors';
 
 type FixtureObject = {
@@ -84,5 +85,24 @@ describe('fetchGame', () => {
     const error = await fetchGame(client, { id: o.objectId, originalPackageId: PKG }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ReadDataError);
     expect(error).toMatchObject({ reason: 'malformed' });
+  });
+});
+
+describe('gameRefetchInterval', () => {
+  it('keeps refetching every 15 s after a success', () => {
+    expect(GAME_REFETCH_MS).toBe(15_000);
+    expect(gameRefetchInterval({ status: 'success', error: null })).toBe(15_000);
+  });
+
+  it('keeps refetching after a transient error (UNAVAILABLE)', () => {
+    expect(gameRefetchInterval({ status: 'error', error: new RpcError('down', 'UNAVAILABLE') })).toBe(15_000);
+  });
+
+  it.each([
+    ['GameNotFoundError', new GameNotFoundError('0x6')],
+    ['NotAGameError', new NotAGameError('0x6', '0x2::coin::Coin')],
+    ['ReadDataError', new ReadDataError('malformed', 'x')],
+  ])('stops refetching after a definitive %s', (_name, error) => {
+    expect(gameRefetchInterval({ status: 'error', error })).toBe(false);
   });
 });

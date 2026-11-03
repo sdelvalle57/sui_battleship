@@ -7,6 +7,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { advance, createPolicyQueryClient, queryWrapper } from '../test/queryHarness';
 import type { AppConfig } from '../sui/config';
+import { GAME_REFETCH_MS } from '../sui/gameDetail';
 import { READ_TIMEOUT_MS } from '../sui/readPolicy';
 import { useAppConfig } from './useAppConfig';
 import { useGame } from './useGame';
@@ -100,6 +101,27 @@ describe('useGame', () => {
     await advance(5000);
     expect(result.current).toMatchObject({ status: { kind: 'error' } });
     expect(getObject).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops refetching after a definitive GameNotFoundError (DL-7): no call in 2 × 15 s', async () => {
+    getObject.mockRejectedValue(new ObjectError('notExists', 'x', { reason: 'notFound' }));
+    const { result } = render(OPEN.objectId);
+    await advance(0);
+    expect(result.current).toMatchObject({ status: { kind: 'error' } });
+    await advance(2 * GAME_REFETCH_MS);
+    expect(getObject).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps refetching every 15 s after a transient error (UNAVAILABLE)', async () => {
+    getObject.mockRejectedValue(new RpcError('down', 'UNAVAILABLE'));
+    const { result } = render(OPEN.objectId);
+    await advance(0);
+    await advance(1_000);
+    await advance(2_000);
+    expect(result.current).toMatchObject({ status: { kind: 'error' } });
+    expect(getObject).toHaveBeenCalledTimes(3);
+    await advance(GAME_REFETCH_MS);
+    expect(getObject.mock.calls.length).toBeGreaterThan(3);
   });
 
   it('retries after its own timeout', async () => {

@@ -2,7 +2,7 @@ import { ObjectError } from '@mysten/sui/client';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { gameType, isExactType, parseGameObject, type Game } from './game';
 import { GameNotFoundError, NotAGameError } from './readErrors';
-import { withReadTimeout } from './readPolicy';
+import { isTransientReadError, withReadTimeout } from './readPolicy';
 
 /** Cada cuánto se vuelve a leer el detalle de una partida. */
 export const GAME_REFETCH_MS = 15_000;
@@ -29,4 +29,13 @@ export async function fetchGame(
   }
   if (!isExactType(object.type, gameType(originalPackageId))) throw new NotAGameError(id, object.type);
   return { game: parseGameObject(object, originalPackageId), previousTransaction: object.previousTransaction ?? null };
+}
+
+/**
+ * Intervalo de relectura del detalle (DL-7): se corta (`false`) ante un error definitivo (no existe, no es una partida,
+ * datos ilegibles), que no mejora releyendo; con éxito o con un error transitorio (red caída) sigue cada
+ * `GAME_REFETCH_MS`. Mismo criterio de "transitorio" que la política de lecturas.
+ */
+export function gameRefetchInterval(state: { status: string; error: unknown }): number | false {
+  return state.status === 'error' && !isTransientReadError(state.error) ? false : GAME_REFETCH_MS;
 }

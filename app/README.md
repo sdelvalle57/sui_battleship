@@ -47,8 +47,9 @@ la app muestra la pantalla "La app no está configurada" con la causa y la acci�
    vuelve a crear) con `vite` dev ya arrancado, la app sigue en "La app no está configurada" aunque se recargue:
    reiniciar `npm run dev -w app` (`vite` ve los cambios y el borrado del archivo, pero no uno nuevo fuera de `app/`;
    el build no se ve afectado).
-3. **Wallet de desarrollo** (burner del kit): solo en localnet **y** con `npm run dev` (D-20261102-02 (5)). Para firmar
-   con una wallet de navegador, esa wallet tiene que apuntar a la misma localnet.
+3. **Wallet de desarrollo** (burner del kit): solo en localnet **y** con `npm run dev` (D-20261102-02 (5)). Nace sin
+   fondos: se fondea por CLI (ver "Wallet"). Para firmar con una wallet de navegador, esa wallet tiene que apuntar a la
+   misma localnet.
 4. Al cerrar: el paso 7 de `agents.md` §3, que borra también `contracts/deployments/localnet.json` (pertenece a la
    génesis que se borra).
 
@@ -69,12 +70,14 @@ src/
 ├── sui/         # funciones puras sobre el SDK (sin React): red, config, montos, lecturas, parsers, política
 ├── hooks/       # hooks de React sobre el kit y TanStack Query (+ ConfigContext, queryKeys)
 ├── providers/   # QueryClientProvider (política común) > DAppKitProvider > ConfigContext
-├── components/  # UI sin lógica de negocio (LobbyList, GameDetail, ReadState, Header…)
+├── components/  # UI sin lógica de negocio (LobbyList, GameDetail, ReadState, Header, CreateGameForm, GameActions…)
 ├── pages/       # páginas del router por hash: HomePage (#/), GameDetailPage (#/game/:id), NotFoundPage
 ├── test/        # setup de Vitest y arnés de TanStack Query para tests
 └── App.tsx      # rutas (appRoutes) + RouterProvider
 scripts/
-└── capture-read-fixtures.mjs   # captura de las fixtures reales de lectura (ver "Fixtures de lectura")
+├── localnet-guard.mjs          # guarda compartida de las capturas: solo http://127.0.0.1:9000 y la génesis del despliegue
+├── capture-read-fixtures.mjs   # captura de las fixtures reales de lectura (ver "Fixtures de lectura")
+└── capture-tx-fixtures.mjs     # captura de las fixtures reales de transacciones (ver "Fixtures de lectura")
 ```
 
 La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted-imports` en lista blanca):
@@ -101,22 +104,41 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 | `readErrors.ts` | errores de lectura (`ReadDataError`, `GameNotFoundError`, `NotAGameError`, `PaginationStalledError`, `ReadTimeoutError`, `NotYetCheckpointedError`, `HistoryPrunedError`) y `readErrorMessage` | #10 |
 | `readPolicy.ts` | `withReadTimeout` (corte de 10 s), `isTransientReadError`, `shouldRetryRead`, `readRetryDelay` | #10 |
 | `readStatus.ts` | `ReadStatus` y `deriveReadStatus` (cargando, reintentando n de m, en pausa, error, lista) | #10 |
-| `ids.ts` | `parseObjectIdInput` (valida y normaliza en el borde) y `sameAddress` | #10 |
+| `ids.ts` | `parseObjectIdInput` y `parseAddressInput` (validan y normalizan en el borde, mismo helper) y `sameAddress` | #10, #11 |
 | `transactionInfo.ts` | hora/checkpoint de una transacción, checkpoint de la publicación (`null` = podada) y hora de un checkpoint | #10 |
-| `gameDetail.ts` | `fetchGame` (detalle por ID) y `GAME_REFETCH_MS` | #10 |
+| `gameDetail.ts` | `fetchGame` (detalle por ID), `GAME_REFETCH_MS` y `gameRefetchInterval` (corta el intervalo ante un error definitivo, DL-7) | #10, #11 |
 | `lobby.ts` | `fetchLobbyPage` (lobby por eventos con el `ListEvents` crudo), `lobbyLowerBound` y las constantes calibradas | #10 |
-| `errors.ts` | mapeo (módulo, código de abort) → mensaje | #11 |
-| `transactions/*.ts` | builders puros de PTB | #11, #12 |
+| `transactions/game.ts` | builders puros de PTB: `buildCreateGameTx` (`splitCoins(gas)` + `create_game`), `buildCancelGameTx`, `buildRejectGameTx`; lanzan ante un ID o un monto inválidos; sin `sender` ni gas | #11 (#12 suma aceptar) |
+| `errors.ts` | `ABORT_MESSAGES` (módulo + código → mensaje), `findMoveAbort` (estructurado, formato del SDK y formato Rust del nodo; `cause` hasta 5 niveles), `abortCodeSuffix` y `transactionErrorMessage` con sus fallbacks | #11 |
+| `execution.ts` | `preflightTransaction` (simulación de una copia, corte de 20 s, `PreflightNetworkError`), `confirmTransaction` (30 s), `waitForCheckpoint` (30 s), `classifyExecution`, `digestFromError`, `networkCost` | #11 |
+| `gameTx.ts` | `parseCreatedGame` (único `GameCreated` del firmante) y `cancelledRefund` (`refund` del `GameCancelled` de esa partida) | #11 |
+| `house.ts` | esquema BCS de la `House`, `houseType`, `parseHouseObject` (tipo exacto, compartida, bytes canónicos, `0 < min_bet <= max_bet`) y `fetchHouse` | #11 |
+| `account.ts` | `fetchSuiBalance` (`balance.balance` de `getBalance`: monedas + saldo de dirección) | #11 |
+| `createGame.ts` | `validateCreateGame` (motivos tipados), `houseTermsChanges`/`houseChangeMessage` (M-2), `CREATE_GAS_RESERVE_MIST`, `GAME_STORAGE_DEPOSIT_MIST` | #11 |
+| `gameActions.ts` | `canCancel` (creador, `Pending`) y `canReject` (invitado, `Pending`) | #11 |
 
 ### Hooks (`app/src/hooks/`)
 
 | Hook | Qué devuelve |
 |---|---|
-| `queryKeys.ts` | **únicas** claves de TanStack Query: `['sui', red, recurso, …]` (`nodeInfo`, `lobby`, `game`, `txInfo`, `publishCheckpoint`, `checkpointTime`); los `bigint` como string |
+| `queryKeys.ts` | **únicas** claves de TanStack Query: `['sui', red, recurso, …]` (`nodeInfo`, `lobby`, `game`, `txInfo`, `publishCheckpoint`, `checkpointTime`, `house`, `balance` con la dirección normalizada); los `bigint` como string |
+| `txInvalidation.ts` | `TxAction` y `transactionInvalidations`: la tabla única de qué reiniciar/invalidar tras una transacción propia (DL-6) |
+| `useExecuteTransaction` | máquina común de transacciones: `stage`, `outcome` (`success`/`failure`/`unconfirmed`), `isBusy`, `execute`, `reset` (ver "Transacciones (#11)") |
+| `useCreateGame` / `useCancelGame` / `useRejectGame` | hooks finos sobre la máquina: builder, relectura de la House (crear), y lo que se lee del resultado (partida creada y `feeChanged`; reembolso) |
+| `useHouse` / `useSuiBalance` | la House de la config (sin intervalo; al montar y al foco) y el saldo de la cuenta conectada (sin cuenta no consulta) |
 | `useLobby` (+ `usePublishCheckpoint`) | filas con `isMine`, `ReadStatus` combinado con la publicación, `hasNextPage`, `isFetchingNextPage`, `nextPageError`, `stalled`, `lowerBound`, `end`, `loadMore`, `refresh` |
-| `useGame` | `invalid_id` sin consulta, o la partida con su `ReadStatus`; refresco cada 15 s y al foco |
+| `useGame` | `invalid_id` sin consulta, o la partida con su `ReadStatus`; refresco cada 15 s y al foco, salvo tras un error definitivo (DL-7) |
 | `useTransactionTime` / `useCheckpointTime` | hora inmutable (`staleTime: Infinity`); sin digest (`null`/`''`) o sin número no consultan |
 | `useNodeStatus`, `useWalletAccount`, `useAppConfig` | indicador de red, cuenta conectada y config |
+
+### Componentes de transacción (#11)
+
+| Componente | Qué hace |
+|---|---|
+| `TransactionStatus` | etapa en curso o resultado del nodo: éxito con digest (link solo en testnet), costo de red y nota si no se indexó; "sin confirmar" con digest y sin "Reintentar"; fallo con mensaje y, si se ejecutó, digest y costo |
+| `CreateGameForm` | formulario de la portada (ver "Formulario de creación"); navega al detalle con el aviso en el `state` del router |
+| `GameActions` | "Cancelar" (creador) y "Rechazar" (invitado) en el detalle, cada uno con su `TransactionStatus` |
+| `createdNotice.ts` | escribe y lee el aviso de creación del `state` del router (costo como string: react-router serializa la ubicación con `JSON.stringify`) |
 
 ### Lecturas (#10)
 
@@ -140,9 +162,10 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
   - un cursor que no avanza es un error visible (`PaginationStalledError`, M-2) y solo deja "Actualizar";
   - **sin refresco automático:** "Actualizar" vuelve a la primera página; sin intervalo ni refetch al volver el foco (sí se
     vuelve a pedir al volver a la portada, por el montaje).
-- **Detalle (`#/game/:id`):** lee el objeto; se refresca cada **15 s** y al volver el foco. "Última actividad" es la hora
-  de `previousTransaction`, que es la **última** transacción que tocó el objeto, también una **fallida** (sonda P6 de
-  #10): nunca se presenta como "la que la resolvió".
+- **Detalle (`#/game/:id`):** lee el objeto; se refresca cada **15 s** y al volver el foco, salvo tras un error
+  definitivo (no existe, no es una partida, datos ilegibles: `gameRefetchInterval`, DL-7); con la red caída sigue.
+  "Última actividad" es la hora de `previousTransaction`, que es la **última** transacción que tocó el objeto, también
+  una **fallida** (sonda P6 de #10): nunca se presenta como "la que la resolvió".
 - **Política común de lecturas** (`QueryClient` de `AppProviders`, DL-5): corte de **10 s** por intento, decidido por la
   señal que se disparó (corte propio ⇒ transitorio; cancelación de TanStack ⇒ no); solo se reintenta lo transitorio
   (`UNAVAILABLE`, `INTERNAL`, `DEADLINE_EXCEEDED`, `RESOURCE_EXHAUSTED`, `UNKNOWN`, `ABORTED`, el corte propio y la
@@ -159,11 +182,97 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
   historial disponible** (`HistoryPrunedError`), no como error. La paginación del SDK solo vale contra un nodo sin poda
   (p. ej. la localnet). El filtro `eventType` exige direcciones completas.
 - **IDs de entrada** (D12, SEG-9): implementado en `ids.ts` (`parseObjectIdInput`) y usado por `useGame`: un ID de la
-  URL se valida y normaliza antes de consultar; uno inválido no consulta la red. **Regla para #11/#12:** todo ID o
-  dirección que entre por formulario pasa por el mismo borde antes de consultar o armar un PTB. `explorer.ts` valida
+  URL se valida y normaliza antes de consultar; uno inválido no consulta la red. Todo ID o dirección que entre por
+  formulario pasa por el mismo borde antes de consultar o armar un PTB (la invitación usa `parseAddressInput`, #11). `explorer.ts` valida
   pero no normaliza; los IDs de config ya llegan normalizados.
 - Lecturas solo con TanStack Query sobre `useCurrentClient()` y claves de `queryKeys.ts`; nada de `useEffect` para pedir
   datos (PROY-14). La hora de un evento no viene en `listEvents`: sale de la transacción (`timestampMs`).
+
+### Transacciones (#11)
+
+Una sola máquina para crear, cancelar y rechazar (y para aceptar en #12 y el panel de #14): `useExecuteTransaction`.
+Corre entera dentro de la `mutationFn` de TanStack (`retry: false`: una transacción nunca se reintenta sola), así que
+termina aunque el componente se desmonte, y nunca lanza hacia el componente (LIM-8).
+
+| Etapa | Texto | Qué pasa |
+|---|---|---|
+| `preflight` | "Verificando la transacción…" | sin cuenta ⇒ "Conecta tu wallet". `precheck` de la acción (crear: **relee la House** y la compara con lo mostrado, M-2). Después, **preflight propia**: simula una **copia** con `sender` (`build({ client })`). Nada de esto abre la wallet |
+| `signing` | "Esperando la firma en la wallet…" | a la wallet va el `Transaction` **sin construir** (la wallet resuelve gas y pago) |
+| `confirming` | "Confirmando en la red…" | `waitForTransaction` por digest con efectos y eventos. **El nodo es la única fuente de éxito o fallo** (DL-2, SEG-10): de la wallet solo se toma el digest |
+| `indexing` | "Actualizando datos…" | si la confirmación no trae `checkpoint`, `waitForCheckpoint`; después, las invalidaciones de la acción |
+| `done` | — | queda el `outcome` |
+
+- **Resultados:** `success` (digest, valor leído del resultado, `indexed`, costo de red = cómputo + storage − rebate);
+  `failure` (mensaje y, si se ejecutó, digest y costo); `unconfirmed` (digest), **solo** cuando el nodo no respondió o
+  venció el corte. Un error de la wallet o del SDK con digest, o cualquier error después de tenerlo, nunca es `failure`
+  (M-3 (b)): se consulta al nodo y, si no confirma, queda "sin confirmar" con el digest e invalida igual. Un
+  `status.success: false` del nodo sí es `failure`. Si el nodo confirmó el éxito y no se pudo interpretar el resultado,
+  es `success` con `value: null`.
+- **"Sin confirmar":** "La transacción se envió pero la red no la confirmó todavía; revísala antes de volver a
+  intentar", sin "Reintentar". El formulario de creación queda bloqueado hasta "Ya la revisé: crear otra partida".
+- **Indexación (S-1 bis de #11):** en el fullnode 1.83, después de ejecutar, `getTransaction` responde "not found" hasta
+  que la transacción está en un checkpoint (≈ 0,44 s en localnet) y `getObject` puede devolver un momento la versión
+  vieja; `waitForTransaction` vuelve ya con `checkpoint` (≈ 0,6 s). Por eso `indexing` normalmente no pide nada; si hace
+  falta, `waitForCheckpoint` repite `getTransaction` cada 500 ms y cuenta el "not found" como intento fallido.
+- **Cortes** (topes, no latencias esperadas; S-1 no los cambió): preflight **20 s** (`TX_PREFLIGHT_TIMEOUT_MS`),
+  confirmación **30 s** (`TX_CONFIRM_TIMEOUT_MS`), indexación **30 s** (`TX_INDEX_TIMEOUT_MS`); si vence la indexación,
+  éxito con "La lista puede tardar unos segundos en mostrarlo". La firma no tiene corte (es del usuario). Un error de
+  red o el corte en la relectura de la House o en la preflight ⇒ "No se pudo verificar la transacción (red); intenta
+  de nuevo", sin pasar por `errors.ts` (M-3 (a)).
+- **Doble envío (M-1):** candado síncrono (`useRef`) tomado antes de cualquier `await` y liberado al terminar; los
+  botones se deshabilitan con `isBusy`.
+- **Invalidación (DL-6, `txInvalidation.ts`):**
+
+  | Acción | `resetQueries` | `invalidateQueries` |
+  |---|---|---|
+  | crear | `lobby` (vuelve a la primera página) | `balance` de la cuenta |
+  | cancelar / rechazar | `lobby` | `game` de esa partida y `balance` de la cuenta |
+
+  Nunca `nodeInfo`, `txInfo`, `publishCheckpoint` ni `checkpointTime`. Se aplica también tras un abort en la preflight,
+  un fallo del nodo y un "sin confirmar" (el estado pudo cambiar). `done` llega **después** de la relectura: con el lobby
+  montado, "Actualizando datos…" dura lo que tarde esa lectura. #12 y #14 suman sus claves en esta misma tabla.
+- **Mensajes de abort** (`errors.ts`, M-5): por **módulo + código**, solo si el abort viene de nuestro `packageId` u
+  `originalPackageId` (normalizados), con el sufijo de diagnóstico fijo `(código <módulo>/<n>)`, p. ej. "Solo quien creó
+  la partida puede cancelarla. (código game/3)". Los textos de `game` 0–10 y `house` 0–4 viven solo en
+  `ABORT_MESSAGES` (tabla de `contracts/README.md`, "Abort codes"). Fallbacks:
+
+  | Caso | Mensaje |
+  |---|---|
+  | código desconocido de `game`/`house` | "El contrato rechazó la operación (código game/99)" |
+  | abort de otro paquete | "La transacción abortó en `0x1234…abcd::<módulo>` (código N)", sin traducir |
+  | fallo sin abort (gas, objetos, `ExecutionCancelledDueToRandomnessUnavailable`, congestión) | "La red no ejecutó la transacción: …" |
+  | error de la wallet sin abort | "La wallet no completó la operación: …" o "La wallet no completó la operación (sin detalle del error)" |
+  | otro error al preparar (ni simulación ni red) | "No se pudo preparar la transacción: …" |
+  | red o corte al verificar | "No se pudo verificar la transacción (red); intenta de nuevo" |
+
+  `findMoveAbort` reconoce el abort estructurado y, por texto, **dos** formatos: el del SDK (`abort code: N, in
+  '0x…::<módulo>::…'`) y el Rust del nodo (`MoveAbort(MoveLocation { module: ModuleId { address: …, name:
+  Identifier("<módulo>") } … }, N)`). La forma en que la CLI **presenta** un abort ("… aborted within function … with
+  code N") no se reconoce: nunca llega a la app (R-1 de #11).
+
+### Formulario de creación
+
+- **Términos de la House** (`useHouse`): "Mínimo X SUI · máximo Y SUI" y "Comisión Z (la partida guarda esta
+  comisión)"; sin la House leída no se puede crear (estado de lectura con "Reintentar"). Antes de firmar se relee: si la
+  comisión o los límites cambiaron, se detiene con "La comisión cambió de X a Y; revisa y vuelve a confirmar" (y/o los
+  límites) sin abrir la wallet (M-2). Si igual la partida guarda otra comisión, el aviso de creación lo dice
+  (`feeChanged`).
+- **Monto:** `parseSuiToMist`, **sin recortar** (un espacio es "Monto inválido: solo números y punto decimal, sin
+  espacios ni separador de miles"); límites **inclusive**; saldo ≥ apuesta + **0,01 SUI** de reserva de gas de
+  cortesía (`CREATE_GAS_RESERVE_MIST`). Si el saldo no se pudo leer no bloquea y se avisa: la wallet lo verifica.
+- **Invitación (opcional):** se recorta y se normaliza con `parseAddressInput` (valen la forma corta y las mayúsculas);
+  la propia cuenta ⇒ "No puedes invitarte a ti mismo".
+- **Estimación** "Si alguien acepta: pozo · comisión · al ganador", con `resolutionAmounts` y la comisión de la House.
+- **Costo:** nota previa con el depósito de almacenamiento, que **no se recupera** (D-20261030-15 D3; medido en #6 al
+  precio de testnet: **1 953 200** MIST abierta y **2 196 400** MIST con invitación, `GAME_STORAGE_DEPOSIT_MIST`), y la
+  reserva de gas; tras el éxito, el costo real de red de esa transacción.
+- **Después de crear:** con la partida identificada (único `GameCreated` del firmante) navega a `#/game/<id>` con el
+  aviso "Partida creada", digest y costo; en una invitación, "Comparte el enlace de esta página con el invitado;
+  guárdalo para volver a esta partida" (las invitaciones no aparecen en el lobby). Sin identificarla, queda en la
+  portada con "Partida creada" y el digest.
+- **Detalle:** "Cancelar" solo para el creador y "Rechazar" solo para el invitado, en `Pending`; el reembolso que se
+  muestra sale del `GameCancelled` de la transacción. Sin cuenta, el formulario dice "Conecta tu wallet para crear una
+  partida" y el detalle no muestra botones.
 
 ### Fixtures de lectura
 
@@ -171,6 +280,10 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 capturadas en una localnet desechable) la usan los tests de `sui/`. Cómo recapturarla:
 `contracts/README.md`, "Lectura desde la app" (`node app/scripts/capture-read-fixtures.mjs` dentro de la localnet
 aislada; solo acepta `http://127.0.0.1:9000`).
+
+`contracts/fixtures/game-tx.localnet.json` (#11: House, 7 `SimulationError` reales, 5 transacciones ejecutadas con un
+`MoveAbort` real y el texto Rust del abort) la usan los tests de `sui/` y `hooks/`; se recaptura con
+`node app/scripts/capture-tx-fixtures.mjs`, con la misma guarda (`app/scripts/localnet-guard.mjs`).
 
 ## Indicador de red
 
@@ -192,6 +305,14 @@ inglés (DL-11, D-20261102-04 (2)). La **burner wallet** se habilita solo en
 localnet + `npm run dev`; su código igual está en el bundle de testnet (el kit lo importa siempre), pero nunca se
 habilita ni se ofrece.
 
+- **La burner nace sin fondos** y es una clave nueva **por carga de página** (no se guarda): al recargar cambia de
+  dirección y la anterior queda inaccesible. Después de fondearla, navegar por hash (`#/…`) sin recargar.
+- **Fondearla en la localnet aislada** (`agents.md` §3): conectar la burner, tomar su dirección (el `title` de la
+  dirección abreviada del encabezado) y, desde una cuenta de la génesis con el prefijo `PRE` (`env.sh` + `ids.env` +
+  `smoke_guard`, regla B4): `PRE act_as "$A" && suic ptb --split-coins gas "[2000000000]" --assign c
+  --transfer-objects "[c]" @<burner>` (2 SUI). El saldo del formulario se actualiza al volver a la portada.
+- La burner firma sin ventana de aprobación (simula y ejecuta con su cliente); una wallet de navegador muestra la suya.
+
 ## Dependencias y avisos de seguridad (SEG-8, D-20261102-02 (3))
 
 - Versiones **exactas** en `app/package.json`, `package-lock.json` commiteado y `.npmrc` en la raíz:
@@ -200,7 +321,13 @@ habilita ni se ofrece.
   `@mysten/dapp-kit-react` 2.1.41, con una sola versión de cada uno en el árbol); se suben juntos.
 - **Al subir el tren `@mysten/*`:** revisar `TransactionErrorReason` y `ObjectErrorReason` de `@mysten/sui/client`.
   `fetchPublishCheckpoint` trata todo `TransactionError` como "podada" porque en 2.37 su único motivo es `notFound`, y
-  `fetchGame` mapea `ObjectError` `notFound`/`deleted` a "no existe"; un motivo nuevo cambia esa lectura.
+  `fetchGame` mapea `ObjectError` `notFound`/`deleted` a "no existe"; un motivo nuevo cambia esa lectura. Revisar
+  también los `$kind` de `ExecutionError` (`errors.ts` los usa para distinguir "la red no ejecutó" de un error de la
+  wallet) y los formatos de `formatMoveAbortMessage` y del texto Rust del nodo (las dos regex de `findMoveAbort`; la
+  fixture `game-tx.localnet.json` y sus tests lo detectan).
+- **`build()` sin `signal` (SDK 2.37):** la preflight corta la **espera** a los 20 s, no la simulación, que puede seguir
+  en segundo plano (solo lectura; su resultado se descarta). Si una versión futura del SDK acepta `signal` en
+  `build()`, pasárselo.
 - Un paquete nuevo necesita justificación (necesidad, mantenimiento, licencia) y pasa por plan.
 - Licencias del árbol (#9, TASK-1): en producción, todo MIT/Apache-2.0/BSD/ISC salvo `@protobuf-ts/runtime`
   (Apache-2.0 AND BSD-3-Clause); en desarrollo además BlueOak-1.0.0, MIT-0, CC-BY-4.0, CC0-1.0 y MPL-2.0
@@ -221,8 +348,9 @@ habilita ni se ofrece.
 
 ## Pendientes conocidos
 
-- El build de testnet pesa ≈ 852 kB (≈ 260 kB gzip) y Vite avisa de un chunk mayor de 500 kB: el code-splitting
-  queda para #15 (hosting).
-- El detalle (`useGame`) sigue pidiendo cada 15 s aunque el error sea definitivo (no existe, no es una partida, datos
-  ilegibles): cortar ese intervalo (`refetchInterval` como función que devuelve `false` si el error no es transitorio) y
-  qué refrescar después de una transacción propia quedan para #11/#12. El lobby no tiene intervalo.
+- El build de testnet pesa ≈ 878 kB (≈ 267 kB gzip; desde #11 entra el SDK de transacciones) y Vite avisa de un chunk
+  mayor de 500 kB: el code-splitting queda para #15 (hosting).
+- `done` espera la relectura del lobby si está montado (DL-6): con una red lenta "Actualizando datos…" puede durar
+  varios segundos. Se mide en el smoke de #11 y en testnet (#12, #17).
+- Lo que no prueba el smoke de localnet (una wallet de extensión real y su texto de error, R-1 de #11; la latencia de
+  testnet) queda para el owner en #17.

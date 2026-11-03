@@ -12,6 +12,9 @@ import { GameDetailPage } from './GameDetailPage';
 vi.mock('../hooks/useAppConfig', () => ({ useAppConfig: vi.fn() }));
 vi.mock('../hooks/useGame', () => ({ useGame: vi.fn() }));
 vi.mock('../hooks/useTransactionTime', () => ({ useTransactionTime: vi.fn() }));
+vi.mock('../components/GameActions', () => ({
+  GameActions: ({ game }: { game: Game }) => <div data-testid="game-actions">acciones de {game.id}</div>,
+}));
 
 const ID = `0x${'6'.repeat(64)}`;
 const GAME: Game = {
@@ -36,10 +39,10 @@ const read = (overrides: Partial<Extract<UseGameResult, { kind: 'read' }>>): Use
   ...overrides,
 });
 
-function renderAt(path: string, result: UseGameResult) {
+function renderAt(path: string, result: UseGameResult, state?: unknown) {
   vi.mocked(useGame).mockReturnValue(result);
   render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter initialEntries={[{ pathname: path, state }]}>
       <Routes>
         <Route path="/game/:id" element={<GameDetailPage />} />
       </Routes>
@@ -76,5 +79,40 @@ describe('GameDetailPage', () => {
     expect(useTransactionTime).toHaveBeenCalledWith('tx-prev');
     expect(screen.getByText('Abierta')).toBeInTheDocument();
     expect(screen.getByText('Última actividad').nextElementSibling).toHaveTextContent('2 nov 2026');
+  });
+
+  it('shows the game actions below the detail', () => {
+    renderAt(`/game/${ID}`, read({ game: GAME, status: { kind: 'ready', refreshing: false }, isFetching: false }));
+    expect(screen.getByTestId('game-actions')).toHaveTextContent(`acciones de ${ID}`);
+    expect(screen.queryByText('Partida creada')).not.toBeInTheDocument();
+  });
+
+  const DIGEST = '7VXtB8Pc47Jss33zYQRMXJDfLsY7XvdWFX78gzj7q7YH';
+  const ready = () => read({ game: GAME, status: { kind: 'ready', refreshing: false }, isFetching: false });
+
+  it('shows the creation notice from the router state with digest and network cost', () => {
+    renderAt(`/game/${ID}`, ready(), { created: { digest: DIGEST, costMist: '3941200', invitation: false, feeChanged: null } });
+    const notice = screen.getByRole('status');
+    expect(notice).toHaveTextContent('Partida creada');
+    expect(notice).toHaveTextContent('Costo de red: 0.0039412 SUI (incluye el depósito de almacenamiento, que no se recupera)');
+    expect(screen.getByTitle(DIGEST)).toHaveTextContent('7VXtB8…q7YH');
+    expect(notice).not.toHaveTextContent('Comparte el enlace');
+  });
+
+  it('adds the share text for an invitation and the stored fee when it changed', () => {
+    renderAt(`/game/${ID}`, ready(), { created: { digest: DIGEST, costMist: '1', invitation: true, feeChanged: { from: 250, to: 300 } } });
+    const notice = screen.getByRole('status');
+    expect(notice).toHaveTextContent('Comparte el enlace de esta página con el invitado; guárdalo para volver a esta partida');
+    expect(notice).toHaveTextContent('La partida se creó con comisión 3 % (el formulario mostraba 2.5 %)');
+  });
+
+  it('ignores a router state with another shape', () => {
+    renderAt(`/game/${ID}`, ready(), { created: { digest: DIGEST, costMist: 1 } });
+    expect(screen.queryByText('Partida creada')).not.toBeInTheDocument();
+  });
+
+  it('ignores a router state with an invalid digest', () => {
+    renderAt(`/game/${ID}`, ready(), { created: { digest: 'not-a-digest', costMist: '1', invitation: false, feeChanged: null } });
+    expect(screen.queryByText('Partida creada')).not.toBeInTheDocument();
   });
 });

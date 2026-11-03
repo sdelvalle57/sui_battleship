@@ -1,0 +1,923 @@
+{
+  "_meta": {
+    "suiCliVersion": "1.83.0-16d2dc1e05ed",
+    "sdkVersion": "2.37.0",
+    "capturedAt": "2026-11-02T23:38:58.116Z",
+    "network": "localnet",
+    "method": {
+      "house": "SuiGrpcClient.getObject({ objectId: houseId, include: { content: true, json: true } }); content en base64 (BCS de los campos del struct)",
+      "simulationErrors": "SimulationError real de Transaction.build({ client }) con setSender(<cuenta de la génesis del rol>), sin firmar; PTB con la forma de V-11 (splitCoins(gas) + create_game; cancel_game/reject_game con el Game). Por caso: { sender: <rol>, message, executionError }",
+      "executed": "SuiGrpcClient.getTransaction({ digest, include: { effects: true, events: true, objectTypes: true } }) de transacciones hechas con la CLI 1.83; effects.bcs y bcs de eventos en base64, sin sender ni signatures",
+      "cliErrorText": "description del error de ejecución por gRPC (ledgerService.getTransaction, readMask effects.status) del fallo ejecutado; idéntico a effects.status.error de `sui client tx-block <digest> --json`",
+      "selection": "G_OPEN = primera abierta pendiente; G_INV = primera invitación pendiente; G_CANCEL = primera cancelada por su creador; G_REJ = primera rechazada por su invitado (por orden de creación). cancelNotCreatorExecuted = previousTransaction de G_OPEN (cancel_game de B con --gas-budget, MoveAbort game/3)",
+      "roles": "A = creador de las partidas; B = invitado de G_INV y G_REJ; ADMIN = dueño de la HouseCap (rejectNotInvited)"
+    },
+    "note": "Captura de una localnet aislada y desechable (agents.md §3). Las direcciones e IDs son de cuentas efímeras de la génesis; sin claves ni frases. Sin sender: los casos llevan el rol."
+  },
+  "ids": {
+    "packageId": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+    "originalPackageId": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+    "houseId": "0xd882f94a20956804739532ee2a2bf5e7cc8232922079834fb5b870c10268527d",
+    "games": {
+      "open": "0x55ef9708e5f63e4a333241fd02dca8e0fa7c4ac2fadc2a319d6fecc83f07b2cb",
+      "invite": "0x71699b90f6533fa8f14e754194975708c7fe12df7222c22eab5c4c5c38db9470",
+      "cancelled": "0x6736b64110f1885fc86d0814c8c2d895e2ce3e814d9c7cad96f30a4077647c4b",
+      "rejected": "0x8703d0172db058ece6eb15e8821b0e5fdcfc31acb4ec1eacac6d3901aee583a7"
+    }
+  },
+  "house": {
+    "objectId": "0xd882f94a20956804739532ee2a2bf5e7cc8232922079834fb5b870c10268527d",
+    "version": "3",
+    "digest": "EkfkkgoYEhQYbDq6g9hUJsAM31abcuJ6JmFoy8vvyWUn",
+    "owner": {
+      "$kind": "Shared",
+      "Shared": {
+        "initialSharedVersion": "2"
+      }
+    },
+    "type": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::house::House",
+    "json": {
+      "fee_rate": 250,
+      "fees_collected": "0",
+      "id": "0xd882f94a20956804739532ee2a2bf5e7cc8232922079834fb5b870c10268527d",
+      "max_bet": "50000000000",
+      "min_bet": "1000000",
+      "version": "1"
+    },
+    "content": "2IL5SiCVaARzlTLuKiv158yCMpIgeYNPtbhwwQJoUn0BAAAAAAAAAPoAAAAAAAAAAABAQg8AAAAAAAB0O6QLAAAA"
+  },
+  "simulationErrors": {
+    "createBetTooLow": {
+      "sender": "A",
+      "message": "Transaction resolution failed: MoveAbort in 2nd command, abort code: 0, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::create_game' (instruction 22)",
+      "executionError": {
+        "$kind": "MoveAbort",
+        "message": "MoveAbort in 2nd command, abort code: 0, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::create_game' (instruction 22)",
+        "command": 1,
+        "MoveAbort": {
+          "abortCode": "0",
+          "location": {
+            "package": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+            "module": "game",
+            "function": 0,
+            "instruction": 22,
+            "functionName": "create_game"
+          }
+        }
+      }
+    },
+    "createBetTooHigh": {
+      "sender": "A",
+      "message": "Transaction resolution failed: MoveAbort in 2nd command, abort code: 1, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::create_game' (instruction 33)",
+      "executionError": {
+        "$kind": "MoveAbort",
+        "message": "MoveAbort in 2nd command, abort code: 1, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::create_game' (instruction 33)",
+        "command": 1,
+        "MoveAbort": {
+          "abortCode": "1",
+          "location": {
+            "package": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+            "module": "game",
+            "function": 0,
+            "instruction": 33,
+            "functionName": "create_game"
+          }
+        }
+      }
+    },
+    "createSelfInvite": {
+      "sender": "A",
+      "message": "Transaction resolution failed: MoveAbort in 2nd command, abort code: 2, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::create_game' (instruction 49)",
+      "executionError": {
+        "$kind": "MoveAbort",
+        "message": "MoveAbort in 2nd command, abort code: 2, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::create_game' (instruction 49)",
+        "command": 1,
+        "MoveAbort": {
+          "abortCode": "2",
+          "location": {
+            "package": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+            "module": "game",
+            "function": 0,
+            "instruction": 49,
+            "functionName": "create_game"
+          }
+        }
+      }
+    },
+    "cancelNotCreator": {
+      "sender": "B",
+      "message": "Transaction resolution failed: MoveAbort in 1st command, abort code: 3, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::cancel_game' (instruction 16)",
+      "executionError": {
+        "$kind": "MoveAbort",
+        "message": "MoveAbort in 1st command, abort code: 3, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::cancel_game' (instruction 16)",
+        "command": 0,
+        "MoveAbort": {
+          "abortCode": "3",
+          "location": {
+            "package": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+            "module": "game",
+            "function": 1,
+            "instruction": 16,
+            "functionName": "cancel_game"
+          }
+        }
+      }
+    },
+    "cancelNotPending": {
+      "sender": "A",
+      "message": "Transaction resolution failed: MoveAbort in 1st command, abort code: 4, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::cancel_game' (instruction 27)",
+      "executionError": {
+        "$kind": "MoveAbort",
+        "message": "MoveAbort in 1st command, abort code: 4, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::cancel_game' (instruction 27)",
+        "command": 0,
+        "MoveAbort": {
+          "abortCode": "4",
+          "location": {
+            "package": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+            "module": "game",
+            "function": 1,
+            "instruction": 27,
+            "functionName": "cancel_game"
+          }
+        }
+      }
+    },
+    "rejectNotInvited": {
+      "sender": "ADMIN",
+      "message": "Transaction resolution failed: MoveAbort in 1st command, abort code: 5, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::reject_game' (instruction 28)",
+      "executionError": {
+        "$kind": "MoveAbort",
+        "message": "MoveAbort in 1st command, abort code: 5, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::reject_game' (instruction 28)",
+        "command": 0,
+        "MoveAbort": {
+          "abortCode": "5",
+          "location": {
+            "package": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+            "module": "game",
+            "function": 2,
+            "instruction": 28,
+            "functionName": "reject_game"
+          }
+        }
+      }
+    },
+    "rejectNoInvitation": {
+      "sender": "B",
+      "message": "Transaction resolution failed: MoveAbort in 1st command, abort code: 6, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::reject_game' (instruction 10)",
+      "executionError": {
+        "$kind": "MoveAbort",
+        "message": "MoveAbort in 1st command, abort code: 6, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::reject_game' (instruction 10)",
+        "command": 0,
+        "MoveAbort": {
+          "abortCode": "6",
+          "location": {
+            "package": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+            "module": "game",
+            "function": 2,
+            "instruction": 10,
+            "functionName": "reject_game"
+          }
+        }
+      }
+    }
+  },
+  "executed": {
+    "createOpen": {
+      "$kind": "Transaction",
+      "Transaction": {
+        "digest": "7VXtB8Pc47Jss33zYQRMXJDfLsY7XvdWFX78gzj7q7YH",
+        "epoch": "0",
+        "timestampMs": 1793662326921,
+        "checkpoint": "480",
+        "status": {
+          "success": true,
+          "error": null
+        },
+        "effects": {
+          "bcs": "AQAAAAAAAAAAAEBCDwAAAAAAEOEsAAAAAAAAAAAAAAAAAAAAAAAAAAAAIGB1TY8IOCI+kf34ziMdbpMhcuhbD/um4J20s6bIttDOAQAAAAABINxR4UVGEAHC9rGgFGUmg/NQn7xmpJdTLNHQWsWOCNkiAAQAAAAAAAAABhNFqPUd7Gog54KzJEaQxPSQ1X2oNEhno0DRkgVtZWHbAQEAAAAAAAAAIORA9ZqroB/6r95Chuq+ypyzXhUEOT0In5y4D7II+/yyAF+ThghX7fKdwxp7zPNhHEpx9PzFlltFqb04vL8Qa5ZnASBrEqZB1m6IkImoJKlT2sLpxL/2M+hM3TNqmh1rzNL2jwBfk4YIV+3yncMae8zzYRxKcfT8xZZbRam9OLy/EGuWZwAkf4Nieum9MT3fiWNHbM+6UxQVvs4vuMGVV//tGTnULgEBAAAAAAAAACDmX/FNYy6Eqq72ST8t3uPtea3s4+ChA3cgZ2LDq80OLwBfk4YIV+3yncMae8zzYRxKcfT8xZZbRam9OLy/EGuWZwACVe+XCOX2PkozMkH9Atyo4Pp8SsL63CoxnW/syD8HsssAASBvldawY09EHtNyNHyLhIM3chJeIqNj4oJTBxBNOLvZtgIEAAAAAAAAAAFu80TbUVe3rvXmou03EzyA7yroNfbB1+xwF3uPf/qeegEBAAAAAAAAACAGFCDD4yMJdQAfvOnARun2tOj49Oe5SKRI1O1xTHiwbgBfk4YIV+3yncMae8zzYRxKcfT8xZZbRam9OLy/EGuWZwACkNFgkEokeSsF4PxF7mVhZIUnRweECd2VPTZcgGkOnqsBAQAAAAAAAAAgoiBoSe55aHqmMg2bDOeoXiXyUIE8fmLtwhZKtrtDAhcAX5OGCFft8p3DGnvM82EcSnH0/MWWW0WpvTi8vxBrlmcAAvx0WKZH5gxFpnhADPItgdd2AroFXo3zuAc6CTJhbHtfAQEAAAAAAAAAIOb72bkCoV8czjoXa6gxAQt0qzLD5kTDZTbmoBcxNfUwAF+ThghX7fKdwxp7zPNhHEpx9PzFlltFqb04vL8Qa5ZnAAIB2IL5SiCVaARzlTLuKiv158yCMpIgeYNPtbhwwQJoUn0AAwAAAAAAAAAgzFe5ewxRpC8MLZBibBIhaRzSD320zL3zQUi5YFjXZE8A",
+          "version": 2,
+          "status": {
+            "success": true,
+            "error": null
+          },
+          "gasUsed": {
+            "computationCost": "1000000",
+            "storageCost": "2941200",
+            "storageRebate": "0",
+            "nonRefundableStorageFee": "0"
+          },
+          "transactionDigest": "7VXtB8Pc47Jss33zYQRMXJDfLsY7XvdWFX78gzj7q7YH",
+          "gasObject": {
+            "objectId": "0x1345a8f51dec6a20e782b3244690c4f490d57da8344867a340d192056d6561db",
+            "inputState": "Exists",
+            "inputVersion": "1",
+            "inputDigest": "GN1QX7omiCRKcEBEThT6bdAoMHB26pTTP9NfGfhGuU97",
+            "inputOwner": {
+              "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+              "$kind": "AddressOwner"
+            },
+            "outputState": "ObjectWrite",
+            "outputVersion": "4",
+            "outputDigest": "8Cy7ofrJfFj178n5eyj6LjabpL1ov7rRJYRxm9JNVEBg",
+            "outputOwner": {
+              "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+              "$kind": "AddressOwner"
+            },
+            "idOperation": "None"
+          },
+          "eventsDigest": "Fq37JCmNTe76dsyWzop5SB5WX9DXhZRTVW7einUkRzA5",
+          "dependencies": [],
+          "lamportVersion": "4",
+          "changedObjects": [
+            {
+              "objectId": "0x1345a8f51dec6a20e782b3244690c4f490d57da8344867a340d192056d6561db",
+              "inputState": "Exists",
+              "inputVersion": "1",
+              "inputDigest": "GN1QX7omiCRKcEBEThT6bdAoMHB26pTTP9NfGfhGuU97",
+              "inputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "4",
+              "outputDigest": "8Cy7ofrJfFj178n5eyj6LjabpL1ov7rRJYRxm9JNVEBg",
+              "outputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0x247f83627ae9bd313ddf8963476ccfba531415bece2fb8c19557ffed1939d42e",
+              "inputState": "Exists",
+              "inputVersion": "1",
+              "inputDigest": "GWHd7QrEQfyvM6PBMyB8fBXsc838qtsJYBUGmbVnG3D8",
+              "inputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "DoesNotExist",
+              "outputVersion": null,
+              "outputDigest": null,
+              "outputOwner": null,
+              "idOperation": "Deleted"
+            },
+            {
+              "objectId": "0x55ef9708e5f63e4a333241fd02dca8e0fa7c4ac2fadc2a319d6fecc83f07b2cb",
+              "inputState": "DoesNotExist",
+              "inputVersion": null,
+              "inputDigest": null,
+              "inputOwner": null,
+              "outputState": "ObjectWrite",
+              "outputVersion": "4",
+              "outputDigest": "8WamofxRyVSKgonB9LLWWn2EczDSyoKtVddaaWXGKke9",
+              "outputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "4"
+                }
+              },
+              "idOperation": "Created"
+            },
+            {
+              "objectId": "0x6ef344db5157b7aef5e6a2ed37133c80ef2ae835f6c1d7ec70177b8f7ffa9e7a",
+              "inputState": "Exists",
+              "inputVersion": "1",
+              "inputDigest": "QjFMXiwYYgbQLSuv83WkHfeFBjTBmminmQW4hWNYE4d",
+              "inputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "DoesNotExist",
+              "outputVersion": null,
+              "outputDigest": null,
+              "outputOwner": null,
+              "idOperation": "Deleted"
+            },
+            {
+              "objectId": "0x90d160904a24792b05e0fc45ee656164852747078409dd953d365c80690e9eab",
+              "inputState": "Exists",
+              "inputVersion": "1",
+              "inputDigest": "Busi5gFnfmvr1H3jBaXHJER494A8n2ScQkj7kdGJgFh8",
+              "inputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "DoesNotExist",
+              "outputVersion": null,
+              "outputDigest": null,
+              "outputOwner": null,
+              "idOperation": "Deleted"
+            },
+            {
+              "objectId": "0xfc7458a647e60c45a678400cf22d81d77602ba055e8df3b8073a0932616c7b5f",
+              "inputState": "Exists",
+              "inputVersion": "1",
+              "inputDigest": "GYfWV1SeKV8o5hQNmHvHdiLbWSiXV8X4nJZKhvLpW3Us",
+              "inputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "DoesNotExist",
+              "outputVersion": null,
+              "outputDigest": null,
+              "outputOwner": null,
+              "idOperation": "Deleted"
+            }
+          ],
+          "unchangedConsensusObjects": [
+            {
+              "kind": "ReadOnlyRoot",
+              "objectId": "0xd882f94a20956804739532ee2a2bf5e7cc8232922079834fb5b870c10268527d",
+              "version": "3",
+              "digest": "EkfkkgoYEhQYbDq6g9hUJsAM31abcuJ6JmFoy8vvyWUn"
+            }
+          ],
+          "auxiliaryDataDigest": null
+        },
+        "objectTypes": {
+          "0x1345a8f51dec6a20e782b3244690c4f490d57da8344867a340d192056d6561db": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x247f83627ae9bd313ddf8963476ccfba531415bece2fb8c19557ffed1939d42e": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x55ef9708e5f63e4a333241fd02dca8e0fa7c4ac2fadc2a319d6fecc83f07b2cb": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::Game",
+          "0x6ef344db5157b7aef5e6a2ed37133c80ef2ae835f6c1d7ec70177b8f7ffa9e7a": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x90d160904a24792b05e0fc45ee656164852747078409dd953d365c80690e9eab": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0xfc7458a647e60c45a678400cf22d81d77602ba055e8df3b8073a0932616c7b5f": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+        },
+        "events": [
+          {
+            "packageId": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+            "module": "game",
+            "eventType": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::GameCreated",
+            "bcs": "Ve+XCOX2PkozMkH9Atyo4Pp8SsL63CoxnW/syD8Hsstfk4YIV+3yncMae8zzYRxKcfT8xZZbRam9OLy/EGuWZwBBQg8AAAAAAPoA",
+            "json": {
+              "bet": "1000001",
+              "creator": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+              "fee_rate": 250,
+              "game_id": "0x55ef9708e5f63e4a333241fd02dca8e0fa7c4ac2fadc2a319d6fecc83f07b2cb",
+              "opponent": null
+            }
+          }
+        ]
+      }
+    },
+    "createInvite": {
+      "$kind": "Transaction",
+      "Transaction": {
+        "digest": "BZHv6KKQU6A4F6PQPHBwAifsm98kJwiKUv3QVebqEBJo",
+        "epoch": "0",
+        "timestampMs": 1793662340942,
+        "checkpoint": "545",
+        "status": {
+          "success": true,
+          "error": null
+        },
+        "effects": {
+          "bcs": "AQAAAAAAAAAAAEBCDwAAAAAAEJcwAAAAAAD9Eg8AAAAAAGMAAAAAAAAAIJzalNhuzKIKoVYZi0t7R9D9u/lZmaVzoTaqUQTyfVH4AQAAAAABIMmDur6L4KrxO0nXPgrI1OotacXA45JQWN7zR8UTO2X1AAUAAAAAAAAAAhNFqPUd7Gog54KzJEaQxPSQ1X2oNEhno0DRkgVtZWHbAQQAAAAAAAAAIGsSpkHWboiQiagkqVPawunEv/Yz6EzdM2qaHWvM0vaPAF+ThghX7fKdwxp7zPNhHEpx9PzFlltFqb04vL8Qa5ZnASBNpAjsFXfYIDuw8SA0CBCjQ/RTr9Nq2XEWlY/mK0yaqgBfk4YIV+3yncMae8zzYRxKcfT8xZZbRam9OLy/EGuWZwBxaZuQ9lM/qPFOdUGUl1cIx/4S33Iiwi6rXExcONuUcAABICukmBPEmwIGvhg/IbA6RRWOT66nJKHWe934R/ilqmLnAgUAAAAAAAAAAQHYgvlKIJVoBHOVMu4qK/XnzIIykiB5g0+1uHDBAmhSfQADAAAAAAAAACDMV7l7DFGkLwwtkGJsEiFpHNIPfbTMvfNBSLlgWNdkTwA=",
+          "version": 2,
+          "status": {
+            "success": true,
+            "error": null
+          },
+          "gasUsed": {
+            "computationCost": "1000000",
+            "storageCost": "3184400",
+            "storageRebate": "987901",
+            "nonRefundableStorageFee": "99"
+          },
+          "transactionDigest": "BZHv6KKQU6A4F6PQPHBwAifsm98kJwiKUv3QVebqEBJo",
+          "gasObject": {
+            "objectId": "0x1345a8f51dec6a20e782b3244690c4f490d57da8344867a340d192056d6561db",
+            "inputState": "Exists",
+            "inputVersion": "4",
+            "inputDigest": "8Cy7ofrJfFj178n5eyj6LjabpL1ov7rRJYRxm9JNVEBg",
+            "inputOwner": {
+              "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+              "$kind": "AddressOwner"
+            },
+            "outputState": "ObjectWrite",
+            "outputVersion": "5",
+            "outputDigest": "6E5U2Zo9Zbr3wUk7qf3dFHQjxHz8NBNfyZ8QKHKBUbHj",
+            "outputOwner": {
+              "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+              "$kind": "AddressOwner"
+            },
+            "idOperation": "None"
+          },
+          "eventsDigest": "EZdT4zFRbZZZbGLAFqkqsLHQbMtxXQNL4KU2oNmqiT1e",
+          "dependencies": [],
+          "lamportVersion": "5",
+          "changedObjects": [
+            {
+              "objectId": "0x1345a8f51dec6a20e782b3244690c4f490d57da8344867a340d192056d6561db",
+              "inputState": "Exists",
+              "inputVersion": "4",
+              "inputDigest": "8Cy7ofrJfFj178n5eyj6LjabpL1ov7rRJYRxm9JNVEBg",
+              "inputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "5",
+              "outputDigest": "6E5U2Zo9Zbr3wUk7qf3dFHQjxHz8NBNfyZ8QKHKBUbHj",
+              "outputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0x71699b90f6533fa8f14e754194975708c7fe12df7222c22eab5c4c5c38db9470",
+              "inputState": "DoesNotExist",
+              "inputVersion": null,
+              "inputDigest": null,
+              "inputOwner": null,
+              "outputState": "ObjectWrite",
+              "outputVersion": "5",
+              "outputDigest": "3wN6jRTbhc3v8za5EnSmiHspzKHbXkQZkgErFK188zg6",
+              "outputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "5"
+                }
+              },
+              "idOperation": "Created"
+            }
+          ],
+          "unchangedConsensusObjects": [
+            {
+              "kind": "ReadOnlyRoot",
+              "objectId": "0xd882f94a20956804739532ee2a2bf5e7cc8232922079834fb5b870c10268527d",
+              "version": "3",
+              "digest": "EkfkkgoYEhQYbDq6g9hUJsAM31abcuJ6JmFoy8vvyWUn"
+            }
+          ],
+          "auxiliaryDataDigest": null
+        },
+        "objectTypes": {
+          "0x1345a8f51dec6a20e782b3244690c4f490d57da8344867a340d192056d6561db": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x71699b90f6533fa8f14e754194975708c7fe12df7222c22eab5c4c5c38db9470": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::Game"
+        },
+        "events": [
+          {
+            "packageId": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+            "module": "game",
+            "eventType": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::GameCreated",
+            "bcs": "cWmbkPZTP6jxTnVBlJdXCMf+Et9yIsIuq1xMXDjblHBfk4YIV+3yncMae8zzYRxKcfT8xZZbRam9OLy/EGuWZwFhnkiU/ih9o0PMg1vjBob6DfS1aXnnlVcruAPmwS6HGIKEHgAAAAAA+gA=",
+            "json": {
+              "bet": "2000002",
+              "creator": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+              "fee_rate": 250,
+              "game_id": "0x71699b90f6533fa8f14e754194975708c7fe12df7222c22eab5c4c5c38db9470",
+              "opponent": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718"
+            }
+          }
+        ]
+      }
+    },
+    "cancel": {
+      "$kind": "Transaction",
+      "Transaction": {
+        "digest": "6MGzadAbvRmZGFDe2XxnDukwfYVQWiXLNrGbJD9H8bC2",
+        "epoch": "0",
+        "timestampMs": 1793662351079,
+        "checkpoint": "592",
+        "status": {
+          "success": true,
+          "error": null
+        },
+        "effects": {
+          "bcs": "AQAAAAAAAAAAAEBCDwAAAAAAcPQ7AAAAAADq3ywAAAAAACYBAAAAAAAAIE98IkXMouSa/fwrXXV4tW2KFWCvuc+EZ65DwwlNLBffAQAAAAABICAmX5jsaBhWn66g9P+Z3JD3lut48WiJ9WhsJshfGXTXAAcAAAAAAAAAAxNFqPUd7Gog54KzJEaQxPSQ1X2oNEhno0DRkgVtZWHbAQYAAAAAAAAAIO2fFohHqp+A8e+WAwtnhwYp7QTwdBwQdy5Y1vC1+BcGAF+ThghX7fKdwxp7zPNhHEpx9PzFlltFqb04vL8Qa5ZnASC6tiG03NJ78VA2F+NXprv1PLQUoa9197IS+IO/dec+lgBfk4YIV+3yncMae8zzYRxKcfT8xZZbRam9OLy/EGuWZwA7C6c2xs2nsDUt4wJzUOCPrje4cL/OlEquppxVyV5axQABIM7yBumBKlIf7n460T53JiG3/bR66X0rqk43yMNA6/+vAF+ThghX7fKdwxp7zPNhHEpx9PzFlltFqb04vL8Qa5ZnAWc2tkEQ8YhfyG0IFMjC2JXizj6BTZx8rZbzCkB3ZHxLAQYAAAAAAAAAIINYR7WhkGFMfdvMX0Bvg9LZuAydREHd8d/GYTFf+SV/AgYAAAAAAAAAASDBAQ7WWfmRWo8ENQeoWdcixwLcBEXtmanqT3SDREExvAIGAAAAAAAAAAAAAA==",
+          "version": 2,
+          "status": {
+            "success": true,
+            "error": null
+          },
+          "gasUsed": {
+            "computationCost": "1000000",
+            "storageCost": "3929200",
+            "storageRebate": "2940906",
+            "nonRefundableStorageFee": "294"
+          },
+          "transactionDigest": "6MGzadAbvRmZGFDe2XxnDukwfYVQWiXLNrGbJD9H8bC2",
+          "gasObject": {
+            "objectId": "0x1345a8f51dec6a20e782b3244690c4f490d57da8344867a340d192056d6561db",
+            "inputState": "Exists",
+            "inputVersion": "6",
+            "inputDigest": "GzaKiHfRmLwRNqTPtPdBDAEjMpDxiHMwcn6CNdPPHtMs",
+            "inputOwner": {
+              "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+              "$kind": "AddressOwner"
+            },
+            "outputState": "ObjectWrite",
+            "outputVersion": "7",
+            "outputDigest": "DZqun5cUMqZEo7dZh4UJRAmLDnaCMpQV5LcbVv99dEFw",
+            "outputOwner": {
+              "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+              "$kind": "AddressOwner"
+            },
+            "idOperation": "None"
+          },
+          "eventsDigest": "3AVz57g4aVVNUy1koag2aF2ogXYPQb6nya5LzZLkKoa6",
+          "dependencies": [],
+          "lamportVersion": "7",
+          "changedObjects": [
+            {
+              "objectId": "0x1345a8f51dec6a20e782b3244690c4f490d57da8344867a340d192056d6561db",
+              "inputState": "Exists",
+              "inputVersion": "6",
+              "inputDigest": "GzaKiHfRmLwRNqTPtPdBDAEjMpDxiHMwcn6CNdPPHtMs",
+              "inputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "7",
+              "outputDigest": "DZqun5cUMqZEo7dZh4UJRAmLDnaCMpQV5LcbVv99dEFw",
+              "outputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0x3b0ba736c6cda7b0352de3027350e08fae37b870bfce944aaea69c55c95e5ac5",
+              "inputState": "DoesNotExist",
+              "inputVersion": null,
+              "inputDigest": null,
+              "inputOwner": null,
+              "outputState": "ObjectWrite",
+              "outputVersion": "7",
+              "outputDigest": "Evq34umJzDEJhgsW4AyjTSzJXtCJFfB5FqEuf7TJo2M4",
+              "outputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "Created"
+            },
+            {
+              "objectId": "0x6736b64110f1885fc86d0814c8c2d895e2ce3e814d9c7cad96f30a4077647c4b",
+              "inputState": "Exists",
+              "inputVersion": "6",
+              "inputDigest": "9qiV4Tsfg9PseVSPxnjNakwuFpgFfKTKVW76sBTZtsk2",
+              "inputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "6"
+                }
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "7",
+              "outputDigest": "DzQd3AF4EP1jeG1mUVnTzjii5zuKXykHRjftH4XeuReB",
+              "outputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "6"
+                }
+              },
+              "idOperation": "None"
+            }
+          ],
+          "unchangedConsensusObjects": [],
+          "auxiliaryDataDigest": null
+        },
+        "objectTypes": {
+          "0x1345a8f51dec6a20e782b3244690c4f490d57da8344867a340d192056d6561db": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x3b0ba736c6cda7b0352de3027350e08fae37b870bfce944aaea69c55c95e5ac5": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x6736b64110f1885fc86d0814c8c2d895e2ce3e814d9c7cad96f30a4077647c4b": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::Game"
+        },
+        "events": [
+          {
+            "packageId": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+            "module": "game",
+            "eventType": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::GameCancelled",
+            "bcs": "Zza2QRDxiF/IbQgUyMLYleLOPoFNnHytlvMKQHdkfEtfk4YIV+3yncMae8zzYRxKcfT8xZZbRam9OLy/EGuWZ1+ThghX7fKdwxp7zPNhHEpx9PzFlltFqb04vL8Qa5Znw8YtAAAAAAA=",
+            "json": {
+              "cancelled_by": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+              "creator": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+              "game_id": "0x6736b64110f1885fc86d0814c8c2d895e2ce3e814d9c7cad96f30a4077647c4b",
+              "refund": "3000003"
+            }
+          }
+        ]
+      }
+    },
+    "reject": {
+      "$kind": "Transaction",
+      "Transaction": {
+        "digest": "EWDMhQfMHrH84QzVu6Qo5rg2hZxV7w2aM65jeZkdSXcy",
+        "epoch": "0",
+        "timestampMs": 1793662361422,
+        "checkpoint": "640",
+        "status": {
+          "success": true,
+          "error": null
+        },
+        "effects": {
+          "bcs": "AQAAAAAAAAAAAEBCDwAAAAAAcKo/AAAAAADUgiEAAAAAANwAAAAAAAAAIMijvtRp/FpdhBOigRWe/AqCc5xyjEuBeQFn78Eh4prmAQAAAAABIEjWivOc9if6yWh7ygoyGS1Xl/1/GS/LfYTDhdjqCtS6AAkAAAAAAAAABz+Jc4otNiUS9fZsWmmVv4aXdMTrM/IMsU9dP9aSH+WcAQEAAAAAAAAAICT4yZweGurAKAAfGYPgsSTtaQvklUNMrciHYuI7vBFjAGGeSJT+KH2jQ8yDW+MGhvoN9LVpeeeVVyu4A+bBLocYASBqaMjp9GMOxerIIEWTJ0CTY7T64BzhbqaKEY1aKBTf+ABhnkiU/ih9o0PMg1vjBob6DfS1aXnnlVcruAPmwS6HGABB9cLFlRpiZaVSpKVdOiCJxOIc860Wu/+9YwO9jZzPZAEBAAAAAAAAACDy7pceFLXiCg3fKa0vGmZixB3dYX1l99BTsQfEnjqcCQBhnkiU/ih9o0PMg1vjBob6DfS1aXnnlVcruAPmwS6HGAAChR90KmsTfbTzNxzcTDbxhin4+Xto1wUL73T/RcqejMUAASBF7eyE9ZVW+ORyqf/qzYSVRwK72DvO7OF45JIH3ktMBQBfk4YIV+3yncMae8zzYRxKcfT8xZZbRam9OLy/EGuWZwGHA9AXLbBY7ObrFeiCGw5f3PwxrLTsHqysbTkBruWDpwEIAAAAAAAAACAhRlTZXEggEatBsbyk2rh2NR7tWCZHlgWnXs+x/ylbkgIIAAAAAAAAAAEgvQFN/tu7Vp/ol1IfWmHU0BAs9clqbOc3INlTxHzd7LICCAAAAAAAAAAA3zYxnrstoCIQijVwDZqDTT+ZqA0OD63C2tQO0va8kPEBAQAAAAAAAAAgNf6QPucbE0UR7bYBufm3jsajXVQmx1daj99EMCYv4VAAYZ5IlP4ofaNDzINb4waG+g30tWl555VXK7gD5sEuhxgAAukdNF1OVUX3an/NkCb42i+IDSniTnF0YCmu9+e/A+RkAQEAAAAAAAAAIFtg8glImIcoYh5Ctr4HgO+P0IBKLSadDCxwdWMGq4fQAGGeSJT+KH2jQ8yDW+MGhvoN9LVpeeeVVyu4A+bBLocYAAL+MjqGd+0xYsFphg0fMxiRx9P2zwB1W4bNRaoA899oigEBAAAAAAAAACDzXo/eHfSScJYe6P1vdqSne1QBSZl7npoQLYQaLlnw9gBhnkiU/ih9o0PMg1vjBob6DfS1aXnnlVcruAPmwS6HGAACAAA=",
+          "version": 2,
+          "status": {
+            "success": true,
+            "error": null
+          },
+          "gasUsed": {
+            "computationCost": "1000000",
+            "storageCost": "4172400",
+            "storageRebate": "2196180",
+            "nonRefundableStorageFee": "220"
+          },
+          "transactionDigest": "EWDMhQfMHrH84QzVu6Qo5rg2hZxV7w2aM65jeZkdSXcy",
+          "gasObject": {
+            "objectId": "0x3f89738a2d362512f5f66c5a6995bf869774c4eb33f20cb14f5d3fd6921fe59c",
+            "inputState": "Exists",
+            "inputVersion": "1",
+            "inputDigest": "3VKhxFbis1quZf4yHQN4edsnwXWWucSudNAak2AYGgdQ",
+            "inputOwner": {
+              "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+              "$kind": "AddressOwner"
+            },
+            "outputState": "ObjectWrite",
+            "outputVersion": "9",
+            "outputDigest": "8ANtWsFT8HVgDveoPuJ3LBfMoqwnSK7xLDMm179bzs7D",
+            "outputOwner": {
+              "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+              "$kind": "AddressOwner"
+            },
+            "idOperation": "None"
+          },
+          "eventsDigest": "5uL6dBDeBoho3uD5rAh7F7biBsUHqcwxMSSpSdxqUJUZ",
+          "dependencies": [],
+          "lamportVersion": "9",
+          "changedObjects": [
+            {
+              "objectId": "0x3f89738a2d362512f5f66c5a6995bf869774c4eb33f20cb14f5d3fd6921fe59c",
+              "inputState": "Exists",
+              "inputVersion": "1",
+              "inputDigest": "3VKhxFbis1quZf4yHQN4edsnwXWWucSudNAak2AYGgdQ",
+              "inputOwner": {
+                "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "9",
+              "outputDigest": "8ANtWsFT8HVgDveoPuJ3LBfMoqwnSK7xLDMm179bzs7D",
+              "outputOwner": {
+                "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0x41f5c2c5951a6265a552a4a55d3a2089c4e21cf3ad16bbffbd6303bd8d9ccf64",
+              "inputState": "Exists",
+              "inputVersion": "1",
+              "inputDigest": "HMJg463yHgUohzwsMDhmGnCycFELnFBTjVTJNdYiR3Ra",
+              "inputOwner": {
+                "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "DoesNotExist",
+              "outputVersion": null,
+              "outputDigest": null,
+              "outputOwner": null,
+              "idOperation": "Deleted"
+            },
+            {
+              "objectId": "0x851f742a6b137db4f3371cdc4c36f18629f8f97b68d7050bef74ff45ca9e8cc5",
+              "inputState": "DoesNotExist",
+              "inputVersion": null,
+              "inputDigest": null,
+              "inputOwner": null,
+              "outputState": "ObjectWrite",
+              "outputVersion": "9",
+              "outputDigest": "5hyZ2n2VbWSn27oRSCNXbzonkz95awxfotrioQgcFKqW",
+              "outputOwner": {
+                "AddressOwner": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "Created"
+            },
+            {
+              "objectId": "0x8703d0172db058ece6eb15e8821b0e5fdcfc31acb4ec1eacac6d3901aee583a7",
+              "inputState": "Exists",
+              "inputVersion": "8",
+              "inputDigest": "3Etf28oSqXXQxAFtVfPjhYHpLFUnXnoxYAy1sRBsYreM",
+              "inputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "8"
+                }
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "9",
+              "outputDigest": "DioD7BTAzZp6MoSavHjexzdkXc8i8m2urrvByYLQqY4R",
+              "outputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "8"
+                }
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0xdf36319ebb2da022108a35700d9a834d3f99a80d0e0fadc2dad40ed2f6bc90f1",
+              "inputState": "Exists",
+              "inputVersion": "1",
+              "inputDigest": "4dmkDqd3TQVLmbuAJQJRGkR8nmaXqz1vm1EPKKoCeqps",
+              "inputOwner": {
+                "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "DoesNotExist",
+              "outputVersion": null,
+              "outputDigest": null,
+              "outputOwner": null,
+              "idOperation": "Deleted"
+            },
+            {
+              "objectId": "0xe91d345d4e5545f76a7fcd9026f8da2f880d29e24e71746029aef7e7bf03e464",
+              "inputState": "Exists",
+              "inputVersion": "1",
+              "inputDigest": "79hqhEmbe9yAVkssxt2roVqTw4VoaUeCYkuBxGVsYjPu",
+              "inputOwner": {
+                "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "DoesNotExist",
+              "outputVersion": null,
+              "outputDigest": null,
+              "outputOwner": null,
+              "idOperation": "Deleted"
+            },
+            {
+              "objectId": "0xfe323a8677ed3162c169860d1f331891c7d3f6cf00755b86cd45aa00f3df688a",
+              "inputState": "Exists",
+              "inputVersion": "1",
+              "inputDigest": "HP1hhMwanQre98ktrVyYG7HvL5hCGwvBNvLjHR5Xezu3",
+              "inputOwner": {
+                "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "DoesNotExist",
+              "outputVersion": null,
+              "outputDigest": null,
+              "outputOwner": null,
+              "idOperation": "Deleted"
+            }
+          ],
+          "unchangedConsensusObjects": [],
+          "auxiliaryDataDigest": null
+        },
+        "objectTypes": {
+          "0x3f89738a2d362512f5f66c5a6995bf869774c4eb33f20cb14f5d3fd6921fe59c": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x41f5c2c5951a6265a552a4a55d3a2089c4e21cf3ad16bbffbd6303bd8d9ccf64": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x851f742a6b137db4f3371cdc4c36f18629f8f97b68d7050bef74ff45ca9e8cc5": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x8703d0172db058ece6eb15e8821b0e5fdcfc31acb4ec1eacac6d3901aee583a7": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::Game",
+          "0xdf36319ebb2da022108a35700d9a834d3f99a80d0e0fadc2dad40ed2f6bc90f1": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0xe91d345d4e5545f76a7fcd9026f8da2f880d29e24e71746029aef7e7bf03e464": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0xfe323a8677ed3162c169860d1f331891c7d3f6cf00755b86cd45aa00f3df688a": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+        },
+        "events": [
+          {
+            "packageId": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+            "module": "game",
+            "eventType": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::GameCancelled",
+            "bcs": "hwPQFy2wWOzm6xXoghsOX9z8May07B6srG05Aa7lg6dfk4YIV+3yncMae8zzYRxKcfT8xZZbRam9OLy/EGuWZ2GeSJT+KH2jQ8yDW+MGhvoN9LVpeeeVVyu4A+bBLocYBAk9AAAAAAA=",
+            "json": {
+              "cancelled_by": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+              "creator": "0x5f93860857edf29dc31a7bccf3611c4a71f4fcc5965b45a9bd38bcbf106b9667",
+              "game_id": "0x8703d0172db058ece6eb15e8821b0e5fdcfc31acb4ec1eacac6d3901aee583a7",
+              "refund": "4000004"
+            }
+          }
+        ]
+      }
+    },
+    "cancelNotCreatorExecuted": {
+      "$kind": "FailedTransaction",
+      "FailedTransaction": {
+        "digest": "3gWJcLHxsCU3Gjs66r8wm2mvHCkbSKq3aZANv6AhSXnr",
+        "epoch": "0",
+        "timestampMs": 1793662364443,
+        "checkpoint": "654",
+        "status": {
+          "success": false,
+          "error": {
+            "$kind": "MoveAbort",
+            "message": "MoveAbort in 1st command, abort code: 3, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::cancel_game' (instruction 16)",
+            "command": 0,
+            "MoveAbort": {
+              "abortCode": "3",
+              "location": {
+                "package": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+                "module": "game",
+                "function": 1,
+                "instruction": 16,
+                "functionName": "cancel_game"
+              }
+            }
+          }
+        },
+        "effects": {
+          "bcs": "AQEMWksIQaQj9h+NtKFg8Q9FKCxGxD5o7OdCCuQMa49ZJO8EZ2FtZQEAEAABC2NhbmNlbF9nYW1lAwAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAEBCDwAAAAAAEOEsAAAAAADq3ywAAAAAACYBAAAAAAAAICfWKLrLVw8MlwA3ZGjAe2bvUBlodSkTsSg+X3gqDUJjAQAAAAAAAAoAAAAAAAAAAj+Jc4otNiUS9fZsWmmVv4aXdMTrM/IMsU9dP9aSH+WcAQkAAAAAAAAAIGpoyOn0Yw7F6sggRZMnQJNjtPrgHOFupooRjVooFN/4AGGeSJT+KH2jQ8yDW+MGhvoN9LVpeeeVVyu4A+bBLocYASAbKAOLzoWmVxqUgu0j4gtNTTTyyOC3rDvAH+iku8bQLQBhnkiU/ih9o0PMg1vjBob6DfS1aXnnlVcruAPmwS6HGABV75cI5fY+SjMyQf0C3Kjg+nxKwvrcKjGdb+zIPweyywEEAAAAAAAAACBvldawY09EHtNyNHyLhIM3chJeIqNj4oJTBxBNOLvZtgIEAAAAAAAAAAEgNlCQO14VKDg9Nbio4rTbLP+8Rei/VkSd+VV/qMKJfuECBAAAAAAAAAAAAAA=",
+          "version": 2,
+          "status": {
+            "success": false,
+            "error": {
+              "$kind": "MoveAbort",
+              "message": "MoveAbort in 1st command, abort code: 3, in '0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::cancel_game' (instruction 16)",
+              "command": 0,
+              "MoveAbort": {
+                "abortCode": "3",
+                "location": {
+                  "package": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef",
+                  "module": "game",
+                  "function": 1,
+                  "instruction": 16,
+                  "functionName": "cancel_game"
+                }
+              }
+            }
+          },
+          "gasUsed": {
+            "computationCost": "1000000",
+            "storageCost": "2941200",
+            "storageRebate": "2940906",
+            "nonRefundableStorageFee": "294"
+          },
+          "transactionDigest": "3gWJcLHxsCU3Gjs66r8wm2mvHCkbSKq3aZANv6AhSXnr",
+          "gasObject": {
+            "objectId": "0x3f89738a2d362512f5f66c5a6995bf869774c4eb33f20cb14f5d3fd6921fe59c",
+            "inputState": "Exists",
+            "inputVersion": "9",
+            "inputDigest": "8ANtWsFT8HVgDveoPuJ3LBfMoqwnSK7xLDMm179bzs7D",
+            "inputOwner": {
+              "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+              "$kind": "AddressOwner"
+            },
+            "outputState": "ObjectWrite",
+            "outputVersion": "10",
+            "outputDigest": "2q1Pz8YghHvHo8bPfztBiducAf5d6KV7FkCLwus2C8Pn",
+            "outputOwner": {
+              "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+              "$kind": "AddressOwner"
+            },
+            "idOperation": "None"
+          },
+          "eventsDigest": null,
+          "dependencies": [],
+          "lamportVersion": "10",
+          "changedObjects": [
+            {
+              "objectId": "0x3f89738a2d362512f5f66c5a6995bf869774c4eb33f20cb14f5d3fd6921fe59c",
+              "inputState": "Exists",
+              "inputVersion": "9",
+              "inputDigest": "8ANtWsFT8HVgDveoPuJ3LBfMoqwnSK7xLDMm179bzs7D",
+              "inputOwner": {
+                "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "10",
+              "outputDigest": "2q1Pz8YghHvHo8bPfztBiducAf5d6KV7FkCLwus2C8Pn",
+              "outputOwner": {
+                "AddressOwner": "0x619e4894fe287da343cc835be30686fa0df4b56979e795572bb803e6c12e8718",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0x55ef9708e5f63e4a333241fd02dca8e0fa7c4ac2fadc2a319d6fecc83f07b2cb",
+              "inputState": "Exists",
+              "inputVersion": "4",
+              "inputDigest": "8WamofxRyVSKgonB9LLWWn2EczDSyoKtVddaaWXGKke9",
+              "inputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "4"
+                }
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "10",
+              "outputDigest": "4f2GT3kRATMVLu871cNP5gZNMsp2krUscFRFZb7yBGLg",
+              "outputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "4"
+                }
+              },
+              "idOperation": "None"
+            }
+          ],
+          "unchangedConsensusObjects": [],
+          "auxiliaryDataDigest": null
+        },
+        "objectTypes": {
+          "0x3f89738a2d362512f5f66c5a6995bf869774c4eb33f20cb14f5d3fd6921fe59c": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x55ef9708e5f63e4a333241fd02dca8e0fa7c4ac2fadc2a319d6fecc83f07b2cb": "0x5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef::game::Game"
+        },
+        "events": []
+      }
+    }
+  },
+  "cliErrorText": "MoveAbort(MoveLocation { module: ModuleId { address: 5a4b0841a423f61f8db4a160f10f45282c46c43e68ece7420ae40c6b8f5924ef, name: Identifier(\"game\") }, function: 1, instruction: 16, function_name: Some(\"cancel_game\") }, 3) in command 0"
+}

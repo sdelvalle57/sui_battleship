@@ -8,22 +8,10 @@
 // `contracts/fixtures/game-reads.localnet.json`. Las direcciones e IDs del archivo son de cuentas efímeras de una génesis
 // desechable; ninguna clave. Los eventos se guardan sin `sender`.
 import process from 'node:process';
-
-const LOCALNET_URL = 'http://127.0.0.1:9000';
+import { assertDeployment, assertLocalnetUrl } from './localnet-guard.mjs';
 
 // Guarda de URL: primera instrucción ejecutable. Nada de red ni de SDK antes de esto.
-const argv = process.argv.slice(2);
-const urlFlag = argv.indexOf('--url');
-const url = urlFlag === -1 ? LOCALNET_URL : argv[urlFlag + 1];
-const unknownArgs = urlFlag === -1 ? argv : argv.filter((_arg, i) => i !== urlFlag && i !== urlFlag + 1);
-if (url !== LOCALNET_URL || unknownArgs.length > 0) {
-  process.stderr.write(
-    `capture-read-fixtures: solo se captura desde la localnet aislada (${LOCALNET_URL}); ` +
-      `recibido --url ${String(url)}${unknownArgs.length > 0 ? ` y argumentos desconocidos: ${unknownArgs.join(' ')}` : ''}. ` +
-      'No se hizo ningún pedido.\n',
-  );
-  process.exit(2);
-}
+const url = assertLocalnetUrl(process.argv.slice(2), 'capture-read-fixtures');
 
 const { readFile, writeFile, mkdir } = await import('node:fs/promises');
 const { fileURLToPath } = await import('node:url');
@@ -68,17 +56,12 @@ function plain(value) {
 }
 
 const deployment = JSON.parse(await readFile(deploymentPath, 'utf8'));
-if (deployment.network !== 'localnet') {
-  throw new Error(`contracts/deployments/localnet.json declara network ${JSON.stringify(deployment.network)}`);
-}
 const originalPackageId = deployment.originalPackageId;
 const client = new SuiGrpcClient({ network: 'localnet', baseUrl: url });
 
 const { response: serviceInfo } = await client.ledgerService.getServiceInfo({});
 const nodeChainId = toHex(fromBase58(serviceInfo.chainId)).slice(0, 8);
-if (nodeChainId !== deployment.chainId) {
-  throw new Error(`chain id del nodo ${nodeChainId} ≠ chainId del despliegue ${deployment.chainId}: otra génesis`);
-}
+assertDeployment(deployment, nodeChainId);
 say(`nodo ${url}, chain id ${nodeChainId} = despliegue`);
 
 /** Todos los eventos de un tipo del juego, en orden ascendente (localnet: sin poda ni cota necesaria). */
