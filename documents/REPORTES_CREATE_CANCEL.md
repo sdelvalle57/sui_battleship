@@ -82,3 +82,38 @@ Confirmado: BCS de la House = `house.move` (orden de campos; tipo exacto; `Share
 
 ### Recordatorios
 **TASK-4:** `useGame` con `refetchInterval: (q) => gameRefetchInterval(q.state)` + test; M-2 en el `precheck` (relee la House, frena con `houseChangeMessage`, invalida `house`, sin wallet; error transitorio ⇒ `PREFLIGHT_NETWORK_MESSAGE`); v1.3 ("No se pudo preparar la transacción: …"); M-1 candado síncrono; `indexing` se salta con `checkpoint`. **TASK-5:** texto de monto `invalid` que mencione sin espacios ni separador de miles; aviso visible con `balanceUnknown` aunque el formulario sea válido.
+
+## Task completado: HANDOFF_CREATE_CANCEL (v1.3) — TASK-4 (hooks de transacción y lectura)
+
+> Reporte del DEV transcrito por el orquestador (resumido; conteos y exit codes literales).
+
+- Branch @ `053e2a5`, sin commits. En `app/src/hooks/`: `queryKeys.ts` (+`house`, `balance`), nuevos `txInvalidation.ts` (7 tests), `useExecuteTransaction.ts` (24), `useCreateGame.ts` (5), `useCancelGame.ts` + `useRejectGame.ts` (2), `useHouse.ts` + `useSuiBalance.ts` (5); `useGame.ts` con `refetchInterval: (q) => gameRefetchInterval(q.state)` (+2, ahora 10).
+- `useExecuteTransaction`: candado síncrono (M-1) → `precheck` (M-2) → preflight → firma → confirmación por el nodo → indexación (se salta `waitForCheckpoint` con `checkpoint`) → invalidación; todo en la `mutationFn`, sin `useEffect`, nunca lanza al componente.
+- **Recordatorios cumplidos con test:** (1) DL-7: tras `GameNotFoundError` no vuelve a pedir (el test falla con el intervalo fijo); (2) M-2: cambio de House ⇒ `failure` con `houseChangeMessage`, invalida `house`, sin preflight ni wallet; `UNAVAILABLE` ⇒ `PREFLIGHT_NETWORK_MESSAGE`; `feeChanged` tras el éxito; (3) v1.3: "No se pudo preparar la transacción: …" sin abrir la wallet; (4) M-1: dos `execute` en el mismo tick ⇒ una preflight y una wallet (el test falla sin el candado); (5) M-3 (b)/NIT-1: wallet con digest ⇒ `success` o `unconfirmed` según el nodo; confirmación vencida ⇒ `unconfirmed`; nodo `success: false` ⇒ `failure` "Solo quien creó la partida puede cancelarla. (código game/3)" con digest y `cost` 1000294n; `interpret` falla tras éxito ⇒ `success` con `value: null`; (6) indexing según `checkpoint`; abort en preflight también invalida.
+- **Otros:** etapas `preflight → signing → confirming → indexing → done`; invalidaciones exactas por acción (nunca `nodeInfo`/`txInfo`/`publishCheckpoint`/`checkpointTime`/`house`); sin cuenta ⇒ "Conecta tu wallet"; M-3 (a) sin `transactionErrorMessage`; rechazo sin digest; desmontaje durante `confirming` invalida igual; `reset`; a la wallet va el `Transaction` sin construir; hooks finos con resultados de la fixture.
+- **Gates:** `npm ci` 0; firmas 292; audit prod 0; lint 0; typecheck 0; `Test Files 42 passed (42)` / `Tests 577 passed (577)`; build `index-Bhx-WgPL.js` 852.46 kB; `contracts`, `sui/`, `components/`, `pages/`, `providers/`, `package*` sin delta. Greps (claves, rutas, hex, `console`/`any`, `useEffect`; `useDAppKit` fuera de `hooks/`): vacíos.
+- **Desviaciones:** (1) la etapa `indexing` siempre se marca (ahí corren las invalidaciones; se salta solo `waitForCheckpoint`); (2) errores no transitorios del `precheck` ⇒ "No se pudo preparar…"; (3) `isBusy` con `useState` espejo del candado `useRef`; (4) red de seguridad en la `mutationFn` (`unconfirmed` con digest, `failure` sin él); (5) exports adicionales.
+- **Riesgos:** `done` espera la relectura del lobby si está montado (lento en red lenta); cortes 20/30/30 s cubiertos en TASK-2, no en hooks.
+
+## Revisión TASK-4: NO PASA (corrección corta)
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió gates.
+
+Confirmado: SEG-10 en el camino normal (`useExecuteTransaction.ts:91-184`); M-1 síncrono (`:203-207`); DL-6 exacto; M-2; M-3 (a); v1.3; indexación; DL-7; `retry: false`; sin `useEffect`. Desviaciones 1–3 y 5 aceptadas (la 3, `useState` espejo, es necesaria para deshabilitar el botón). Riesgo de `done` tras la relectura del lobby aceptado con condiciones (TASK-5 muestra "Actualizando…"; el smoke mide `confirming`→`done`; si en testnet supera ~3 s, invalidar sin esperar).
+
+| # | Regla | Archivo:Líneas | Problema | Corrección |
+|---|---|---|---|---|
+| 1 | **SEG-10 / M-3 (b)** | `useExecuteTransaction.ts:186-199` | La red de seguridad toma el digest solo del error: si algo lanza después de obtener el digest de la wallet (p. ej. respuesta del nodo mal formada ⇒ `TypeError` en `:158-159`), da `failure` sin digest sobre una tx ya ejecutada (invita a reintentar) | Guardar el digest conocido en un `progress` fuera de `run` y usarlo en la red de seguridad (⇒ `unconfirmed` + invalidación); test: wallet con digest + `confirmTransaction` resuelve `{}` ⇒ `unconfirmed` con ese digest, invalida igual; debe fallar con el código actual |
+
+### Re-revisión del hallazgo 1 de TASK-4: PASA
+
+> Corrección del DEV con el texto literal del MID (`useExecuteTransaction.ts:93`, `:106`, `:154`, `:194-209`); test nuevo (`:356-362`) falla antes (`failure`, `digest: null`, `1 failed | 24 passed (25)`) y pasa después; gate 578 tests en 42 archivos, build sin cambios. **TASK-4 PASA.**
+
+### Recordatorios para TASK-5
+1. **Etapas visibles:** preflight "Verificando…", signing "Confirma en tu wallet", confirming "Esperando a la red…", indexing "Actualizando…". Con `isBusy`, enviar/cancelar/rechazar deshabilitados.
+2. **`TransactionStatus` (DL-12):** `success` con digest, link al explorador (solo testnet) y costo de red; si `indexed: false`, "La lista puede tardar unos segundos en mostrarlo"; `unconfirmed`: "No se pudo confirmar…" con el digest, **sin** "Reintentar"; `failure`: mensaje, y digest y costo si los hay.
+3. **Crear (DL-14, DL-9, M-2):** con `value.created`, navegar al detalle con el aviso en el `state` del router (si es invitación, texto para compartir); con `value === null` o `created === null`, "Partida creada" con el digest, sin navegar; con `feeChanged`, aviso de la comisión guardada.
+4. **Formulario:** límites y comisión de `useHouse`; texto de `invalid` del monto que diga que no lleva espacios ni separador de miles; aviso con `balanceUnknown` aunque sea válido; nota de costo (DL-13) con `GAME_STORAGE_DEPOSIT_MIST` y la reserva de gas.
+5. **Detalle:** "Cancelar" con `canCancel` y "Rechazar" con `canReject` (D-20261102-05); reembolso del `value` (si `null`, sin monto); tras la acción el detalle ya está refrescado.
+6. **Capas:** `useDAppKit` solo en `hooks/`; los componentes usan `useCreateGame`/`useCancelGame`/`useRejectGame`.
+7. **Sin cuenta:** formulario y botones dicen "Conecta tu wallet" antes de intentar nada.
