@@ -63,3 +63,22 @@ Confirmado: builders = `game.move:88-149` (target con `packageId`, sin `sender` 
 
 ### Siguiente paso
 TASK-3 arranca; TASK-4 con la v1.3.
+
+## Task completado: HANDOFF_CREATE_CANCEL (v1.3) — TASK-3 (House, saldo, validación del formulario y predicados)
+
+> Reporte del DEV transcrito por el orquestador (resumido; conteos y exit codes literales).
+
+- Branch @ `0de62f4`, sin commits. Nuevos: `sui/house.ts` (13 tests), `sui/account.ts` (2), `sui/createGame.ts` (23), `sui/gameActions.ts` (11). Extendidos: `sui/ids.ts` (+`parseAddressInput`, helper común; 23 tests, +12) y `sui/gameDetail.ts` (+`gameRefetchInterval`; 13, +5).
+- `house.ts`: parser exacto (tipo, `Shared`, BCS canónico, `0 < min_bet <= max_bet`; `fee_rate` no se valida) + lectura con corte de 10 s. `account.ts`: `fetchSuiBalance` (`bigint`). `createGame.ts`: `CREATE_GAS_RESERVE_MIST` 10 000 000, `GAME_STORAGE_DEPOSIT_MIST` 1 953 200 / 2 196 400, `validateCreateGame` (motivos tipados + `balanceUnknown`), `houseTermsChanges`/`houseChangeMessage` (M-2). `gameActions.ts`: `canCancel`/`canReject`. `gameRefetchInterval` (DL-7).
+- **Tests:** House real de la fixture y malformados/tipo/dueño/invariantes; `min == max` y `fee_rate` 1001 parsean; `fetchHouse` relanza `ObjectError` no transitorio; saldo con corte; validación (vacío, inválido, decimales, límites inclusive, por encima de u64, saldo justo vs uno menos, saldo `null` ⇒ `balanceUnknown`, invitación vacía/recortada/normalizada/inválida, `self_invite` en mayúsculas, errores combinados); textos de cambio de la House; `canCancel`/`canReject` en todos los estados y formatos; `parseAddressInput` (10 casos, `parseObjectIdInput` sin cambios); `gameRefetchInterval` (éxito/`UNAVAILABLE` ⇒ 15 000; errores definitivos ⇒ `false`).
+- **Gates:** `npm ci` 0; firmas 292; audit prod 0; lint 0; typecheck 0; `Test Files 37 passed (37)` / `Tests 532 passed (532)`; build `index-BXteCMr-.js` 852.31 kB; `contracts`/`package*` sin delta. Greps de claves, rutas, hex, `console`, `any`: vacíos.
+- **Desviaciones:** (1) con cambio de comisión y límites a la vez, dos frases y un solo "revisa y vuelve a confirmar"; (2) el monto no se recorta (contrato de `parseSuiToMist`); (3) `balanceUnknown` también con `ok: true`; (4) tipos exportados adicionales.
+
+## Revisión TASK-3: PASA
+
+> Revisión del MID transcrita por el orquestador (resumida). Contrastó con `house.move:28-39`, la fixture y `sui-types.mjs:104-111`; no corrió gates.
+
+Confirmado: BCS de la House = `house.move` (orden de campos; tipo exacto; `Shared`; canónico; `min_bet > 0` y `≤ max_bet`; sin tope de `fee_rate`); límites siempre de la House (inclusive); reserva de gas 0,01 SUI ≈ 2,5× el costo real de crear (3 941 200 MIST) y depósitos de storage = `contracts/README.md:380` y la fixture; `parseObjectIdInput` sin cambio de comportamiento (`normalizeSuiObjectId` = `normalizeSuiAddress`); M-2 con texto exacto; `canCancel`/`canReject` (D-20261102-05) como cortesía de UI; DL-7 cierra el pendiente de #10. Desviaciones 1–4 aceptadas. Sin hallazgos.
+
+### Recordatorios
+**TASK-4:** `useGame` con `refetchInterval: (q) => gameRefetchInterval(q.state)` + test; M-2 en el `precheck` (relee la House, frena con `houseChangeMessage`, invalida `house`, sin wallet; error transitorio ⇒ `PREFLIGHT_NETWORK_MESSAGE`); v1.3 ("No se pudo preparar la transacción: …"); M-1 candado síncrono; `indexing` se salta con `checkpoint`. **TASK-5:** texto de monto `invalid` que mencione sin espacios ni separador de miles; aviso visible con `balanceUnknown` aunque el formulario sea válido.
