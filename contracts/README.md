@@ -78,8 +78,10 @@ Todos `has copy, drop`; tipo completo `<packageId>::house::<Evento>`.
 
 ### Abort codes
 
-Números estables (D-20261030-11 §5): un código publicado no cambia de número ni de significado. Base de
-`app/src/sui/errors.ts` (#11).
+Números estables (D-20261030-11 §5): un código publicado no cambia de número ni de significado. Espejo implementado
+en `app/src/sui/errors.ts` (#11): `ABORT_MESSAGES` da un mensaje en español por **módulo + código**, con el sufijo
+`(código <módulo>/<n>)` (mensajes y fallbacks: `app/README.md`, "Transacciones (#11)"). Un código nuevo se agrega
+aquí y en `ABORT_MESSAGES` en el mismo PR (`agents.md` §5).
 
 | Código | Constante | Condición | Funciones |
 |---|---|---|---|
@@ -251,8 +253,10 @@ vigente de cada partida se lee del objeto.
 
 ### Abort codes
 
-Números estables (D-20261030-11 §5): un código publicado no cambia de número ni de significado. Base de
-`app/src/sui/errors.ts` (#11).
+Números estables (D-20261030-11 §5): un código publicado no cambia de número ni de significado. Espejo implementado
+en `app/src/sui/errors.ts` (#11): `ABORT_MESSAGES` da un mensaje en español por **módulo + código**, con el sufijo
+`(código <módulo>/<n>)` (mensajes y fallbacks: `app/README.md`, "Transacciones (#11)"). Un código nuevo se agrega
+aquí y en `ABORT_MESSAGES` en el mismo PR (`agents.md` §5).
 
 | Código | Constante | Condición | Funciones |
 |---|---|---|---|
@@ -271,8 +275,8 @@ Números estables (D-20261030-11 §5): un código publicado no cambia de número
 `create_game` y `accept_game` también abortan con **`house::EWrongVersion` (3, del módulo `house`)**: en
 `create_game`, en las lecturas de la House (el primer chequeo); en `accept_game`, en el cobro (`add_fees` dentro
 de `collect_pot`), después de todos los chequeos propios y antes del sorteo (ver Versionado del `Game`). El
-número 3 existe en los dos módulos con significados distintos (`house::EWrongVersion`, `game::ENotCreator`): #11
-mapea los aborts por **módulo + código**, nunca solo por número.
+número 3 existe en los dos módulos con significados distintos (`house::EWrongVersion`, `game::ENotCreator`): la app
+mapea los aborts por **módulo + código**, nunca solo por número (`errors.ts`, con test de `house`/3 ≠ `game`/3).
 
 ### Autorización
 
@@ -382,13 +386,15 @@ con invitación y **2439600** resuelta desde abierta (≈ 2682800 desde invitaci
 aceptar, quien firma cobra el rebate de la versión `Pending` del objeto y paga el de la versión `Resolved`, así que
 el depósito sigue inmovilizado en el objeto terminal. Es reversible en una versión futura con una función de borrado
 **restringida al creador** (`sender == creator`), porque el rebate de storage va a quien firma la transacción que
-borra. La UI (#11) muestra ese costo al crear.
+borra. La UI lo muestra al crear (#11): una nota previa con lo medido aquí (`GAME_STORAGE_DEPOSIT_MIST` de
+`app/src/sui/createGame.ts`: 1953200 abierta, 2196400 con invitación) y, tras el éxito, el costo real de red de la
+transacción (cómputo + storage − rebate de `effects.gasUsed`).
 
 ### PTB
 
 - **Crear:** `splitCoins(gas, [monto])` y `create_game(house, coin, opción)` con el `Coin` resultante;
   `opponent` es un `Option<address>` **puro** (`none` para una partida abierta, `some(dirección)` para una
-  invitación). El builder vive en `app/src/sui/` (#11).
+  invitación). El builder vive en `app/src/sui/transactions/game.ts` (#11), igual que los de cancelar y rechazar.
 - **Cancelar / rechazar:** `cancel_game(game)` o `reject_game(game)` con el `Game` compartido; el reembolso
   llega al creador sin pasos extra en el PTB.
 - **Aceptar:** `splitCoins(gas, [bet])` y `accept_game(game, house, coin, random)` con el `Coin` resultante; en
@@ -437,8 +443,9 @@ borra. La UI (#11) muestra ese costo al crear.
   base64), `simulationErrors` (7 casos `{ sender: <rol>, message, executionError }` del `SimulationError` real de
   `build({ client })`: `game` 0 a 6), `executed` (`getTransaction` con efectos, eventos y `objectTypes` de crear abierta,
   crear invitación, cancelar, rechazar y del `cancel_game` fallido; `effects.bcs` y `bcs` de eventos en base64, sin
-  `sender` ni `signatures`) y `cliErrorText` (el texto del abort en formato Rust, igual al `effects.status.error` de
-  `sui client tx-block`). Las simulaciones no firman (`setSender` de una cuenta de la génesis); las direcciones de los
+  `sender` ni `signatures`) y `cliErrorText` (el texto Rust del abort **del nodo**: `description` del error por gRPC,
+  igual al `effects.status.error` de `sui client tx-block`; no es la línea con que la CLI presenta el error al
+  ejecutar, "… aborted within function … with code N", que la app no reconoce porque nunca le llega). Las simulaciones no firman (`setSender` de una cuenta de la génesis); las direcciones de los
   datos son de cuentas efímeras (sin claves).
 - **Recaptura de la fixture de transacciones:** dentro de la localnet aislada, después de las transacciones por CLI de
   `documents/HANDOFF_CREATE_CANCEL.md` (TASK-1: `update_fee_rate` 250; `A` crea `G_OPEN` abierta e invita a `B` en

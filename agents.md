@@ -38,11 +38,13 @@ sui_battleship/
 ├── documents/                # flujo multi-agente, estándares, decisiones, status, planes/handoffs
 ├── contracts/                # paquete Move (Move.toml, Move.lock, README.md, sources/, tests/)
 │   ├── scripts/              # (#7) publish.mjs (publish/record/check), deployment.mjs, tests y fixtures/ de la CLI
-│   ├── fixtures/             # (#10) game-reads.localnet.json: lecturas gRPC reales del Game y sus eventos por variante
+│   ├── fixtures/             # (#10) game-reads.localnet.json: lecturas gRPC reales del Game y sus eventos por variante;
+│   │                         # (#11) game-tx.localnet.json: House, simulaciones fallidas y transacciones ejecutadas reales
 │   ├── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos); lo escribe el script
 │   └── Published.toml        # (#8) lo escribe `sui client publish`: fuente de los datos del paquete
 ├── app/                      # cliente React (Vite + TS + SDK de Sui + wallet kit); guía en app/README.md
-│   └── scripts/              # (#10) capture-read-fixtures.mjs: recaptura de contracts/fixtures/ en la localnet aislada
+│   └── scripts/              # recaptura de contracts/fixtures/ en la localnet aislada: capture-read-fixtures.mjs (#10),
+│                             # capture-tx-fixtures.mjs (#11) y su guarda compartida localnet-guard.mjs (#11: sin SDK ni red)
 ├── package.json              # npm workspaces: ["app"]; engines: Node 26
 ├── package-lock.json         # versiones exactas congeladas (D-20261102-02 (3))
 ├── .npmrc                    # save-exact, engine-strict, min-release-age=7, ignore-scripts
@@ -159,6 +161,11 @@ borradas al cerrar. Nada en `~/.sui/`.
    `sui-start.log`) no se pegan (solo líneas puntuales revisadas antes). Lo que vaya a docs o fixtures sale
    **únicamente** de lecturas de la red local por la CLI (`suic object`, `suic tx-block`) o por `SuiGrpcClient` (D-20261102-02 (1));
    el fullnode de `sui 1.83.0` no sirve JSON-RPC (`POST` a `:9000` → `404`, H-1 de #6, D-20261031-01).
+   **Firmar como una cuenta de la génesis** desde fuera de la CLI (p. ej. `suic ptb … --serialize-signed-transaction`
+   y ejecutar esos bytes por gRPC desde Node para medir el camino de una wallet, S-1 bis de #11): permitido **solo** en
+   esta localnet aislada y con tres condiciones: (1) la firma la hace la CLI bajo el prefijo del paso 3 (`suic …`,
+   regla B4); (2) ningún proceso de Node (sondas, scripts, la app) lee nada de `<SMOKE_DIR>/net`; (3) ninguna clave se
+   imprime ni se pega. Las sondas en Node solo hablan con la red por gRPC.
 7. **Cierre:** `kill "$(cat <SMOKE_DIR>/sui.pid)"` (nunca `pkill`); en otra llamada, confirmar que terminó (`kill -0 "$(cat <SMOKE_DIR>/sui.pid)"` falla) y solo entonces `rm -rf <SMOKE_DIR>` (comprobar que ya no existe);
    `rm -f contracts/deployments/localnet.json` y `rmdir contracts/deployments 2>/dev/null || true` (pertenece a la
    génesis que se borra); sin cargar `env.sh`, `stat`/`ls` de `~/.sui/sui_config/` idénticos a la línea base;
@@ -223,8 +230,9 @@ eventos y códigos de abort. La UI los consume desde un único módulo (`app/src
 |---|---|---|
 | Package ID / object IDs por red | `contracts/deployments/<red>.json` | Lo escribe `contracts/scripts/publish.mjs` (nunca a mano), en el mismo PR que la publicación; `Published.toml` es la fuente de los datos del paquete y la CI verifica la coherencia (`publish.mjs check`). La app lo importa (nunca IDs hardcodeados en componentes) |
 | Firmas y eventos | `contracts/sources/*.move` | Tabla en `contracts/README.md`; cambios = STOP (§6 de FLUJO) |
-| Abort codes | constantes `E*` de cada módulo | Tabla en `contracts/README.md` + mapeo en `app/src/sui/errors.ts` |
+| Abort codes | constantes `E*` de cada módulo | Tabla en `contracts/README.md` + `ABORT_MESSAGES` (módulo + código → mensaje) en `app/src/sui/errors.ts` (#11), con un test por código; un código nuevo entra en los dos en el mismo PR |
 | Layout BCS de `Game` y de sus eventos | `contracts/sources/game.move` | Esquemas en `app/src/sui/game.ts` y `events.ts`; fixtures en `contracts/fixtures/game-reads.localnet.json` (se recapturan si cambia el layout) |
+| Layout BCS de la `House` | `contracts/sources/house.move` | Esquema en `app/src/sui/house.ts` (#11; lo reutiliza #14); fixture en `contracts/fixtures/game-tx.localnet.json` (se recaptura si cambia el layout) |
 | Fórmula de la comisión y del pago | `game.move` (`accept_game`) | `resolutionAmounts` de `app/src/sui/game.ts` = fórmula de la v1 (D-20261030-16 D2/D3). Un upgrade que la cambie conserva la vieja para las partidas resueltas con el código viejo (por versión del `Game` o leyendo `GameResolved`) en el mismo PR. La app no replica `house::MAX_FEE_BPS`; si una vista lo replica (#14), entra en esta tabla |
 
 **Regla:** tras la primera publicación en testnet, un cambio incompatible con upgrade (firma pública,

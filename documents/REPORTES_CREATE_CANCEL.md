@@ -151,3 +151,23 @@ Confirmado: textos honestos (DL-12, SEG-10); límites y comisión de la House (`
 ### Re-revisión de los hallazgos 1 y 2 de TASK-5: PASA
 
 > Correcciones del DEV: `pendingReview` en `CreateGameForm.tsx:86`, `:104`, `:149` y botón "Ya la revisé: crear otra partida" (`:166-168`) → `tx.reset`; regex base58 en `createdNotice.ts:38` y comentario corregido (`:3`). Tests nuevos (`CreateGameForm.test.tsx:233`, `GameDetailPage.test.tsx:114`) fallan antes (`2 failed | 31 passed (33)`; el digest inválido rompía el render del detalle) y pasan después; gate 630 tests en 46 archivos, build 877.90 kB. **TASK-5 PASA.** TASK-6 autorizada con la lista consolidada; baseline STATUS = 630/46, 878 kB.
+
+## Task completado: HANDOFF_CREATE_CANCEL (v1.3) — TASK-6 (docs del ciclo)
+
+> Reporte del DEV transcrito por el orquestador (resumido).
+
+- Branch @ `7894b43`, sin commits; sin código (bundle con el mismo hash que TASK-5). `agents.md` +14, `app/README.md` +170, `contracts/README.md` +27, `documents/STATUS.md` +12 (187+/36−).
+- `app/README.md`: los 8 puntos (mapa de `sui/` y scripts; hooks y tabla de componentes de transacción; sección "Transacciones (#11)" con etapas, nodo como única fuente, "sin confirmar" y bloqueo, indexación con latencias medidas, cortes como topes, M-1, DL-6, `done`; abort codes con sufijo y 6 fallbacks, R-1; formulario; wallet y fondeo bajo `PRE`; dependencias con la nota v1.3; pendientes actualizados). `contracts/README.md`: abort codes espejo en `errors.ts`, storage mostrado en la UI, PTB en `transactions/game.ts`, `cliErrorText` = texto Rust del nodo. `agents.md` §2 (fixture y scripts), §3 paso 6 (firma como cuenta de la génesis con las 3 condiciones), §5 (abort codes con ruta completa; layout BCS de la House). `STATUS.md`: baseline 630/46 por archivo, 878 kB; contratos 83 / 99 / 0 despliegues; fila #11 🚧; D-20261102-05; #35.
+- **Gates:** `npm ci` 0; firmas 292; audit prod 0; lint 0; typecheck 0; `Tests 630 passed (630)` en 46 archivos; build `index-Dg-GHDX5.js` 877.90 kB; `node --test` 99/99; `check` "0 despliegues"; `Move.lock` sin delta. Cierre: `grep "#11/#12\|quedan para #11"` vacío; sin #11 en futuro; greps de claves/rutas/hex vacíos.
+- Desviaciones: (1) 630 en STATUS (medido); (2) archivos de test que cubren dos hooks, aclarado; (3) `sui move` no re-corrido (sin cambios de Move; valores de TASK-1).
+
+## Revisión TASK-6: PASA + revisión del runbook del smoke: OK con 3 ajustes (aplicados por el orquestador)
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió gates.
+
+TASK-6: los 8 puntos de `app/README.md`, `contracts/README.md`, `agents.md` §2/§3/§5 y `STATUS.md` confirmados; criterio de cierre cumplido; números = reportes; desviaciones 1–3 aceptadas; sin hallazgos.
+
+Runbook `SMOKE_CREATE_CANCEL.md`: cubre los criterios del issue y D-20261102-05 (pasos 8, 10, 11, 12, 13, 14, 15, 16, 17, 18); textos y montos = código (`TransactionStatus`, `CreateGameForm`, `GameActions`, `houseChangeMessage`, `ABORT_MESSAGES`); firmas de `update_fee_rate`/`update_bet_limits` = `house.move:98-108`; reglas OK; latencia con `MutationObserver`; paso 17 con ventana real; **paso 18 (`Fetch.failRequest` sobre `GetTransaction`) aceptable**: provoca el caso real (ejecución sin confirmación) solo en el navegador desechable, y la CLI demuestra después que sí se ejecutó. Ajustes aplicados: (1) paso 12, si el 2.º click encuentra el botón ya deshabilitado se anota; (2) paso 13, reconexión del kit con la sesión de `T1`; (3) paso 18, horas del lobby en "—" con `Fetch` activo no son falla.
+
+### Siguiente paso
+Smoke autorizado. Pendientes para el body del PR: #12 (aceptar en DL-6 y `ABORT_MESSAGES`), #14 (House en la invalidación), #15 (878 kB), #17 (wallet de extensión, R-1, latencia de `done` en testnet), #8, #35.
