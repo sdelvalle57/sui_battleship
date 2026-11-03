@@ -166,6 +166,10 @@ borradas al cerrar. Nada en `~/.sui/`.
    esta localnet aislada y con tres condiciones: (1) la firma la hace la CLI bajo el prefijo del paso 3 (`suic …`,
    regla B4); (2) ningún proceso de Node (sondas, scripts, la app) lee nada de `<SMOKE_DIR>/net`; (3) ninguna clave se
    imprime ni se pega. Las sondas en Node solo hablan con la red por gRPC.
+   **Pasos de navegador (🌐):** Chrome headless + CDP con perfil desechable en `<SMOKE_DIR>` (`--user-data-dir`,
+   `HOME`/`XDG_*` aislados, depuración solo en `127.0.0.1`), nunca el navegador ni el perfil del usuario. Con más de
+   una pestaña, cada una se abre con `Target.createTarget({ url, newWindow: true })`, todas visibles, y nunca
+   `Page.bringToFront`: las pestañas de fondo quedan `hidden` y no corren intervalos ni remontajes (regla del smoke de #11).
 7. **Cierre:** `kill "$(cat <SMOKE_DIR>/sui.pid)"` (nunca `pkill`); en otra llamada, confirmar que terminó (`kill -0 "$(cat <SMOKE_DIR>/sui.pid)"` falla) y solo entonces `rm -rf <SMOKE_DIR>` (comprobar que ya no existe);
    `rm -f contracts/deployments/localnet.json` y `rmdir contracts/deployments 2>/dev/null || true` (pertenece a la
    génesis que se borra); sin cargar `env.sh`, `stat`/`ls` de `~/.sui/sui_config/` idénticos a la línea base;
