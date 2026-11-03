@@ -171,3 +171,22 @@ Runbook `SMOKE_CREATE_CANCEL.md`: cubre los criterios del issue y D-20261102-05 
 
 ### Siguiente paso
 Smoke autorizado. Pendientes para el body del PR: #12 (aceptar en DL-6 y `ABORT_MESSAGES`), #14 (House en la invalidación), #15 (878 kB), #17 (wallet de extensión, R-1, latencia de `done` en testnet), #8, #35.
+
+## Smoke del ciclo (`SMOKE_CREATE_CANCEL.md`): PASA 21/21
+
+> Reporte del DEV transcrito por el orquestador (resumido; el detalle por paso está en `documents/SMOKE_CREATE_CANCEL.md`).
+
+- @ `ee9ed28`, localnet aislada (chain `bf6368cb`), variante B, B4 + `smoke_guard`; Chrome headless + CDP con perfil desechable, solo `127.0.0.1:9229`, sin `bringToFront`; dos burners (`X` en `T1`, `Y` en `T2`).
+- Resultados: sin cuenta ⇒ formulario deshabilitado; burner sin fondos ⇒ "Saldo insuficiente…"; fondeo sin recargar; 7 textos de validación sin pedidos; **crear abierta** (2 Simulate / 1 Execute; costo = `gasUsed`; saldo ✓); fila "(tuya)" sin "Actualizar"; **invitación** con texto de compartir, fuera del lobby; **cancelar** con reembolso y "Cancelada" al instante; **M-1** doble click ⇒ 1 Execute; tercero sin botones; abort ejecutado por CLI (`game`/3) no cambia el estado; **M-2** comisión y límites ⇒ alerta sin Simulate/Execute; **rechazar** con reembolso al creador (invitado solo paga gas); **carrera** ⇒ `game`/4 con 1 Simulate y 0 Execute; **"sin confirmar"** a los 30,2 s con el formulario bloqueado y la tx realmente `success` (honesto); build de testnet ⇒ `ConfigError` sin pedidos; cierre completo.
+- **Latencias** (ms): `confirming → done` 1540 / 1525 / 619 / 1518 (crear abierta / invitación / cancelar / rechazar) — casi todo `waitForTransaction` (~0,6 o ~1,5 s según el checkpoint); `indexing` 12–33 ms; `waitForCheckpoint` nunca llamado.
+- **Desviaciones:** (1) `T2` reabierta en ventana propia (`newWindow: true`) porque `T1` quedaba `hidden`; burner `Y` refondeada; sugerencia para futuros runbooks; (2) conteo de pedidos con el reloj de la página; (3) monitor CDP por pestaña y recargas antes de conectar la burner; (4) **fila 3 llenada al final** con los datos anotados durante el paso.
+- Informativos: `GetTransaction` "not found" como `net::ERR_ABORTED` en CDP; hora de `G6` en "—" por el `Fetch` del paso 18 (previsto); `chain-identifier` al 2.º intento; lecturas abortadas por `StrictMode`.
+
+## Revisión del smoke: PASA 21/21
+
+> Revisión del MID transcrita por el orquestador (resumida). No corrió nada.
+
+Criterios del issue con evidencia (pasos 8, 10, 11, 13, 14, 16, 17); M-1 probado directamente (el 2.º click encontró el botón habilitado y lo frenó el candado); M-2; validaciones; `unconfirmed` honesto; build de testnet; cierre. Latencia `confirming → done` 0,6–1,5 s, por debajo de los ~3 s: se mantiene esperar la relectura (testnet en #17).
+
+> Decisión (2026-11-02): desviación 4 (fila 3 llenada al final con datos anotados durante el paso) aceptada; en próximos smokes cada fila se escribe al terminar su paso — MID.
+> Decisión (2026-11-02): regla para runbooks con navegador: con más de una pestaña, cada una con `Target.createTarget({ url, newWindow: true })`, todas visibles, nunca `Page.bringToFront` (las de fondo quedan `hidden` y no corren intervalos ni remontajes). Se registra en `agents.md` §3 en el housekeeping de #11 — MID.
