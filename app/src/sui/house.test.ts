@@ -7,13 +7,7 @@ import { fetchHouse, houseType, parseHouseObject, type HouseObjectInput } from '
 import { isTransientReadError } from './readPolicy';
 import { ReadDataError } from './readErrors';
 
-type FixtureHouse = {
-  objectId: string;
-  type: string;
-  owner: SuiClientTypes.ObjectOwner;
-  content: string;
-  json: { fees_collected: string };
-};
+type FixtureHouse = { objectId: string; type: string; owner: SuiClientTypes.ObjectOwner; content: string };
 type Fixture = { ids: { originalPackageId: string; houseId: string }; house: FixtureHouse };
 const FIXTURE_PATH = '../../../contracts/fixtures/game-tx.localnet.json';
 const fixture = import.meta.glob<Fixture>('../../../contracts/fixtures/game-tx.localnet.json', {
@@ -56,7 +50,8 @@ describe('parseHouseObject', () => {
       id: fixture.ids.houseId,
       version: 1n,
       feeRate: 250,
-      feesCollected: BigInt(HOUSE.json.fees_collected),
+      // Las 3 aceptaciones de la captura de #12 (TASK-1), con comisión 50000 cada una.
+      feesCollected: 150_000n,
       minBet: 1_000_000n,
       maxBet: 50_000_000_000n,
     });

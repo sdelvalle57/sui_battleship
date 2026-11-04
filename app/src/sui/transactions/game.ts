@@ -13,7 +13,10 @@ function assertObjectId(name: string, value: string): void {
   if (!isValidSuiObjectId(value)) throw new Error(`${name} inválido: ${value}`);
 }
 
-function moveTarget(packageId: string, fn: 'create_game' | 'cancel_game' | 'reject_game'): `${string}::${string}::${string}` {
+function moveTarget(
+  packageId: string,
+  fn: 'create_game' | 'cancel_game' | 'reject_game' | 'accept_game',
+): `${string}::${string}::${string}` {
   return `${packageId}::game::${fn}`;
 }
 
@@ -61,4 +64,35 @@ export function buildCancelGameTx({ packageId, gameId }: { packageId: string; ga
 /** Rechazar una invitación pendiente (solo el invitado, D-20261102-05; el contrato lo valida): `reject_game(game)`. */
 export function buildRejectGameTx({ packageId, gameId }: { packageId: string; gameId: string }): Transaction {
   return buildGameCallTx(packageId, gameId, 'reject_game');
+}
+
+/**
+ * Aceptar una partida (DL-1): `splitCoins(gas, [bet])` y `accept_game(game, house, coin, random)`; el contrato iguala la
+ * apuesta exacta, cobra la comisión y paga al ganador en la misma transacción. `bet` sale del `Game` leído y `houseId` de
+ * la config. El `MoveCall` con `Random` (`tx.object.random()`, objeto `0x8`) va **último**: después de un comando que usa
+ * `Random` el nodo solo admite `TransferObjects` o `MergeCoins` y rechaza la transacción antes de ejecutarla (`agents.md`
+ * §7; S-2 de #12). El `splitCoins` previo sí está permitido.
+ */
+export function buildAcceptGameTx({
+  packageId,
+  houseId,
+  gameId,
+  bet,
+}: {
+  packageId: string;
+  houseId: string;
+  gameId: string;
+  bet: bigint;
+}): Transaction {
+  assertObjectId('packageId', packageId);
+  assertObjectId('houseId', houseId);
+  assertObjectId('gameId', gameId);
+  if (bet <= 0n || bet > U64_MAX) throw new Error(`bet fuera de rango (1..U64_MAX): ${String(bet)}`);
+  const tx = new Transaction();
+  const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(bet)]);
+  tx.moveCall({
+    target: moveTarget(packageId, 'accept_game'),
+    arguments: [tx.object(gameId), tx.object(houseId), coin, tx.object.random()],
+  });
+  return tx;
 }

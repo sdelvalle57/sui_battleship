@@ -1,14 +1,27 @@
 import { extractStatusFromEffectsBcs, formatMoveAbortMessage, SimulationError, type SuiClientTypes } from '@mysten/sui/client';
 import { fromBase64, normalizeSuiAddress } from '@mysten/sui/utils';
 import { describe, expect, it } from 'vitest';
-import { ABORT_MESSAGES, abortCodeSuffix, findMoveAbort, transactionErrorMessage, type MoveAbortInfo } from './errors';
+import {
+  ABORT_MESSAGES,
+  abortCodeSuffix,
+  findMoveAbort,
+  RUNTIME_CANCELLED_MESSAGES,
+  runtimeCancellation,
+  transactionErrorMessage,
+  type MoveAbortInfo,
+} from './errors';
 
 type FixtureSimulation = { sender: string; message: string; executionError: SuiClientTypes.ExecutionError };
 type FixtureTx = { digest: string; status: SuiClientTypes.ExecutionStatus; effects: { bcs: string } };
+type FixtureFailed = { $kind: 'FailedTransaction'; FailedTransaction: FixtureTx };
 type Fixture = {
   ids: { packageId: string; originalPackageId: string };
   simulationErrors: Record<string, FixtureSimulation>;
-  executed: { cancelNotCreatorExecuted: { $kind: 'FailedTransaction'; FailedTransaction: FixtureTx } };
+  executed: {
+    cancelNotCreatorExecuted: FixtureFailed;
+    acceptNotPendingExecuted: FixtureFailed;
+    createOpen: { $kind: 'Transaction'; Transaction: FixtureTx };
+  };
   cliErrorText: string;
 };
 const FIXTURE_PATH = '../../../contracts/fixtures/game-tx.localnet.json';
@@ -40,7 +53,12 @@ const CASES: [string, 'game' | 'house', number][] = [
   ['cancelNotPending', 'game', 4],
   ['rejectNotInvited', 'game', 5],
   ['rejectNoInvitation', 'game', 6],
+  ['acceptSelfPlay', 'game', 9],
+  ['acceptNotInvited', 'game', 5],
+  ['acceptNotPending', 'game', 4],
+  ['acceptWrongStake', 'game', 10],
 ];
+const ACCEPT_CASES = CASES.filter(([name]) => name.startsWith('accept'));
 
 describe('ABORT_MESSAGES via transactionErrorMessage', () => {
   it.each([
@@ -91,8 +109,21 @@ describe('abortCodeSuffix (M-5)', () => {
 });
 
 describe('real SimulationError from the fixture', () => {
-  it('has the 7 captured cases', () => {
-    expect(Object.keys(fixture.simulationErrors)).toEqual(expect.arrayContaining(CASES.map(([name]) => name)));
+  it('has the 11 captured cases', () => {
+    expect(Object.keys(fixture.simulationErrors).sort()).toEqual(CASES.map(([name]) => name).sort());
+  });
+
+  it.each(ACCEPT_CASES)('locates the accept abort %s in game::assert_acceptable', (name) => {
+    const sim = fixture.simulationErrors[name];
+    expect(sim?.executionError.$kind).toBe('MoveAbort');
+    expect(sim?.executionError.MoveAbort?.location?.functionName).toBe('assert_acceptable');
+  });
+
+  it('maps acceptNotInvited to game/5, the text of the invitation for another address (D-20261103-02)', () => {
+    const sim = fixture.simulationErrors.acceptNotInvited;
+    if (sim === undefined) throw new Error('falta acceptNotInvited');
+    const error = new SimulationError(sim.message, { executionError: sim.executionError });
+    expect(transactionErrorMessage(error, IDS)).toBe('Esta invitación es para otra dirección. (código game/5)');
   });
 
   it.each(CASES)('maps %s (structured) to %s/%i', (name, module, code) => {
@@ -137,6 +168,25 @@ describe('real executed failure (cancel_game by a non-creator)', () => {
     const text = `Error executing transaction '${failed.FailedTransaction.digest}': 1st command aborted within function '${PKG}::game::cancel_game' at instruction 16 with code 3`;
     expect(findMoveAbort(new Error(text))).toBeNull();
     expect(transactionErrorMessage(new Error(text), IDS)).toBe(`La wallet no completó la operación: ${text}`);
+  });
+});
+
+describe('real executed failure (accept_game on a resolved game)', () => {
+  const failed = fixture.executed.acceptNotPendingExecuted;
+  const expected: MoveAbortInfo = { packageId: PKG, module: 'game', code: '4' };
+  const text = 'La partida ya no está pendiente: se canceló, se rechazó o se aceptó antes. (código game/4)';
+
+  it('is recognized from the gRPC getTransaction result and its status.error', () => {
+    expect(findMoveAbort(failed)).toEqual(expected);
+    expect(findMoveAbort(failed.FailedTransaction.status)).toEqual(expected);
+    expect(transactionErrorMessage(failed, IDS)).toBe(text);
+  });
+
+  it('is recognized from extractStatusFromEffectsBcs of the real effects BCS (the wallet path)', () => {
+    const status = extractStatusFromEffectsBcs(fromBase64(failed.FailedTransaction.effects.bcs));
+    expect(status.success).toBe(false);
+    expect(findMoveAbort(status.error)).toEqual(expected);
+    expect(transactionErrorMessage(status.error, IDS)).toBe(text);
   });
 });
 
@@ -195,8 +245,8 @@ describe('transactionErrorMessage', () => {
   });
 
   it.each([
-    [{ $kind: 'Unknown', message: 'ExecutionCancelledDueToRandomnessUnavailable', Unknown: null }],
-    [{ $kind: 'CongestedObjects', message: 'ExecutionCancelledDueToSharedObjectCongestion', CongestedObjects: { name: 'Congested', objects: [] } }],
+    [{ $kind: 'Unknown', message: 'InsufficientCoinBalance in command 0', command: 0, Unknown: null }],
+    [{ $kind: 'Unknown', message: 'InsufficientGas', Unknown: null }],
   ] as SuiClientTypes.ExecutionError[][])('reports a failure without abort as the network not executing it', (error) => {
     expect(transactionErrorMessage(error, IDS)).toBe(`La red no ejecutó la transacción: ${error.message}`);
     expect(transactionErrorMessage({ success: false, error }, IDS)).toBe(`La red no ejecutó la transacción: ${error.message}`);
@@ -214,5 +264,68 @@ describe('transactionErrorMessage', () => {
     expect(transactionErrorMessage({ code: 4001 }, IDS)).toBe('La wallet no completó la operación (sin detalle del error)');
     expect(transactionErrorMessage(undefined, IDS)).toBe('La wallet no completó la operación (sin detalle del error)');
     expect(transactionErrorMessage(new Error(''), IDS)).toBe('La wallet no completó la operación (sin detalle del error)');
+  });
+});
+
+describe('runtime cancellations (DL-11)', () => {
+  const RANDOMNESS = { $kind: 'Unknown', message: 'ExecutionCancelledDueToRandomnessUnavailable', Unknown: null } as SuiClientTypes.ExecutionError;
+  const RANDOMNESS_RUST = {
+    $kind: 'Unknown',
+    message: 'Certificate is cancelled because RANDOMNESS could not be generated this epoch',
+    Unknown: null,
+  } as SuiClientTypes.ExecutionError;
+  const CONGESTION = {
+    $kind: 'CongestedObjects',
+    message: 'ExecutionCancelledDueToSharedObjectCongestion',
+    CongestedObjects: { name: 'Congested', objects: [] },
+  } as unknown as SuiClientTypes.ExecutionError;
+  /** Un resultado real de la fixture con el estado reemplazado por un fallo con `error`. */
+  const failedLike = (entry: { digest: string }, error: SuiClientTypes.ExecutionError) => ({
+    $kind: 'FailedTransaction',
+    FailedTransaction: { ...entry, status: { success: false, error } },
+  });
+
+  it('maps CongestedObjects to the congestion text', () => {
+    expect(runtimeCancellation(CONGESTION)).toBe('congestion');
+    expect(transactionErrorMessage({ success: false, error: CONGESTION }, IDS)).toBe(RUNTIME_CANCELLED_MESSAGES.congestion);
+    expect(RUNTIME_CANCELLED_MESSAGES.congestion).toBe(
+      'La red canceló la transacción sin ejecutarla (hay congestión en un objeto compartido): no cambió nada salvo el costo de red; intenta de nuevo en unos segundos',
+    );
+  });
+
+  it('maps Unknown with the variant name or the Rust text (any case) to the randomness text', () => {
+    expect(runtimeCancellation(RANDOMNESS)).toBe('randomness');
+    expect(runtimeCancellation(RANDOMNESS_RUST)).toBe('randomness');
+    expect(transactionErrorMessage(RANDOMNESS, IDS)).toBe(RUNTIME_CANCELLED_MESSAGES.randomness);
+    expect(transactionErrorMessage(RANDOMNESS_RUST, IDS)).toBe(RUNTIME_CANCELLED_MESSAGES.randomness);
+    expect(RUNTIME_CANCELLED_MESSAGES.randomness).toBe(
+      'La red canceló la transacción sin ejecutarla (la aleatoriedad de la red todavía no está disponible): no cambió nada salvo el costo de red; intenta de nuevo en unos segundos',
+    );
+  });
+
+  it('gives the same text for a create and an accept failure (neutral to the action)', () => {
+    const create = failedLike(fixture.executed.createOpen.Transaction, RANDOMNESS);
+    const accept = failedLike(fixture.executed.acceptNotPendingExecuted.FailedTransaction, RANDOMNESS);
+    expect(transactionErrorMessage(create, IDS)).toBe(RUNTIME_CANCELLED_MESSAGES.randomness);
+    expect(transactionErrorMessage(accept, IDS)).toBe(RUNTIME_CANCELLED_MESSAGES.randomness);
+    expect(transactionErrorMessage(failedLike(fixture.executed.createOpen.Transaction, CONGESTION), IDS)).toBe(
+      RUNTIME_CANCELLED_MESSAGES.congestion,
+    );
+  });
+
+  it('is not a cancellation for another Unknown, such as InsufficientCoinBalance of S-6 bis', () => {
+    const insufficient = { $kind: 'Unknown', message: 'InsufficientCoinBalance in command 0', command: 0, Unknown: null } as SuiClientTypes.ExecutionError;
+    const sim = new SimulationError('Transaction resolution failed: InsufficientCoinBalance in command 0', { executionError: insufficient });
+    expect(runtimeCancellation(sim)).toBeNull();
+    expect(transactionErrorMessage(sim, IDS)).toBe('La red no ejecutó la transacción: InsufficientCoinBalance in command 0');
+    expect(runtimeCancellation(new Error('randomness could not be generated'))).toBeNull();
+  });
+
+  it('lets an own abort win over a cancellation text in the chain', () => {
+    const abort = new SimulationError('Transaction resolution failed', { executionError: moveAbort('game', 4) });
+    const wrapped = { ...RANDOMNESS, cause: abort };
+    expect(transactionErrorMessage(wrapped, IDS)).toBe(
+      'La partida ya no está pendiente: se canceló, se rechazó o se aceptó antes. (código game/4)',
+    );
   });
 });
