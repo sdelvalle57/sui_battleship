@@ -90,3 +90,35 @@ describe('queryKeys.house and queryKeys.balance', () => {
     expect(queryKeys.balance('localnet', ADDRESS.toUpperCase().replace('0X', '0x'))).toEqual(['sui', 'localnet', 'balance', ADDRESS]);
   });
 });
+
+describe('transactionInvalidations of the House actions (T3-6, H-5 of #14)', () => {
+  const HOUSE_KEY = queryKeys.house('testnet', HOUSE);
+  const HOUSE_CAP = queryKeys.houseCap('testnet', PKG, ADDRESS);
+
+  it.each(['updateFeeRate', 'updateBetLimits'] as const)('%s: resets nothing and invalidates the House and the HouseCap of the account', (kind) => {
+    expect(transactionInvalidations({ kind }, CTX)).toEqual({ reset: [], invalidate: [HOUSE_KEY, HOUSE_CAP] });
+  });
+
+  it('withdrawFees: resets nothing and invalidates the House, the balance (it received the coin) and the HouseCap', () => {
+    expect(transactionInvalidations({ kind: 'withdrawFees' }, CTX)).toEqual({
+      reset: [],
+      invalidate: [HOUSE_KEY, queryKeys.balance('testnet', ADDRESS), HOUSE_CAP],
+    });
+  });
+
+  it.each(['updateFeeRate', 'updateBetLimits', 'withdrawFees'] as const)('%s without account invalidates only the House', (kind) => {
+    expect(transactionInvalidations({ kind }, { ...CTX, address: null })).toEqual({ reset: [], invalidate: [HOUSE_KEY] });
+  });
+
+  it.each(['updateFeeRate', 'updateBetLimits', 'withdrawFees'] as const)('%s never touches games, the lobby, my games or immutable keys', (kind) => {
+    const all = JSON.stringify(transactionInvalidations({ kind }, CTX));
+    for (const key of ['lobby', 'game', 'myGames', 'nodeInfo', 'txInfo', 'publishCheckpoint', 'checkpointTime']) {
+      expect(all).not.toContain(`"${key}"`);
+    }
+  });
+
+  it('normalizes the account in the HouseCap key', () => {
+    const { invalidate } = transactionInvalidations({ kind: 'updateFeeRate' }, { ...CTX, address: ADDRESS.toUpperCase().replace('0X', '0x') });
+    expect(invalidate).toEqual([HOUSE_KEY, HOUSE_CAP]);
+  });
+});

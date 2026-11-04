@@ -1,6 +1,7 @@
 import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
 import { SimulationError, type SuiClientTypes } from '@mysten/sui/client';
 import { RpcError, type SuiGrpcClient } from '@mysten/sui/grpc';
+import type { Transaction } from '@mysten/sui/transactions';
 import { normalizeSuiAddress } from '@mysten/sui/utils';
 import { fromBase64 } from '@mysten/sui/utils';
 import { QueryClient } from '@tanstack/react-query';
@@ -103,8 +104,21 @@ function input(action: TxAction = { kind: 'create' }, overrides: Partial<Execute
     ...overrides,
   };
 }
-/** Objetivo de la vista para la acción de la entrada (crear o la partida). */
-const targetOf = (action: TxAction): TxTarget => (action.kind === 'create' ? { kind: 'create' } : { kind: 'game', gameId: action.gameId });
+/** Objetivo de la vista para la acción de la entrada: crear, la partida o la House (#14). */
+function targetOf(action: TxAction): TxTarget {
+  switch (action.kind) {
+    case 'create':
+      return { kind: 'create' };
+    case 'cancel':
+    case 'reject':
+    case 'accept':
+      return { kind: 'game', gameId: action.gameId };
+    case 'updateFeeRate':
+    case 'updateBetLimits':
+    case 'withdrawFees':
+      return { kind: 'house' };
+  }
+}
 /** El hook con la vista que lo usa (T3-15 (1)): `target` es la fuente de bloqueo y del "sin confirmar". */
 function render(action: TxAction = { kind: 'create' }) {
   return renderHook(
@@ -655,5 +669,45 @@ describe('useExecuteTransaction: account switch (MINOR-1 of #12, DL-11 of #13)',
     await runToOutcome();
     expect(walletCall(0).account).toBe(ACCOUNT_A);
     expect(walletCall(0).transaction.getData().sender).toBeNull();
+  });
+});
+
+describe('useExecuteTransaction: sender for build and precheck (T3-10, D-5 of #14)', () => {
+  type Account = NonNullable<ReturnType<typeof useCurrentAccount>>;
+  const OTHER = `0x${'e'.repeat(64)}`;
+  const HOUSE_ACTION: TxAction = { kind: 'updateFeeRate' };
+
+  it('passes the address of the click account to precheck and to both build calls, also when the wallet switches before the end', async () => {
+    const preflight = deferred<Uint8Array>();
+    vi.mocked(preflightTransaction).mockReturnValueOnce(preflight.promise);
+    const build = vi.fn<(sender: string) => Transaction>(() => buildCancelGameTx({ packageId: CONFIG.packageId, gameId: fixture.ids.games.open }));
+    const precheck = vi.fn<(signal: AbortSignal, sender: string) => Promise<null>>(() => Promise.resolve(null));
+    const hook = render(HOUSE_ACTION);
+    act(() => {
+      hook.result.current.execute(input(HOUSE_ACTION, { build, precheck }));
+    });
+    await waitFor(() => {
+      expect(preflightTransaction).toHaveBeenCalled();
+    });
+    vi.mocked(useCurrentAccount).mockReturnValue({ address: OTHER } as Account);
+    hook.rerender();
+    await act(async () => {
+      preflight.resolve(new Uint8Array());
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(queryClient.isMutating()).toBe(0);
+    });
+    expect(precheck).toHaveBeenCalledTimes(1);
+    expect(precheck.mock.calls[0]?.[0]).toBeInstanceOf(AbortSignal);
+    expect(precheck.mock.calls[0]?.[1]).toBe(SENDER);
+    expect(build.mock.calls.map((call) => call[0])).toEqual([SENDER, SENDER]);
+    expect(signAndExecuteTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs a House action on the house target with the H-5 invalidations of the click account', async () => {
+    await runToOutcome(input(HOUSE_ACTION));
+    expect(resetKeys()).toEqual([]);
+    expect(invalidatedKeys()).toEqual([queryKeys.house('localnet', CONFIG.houseId), queryKeys.houseCap('localnet', PKG, SENDER)]);
   });
 });

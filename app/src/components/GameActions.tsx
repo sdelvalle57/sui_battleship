@@ -44,6 +44,9 @@ function adoptedStatus(adopted: AdoptedTx, address: string | null): { outcome: T
     case 'accept':
       return { outcome: adopted.outcome, text: acceptedText(adopted.outcome.kind === 'success' ? adopted.outcome.value : null, address) };
     case 'create':
+    case 'updateFeeRate':
+    case 'updateBetLimits':
+    case 'withdrawFees':
       return null;
   }
 }

@@ -1122,3 +1122,345 @@ Ninguna nueva.
 ### Riesgos / pendientes
 
 Ninguno nuevo. Lo de TASK-4 queda en la frase corregida de arriba.
+
+## Task completado: HANDOFF_HOUSE_ADMIN — TASK-3
+
+### Branch (con SHA corto del HEAD)
+
+`feature/issue-14-house-admin` @ `7070c0d` (handoff v1.3; sin commits del DEV).
+
+### Archivos modificados/creados
+
+- Código:
+  - `app/src/hooks/txSession.ts`;
+  - `app/src/hooks/queryKeys.ts`;
+  - `app/src/hooks/txInvalidation.ts`;
+  - `app/src/hooks/useTxTarget.ts`;
+  - `app/src/hooks/useExecuteTransaction.ts` (3 líneas);
+  - `app/src/components/GameActions.tsx` (3 líneas).
+- Tests (solo casos agregados, salvo el helper de la desviación 1):
+  - `app/src/hooks/txSession.test.ts`;
+  - `app/src/hooks/txInvalidation.test.ts`;
+  - `app/src/hooks/useTxTarget.test.tsx`;
+  - `app/src/hooks/useExecuteTransaction.test.tsx`.
+- No cambian:
+  - `sui/`, cuyos tipos de eventos solo se importan como `import type`;
+  - `useMyGames.ts` y `CreateGameForm.tsx`;
+  - las cuatro acciones de partidas. Siguen pasando `build: () => …` y `precheck: async (signal) => …`, que TS acepta como
+    `(sender) => …` / `(signal, sender) => …`.
+
+### Qué se implementó (3 líneas máx)
+
+- La máquina común reconoce el objetivo `house` y las acciones `updateFeeRate`/`updateBetLimits`/`withdrawFees` como
+  propias, lo que cierra NIT-3.
+- `TX_ACTION_KINDS` (`satisfies`) y `TxValueMap` quedan atados a `TxAction['kind']`. Usan `switch` exhaustivos sin
+  `default`: `actionGameId` para `toTxGameEntry`, `txTarget`, la normalización de `useTxTarget`, la invalidación y
+  `adoptedStatus`.
+- `ExecuteInput` pasa a `build(sender)` y `precheck(signal, sender)`, con la cuenta del clic.
+- La invalidación de las tres acciones sigue H-5.
+
+### Tests y gates (output pegado, por área tocada)
+
+- Agregados (19 tests; 1049 → 1068, mismos 60 archivos):
+  - `txSession.test.ts` (5):
+    - T3-2: las tres acciones se reconocen y `migrate` se rechaza;
+    - T3-3: `updateFeeRate` propia en curso sobre `house`, proyectada con `toTxEntry` y la clave real, da
+      `inFlightForeign: false` y `notice: null`;
+    - T3-4: `withdrawFees` ajena terminada después de montar da `adopted` con `action: 'withdrawFees'` y su `outcome`;
+    - T3-5: las tres dan `gameId: null` y `liveTxGameIds` queda vacío;
+    - T3-7: `txTarget` de `house` da `[…, 'house']`, con `hashKey` distinto del de `create`; `houseCap` normaliza `0xA` y
+      las mayúsculas.
+  - `txInvalidation.test.ts` (10), T3-6:
+    - `updateFeeRate`/`updateBetLimits` ⇒ `{ reset: [], invalidate: [house, houseCap] }`;
+    - `withdrawFees` ⇒ `[house, balance, houseCap]`, en ese orden;
+    - sin cuenta, las tres ⇒ solo `[house]`;
+    - ninguna toca `lobby`, `game`, `myGames` ni claves inmutables;
+    - `houseCap` va con la cuenta normalizada.
+
+    Los tests viejos de `create`/`cancel`/`reject`/`accept` pasan sin tocarlos.
+  - `useTxTarget.test.tsx` (2):
+    - T3-8: `view.key` termina en `'house'`, con `target` `{ kind: 'house' }`, la misma `accountKey` y otro `targetHash`
+      que `create`;
+    - T3-9: un `updateFeeRate` del objetivo `house` queda "sin confirmar" (por la máquina real, con
+      `confirmTransaction` rechazado). La vista `create` montada después tiene `unconfirmed: null`, `notice: null` y
+      `busy: false`; otra vista `house` sí lo ve (`{ digest }`).
+  - `useExecuteTransaction.test.tsx` (2):
+    - T3-10: `precheck` recibe `(AbortSignal, cuenta del clic)` y las **dos** llamadas a `build` reciben la cuenta del clic,
+      aunque la wallet pasa a otra cuenta durante la preflight;
+    - además, una acción de la House corre sobre el objetivo `house` y la máquina invalida exactamente
+      `[house, houseCap]` de la cuenta del clic, sin reset.
+- **T3-1** (pruebas locales sin commitear, una por vez sobre `txSession.ts`, con `npm run typecheck -w app` y restauración
+  verificada por SHA-1 `OK` y 0 errores al final):
+
+  ```text
+  === prueba 1 (quitar withdrawFees de TX_ACTION_KINDS)
+  src/hooks/txSession.ts(156,3): error TS1360: Type '{ create: true; cancel: true; reject: true; accept: true; updateFeeRate: true; updateBetLimits: true; }' does not satisfy the expected type 'Record<"create" | "cancel" | "reject" | "accept" | "updateFeeRate" | "updateBetLimits" | "withdrawFees", true>'.
+  npm error Lifecycle script `typecheck` failed with error:
+  === prueba 2 (quitar withdrawFees de TxValueMap)
+  src/hooks/txSession.ts(121,58): error TS2536: Type 'K' cannot be used to index type 'TxValueMap'.
+  npm error Lifecycle script `typecheck` failed with error:
+  === prueba 3 (quitar el case 'accept' de actionGameId, la función de gameId de toTxGameEntry)
+  src/hooks/txSession.ts(223,42): error TS2366: Function lacks ending return statement and return type does not include 'undefined'.
+  npm error Lifecycle script `typecheck` failed with error:
+  app/src/hooks/txSession.ts: OK
+  0
+  ```
+
+- **T3-11:** en los cuatro archivos de tests viejos el diff solo agrega casos. La única excepción es el helper `targetOf`
+  de `useExecuteTransaction.test.tsx` (desviación 1), que no es una aserción. Las 290 pruebas previas de `hooks/` y
+  `components/` pasan sin cambios: la suite de esas carpetas pasa de 290 a 309.
+- `grep -n "from './" app/src/hooks/txSession.ts`: vacío.
+- Contracts: no aplica. `git diff --exit-code -- contracts/ app/src/sui/` y las dependencias salen con exit 0 (abajo).
+
+**Gate de la app** (desde `<repo>`, con `export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH`; output completo
+sobre el árbol entregado):
+
+```text
+$ node --version
+v26.13.0
+$ npm --version
+11.20.0
+$ npm ci
+
+added 293 packages, and audited 295 packages in 8s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[exit=0]
+$ npm audit signatures
+audited 292 packages in 7s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+[exit=0]
+$ npm audit --omit=dev --audit-level=high
+found 0 vulnerabilities
+[exit=0]
+$ npm run lint -w app
+
+> lint
+> eslint . --max-warnings 0
+
+[exit=0]
+$ npm run typecheck -w app
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+[exit=0]
+$ npm test -w app
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  60 passed (60)
+      Tests  1068 passed (1068)
+   Start at  03:49:54
+   Duration  21.16s (environment 58%, tests 12%, import 10%, transform 10%, setup 9%)
+
+Environment  jsdom was created 60 times · 116.87s total, 58% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+[exit=0]
+$ VITE_SUI_NETWORK=testnet npm run build -w app
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 596 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-Dw47nO8e.js   902.36 kB │ gzip: 273.84 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 424ms
+[exit=0]
+$ git status --porcelain --untracked-files=all
+ M app/src/components/GameActions.tsx
+ M app/src/hooks/queryKeys.ts
+ M app/src/hooks/txInvalidation.test.ts
+ M app/src/hooks/txInvalidation.ts
+ M app/src/hooks/txSession.test.ts
+ M app/src/hooks/txSession.ts
+ M app/src/hooks/useExecuteTransaction.test.tsx
+ M app/src/hooks/useExecuteTransaction.ts
+ M app/src/hooks/useTxTarget.test.tsx
+ M app/src/hooks/useTxTarget.ts
+$ git diff --exit-code -- contracts/ app/src/sui/ package.json app/package.json package-lock.json
+[exit=0]
+```
+
+- **Build:** `index-*.js` pasa de 901.53 a **902.36 kB** (273.65 → 273.84 kB gzip), por el código nuevo de la máquina, que
+  la app ya importa. Ahí entran los tipos de `ACTION_KINDS`, `actionGameId`, los `switch` y las filas de H-5. El aviso de
+  chunk mayor de 500 kB es el de siempre (#15).
+- **Dependencias:** sin delta (SEG-8).
+- **Lint:** 0, sin `eslint-disable`; tampoco hay `useRef`/`useEffect` nuevos.
+- **Sincronización:** la tabla de contrato de `contracts/README.md` y `app/src/sui/` no aplican (no cambia el contrato ni
+  `sui/`).
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+
+No aplica: sin localnet. No toqué procesos ni puertos de `-issue15`.
+
+### Desviaciones del handoff
+
+1. - Qué cambió: el helper `targetOf` de `useExecuteTransaction.test.tsx` pasa de un ternario a un `switch` exhaustivo
+     (`create` ⇒ `create`; `cancel`/`reject`/`accept` ⇒ `game`; las tres de la House ⇒ `house`). Es una migración
+     declarada en un helper; ninguna aserción cambia.
+   - Por qué: el ternario suponía `gameId` en toda acción que no fuera `create` (el mismo supuesto que V-9 señalaba en
+     `toTxGameEntry`). Con las acciones nuevas, el `typecheck` daba rojo (TS2339 en la línea 107 del test).
+   - Verificación extra realizada: los tests viejos que usan `render(action)` dan los mismos objetivos para las acciones
+     de partidas y pasan sin cambios. T3-10 lo usa con `updateFeeRate` ⇒ `house`.
+2. - Qué cambió: en `useTxTarget`, el `switch` exhaustivo vive en una función pura `normalizedTarget(kind, gameId)` que
+     se llama dentro del `useMemo`, con dependencias primitivas (`network`, `address`, `kind`, `gameId`, `viewId`).
+     `gameId` se normaliza fuera, como antes. El `case 'game'` lanza si `gameId` es `null`, algo inalcanzable.
+   - Por qué: la regla `react-hooks/exhaustive-deps` (warning; con `--max-warnings 0` cuenta como error) no deja usar
+     dentro del `useMemo` un objetivo calculado fuera sin ponerlo en las dependencias. Si se pone, la vista se
+     recalcula en cada render, porque los llamadores pasan un objeto literal. TS no correlaciona `kind` y `gameId`
+     sueltos, y la guarda cubre ese hueco sin un `default`.
+   - Verificación extra realizada: T3-8 y T3-9; los tests de identidad de vista existentes pasan. Si se quita un `case`,
+     TS2366, como en la prueba 3 de T3-1.
+3. - Qué cambió:
+     - `queryKeys.txTarget` pasa de un ternario con tuplas `as const` a una función con `switch` y tipo de retorno
+       explícito `QueryKey`;
+     - en `actionGameId`, `create` y las tres de la House tienen un `case` propio cada una (`return null`), tal como pide
+       §3.1, aunque se podrían agrupar.
+   - Por qué: el tipo de retorno explícito es lo que hace que un `case` faltante dé TS2366. Nadie usaba la tupla exacta
+     (`TxView.key` ya es `QueryKey`).
+   - Verificación extra realizada: los tests viejos de `txTarget` pasan; typecheck 0.
+4. - Qué cambió: en `transactionInvalidations`, el `queryKeys.house(…)` de `accept` pasa a una constante local `house`,
+     compartida con las acciones de la House. Es el mismo valor.
+   - Por qué: evitar la repetición (LIM-5).
+   - Verificación extra realizada: el test viejo de `accept` pasa sin tocarlo.
+
+### Riesgos / pendientes
+
+- Una acción de la House adoptada nunca llega a `GameActions`: la adopción exige el mismo objetivo, y la vista de partida
+  usa `game`. Los tres `case` nuevos de `adoptedStatus` existen solo por la exhaustividad. TASK-5 tiene que dar el texto
+  adoptado en el panel.
+- El retiro todavía no usa `build(sender)`: lo arma TASK-4 (`useWithdrawFees`). T3-10 fija que la máquina pasa la cuenta
+  del clic.
+
+### Documentación
+
+- READMEs / `agents.md` actualizados: no aplica en TASK-3. TASK-6 documenta:
+  - el objetivo `house`;
+  - las acciones nuevas;
+  - `build(sender)`/`precheck(signal, sender)`;
+  - la tabla de invalidación de H-5 en `app/README.md`.
+- Snippet propuesto para `documents/STATUS.md` (fila de #14):
+
+  > #14 TASK-3 ✅ (2026-11-04): máquina de transacciones con el objetivo `house` y las acciones `updateFeeRate`,
+  > `updateBetLimits` y `withdrawFees` (NIT-3 de #12 cerrado): `TX_ACTION_KINDS satisfies Record<TxAction['kind'], true>`
+  > y `TxValueMap` (una acción sin su entrada rompe el `typecheck`), `switch` exhaustivos sin `default` en
+  > `toTxGameEntry`, `txTarget`, `useTxTarget`, la invalidación (H-5) y `adoptedStatus`; `build(sender)` y
+  > `precheck(signal, sender)` con la cuenta del clic. App 1068 tests en 60 archivos (+19), build 902.36 kB; lint 0.
+
+---
+
+## Revisión TASK-3: PASA
+
+> MID, 2026-11-04. Revisado contra el diff real (`txSession.ts`, `queryKeys.ts`, `txInvalidation.ts`, `useTxTarget.ts`,
+> `useExecuteTransaction.ts`, `GameActions.tsx` y los cuatro archivos de tests, sin commitear sobre `7070c0d`) y el output
+> pegado. No corrí gates.
+
+**Checklist de §5:**
+
+- **Implementa lo pedido (D-5, H-4, H-5, MINOR-2/3 del plan y del handoff).**
+  - `TxAction` suma las tres acciones sin `gameId`; `TxTarget` suma `house` y `HouseTarget`.
+  - `TX_ACTION_KINDS … satisfies Record<TxAction['kind'], true>` y `ACTION_KINDS` derivado con `Object.keys`.
+    `TxValueByAction = { [K in TxAction['kind']]: TxValueMap[K] }` sobre un `TxValueMap` no exportado. T3-1 muestra las
+    tres roturas reales: TS1360 (`satisfies`), TS2536 (`TxValueMap`) y TS2366 (`actionGameId`), con la restauración
+    verificada.
+  - `actionGameId` con un `case` por acción, sin `default` y retorno `string | null`; `toTxGameEntry` la usa.
+  - `queryKeys.houseCap` con la dirección normalizada; `txTarget` con `switch` y retorno `QueryKey` (desviación 3).
+  - `useExecuteTransaction`: solo cambian las tres llamadas (`precheck(signal, sender)` y `build(sender)` en la preflight y
+    en la firma), con el `sender` que `run` ya capturaba.
+  - `GameActions.adoptedStatus`: las tres de la House ⇒ `null`.
+- **Regresión de #11-#13: intacta.**
+  - **V-8 (candado en el mismo tick):** `execute` no cambia (`isMutating(accountKey)`, el "sin confirmar" del objetivo y
+    `mutateAsync` en el mismo tick).
+  - **SEG-10:** el resultado sigue saliendo solo de la `mutationFn` después de `classifyExecution`; `interpret` no cambió de
+    firma ni de lugar.
+  - **H-5/H-6 de "Mis partidas":** `toTxGameEntry` da el mismo `gameId` que antes para `cancel`/`reject`/`accept` y `null`
+    para `create` (antes, el ternario; ahora `actionGameId`); `liveTxGameIds` y `useMyGames` no cambian, y las de la House
+    dan `null` (T3-5).
+  - **Adopción:** `mountSnapshot` y `deriveTargetState` no cambian; el cast a `AdoptedTx` ahora abarca las acciones nuevas
+    por el tipo derivado. `CreateGameForm.tsx:88` sigue filtrando por `action === 'create'`, y el objetivo `house` tiene otra
+    clave, así que un "sin confirmar" de la House no bloquea ni se adopta en el formulario (T3-9, con la máquina real).
+    Busqué en `app/src` otros chequeos no exhaustivos de `action.kind`/`target.kind`: no hay.
+  - **Tests viejos:** el diff de los cuatro archivos solo agrega casos; la única línea quitada es el helper `targetOf`
+    (desviación 1), no una aserción. 290 → 309 en `hooks/` + `components/`.
+- **Tabla de invalidación (H-5), exacta:** `txInvalidation.ts:38-41`. `updateFeeRate`/`updateBetLimits` ⇒ `{ reset: [],
+  invalidate: [house, ...houseCap] }`; `withdrawFees` ⇒ `[house, ...balance, ...houseCap]`, en ese orden; sin cuenta, solo
+  `[house]`; nunca `lobby`, `game`, `myGames` ni claves inmutables (T3-6, 10 casos). `accept` conserva su lista con la misma
+  clave `house` (desviación 4) y su test viejo pasa sin tocarlo.
+- **Desviación 2 (`throw` en `normalizedTarget`): no es un `default` disfrazado.** `normalizedTarget(kind, gameId):
+  TxTarget` (`useTxTarget.ts:34-45`) tiene un `case` por cada `TxTarget['kind']`, ningún `default` y retorno explícito:
+  un objetivo nuevo sin su `case` da TS2366 igual que `actionGameId`. El `throw` está **dentro** de `case 'game'` y solo
+  estrecha el tipo de `gameId`, que es `null` únicamente cuando `kind !== 'game'` (`:81`, `normalizeSuiObjectId` siempre
+  devuelve un string): es inalcanzable, no captura ningún `kind`. El motivo (deps primitivas para `exhaustive-deps` sin
+  recalcular la vista por el objeto literal del llamador, M-5) es correcto.
+- **Capas y LIM.** `txSession.ts` sigue sin importar nada de `./` (grep vacío) e importa de `sui/houseAdmin` solo tipos. Lint
+  0 sin `eslint-disable`, sin `useRef`/`useEffect` nuevos. Desviaciones 1, 3 y 4 aceptadas (la 1 era obligatoria: el
+  ternario rompía el `typecheck` con las acciones nuevas).
+- **Tests y gates.** +19 (1068 en 60 archivos); typecheck 0; build 902.36 kB (+0,83 kB); `contracts/`, `sui/` y
+  dependencias sin delta. T3-2..T3-11 presentes con los nombres del handoff.
+
+### Hallazgos
+
+Ninguno.
+
+**Notas para los tasks siguientes (no son hallazgos):**
+- TASK-5: el resultado **adoptado** de una acción de la House solo puede verse en el panel (mismo objetivo `house`);
+  `adoptedStatus` de `GameActions` devuelve `null` por exhaustividad. T5-12 lo cubre.
+- TASK-4: `useWithdrawFees` es el primer consumidor de `build(sender)`; T4-13 fija que el `recipient` es la cuenta del clic.
+
+### Siguiente paso: TASK-4 autorizado (handoff v1.3)
+
+### Mensaje de commit propuesto
+
+```
+feat(app): extend the transaction machine with the House target (#14)
+
+TASK-3 of the House admin panel, closes NIT-3 of #12: house target and
+the updateFeeRate, updateBetLimits and withdrawFees actions recognized
+as own mutations. Action kinds and result values are tied to
+TxAction['kind'] (satisfies and a mapped type), and toTxGameEntry,
+txTarget, useTxTarget, the invalidation table and adoptedStatus use
+exhaustive switches without default. ExecuteInput passes the click
+account to build(sender) and precheck(signal, sender). House actions
+reset nothing and invalidate the House and the account HouseCap (and
+the balance on withdraw).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+### Snippet para STATUS.md
+
+> #14 TASK-3 ✅ (2026-11-04, revisión MID PASA): máquina con el objetivo `house` y las acciones `updateFeeRate`,
+> `updateBetLimits`, `withdrawFees` (NIT-3 de #12 cerrado); `satisfies` + `TxValueMap` y `switch` exhaustivos sin `default`;
+> `build(sender)`/`precheck(signal, sender)`; invalidación H-5. App 1068 tests en 60 archivos (+19), build 902.36 kB.
