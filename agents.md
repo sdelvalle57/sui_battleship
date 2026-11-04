@@ -29,8 +29,9 @@ se citan como `#N`.
 **Layout objetivo (D-20261030-03)** — `contracts/`, `package.json` y `.nvmrc` existen desde #2;
 `contracts/tests/` y `contracts/README.md` desde #4; `.github/workflows/` desde #3 (`ci.yml`: job
 `contracts`; el job `app` desde #9); `contracts/scripts/` desde #7; `app/`, `.npmrc` y `package-lock.json` desde #9; `contracts/fixtures/` y
-`app/scripts/` desde #10 (D-20261031-01); `contracts/deployments/` y `contracts/Published.toml` (los escribe la primera
-publicación en testnet, #8) llegan con su issue:
+`app/scripts/` desde #10 (D-20261031-01); `Dockerfile`, `.dockerignore`, `app/Caddyfile`, `app/public/` y
+`app/scripts/check-deploy-image.sh` desde #15; `contracts/deployments/` y `contracts/Published.toml` (los escribe la
+primera publicación en testnet, #8) llegan con su issue:
 
 ```
 sui_battleship/
@@ -46,14 +47,20 @@ sui_battleship/
 │   ├── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos); lo escribe el script
 │   └── Published.toml        # (#8) lo escribe `sui client publish`: fuente de los datos del paquete
 ├── app/                      # cliente React (Vite + TS + SDK de Sui + wallet kit); guía en app/README.md
+│   ├── Caddyfile             # (#15) servidor de la imagen de Railway: CSP y cabeceras (app/README.md, "Despliegue")
+│   ├── public/               # (#15) estáticos que Vite copia tal cual a la raíz de dist/: favicon.svg
 │   └── scripts/              # recaptura de contracts/fixtures/ en la localnet aislada: capture-read-fixtures.mjs (#10),
 │                             # capture-tx-fixtures.mjs (#11), capture-house-fixtures.mjs (#14) y su guarda compartida
-│                             # localnet-guard.mjs (#11: sin SDK ni red)
+│                             # localnet-guard.mjs (#11: sin SDK ni red);
+│                             # check-deploy-image.sh (#15): chequeo de la imagen de Railway (job deploy-image y local)
+├── Dockerfile                # (#15) imagen de Railway: build de testnet + Caddy; sin testnet.json no se construye
+├── .dockerignore             # (#15) contexto en lista blanca (sin localnet.json, .env*, node_modules ni dist)
 ├── package.json              # npm workspaces: ["app"]; engines: Node 26
 ├── package-lock.json         # versiones exactas congeladas (D-20261102-02 (3))
 ├── .npmrc                    # save-exact, engine-strict, min-release-age=7, ignore-scripts
 ├── .nvmrc                    # versión de Node (PROY-17)
-└── .github/workflows/        # ci.yml: jobs contracts (#3) y app (#9), framework-drift informativo
+└── .github/workflows/        # ci.yml: jobs contracts (#3), app (#9) y deploy-image (#15, no requerido); framework-drift
+                              # informativo
 ```
 
 | Área | Carpeta | Stack |
@@ -208,9 +215,17 @@ VITE_SUI_NETWORK=testnet npm run build -w app   # build de testnet
 y al final `git status --porcelain --untracked-files=all` vacío. Desarrollo: `npm run dev -w app` con
 `VITE_SUI_NETWORK` (`app/README.md`). Procedimiento ante un aviso de seguridad: `app/README.md`.
 
+Imagen de Railway (#15):
+- el job `deploy-image` corre `bash app/scripts/check-deploy-image.sh . 8080`. **No es requerido**;
+- en local, el mismo script con un puerto libre: `bash app/scripts/check-deploy-image.sh . 8090`;
+- el camino depende de que exista `contracts/deployments/testnet.json`: sin él, la imagen tiene que negarse a
+  construirse; con él, se construye y se verifican las cabeceras;
+- detalle, actionlint (`-no-color`) y limpieza de Docker por línea base: `app/README.md`, "Despliegue (Railway)".
+
 Gate completo = el del workflow de CI: job `contracts` (build, lint y test con `--warnings-are-errors`,
 `Move.lock` intacto, cero claves, `node --test` y `check` de los scripts) y job `app` (los steps de arriba); ambos
-bloquean el merge (PROY-18). El job `framework-drift` es informativo (H13) y no condiciona el merge.
+bloquean el merge (PROY-18). Los jobs `framework-drift` (informativo, H13) y `deploy-image` (#15) no condicionan el
+merge.
 
 ## 4. Arquitectura de Runtime
 
@@ -385,7 +400,8 @@ testnet con una wallet real.
   expone a la extensión; la alternativa es `transfer_house_cap` a la wallet del panel. Decisión del owner (N-3).
 - **Post-publicación (#8):** la House nace con fee 0 (D-20261030-11); `update_fee_rate` antes de anunciar el
   juego, o las partidas creadas antes quedan con comisión 0 para siempre.
-- **App:** hosting estático (por definir en el backlog).
+- **App:** Railway (D-20261104-01, D-20261104-03): imagen del `Dockerfile` de la raíz (build de testnet + Caddy con
+  CSP); el owner conecta el servicio, activa *Wait for CI* y publica; sin `testnet.json` la imagen no se construye.
 - **Mainnet:** fuera de alcance sin decisión registrada.
 
 ## 13. Checklist pre-entrega
