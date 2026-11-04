@@ -1,8 +1,32 @@
 # HANDOFF_TESTNET_PUBLISH
 
 > Plan: — (chore; hace de plan la revisión de pre-vuelo del MAYOR, `documents/REVISION_PREVUELO_TESTNET.md` §2.4, §3.3 y §4,
-> veredicto APTO CON PRE-REQUISITOS) | Issue: #8 | Branch: `feature/issue-8-testnet-publish` | **Versión: v1** |
-> Fecha: 2026-11-03 | Autor: MID | Estado: pendiente de revisión del MAYOR
+> veredicto APTO CON PRE-REQUISITOS) | Issue: #8 | Branch: `feature/issue-8-testnet-publish` | PR: #48 (draft) |
+> **Versión: v1.1** | Fecha: 2026-11-03 | Autor: MID | Estado: v1 aprobada por el MAYOR (APPROVE, 0 🔴/🟠, 6 🟡,
+> 5 🔵); la v1.1 solo incorpora esa revisión y no vuelve a revisión (lo aceptó el MAYOR)
+
+## Changelog
+
+| Versión | Fecha | Cambios |
+|---|---|---|
+| v1 | 2026-11-03 | Versión inicial. Aprobada por el MAYOR; TASK-1 autorizado con esta versión |
+| v1.1 | 2026-11-03 | Revisión del MAYOR de la v1. **m-1** (TASK-3 (d) y A12): la regla de cierre M-7 chequea cada ruta por separado (`test ! -e` y `compgen -G`), no con un único `ls`. **m-2** (TASK-2): la verificación impresa lleva el campo en un comentario `#`, para que la línea se pueda pegar, con su test. **m-3** (TASK-3, pasos 1 y 5): un `localnet.json` viejo se detecta y se borra en el paso 1. **m-4** (TASK-5 §3.2): la sonda corre por stdin con cwd `<repo>/app`, así resuelve `@mysten/sui`. **m-5** (A5): `D` va a `ids.env`. **m-6** (G1): la branch queda congelada entre G1 y G3. **s-1** adoptado (paso 1: chequeo de que el realpath de `SUI_CONFIG_DIR` esté fuera de `~/.sui`). **s-2** hecho (PR #48 en draft, la CI ya corre). **s-3** adoptado (permalink al `<head>` en el comentario de #8, que se publica en G1). **s-4** adoptado (B7 no falla por partidas ajenas creadas antes de la comisión). **s-5** adoptado (la sonda solo imprime booleanos, IDs y montos, y sus errores solo el mensaje). Comentario de #8 con PR #48. El addendum por P-C pasa a llamarse v1.2 |
+
+> Decisión (2026-11-03, s-1): se adopta. Las llamadas `suio` del runbook (comisión, custodia, smoke) no pasan por el
+> script, así que nada comprueba que `SUI_CONFIG_DIR` apunte fuera de `~/.sui`; una línea en el paso 1 cubre ese hueco.
+> El costo es nulo y no reemplaza la guarda del script.
+
+> Decisión (2026-11-03, s-3): se adopta. El enlace del comentario de #8 pasa a ser un permalink al `<head>` publicado:
+> el merge commit (D7) lo conserva en `master` aunque se borre la branch. Por eso el comentario se publica en G1, cuando
+> el `<head>` ya existe y tiene la CI verde.
+
+> Decisión (2026-11-03, s-4): se adopta. En testnet, una partida que un tercero cree antes del `update_fee_rate` queda
+> con comisión 0, y eso es inocuo (D-20261030-11). B7 la anota (`game_id`, `fee_rate`) y no marca NO PASA por ella;
+> sí lo marca si la partida es del owner (sender `== S`).
+
+> Decisión (2026-11-03, s-5): se adopta. La sonda guarda en memoria la dirección del owner (`S`); si imprime un objeto o
+> una transacción entera, la filtra al reporte. Por eso solo imprime booleanos, IDs, digests y montos, y ante un error
+> muestra solo `error.message`.
 
 ## Historia de usuario
 
@@ -30,7 +54,7 @@ llega a 141 o más: addendum de este handoff); cambios en el código Move; upgra
 
 | Qué | Valor | Fuente |
 |---|---|---|
-| Branch | `feature/issue-8-testnet-publish` @ `c144d40`, pusheada; sin PR todavía, así que **no hay CI sobre `c144d40`** | `git log`, `gh pr list --head …` vacío |
+| Branch | `feature/issue-8-testnet-publish` @ `c144d40`, pusheada; sin PR todavía, así que **no hay CI sobre `c144d40`**. v1.1: el orquestador ya abrió el **PR #48** en draft (s-2), así que la CI corre en cada push | `git log`, `gh pr list --head …` vacío |
 | Código respecto del último baseline | `ac5a85c..c144d40` solo toca `agents.md` (+4 líneas), `documents/` (housekeeping de #11, D-20261103-01, pre-vuelo): **cero cambios en `contracts/` y `app/`** | `git diff --stat ac5a85c c144d40` |
 | CI de `master` @ `a6ee14c` | run 41556534947 (`push`): `contracts`, `app` y `framework-drift` *success*; único aviso, el H13 del lock en PV 139 | `gh api …/actions/runs` + pre-vuelo §1.1 |
 | CLI | `sui 1.83.0-16d2dc1e05ed` = `ci.yml` (`SUI_VERSION`/`SUI_COMMIT`) | STATUS Toolchain, `ci.yml:22-23` |
@@ -109,7 +133,7 @@ pueden llegar en 1-2 semanas. TASK-1 a TASK-4 conviene cerrarlos sin pausas; si 
 | P-2 (S-4 + autorización en D-20261103-01) | Owner/orquestador con el texto de §"Texto propuesto para D-20261103-01" (el MID no edita `DECISIONES.md`) |
 | P-3 (pre-vuelo como comentario en #8) | ✅ ya publicado (comentario del 2026-11-04 00:23 UTC en #8) |
 | P-5 (PV justo antes de publicar) | Runbook, paso 2 (owner) + puerta G2 |
-| P-6 (todo commiteado, CI verde en el head publicado, sin rebase/squash) | Puertas G1/G3 + runbook pasos 1 y 12 |
+| P-6 (todo commiteado, CI verde en el head publicado, sin rebase/squash) | Puertas G1/G3 (branch congelada entre ambas, m-6) + runbook pasos 1 y 12 |
 | S-5 (verificación pública independiente) | TASK-5 |
 | S-1 | Informativo, sin acción |
 
@@ -120,12 +144,16 @@ TASK-1 repin ─▶ TASK-2 script ─▶ TASK-3 runbook/docs ─▶ TASK-4 ensay
    (cada task: reporte DEV → revisión MID → commit del orquestador)
         │
         ▼
-G1  owner aplica S-4 + autorización en DECISIONES.md (P-2) → commit · comentario de #8 publicado
-    · push · PR abierto (draft vale) · CI del head: contracts ✅ app ✅ framework-drift "lock al día", sin aviso H13
+G1  owner aplica S-4 + autorización en DECISIONES.md (P-2) → commit · push al PR #48
+    · CI del head: contracts ✅ app ✅ framework-drift "lock al día", sin aviso H13 → ese SHA es <head>
+    · comentario de #8 publicado con el permalink a <head> (s-3)
+    · BRANCH CONGELADA (m-6): desde que se entrega <head> al owner, nadie pushea a la branch hasta el commit de
+      G3. Si hace falta un commit en medio (fix, doc), se repite G1 completo con un head nuevo y su CI, y el
+      owner recibe el <head> nuevo (y el comentario de #8 se corrige)
         │
         ▼
 G2  owner: runbook de contracts/README.md → "Uso en testnet", pasos 0-11, sobre <head> (el SHA con CI verde
-    que le pasa el orquestador). PV ≠ 140 en el paso 2 ⇒ no publica ⇒ STOP → addendum v1.1 con P-C
+    que le pasa el orquestador). PV ≠ 140 en el paso 2 ⇒ no publica ⇒ STOP → addendum v1.2 con P-C
         │
         ▼
 G3  entrega del owner (runbook paso 11) → el orquestador commitea testnet.json + Published.toml tal cual
@@ -292,11 +320,13 @@ export function checkNodeVersion({ nodeVersion, nvmrcText }) { … }   // lanza 
   Siguiente paso obligatorio (#8), no lo ejecuta este script. En la shell donde exportaste tu SUI_CONFIG_DIR
   (README → "Uso en testnet", pasos 6-10):
     <OWNER_CLI_PREFIX> call --package <packageId> --module house --function update_fee_rate --args <houseId> <houseCapId> <bps>
-    Verificación: <OWNER_CLI_PREFIX> object <houseId> --json (content.fee_rate)
+  Verificación:
+    <OWNER_CLI_PREFIX> object <houseId> --json   # campo content.fee_rate
   ```
 
   `<bps>` = `200` en testnet (D-20261103-01) y el literal `<bps>` en localnet (cada smoke elige su valor). Ninguna línea
-  del resumen empieza con `sui client` sin el prefijo.
+  del resumen empieza con `sui client` sin el prefijo. **m-2:** cada comando va solo en su línea, sin texto de prosa
+  pegado (el `(` de la v1 rompía el pegado con un error de sintaxis); la nota sobre el campo va como comentario `#`.
 - `RETRY_ADVICE` y `formatPostPublishFailure` no cambian (`<tu dir>` ya es un placeholder que no se ejecuta).
 
 ### 4. Archivos
@@ -318,7 +348,10 @@ export function checkNodeVersion({ nodeVersion, nvmrcText }) { … }   // lanza 
     `<bps>`;
   - localnet: contiene `<bps>`;
   - ambos: los 14 campos, ninguna línea `/^\s*sui client/m`, `assertNoAccountAddress`, y el texto literal
-    `${SUI_CONFIG_DIR:?` (prueba de que no se interpoló).
+    `${SUI_CONFIG_DIR:?` (prueba de que no se interpoló);
+  - **m-2, pegable:** en el resumen de testnet, las dos líneas de comando (las que empiezan con `printf 'n\n' |`) pasan
+    `bash -n -c '<línea>'` (`spawnSync('bash', ['-n', '-c', línea])`, que solo parsea y no ejecuta nada) con estado 0. En
+    localnet no se aplica: `<bps>` falla a propósito.
 - **Verificación manual (va en el reporte, no es gate):** con las rutas absolutas de nvm,
   `<HOME real>/.nvm/versions/node/v20.<x>/bin/node scripts/publish.mjs check; echo "exit=$?"` → mensaje + `exit=1`;
   igual con v22 → `exit=1`; con v26 → `0 despliegues`, `exit=0`.
@@ -406,8 +439,10 @@ procedimiento documentado; el `HouseCap` solo se mueve con `transfer_house_cap`,
 cd <repo> && git switch <branch> && git pull --ff-only
 git status --porcelain                  # vacío, también sin archivos sin trackear
 git log -1 --format=%H                  # = <head> (será el sourceCommit del json)
+test ! -e contracts/deployments/localnet.json || rm contracts/deployments/localnet.json   # resto de un smoke viejo
 nvm use && node --version               # v26.x; con otra versión el script sale con 1
 export SUI_CONFIG_DIR=<su dir>          # solo en esta shell
+case "$(realpath -m "$SUI_CONFIG_DIR")/" in "$(realpath -m ~/.sui)"/*) echo "ABORTA: config dentro de ~/.sui";; *) echo "config fuera de ~/.sui";; esac
 suio() { printf 'n\n' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client "$@"; }
 printf 'n\n' | sui --version            # sui 1.83.0-16d2dc1e05ed (= SUI_VERSION/SUI_COMMIT de ci.yml)
 suio active-env                         # testnet
@@ -416,8 +451,12 @@ suio gas                                # saldo; no se pega
 ```
 
 `suio` es la única forma de llamar a `sui client` en este runbook: sin el `export` aborta antes de invocar `sui` (nunca
-cae en `~/.sui/`), y en una shell nueva ni siquiera existe. Saldo necesario: el gas que estime el paso 3 más ≈ 0,05 SUI
-para la comisión y el smoke. El SUI de testnet sale del faucet web vigente.
+cae en `~/.sui/`), y en una shell nueva ni siquiera existe. La línea `case` debe imprimir `config fuera de ~/.sui`:
+`suio` solo comprueba que la variable esté definida, y las llamadas de los pasos 6-10 no pasan por la guarda del
+script. Con `ABORTA`, no se sigue. Un `contracts/deployments/localnet.json` que haya quedado de un smoke viejo pertenece
+a una génesis ya borrada y lo ignora git: se borra, porque si no el paso 5 vería otra salida de `git status` y `check`
+contaría 2 despliegues. Saldo necesario: el gas que estime el paso 3 más ≈ 0,05 SUI para la comisión y el smoke. El SUI
+de testnet sale del faucet web vigente.
 
 #### 2. Versión de protocolo, justo antes de publicar (STATUS H13)
 
@@ -469,7 +508,9 @@ node scripts/publish.mjs check
 
 `git status` debe dar **exactamente** `?? contracts/Published.toml` y `?? contracts/deployments/`, y `check` debe dar
 `1 despliegue(s) válidos y coherentes con Published.toml`. Ante cualquier otro cambio (p. ej. ` M contracts/Move.lock`):
-STOP; se avisa al orquestador sin commitear ni editar nada.
+STOP; se avisa al orquestador sin commitear ni editar nada. Esto vale porque el paso 1 ya borró cualquier
+`localnet.json` viejo. Si aun así aparece, git lista `?? contracts/deployments/testnet.json` en vez de la carpeta y
+`check` cuenta 2: no es un STOP; se borra `contracts/deployments/localnet.json` y se repite este paso.
 
 #### 6. Comisión: 200 bps, antes de cualquier partida (D-20261103-01)
 
@@ -562,8 +603,10 @@ config propia, nunca en `~/.sui/`).
   `contracts/Pub.*.toml` ni `contracts/Published.toml` ni `contracts/deployments/`." por:
   "`git status --porcelain --untracked-files=all` sin entradas de la corrida; `git diff --exit-code -- contracts/Move.lock
   contracts/Published.toml` (desde #8, `Published.toml` y `deployments/testnet.json` están commiteados y no cambian; antes
-  no existen); y, como los ignora `.gitignore`, `ls contracts/Pub.*.toml contracts/deployments/localnet.json` debe fallar
-  para ambos."
+  no existen); y, como los ignora `.gitignore`, cada uno por separado: `test ! -e contracts/deployments/localnet.json`
+  y `! compgen -G 'contracts/Pub.*.toml'` (bash), los dos con estado 0."
+  **m-1:** nunca con un único `ls` de las dos rutas. `ls` sale ≠ 0 si falta **cualquiera** de las dos, así que un
+  `Pub.*.toml` sobrante pasaría por limpio.
 - `:368-372`, "Orden de #8": reemplazarlo por el orden del runbook: pre-vuelo H13 → config y shell de publicación con
   `export SUI_CONFIG_DIR` y Node 26 → PV justo antes → dry run → publicación → archivos esperados → `update_fee_rate` a
   200 (D-20261103-01) → House → custodia de `HouseCap`/`UpgradeCap`/`Publisher` → smoke crear/cancelar → entrega →
@@ -651,14 +694,14 @@ Prefijo `PRE` = `. <SMOKE_DIR>/env.sh && { . <SMOKE_DIR>/ids.env 2>/dev/null || 
 | A2 | Génesis + arranque en segundo plano + `PRE suic chain-identifier` (§3 paso 4) | red arriba; chain id ≠ `4c78adac`/`35834a8a` |
 | A3 | `PRE suic addresses --json` → `ADMIN` a `ids.env` (§3 paso 5) | alias y direcciones; nunca `new-address` |
 | A4 | `PRE act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs publish --network localnet --pubfile-path "$SMOKE_DIR/Pub.localnet.toml" --out "$SMOKE_DIR/localnet.json" --dry-run; echo "exit=$?"` | `Dry run ok. Gas estimado: N MIST.`, `exit=0`; **sin** `Aviso: Move.lock cambió`; `git diff --exit-code -- contracts/Move.lock` = 0 |
-| A5 | Lo mismo **sin** `--dry-run`, salida del script a `"$SMOKE_DIR/publish-run.txt"`; `D` = directorio `battleship-publish-*` impreso (dentro de `$SMOKE_DIR/tmp`); `PKG`/`HOUSE`/`CAP`/`UCAP` a `ids.env` con los `jq` del paso 4 del README sobre `"$SMOKE_DIR/localnet.json"` | `exit=0`; json con 14 claves, `frameworkRev` = `05ad86a3…`, `suiCliVersion` `1.83.0-16d2dc1e05ed`; el resumen trae `printf 'n\n' \| SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client call … update_fee_rate … <bps>` y la verificación con el mismo prefijo; `grep -c "$ADMIN" "$SMOKE_DIR/publish-run.txt"` = 0; lock sin delta |
+| A5 | Lo mismo **sin** `--dry-run`, salida del script a `"$SMOKE_DIR/publish-run.txt"`; `D` = directorio `battleship-publish-*` impreso (dentro de `$SMOKE_DIR/tmp`), que **también va a `ids.env`** como `export D=<ruta absoluta literal>` (m-5: cada llamada es una shell nueva, y sin eso `$D` llega vacío a A6-A8); `PKG`/`HOUSE`/`CAP`/`UCAP` a `ids.env` con los `jq` del paso 4 del README sobre `"$SMOKE_DIR/localnet.json"`; antes de A6, `PRE test -d "$D" && test -f "$D/publish-output.json" && echo D-OK` | `exit=0`; json con 14 claves, `frameworkRev` = `05ad86a3…`, `suiCliVersion` `1.83.0-16d2dc1e05ed`; el resumen trae `printf 'n\n' \| SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client call … update_fee_rate … <bps>` y la verificación con el mismo prefijo en su propia línea, terminada en `# campo content.fee_rate`; `D-OK`; `grep -c "$ADMIN" "$SMOKE_DIR/publish-run.txt"` = 0; lock sin delta |
 | A6 | Paso 6 del README con `suic` y `200` | `exit=0`, `success`; `FeeRateUpdated` 0 → 200 (anotar la forma exacta, p. ej. `200.0`) |
 | A7 | Paso 7 del README con `suic` | `Shared`; `fee_rate` 200, `min_bet` `"1000000"`, `max_bet` `"50000000000"`, `version` `"1"`, `fees_collected` 0 (anotar la forma exacta de `fees_collected` y corregir el README si difiere) |
 | A8 | Paso 8 del README con `suic` (`A="$(suic active-address)"`, `PUB` desde `"$D/publish-output.json"`) | tres líneas, `HouseCap`/`UpgradeCap`/`Publisher`, cada una `true`; la dirección no se pega |
 | A9 | Paso 9 del README con `suic`; `GAME` a `ids.env` | `success`; `GameCreated` `bet` `"1000000"`, `fee_rate` 200, `opponent` `null` |
 | A10 | Paso 10 del README con `suic` | `success`; `refund` `"1000000"`, `by_creator` `true`; `state` `Cancelled`, `stake` `"0"` |
 | A11 | Guarda del prefijo, en una llamada **nueva sin** `env.sh`: `[ -z "${SUI_CONFIG_DIR+x}" ] && echo unset; printf 'n\n' \| SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" echo WOULD-RUN; echo "exit=$?"` (`echo` en lugar de `sui`: no se invoca la CLI) | `unset`; error `SUI_CONFIG_DIR: exporta tu SUI_CONFIG_DIR`; **sin** `WOULD-RUN`; `exit` ≠ 0 |
-| A12 | Cierre (§3 paso 7 en la versión M-7): `kill` del PID, `kill -0` falla, `rm -rf <SMOKE_DIR>`; sin `env.sh`: `stat`/`ls`; `git status --porcelain --untracked-files=all`; `git diff --exit-code -- contracts/Move.lock contracts/Published.toml`; `ls contracts/Pub.*.toml contracts/deployments/localnet.json` | `stat`/`ls` idénticos a A0; árbol solo con el smoke (y el README si se corrigió); diff `exit=0`; `ls` falla para ambos |
+| A12 | Cierre (§3 paso 7 en la versión M-7): `kill` del PID, `kill -0` falla, `rm -rf <SMOKE_DIR>`; sin `env.sh`: `stat`/`ls`; `git status --porcelain --untracked-files=all`; `git diff --exit-code -- contracts/Move.lock contracts/Published.toml`; por separado (m-1): `test ! -e contracts/deployments/localnet.json; echo "loc=$?"` y `! compgen -G 'contracts/Pub.*.toml'; echo "pub=$?"` | `stat`/`ls` idénticos a A0; árbol solo con el smoke (y el README si se corrigió); diff `exit=0`; `loc=0` y `pub=0` |
 
 Reporte final de la Parte A: PASA/TOTAL, hallazgos con número de paso, veredicto. Un paso fallido ⇒ NO PASA y no se
 abre G1.
@@ -702,8 +745,19 @@ en verde con los archivos publicados, **para** cerrar #8 con evidencia y sin hab
    `testnet`, `chainId` `4c78adac`, `packageId` = `originalPackageId`, `packageVersion` 1, `suiCliVersion`
    `1.83.0-16d2dc1e05ed`, `frameworkRev` `05ad86a3…`; `git merge-base --is-ancestor <sourceCommit> HEAD` → 0, y CI verde
    en ese commit (`gh api repos/sdelvalle57/sui_battleship/commits/<sourceCommit>/check-runs`).
-2. **Sonda gRPC** (script en `<scratchpad>`, no se commitea; se ejecuta desde `<repo>/app` para resolver `@mysten/sui`).
-   Imprime solo booleanos y valores públicos (IDs, digests, montos). Checks de la Parte B (§6).
+2. **Sonda gRPC.** El script vive en `<scratchpad>/verify-testnet.mjs` y no se commitea.
+   - **Cómo se corre (m-4):** por stdin, con cwd en `<repo>/app`:
+     `cd <repo>/app && "$NODE" --input-type=module < <scratchpad>/verify-testnet.mjs`. En ESM, el `import` de un
+     **archivo** se resuelve desde donde vive el archivo, así que en `<scratchpad>` no encontraría `@mysten/sui`
+     (`ERR_MODULE_NOT_FOUND`); con stdin o `--eval`, la resolución parte del cwd. Alternativa válida: importar con la URL
+     absoluta del paquete en `<repo>/node_modules`. **Nunca** un archivo sin trackear en `app/scripts/`, que ensuciaría el
+     árbol y la CI. Antes de B2, un `import('@mysten/sui/grpc')` de prueba por la misma vía tiene que dar `ok`.
+   - **Qué imprime (s-5):** solo booleanos, IDs, digests, checkpoints y montos. `S` (la dirección del owner) vive en una
+     variable y solo aparece en comparaciones (`=== S`). Nunca se imprime un objeto, una transacción ni una respuesta
+     entera (`console.log(obj)`, `JSON.stringify(tx)`). Todo el cuerpo va en un `try/catch` que muestra solo
+     `error.message`, sin `error.cause` ni la respuesta, y el DEV revisa que ese mensaje no traiga hex de 64 antes de
+     pegarlo.
+   - Checks: los de la Parte B (§6).
 3. **Gates con los archivos publicados:** los de contracts de TASK-1 §5 (0 / 0 / 83, `node --test` N de TASK-2,
    `check` = 1 despliegue, `git diff --exit-code -- Move.lock`) y los del job `app` (`agents.md` §3: `npm ci`, audit, lint,
    typecheck, test, `VITE_SUI_NETWORK=testnet npm run build -w app`), con árbol limpio al final. Si `sui move build/test`
@@ -737,7 +791,7 @@ Los del punto 3, con output pegado; `git status --porcelain --untracked-files=al
 | B4 | gRPC: `getObject(houseId)` con `json` | dueño `Shared`; `fee_rate` 200, `min_bet` 1000000, `max_bet` 50000000000, `version` 1, `fees_collected` 0 (o el acumulado si ya hubo partidas aceptadas: anotarlo) |
 | B5 | gRPC: dueño de `houseCapId`, `upgradeCapId` y del `Publisher` | `AddressOwner == S` → `true` ×3 (la dirección no se imprime) |
 | B6 | gRPC: `getTransaction(<digest comisión>)` | `success`; sender `== S`; `FeeRateUpdated` `old_fee_rate` 0 → `new_fee_rate` 200; checkpoint > el de la publicación y < el de la creación |
-| B7 | gRPC: `getTransaction(<digest crear>)` + todos los `GameCreated` del paquete (`ListEvents` por tipo `<originalPackageId>::game::GameCreated`) | `success`; sender `== S`; `bet` 1000000, `fee_rate` 200, `opponent` none; **todos** los `GameCreated` con `fee_rate` 200 (ninguna partida nació con comisión 0) |
+| B7 | gRPC: `getTransaction(<digest crear>)` + todos los `GameCreated` del paquete (`ListEvents` por tipo `<originalPackageId>::game::GameCreated`) | `success`; sender `== S`; `bet` 1000000, `fee_rate` 200, `opponent` none; todos los `GameCreated` con creador `== S` tienen `fee_rate` 200 (ninguna partida del owner nació con comisión 0). **s-4:** una partida de otro creador con `fee_rate` ≠ 200 (creada por un tercero antes de la comisión) se anota en la tabla con su `game_id` y su `fee_rate` (es inocua en testnet, D-20261030-11) y **no** hace NO PASA; solo se imprime `creador == S` → `false`, no su creador |
 | B8 | gRPC: `getTransaction(<digest cancelar>)` + `getObject(GAME)` | `success`; `GameCancelled` `refund` 1000000 y `cancelled_by == creator == S`; `Game` en `Cancelled` con `stake` 0; `balanceChanges` de `S`: crear = −(1000000 + gas neto), cancelar = +1000000 − gas neto |
 | B9 | Gates de §3.3 | verdes, conteos anotados |
 | B10 | 🌐 §3.4: `#/`, `#/game/<GAME>` | indicador "testnet · nodo OK"; lobby con el texto honesto de "sin partidas abiertas" (salvo que alguien haya creado una); detalle de `GAME` "Cancelada" con comisión 2 %; sin wallet de desarrollo; consola sin errores |
@@ -834,18 +888,22 @@ del PR (lo propone el MID) y revisión de integración del MAYOR.
 
 ---
 
-## Comentario para #8 (lo publica el orquestador cuando TASK-3 y TASK-4 estén commiteados y pusheados)
+## Comentario para #8 (lo publica el orquestador en G1)
 
-Reemplazar `<N>` (número del PR) y `<head>` (SHA con la CI verde) al publicarlo. Sin menciones con arroba.
+Se publica en G1, cuando TASK-3 y TASK-4 están commiteados y pusheados y el `<head>` tiene la CI en verde. Antes de
+publicarlo, reemplazar las **dos** apariciones de `<head>`: el SHA completo de 40 caracteres en el permalink y el corto en
+el texto. El enlace es un permalink al commit (s-3): sigue funcionando cuando se borre la branch, porque el merge commit
+conserva el commit en `master`. Si G1 se repite con un head nuevo (m-6), se edita el comentario. Sin menciones con arroba.
 
 ~~~markdown
 **Pasos del owner actualizados: reemplazan los pasos 2, 3, 4 y 6 del cuerpo del issue**
 
 Esos pasos se escribieron antes de #7/#39 y de D-20261103-01. Seguidos al pie de la letra, los pasos 2 y 3 operan sobre
 `~/.sui/`, el 4 corre los gates de otra forma que la CI y el 6 deja la comisión como condicional. Quedan **reemplazados**
-por el runbook de `contracts/README.md` → [Uso en testnet (solo el owner)](https://github.com/sdelvalle57/sui_battleship/blob/feature/issue-8-testnet-publish/contracts/README.md#uso-en-testnet-solo-el-owner),
+por el runbook de `contracts/README.md` → [Uso en testnet (solo el owner)](https://github.com/sdelvalle57/sui_battleship/blob/<head>/contracts/README.md#uso-en-testnet-solo-el-owner),
 ya ensayado en una localnet aislada (`documents/SMOKE_TESTNET_PUBLISH.md`, Parte A). Se publica desde el head `<head>`
-del PR #<N>, con la CI en verde. Los pasos 1, 5 y 7 siguen vigentes, con las precisiones de abajo.
+del PR #48, con la CI en verde. Hasta que el orquestador commitee lo que entregue el owner, nadie pushea a la branch: si
+hiciera falta, habría un head nuevo con su CI y este comentario se corrige. Los pasos 1, 5 y 7 siguen vigentes, con las precisiones de abajo.
 
 Resumen (los comandos exactos están en el README):
 
@@ -890,7 +948,7 @@ PRE-REQUISITOS).
 
 Ninguno abierto en este handoff. Puntos que **son** STOP si aparecen durante la ejecución:
 
-- TASK-1 / G2: PV de testnet ≠ 140 → P-C (addendum v1.1: subir la CLI, `ci.yml`, `publish.test.mjs:480-481`, recaptura
+- TASK-1 / G2: PV de testnet ≠ 140 → P-C (addendum v1.2: subir la CLI, `ci.yml`, `publish.test.mjs:480-481`, recaptura
   de `scripts/fixtures/`, repin, y TASK-4 de nuevo).
 - TASK-1: delta del lock distinto del esperado.
 - TASK-4: `Move.lock` cambia en el dry run o en la publicación efímera.
