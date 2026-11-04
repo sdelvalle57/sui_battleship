@@ -55,8 +55,10 @@ la app muestra la pantalla "La app no está configurada" con la causa y la acci�
 
 ### Testnet
 
-`contracts/deployments/testnet.json` lo publica #8 (owner). Hasta entonces, un build con `VITE_SUI_NETWORK=testnet`
-compila pero muestra la pantalla de error de configuración. Explorador: Suiscan (`explorer.ts`); en localnet, sin link.
+`contracts/deployments/testnet.json` existe desde #8 (publicación del 2026-11-04): un build con `VITE_SUI_NETWORK=testnet`
+lee la House y las partidas reales del fullnode público. Sin ese archivo (p. ej., en el PR de una republicación), el
+build compila pero muestra la pantalla de error de configuración. Explorador: Suiscan (`explorer.ts`); en localnet, sin
+link.
 
 **Origen del build publicado:** el glob de `config.ts` es `eager` y se resuelve al compilar, así que un
 `contracts/deployments/localnet.json` presente en la máquina entra en **cualquier** build hecho ahí, también en uno de

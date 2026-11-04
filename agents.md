@@ -30,8 +30,8 @@ se citan como `#N`.
 `contracts/tests/` y `contracts/README.md` desde #4; `.github/workflows/` desde #3 (`ci.yml`: job
 `contracts`; el job `app` desde #9); `contracts/scripts/` desde #7; `app/`, `.npmrc` y `package-lock.json` desde #9; `contracts/fixtures/` y
 `app/scripts/` desde #10 (D-20261031-01); `Dockerfile`, `.dockerignore`, `app/Caddyfile`, `app/public/` y
-`app/scripts/check-deploy-image.sh` desde #15; `contracts/deployments/` y `contracts/Published.toml` (los escribe la
-primera publicación en testnet, #8) llegan con su issue:
+`app/scripts/check-deploy-image.sh` desde #15; `contracts/deployments/testnet.json` y `contracts/Published.toml`
+existen desde #8 (primera publicación en testnet, 2026-11-04):
 
 ```
 sui_battleship/
@@ -44,8 +44,10 @@ sui_battleship/
 │   │                         #   reales de crear, cancelar, rechazar y aceptar (con cada ganador y un fallo ejecutado);
 │   │                         # (#14) house-admin.localnet.json: listado del HouseCap por tipo, aborts de house y las
 │   │                         #   transacciones de admin (comisión, límites, retiro)
-│   ├── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos); lo escribe el script
-│   └── Published.toml        # (#8) lo escribe `sui client publish`: fuente de los datos del paquete
+│   ├── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos); lo escribe el script:
+│   │                         #   testnet.json desde #8; localnet.json efímero e ignorado
+│   └── Published.toml        # (#8) lo escribe `sui client publish`: fuente de los datos del paquete; commiteado desde
+│                             #   la publicación
 ├── app/                      # cliente React (Vite + TS + SDK de Sui + wallet kit); guía en app/README.md
 │   ├── Caddyfile             # (#15) servidor de la imagen de Railway: CSP y cabeceras (app/README.md, "Despliegue")
 │   ├── public/               # (#15) estáticos que Vite copia tal cual a la raíz de dist/: favicon.svg
@@ -256,7 +258,7 @@ eventos y códigos de abort. La UI los consume desde un único módulo (`app/src
 
 | Artefacto | Dónde | Sincronización |
 |---|---|---|
-| Package ID / object IDs por red | `contracts/deployments/<red>.json` | Lo escribe `contracts/scripts/publish.mjs` (nunca a mano), en el mismo PR que la publicación; `Published.toml` es la fuente de los datos del paquete y la CI verifica la coherencia (`publish.mjs check`). La app lo importa (nunca IDs hardcodeados en componentes) |
+| Package ID / object IDs por red | `contracts/deployments/<red>.json`; testnet: `deployments/testnet.json` (#8) | Lo escribe `contracts/scripts/publish.mjs` (nunca a mano), en el mismo PR que la publicación; `Published.toml` es la fuente de los datos del paquete y la CI verifica la coherencia (`publish.mjs check`). La app lo importa (nunca IDs hardcodeados en componentes) |
 | Firmas y eventos | `contracts/sources/*.move` | Tabla en `contracts/README.md`; cambios = STOP (§6 de FLUJO) |
 | Abort codes | constantes `E*` de cada módulo | Tabla en `contracts/README.md` + `ABORT_MESSAGES` (módulo + código → mensaje) en `app/src/sui/errors.ts` (#11), con un test por código; un código nuevo entra en los dos en el mismo PR |
 | Layout BCS de `Game` y de sus eventos | `contracts/sources/game.move` | Esquemas en `app/src/sui/game.ts` y `events.ts`; fixtures en `contracts/fixtures/game-reads.localnet.json` (se recapturan si cambia el layout) |
@@ -391,20 +393,19 @@ testnet con una wallet real.
   terminal y con su `SUI_CONFIG_DIR` propio (fuera de `~/.sui/`, D-20261102-03); ningún agente corre el camino testnet.
   Publicar, upgradear y custodiar el `UpgradeCap`/`HouseCap` es del owner. Detalle y recuperación:
   `contracts/README.md` → "Despliegues".
-- **Orden de #8** (el del runbook del owner): pre-vuelo H13 (repin, gates re-medidos y commiteados) → config propia
-  y shell de publicación con `export SUI_CONFIG_DIR=<su dir>` y Node 26 (`nvm use`) → PV de testnet justo antes de
-  publicar → dry run → publicación (confirmación escribiendo `testnet`; escribe `deployments/testnet.json` y la CLI,
-  `Published.toml`) → archivos esperados (`git status`, `check`) → `update_fee_rate` a 200 (D-20261103-01) → House →
-  custodia de `HouseCap`/`UpgradeCap`/`Publisher` sin pegar la dirección → smoke crear/cancelar → entrega al
-  orquestador (los dos archivos sin editar, digests, sí/no de custodia, PV) → borrar los temporales del script con la
-  CI del PR en verde. Detalle: `contracts/README.md` → "Uso en testnet".
+- **Testnet: publicado el 2026-11-04 (#8)** desde `26f2676`,
+  `packageId` `0x8b7873ec06f9173d43aa6c1f093040e5237967ad2aaecece0a32070587856f51`;
+  runbook: `contracts/README.md` → "Uso en testnet"; republicar solo bajo D-20261103-01 (2), con su operación previa.
 - **Dirección publicadora:** recibe el `HouseCap` (`key` sin `store`, PROY-3). Si no es la wallet del
   navegador del panel admin (#14, `#/admin`), el owner le pasa el cap con `transfer_house_cap` por CLI (no con "Send"
   de la wallet; la app no lo transfiere), con el checklist de `contracts/README.md`, "Qué pasa si se pierde el cap".
   La dirección publicadora también tiene el `UpgradeCap` y el `Publisher`: importarla en una wallet de navegador los
   expone a la extensión; la alternativa es `transfer_house_cap` a la wallet del panel. Decisión del owner (N-3).
-- **Post-publicación (#8):** la House nace con fee 0 (D-20261030-11); `update_fee_rate` antes de anunciar el
-  juego, o las partidas creadas antes quedan con comisión 0 para siempre.
+  N-3 decidido (D-20261104-06, 2026-11-04, «lo dejo»): en testnet el `HouseCap` sigue en la publicadora, que el owner usa
+  en su wallet de navegador; sin `transfer_house_cap`.
+- **Post-publicación (#8):** ✅ 2026-11-04, `update_fee_rate` a 200 bps (tx `BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw`).
+  La House nace con fee 0 (D-20261030-11): en una republicación, `update_fee_rate` antes de anunciar el juego, o las
+  partidas creadas antes quedan con comisión 0 para siempre.
 - **App:** Railway (D-20261104-01, D-20261104-03): imagen del `Dockerfile` de la raíz (build de testnet + Caddy con
   CSP); el owner conecta el servicio, activa *Wait for CI* y publica; sin `testnet.json` la imagen no se construye.
 - **Mainnet:** fuera de alcance sin decisión registrada.

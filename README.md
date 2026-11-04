@@ -24,7 +24,7 @@ navegador.
 - **Comisión:** `fee = ⌊pozo × fee_rate / 10 000⌋`, con `pozo = 2 × apuesta`, redondeada hacia abajo (el resto va al
   ganador). Máximo 10 % (1000 bps). La partida copia la comisión vigente al crearse y el ganador recibe `pozo − fee`
   ([comisión](contracts/README.md#comisión)). En testnet: valor inicial de 200 bps (2 %),
-  D-20261103-01 ([PR #48](https://github.com/sdelvalle57/sui_battleship/pull/48)); la vigente la muestra la app.
+  D-20261103-01; la vigente la muestra la app.
 - **Cancelar y rechazar:** el creador cancela y el invitado rechaza, solo mientras la partida está pendiente. Vuelve el
   100 % al creador, sin comisión. Las partidas no expiran.
 - **Estados:** pendiente → cancelada o resuelta, sin estado intermedio ([estados](contracts/README.md#estados)).

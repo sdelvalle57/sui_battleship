@@ -13,7 +13,7 @@ código discrepan, manda el código y se corrige la tabla en el mismo PR (`agent
 | `scripts/publish.mjs` | Publicación con guardas, `record` y `check` de los despliegues (#7, ver "Despliegues") |
 | `scripts/deployment.mjs` | Formato de `deployments/<red>.json`: funciones puras que usan el script y la CI |
 | `scripts/*.test.mjs`, `scripts/fixtures/` | Tests (`node --test`) y salidas reales de la CLI 1.83.0 en una localnet desechable |
-| `deployments/<red>.json`, `Published.toml` | Datos de cada publicación (los escribe la primera publicación en testnet, #8) |
+| `deployments/<red>.json`, `Published.toml` | Datos de cada publicación (testnet desde #8) |
 | `fixtures/game-reads.localnet.json` | Lecturas gRPC reales de cada variante de `Game` y de sus eventos, capturadas en una localnet desechable con `app/scripts/capture-read-fixtures.mjs` (#10, ver "Lectura desde la app") |
 | `fixtures/game-tx.localnet.json` | Transacciones reales de crear, cancelar, rechazar (#11) y aceptar (#12): éxitos (con cada ganador y sobre una invitación), dos fallos `MoveAbort` ejecutados y 11 `SimulationError` de simulaciones sin firmar, y el objeto House, capturados en una localnet desechable con `app/scripts/capture-tx-fixtures.mjs` (ver "Lectura desde la app") |
 | `fixtures/house-admin.localnet.json` | Panel de la House (#14): listado real del `HouseCap` por tipo (`listOwnedObjects`), su `getObject`, 4 `SimulationError` de `house`/0, 1, 1, 2 y la preflight sin el cap, las transacciones de admin ejecutadas (`update_fee_rate`, `update_bet_limits`, `withdraw_fees` + `TransferObjects`) y la House después del retiro, capturados en una localnet desechable con `app/scripts/capture-house-fixtures.mjs` (ver "Lectura desde la app") |
@@ -120,12 +120,14 @@ cap (N-1): `transfer_house_cap` sigue siendo solo por CLI, igual que `migrate`. 
   (si dice "Sin permisos", "Volver a comprobar": el índice puede ir unos cientos de ms atrás).
 - [ ] La dirección publicadora también tiene el `UpgradeCap` y el `Publisher`: importarla en una wallet de navegador
   los expone a la extensión; la alternativa es `transfer_house_cap` a la wallet del panel. Decisión del owner (N-3).
+  En testnet, D-20261104-06, decidido el 2026-11-04: el cap se queda en la publicadora («lo dejo»).
 
 ### Fee por defecto 0 (D-20261030-11)
 
 La House nace con `fee_rate = 0`. Como el `Game` copia el fee al crearse (D-20261030-06 §3), las partidas
 creadas antes del primer `update_fee_rate` quedan con comisión 0 para siempre.
 **Paso obligatorio post-publicación (#8):** el owner llama `update_fee_rate` antes de anunciar el juego.
+En testnet, 200 bps desde la publicación (D-20261103-01, tx `BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw`).
 
 ### Retiro de comisiones
 
@@ -571,10 +573,14 @@ transacción (cómputo + storage − rebate de `effects.gasUsed`).
 
 ## Despliegues (#7)
 
-Un archivo por red en `contracts/deployments/<red>.json`: `localnet.json` (ignorado por git) y `testnet.json` (lo
-commitea #8). Lo escribe **solo** `scripts/publish.mjs` (nunca a mano), con `JSON.stringify(obj, null, 2)` y salto de
+Un archivo por red en `contracts/deployments/<red>.json`: `localnet.json` (ignorado por git) y `testnet.json` (commiteado
+en #8). Lo escribe **solo** `scripts/publish.mjs` (nunca a mano), con `JSON.stringify(obj, null, 2)` y salto de
 línea final, a partir de la salida de la misma transacción de publicación (D-20261102-01). El script exige el Node de
 `.nvmrc` (26): con otra versión sale con 1 y un mensaje (#8).
+
+**Testnet:** publicado el 2026-11-04 (#8) desde `26f2676`,
+`packageId` `0x8b7873ec06f9173d43aa6c1f093040e5237967ad2aaecece0a32070587856f51`.
+IDs completos en `deployments/testnet.json`.
 
 ### Esquema (`schemaVersion: 1`)
 
@@ -671,6 +677,9 @@ su `network`, si una red no-localnet no tiene su `[published.<red>]` (o al revé
 
 ### Uso en testnet (solo el owner)
 
+Publicado el 2026-11-04 (#8). Una republicación sigue este runbook bajo D-20261103-01 (2), con la operación previa
+que registra esa decisión.
+
 Ningún agente corre este camino, ni con `--dry-run` (D-20261102-03). No admite `--out` ni `--pubfile-path`: el json va
 siempre a `deployments/testnet.json`, el que `check` cruza con `[published.testnet]`. Lo corre **solo el owner**, en su
 terminal (bash o zsh, con `jq`), desde su clon del repo. Nada de lo que imprime la CLI se pega en el repo, en issues ni
@@ -685,8 +694,12 @@ procedimiento documentado; el `HouseCap` solo se mueve con `transfer_house_cap`,
 #### 0. Config propia (una vez)
 
 - La config vive en un `SUI_CONFIG_DIR` **absoluto y fuera de `~/.sui/`**, con la clave del owner y un env de alias
-  exactamente `testnet` (RPC `https://fullnode.testnet.sui.io:443`) como env activo. La dirección activa es la misma que
-  usa en la wallet del navegador, porque el panel admin (#14) firma con ella. Cómo crea o importa la clave es manejo
+  exactamente `testnet` (RPC `https://fullnode.testnet.sui.io:443`) como env activo. La dirección activa es la
+  **publicadora**: recibe el `HouseCap`, el `UpgradeCap` y el `Publisher`. Cómo llega el `HouseCap` a la wallet del
+  navegador del panel admin (#14, `#/admin`) es decisión del owner (N-3): importar la publicadora en esa wallet (expone
+  también el `UpgradeCap` y el `Publisher` a la extensión) o, después de verificar la custodia (paso 8), pasarle el cap
+  con `transfer_house_cap` por CLI, con el checklist de "Qué pasa si se pierde el cap". En la publicación del
+  2026-11-04, el `HouseCap` quedó en la publicadora (N-3: «lo dejo», D-20261104-06). Cómo crea o importa la clave es manejo
   personal del owner: la frase de recuperación nunca sale de su terminal.
 - **Siempre `export SUI_CONFIG_DIR=<su dir>` antes de cualquier `sui client …` o `sui keytool …`.** Sin ese export la CLI
   usa `~/.sui/sui_config/`, que queda **sin claves para siempre** (D-20261030-07): un `new-address` o un `import` ahí

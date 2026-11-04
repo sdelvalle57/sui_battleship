@@ -1731,3 +1731,281 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
 
 ---
+
+---
+
+## TASK-6
+
+## Task completado: HANDOFF_TESTNET_PUBLISH — TASK-6
+
+> Reporte del DEV (texto plano, copiado tal cual por el orquestador tras leerlo entero y pasar los greps §R-6).
+
+```text
+REPORTE TASK-6 de #8 — Docs post-publicación (área: docs)
+Handoff: documents/HANDOFF_TESTNET_PUBLISH.md v1.2.2 (TASK-6 §1-§8) | Branch: feature/issue-8-testnet-publish @ 2620388 | PR: #48
+Fecha: 2026-11-04 | DEV | Sin cambios de código, sin smoke (§6: no aplica)
+
+== Resumen ==
+Los docs de siempre registran la publicación en testnet: STATUS (sección "Despliegues", H13, Ciclo activo, Siguiente, Pendientes,
+fila de #9 y la fila de Baselines de TASK-5), agents.md §2/§5/§12, contracts/README.md (tabla inicial, checklist N-3, fee,
+"Despliegues", "Uso en testnet" y paso 0 reconciliado), app/README.md ("Testnet") y README.md:27 (sin "(PR #48)").
+
+== Fuente de los valores (nunca a mano) ==
+- jq -r sobre contracts/deployments/testnet.json:
+  - .packageId, .publishTxDigest y .publishTimestamp[0:10] (2026-11-04);
+  - .sourceCommit[0:7] (26f2676), .suiCliVersion (1.83.0-16d2dc1e05ed) y .frameworkRev[0:8] (05ad86a3).
+- Digests de comisión, crear y cancelar: extraídos por regex de la tabla §"Entrega del owner" del handoff (son base58 y no
+  están en el json): BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw, FpqGNLhCFdK8rEdLJdQwMKqd2bEigiHsuzah1zrXJXu4 y
+  9up8hCmk7hJMhqxNeufyr2PTCBp5nsNyGfgLuVnnsVP7.
+- Todas las ediciones las hizo un script con reemplazos exactos, cada uno con assert de una sola ocurrencia
+  (<scratchpad>/task6-edit.py).
+
+== Qué cambió, por archivo ==
+documents/STATUS.md
+  - Roadmap, fila "6. Docs y despliegue": "Publicación en testnet: #8, pendiente del owner (PR #48)." pasa a
+    "✅ 2026-11-04 (#8, PR #48; ver "Despliegues")" (Desviación 1).
+  - Sección nueva "## Despliegues", tras "Toolchain":
+    - columnas Red | Fecha | packageId | Digest de publicación | sourceCommit | CLI / framework | Comisión | Custodia | Smoke;
+    - fila de testnet: 2026-11-04, packageId completo, 4yK3m…, 26f2676, 1.83.0-16d2dc1e05ed / 05ad86a3… (PV 140, época 1273),
+      200 bps (tx BVQf…), custodia en la publicadora (N-3 «lo dejo», D-20261104-06), crear/cancelar y Parte B 12/12;
+    - nota: "IDs completos en contracts/deployments/testnet.json… manda el json"; una republicación actualiza la fila.
+  - Baselines de gates, fila nueva arriba (v1.2.2): "testnet @ 36068e7 (TASK-5 de #8), CLI 1.83.0, Node v26.13.0, 2026-11-04" |
+    Parte B | 🟢 12/12. Lleva la sonda 32/0, B5 true ×3 (D-20261104-06) y los gates idénticos a la CI de 24afcec
+    (0/0/83, 104, 1 despliegue(s), 1156/65, index-B3BeMVQC.js 917.80 kB / 277.96 kB). También B10 ✅ con la observación
+    del 403 de Slush (E-6b de #15) y B11 con 2 despliegue(s) y cierre M-7 limpio. Sin direcciones.
+  - H13: "Publicado con PV 140 (época 1273) el 2026-11-04 (#8)".
+  - Ciclo activo:
+    - fila #9: rama "con testnet.json" del paso 15 ✅ 2026-11-04 (B10 de #8);
+    - fila #8: 🚧 2026-11-04. Suma G1 ✅, G2/G3 ✅ (publicación desde 26f2676, registrada en 327f5d4) y el merge 24afcec. También
+      TASK-5 (3da6de8, 2620388), 12/12, y TASK-6. Siguen la revisión del MAYOR y el merge (S-4); el housekeeping lo cierra;
+    - Siguiente: "#8 (TASK-5/6, revisión de integración y merge = S-4 de #17); después #15 TASK-6 (S-6), Railway (S-7, owner),
+      #16 TASK-5 (S-8) y #17 TASK-3", con la lista post-MVP intacta (#51, #53, #54, #56, #58, #60). Sin #12 ni #14.
+  - Pendientes del usuario:
+    - "Post-publicación (#8)" ✅ 2026-11-04, 200 bps y tx BVQf…; se conserva la regla para una republicación;
+    - ítem nuevo, "Runbook de #8, paso 12: borrar los dos battleship-publish-*". B1-B5 de TASK-5 dieron PASA; el owner
+      puede borrarlos; pendiente de confirmación;
+    - en "A revisar por el owner": "N-3: ✅ D-20261104-06, decidido por el owner el 2026-11-04 («lo dejo»: el HouseCap queda en
+      la publicadora; sin transfer_house_cap)".
+agents.md
+  - §2: "contracts/deployments/testnet.json y contracts/Published.toml existen desde #8 (primera publicación en testnet,
+    2026-11-04):".
+  - Árbol: deployments/ dice "testnet.json desde #8; localnet.json efímero e ignorado"; Published.toml, "commiteado desde la
+    publicación".
+  - §5, fila "Package ID / object IDs por red": "testnet: deployments/testnet.json (#8)".
+  - §12:
+    - "Orden de #8" pasa a "Testnet: publicado el 2026-11-04 (#8) desde 26f2676, packageId <completo>; runbook: contracts/README.md
+      → "Uso en testnet"; republicar solo bajo D-20261103-01 (2), con su operación previa";
+    - "Dirección publicadora": conserva el texto neutral y suma "N-3 decidido (D-20261104-06, 2026-11-04, «lo dejo»): en testnet
+      el HouseCap sigue en la publicadora, que el owner usa en su wallet de navegador; sin transfer_house_cap";
+    - "Post-publicación (#8)": ✅ 2026-11-04, 200 bps (tx BVQf…), y se conserva la regla para una republicación;
+    - "App: Railway…" y "Mainnet" sin cambios.
+contracts/README.md
+  - Tabla inicial: "Datos de cada publicación (testnet desde #8)".
+  - Checklist "Qué pasa si se pierde el cap", ítem N-3: "En testnet, D-20261104-06, decidido el 2026-11-04: el cap se queda
+    en la publicadora («lo dejo»)". El resto del checklist queda igual.
+  - "Fee por defecto 0": "En testnet, 200 bps desde la publicación (D-20261103-01, tx BVQf…)".
+  - "Despliegues (#7)": "testnet.json (commiteado en #8)" y un párrafo "Testnet:" con la fecha, 26f2676, el packageId e "IDs
+    completos en deployments/testnet.json".
+  - "Uso en testnet (solo el owner)": línea inicial "Publicado el 2026-11-04 (#8). Una republicación sigue este runbook bajo
+    D-20261103-01 (2), con la operación previa que registra esa decisión". El título no cambia.
+  - Paso 0: la frase "La dirección activa es la misma que usa en la wallet del navegador, porque el panel admin (#14) firma
+    con ella" se reemplaza por el texto del handoff (publicadora; N-3 neutral: importar o transfer_house_cap después del
+    paso 8 con el checklist; «lo dejo», D-20261104-06). Solo ajusté el corte de líneas, no el contenido.
+    Ahora el paso 0, el checklist de N-3 y agents.md §12 dicen lo mismo: texto neutral + decisión.
+app/README.md ("Testnet", sin otros cambios)
+  - Las dos primeras oraciones pasan a "contracts/deployments/testnet.json existe desde #8 (publicación del 2026-11-04): un build
+    con VITE_SUI_NETWORK=testnet lee la House y las partidas reales del fullnode público. Sin ese archivo (p. ej., en el PR
+    de una republicación), el build compila pero muestra la pantalla de error de configuración". La oración del explorador
+    queda.
+README.md (solo :27)
+  - grep -n 'PR #48' README.md daba ":27" (TASK-5 de #16 no lo quitó). Se quitó "([PR #48](…))" y queda "D-20261103-01; la
+    vigente la muestra la app". Nada más: :36, :47 y el roadmap son de #16.
+
+== No tocado ==
+contracts/deployments/testnet.json, contracts/Published.toml, código (app/src, contracts/sources, contracts/scripts), DECISIONES.md,
+el handoff, el smoke, lo de #15/#16 (app/README "Despliegue (Railway)", agents.md §12 "App", README :36/:47/roadmap) y los
+títulos de sección. Lo comprueban git diff --exit-code de los intocables → 0 y git diff --name-only de código → 0 archivos.
+
+== Gates (§5) ==
+git diff --stat:
+ README.md           |  2 +-
+ agents.md           | 29 +++++++++++++++--------------
+ app/README.md       |  6 ++++--
+ contracts/README.md | 23 ++++++++++++++++++-----
+ documents/STATUS.md | 25 ++++++++++++++++++-------
+ 5 files changed, 56 insertions(+), 29 deletions(-)
+Greps §R-6, sobre las líneas agregadas del diff:
+  [0-9a-fA-F]{40,64}: 4 líneas. 3 son el packageId (STATUS "Despliegues", agents.md §12, contracts/README "Despliegues") y 1 es
+    la fila H13 de STATUS, que ya tenía el rev completo del framework 05ad86a3e86c… (público, declarado en el handoff): conteo
+    antes 2, después 2, solo se le agregó texto. Sin ese rev ni el packageId: vacío.
+  0x[0-9a-fA-F]{8,}: 3 líneas, las 3 el packageId. Sin el packageId: vacío.
+  grep de secretos y rutas personales (el tercero de §R-6): vacío.
+  Ninguna dirección de cuenta, ni completa ni abreviada.
+jq -r .packageId contracts/deployments/testnet.json = el valor de cada doc, con grep -c por archivo:
+  README.md 0 · agents.md 1 · app/README.md 0 · contracts/README.md 1 · documents/STATUS.md 1. Ningún otro ID completo.
+Anclas: los títulos de README.md, agents.md, app/README.md y contracts/README.md no cambian (diff de "^#" vacío). STATUS solo
+  agrega "## Despliegues". Nadie enlaza a STATUS.md#…, así que ningún "#…" queda apuntando a un título cambiado.
+Criterios §7:
+  - grep -c "se completa después de #8" README.md = 2;
+  - grep -c 'PR #48' README.md = 0;
+  - agents.md §12 conserva "App: Railway" y "Mainnet";
+  - "Siguiente" sin #12 ni #14;
+  - paso 0, checklist N-3 y agents.md §12 coherentes: neutral + D-20261104-06.
+git status --porcelain --untracked-files=all: los 5 archivos de §4 y nada más.
+
+== Desviaciones del handoff ==
+1. STATUS, roadmap "6. Docs y despliegue": la frase "Publicación en testnet: #8, pendiente del owner (PR #48)." pasó a
+   "✅ 2026-11-04 (#8, PR #48; ver "Despliegues")". §3 no la lista, pero es texto de #8 y habría quedado falso. El resto de esa
+   fila (#15, #16) no se tocó.
+2. agents.md §12: el bullet "Orden de #8" se reemplazó entero por el texto del handoff ("pasa a"). La secuencia detallada
+   sigue en el runbook de contracts/README.md, que es a donde apunta. Las menciones de "Orden de #8" en STATUS (TASK-3) y
+   en REPORTES/HANDOFF son históricas y quedan.
+3. Corte de líneas: en agents.md §2 y §12 y en contracts/README "Despliegues", la línea del packageId va sola para no pasar
+   de ~120 columnas; el contenido es el del handoff.
+4. Paso 12 del runbook: va como pendiente ("el owner puede borrarlos; pendiente de confirmación"), según el dato del
+   orquestador.
+
+== Commit sugerido (no lo hice) ==
+docs: record the testnet deployment in STATUS, agents.md and READMEs (#8)
+
+== Veredicto ==
+Listo para revisión. Se cumple el criterio 6 de #8, el packageId es idéntico a testnet.json en los 3 docs que lo citan, y no
+hay direcciones de cuenta.
+```
+
+## Revisión TASK-6: PASA
+
+> MID · 2026-11-04 · Contra `documents/HANDOFF_TESTNET_PUBLISH.md` v1.2.2 (TASK-6 §2-§7, con la tabla de §2 de lo que es
+> de #8 y lo que es de #15/#16), D-20261104-06 (`documents/DECISIONES.md:13`) y el diff real sobre `2620388`: `README.md`
+> (+1/−1), `agents.md` (+15/−14), `app/README.md` (+4/−2), `contracts/README.md` (+18/−5), `documents/STATUS.md`
+> (+18/−7) y este archivo.
+
+**1. Diff contra §3: ✅**
+- **STATUS:**
+  - sección "Despliegues" con las 9 columnas y la fila de testnet completa, con el aviso "manda el json";
+  - fila de evidencia de TASK-5 en "Baselines de gates" (v1.2.2): 12/12, 32/0, B5 `true` ×3, gates y bundle literales,
+    B10 con la observación y B11 con 2 despliegues;
+  - H13 con la fecha;
+  - fila de #9 ✅ (B10);
+  - fila de #8 con G1-G3, el merge, TASK-5 y TASK-6;
+  - "Siguiente" sin #12 ni #14;
+  - en Pendientes, "Post-publicación" ✅ con el digest, el paso 12 pendiente y N-3 ✅ con D-20261104-06.
+- **`agents.md`:**
+  - §2 y árbol;
+  - §5, fila con testnet;
+  - §12: "Testnet: publicado…" con `packageId`, la "Dirección publicadora" neutral más N-3 decidido, y "Post-publicación"
+    ✅ conservando la regla.
+- **`contracts/README.md`:**
+  - tabla inicial;
+  - checklist N-3;
+  - "Fee por defecto 0" con el digest;
+  - intro de "Despliegues" y párrafo "Testnet";
+  - línea inicial de "Uso en testnet";
+  - paso 0 reconciliado.
+- **`app/README.md`:** solo las dos primeras oraciones de "Testnet". La del explorador queda (SUG-4).
+- **`README.md`:** solo `:27`, `D-20261103-01` sin enlace (SUG-5). `grep -c 'PR #48' README.md` = 0.
+- Los intocables no cambian: `git diff --exit-code` da 0 en `contracts/deployments`, `Published.toml`, `Move.lock`,
+  `contracts/sources`, `app/src`, `DECISIONES.md`, el handoff y el smoke.
+
+**2. `packageId`: ✅**
+- Comparé `jq -r .packageId contracts/deployments/testnet.json` con `grep -c` por archivo, y con las líneas agregadas:
+  - `agents.md`: 1/1;
+  - `contracts/README.md`: 1/1;
+  - `documents/STATUS.md`: 1/1;
+  - `README.md` y `app/README.md`: 0, como pide §3 (el README no copia IDs, D-20261104-04 (2)).
+- Ningún otro ID completo.
+- Los digests (comisión, crear, cancelar, publicación) coinciden con §"Entrega del owner" y con `publishTxDigest`.
+
+**3. Custodia coherente en los tres lugares: ✅**
+- **Paso 0 del runbook** (`contracts/README.md:696-702`): la publicadora recibe los tres objetos. Las dos vías de N-3 van
+  en neutral: importarla en la wallet, con el riesgo de exponer `UpgradeCap` y `Publisher` a la extensión, o
+  `transfer_house_cap` por CLI después del paso 8, con el checklist. Cierra con "el `HouseCap` quedó en la publicadora
+  (N-3: «lo dejo», D-20261104-06)".
+- **Checklist de N-3** (`:121-123`): la línea agregada dice lo mismo.
+- **`agents.md` §12:** el texto neutral queda tal cual, más "N-3 decidido (D-20261104-06…)".
+- La frase vieja "La dirección activa es la misma que usa en la wallet del navegador" ya no está en ningún doc.
+- D-20261104-06 se cita en `contracts/README.md` (2), `agents.md` (1) y STATUS (3).
+- Ninguno cuenta cómo se creó la cuenta (MINOR-2 de v1.2).
+
+**4. Nada de #15/#16 tocado: ✅**
+- `README.md` tiene un solo hunk, en `:27`. `:36`, `:47` y el roadmap siguen igual: `grep -c "se completa después de #8"
+  README.md` = 2.
+- `app/README.md` tiene un solo hunk, en `:58`. "Despliegue (Railway)" no cambia.
+- En `agents.md` §12, las líneas "App: Railway" y "Mainnet" quedan iguales.
+- En STATUS, las filas de #15 y #16 quedan iguales.
+- La desviación 1 (la frase de #8 en la fila "6. Docs y despliegue" del roadmap de STATUS) toca solo el texto de #8, que
+  habría quedado falso. Se acepta.
+
+**5. §R-6 y dirección de cuenta: ✅**
+- Greps sobre las líneas agregadas de los 5 docs:
+  - 40-64 hex: solo el `packageId` (3) y el rev `05ad86a3…` de la fila H13, que ya estaba y está declarado. Sin esos dos,
+    vacío;
+  - `0x` + 8 hex: solo el `packageId`;
+  - el tercero (claves y rutas personales): vacío.
+- **Dirección:** leí por gRPC público el `sender` de la publicación, sin imprimirlo, y lo busqué en los 214 archivos de
+  `git ls-files`, leídos del worktree (incluye los 6 modificados). Seis formas: completa, prefijo de 8, sufijo de 8, dos
+  abreviaciones 4+4 y `0x` + 4 hex. Resultado: **0 archivos en todas**.
+
+**6. Anclas: ✅**
+- Ningún título cambia en `README.md`, `agents.md`, `app/README.md` ni `contracts/README.md`. El diff de líneas `^#` solo
+  trae `+## Despliegues` en STATUS.
+- `#uso-en-testnet-solo-el-owner` (`README.md:134` y el comentario de #8) y `#despliegues-7` siguen apuntando a títulos
+  existentes.
+- No hay enlaces a anclas de `STATUS.md`. La sección nueva no colisiona: el ancla de `contracts/README.md` es
+  `#despliegues-7`, en otro archivo.
+
+**7. Desviaciones: aceptadas**
+- **1. Fila del roadmap:** ver el punto 4.
+- **2. "Orden de #8" reemplazado entero:** es lo que dice §3 ("pasa a"). La secuencia sigue en el runbook enlazado, y
+  ningún doc vigente remite a esa viñeta. Las menciones en STATUS, REPORTES y el handoff son históricas.
+- **3. Corte de línea del `packageId`:** cosmético, sin cambio de contenido.
+- **4. Paso 12 pendiente:** es correcto según SUG-2 de la v1.2. TASK-6 escribe el estado real, y el owner no lo confirmó.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Sin hallazgos | — |
+
+> Nota (🔵, no bloquea): "Siguiente" de STATUS dice "#8 (TASK-5/6, revisión de integración y merge = S-4 de #17)". Es el
+> texto del handoff, y TASK-5/6 ya están hechos. Si el orquestador quiere, el housekeeping del merge lo reemplaza por la
+> fila final; no hace falta tocarlo ahora.
+
+### Siguiente paso
+1. Commitear los 5 docs y este archivo en un solo commit, con el mensaje de abajo, y pushear. La CI del head tiene que
+   dar `contracts`, `app` y `deploy-image` positivos y `framework-drift` sin H13.
+2. **Body del PR #48** (lo propone el MID cuando se pida):
+   - `Closes #8`;
+   - criterios 1-6 de #8 con su evidencia: runbook ensayado (Parte A 13/13), autorización en D-20261103-01, publicación
+     y entrega (G2/G3), verificación pública (Parte B 12/12), comisión 200 y custodia definitiva (D-20261104-06), y docs
+     (TASK-6);
+   - la excepción de B10 acotada (v1.2.2);
+   - pendientes del owner: el paso 12 del runbook, Railway (S-7) y revisar D-20261104-06.
+3. **Revisión de integración del MAYOR**, publicada en el PR antes del merge. Además de lo habitual, verifica:
+   - la aceptación de B10, su límite y la v1.2.2;
+   - que el texto de custodia sea coherente con D-20261104-06.
+4. Merge con **merge commit** (D7: `26f2676` tiene que quedar en `master`) y housekeeping, que borra
+   `HANDOFF_`, `SMOKE_`, `REPORTES_TESTNET_PUBLISH.md` y `REVISION_PREVUELO_TESTNET.md` y cierra la fila de #8. Así se
+   cumple S-4 de #17.
+5. Avisos que siguen pendientes:
+   - al MID de #16: "(PR #48)" ya no está en `README.md:27`;
+   - al MID de #17: el baseline nuevo de `master` y S-5 cumplido sin `dcap`.
+
+### Mensaje de commit propuesto
+```
+docs: record the testnet deployment in STATUS, agents.md and READMEs (#8)
+
+STATUS gets a Deployments section (package, publish digest, source
+commit 26f2676, CLI/framework at PV 140, fee 200 bps with its tx, N-3
+custody per D-20261104-06, smoke digests and Part B 12/12) and the TASK-5
+evidence row. agents.md §2/§5/§12 and contracts/README record that
+testnet.json and Published.toml exist since #8. The owner runbook's step
+0 now uses the neutral N-3 wording plus the owner's decision, so it
+matches the cap checklist and agents.md. The fee default note and
+app/README "Testnet" say the real values, and README drops the PR #48
+link. Nothing owned by #15 or #16 changes. Adds the DEV report and its
+review.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+---
