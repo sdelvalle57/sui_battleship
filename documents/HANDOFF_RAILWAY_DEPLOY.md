@@ -1,0 +1,579 @@
+# HANDOFF_RAILWAY_DEPLOY
+> Plan: PLAN_RAILWAY_DEPLOY v1.1 (aprobado por el MAYOR en la ronda 2; commit `4e7d1a3`) | Issue: #15 |
+> Branch: `feature/issue-15-pages-deploy` | Versión: v1 | Fecha: 2026-11-04
+> Decisiones: D-20261104-03 (P-1..P-5 de este plan, tomadas por delegación), D-20261104-01 (delegación y hosting en
+> Railway; llega a `master` con #14), D-20261102-02, D-20261030-13.
+> Este handoff es **autocontenido**. El plan v1.1 tiene el porqué de cada decisión (DL-1..DL-13); acá está lo que hay
+> que hacer.
+
+## Historia de usuario
+
+**Como** jugador con una wallet de Sui en testnet, **quiero** abrir una URL pública y jugar sin clonar el repo,
+**para** probar el juego desde cualquier navegador.
+**Como** owner, **quiero** que el repo deje lista la imagen de Railway (servidor, cabeceras, guarda de #8 y chequeo en
+la CI), **para** conectar el servicio y publicar en minutos cuando vuelva y exista `contracts/deployments/testnet.json`.
+
+**Scope en una frase:** favicon, imagen Docker con Caddy y CSP que se niega a construirse sin el `testnet.json` de #8,
+un script de chequeo compartido por la CI y el ensayo local, el job `deploy-image` y la documentación.
+**Lo que NO entrega:** nada en Railway ni ninguna publicación (owner); `testnet.json` (#8); la URL pública (TASK-6,
+después de #8); code-splitting (issue aparte, P-3); `railway.json` (P-1: los servicios nuevos no lo leen).
+
+## 0. Baseline de gates verificado (2026-11-04, `master` `deaadbb` = base de la branch; HEAD de la branch `4e7d1a3`, solo docs)
+
+| Área | Gate | Baseline | Fuente |
+|---|---|---|---|
+| CI @ `deaadbb` | run `push` 41790496035 | 🟢 `contracts`, `app` y `framework-drift` success | `gh api …/actions/runs/41790496035/jobs` |
+| app | `npm ci` / `npm audit signatures` / `npm audit --omit=dev --audit-level=high` | 🟢 293 paquetes; 292 firmas; 0 vulnerabilidades de producción (11 *moderate* solo dev, #35) | STATUS (TASK-5 de #13, `7a3b7fb`; sin cambios de app hasta `deaadbb`) |
+| app | `npm run lint -w app` / `npm run typecheck -w app` | 🟢 **0 problemas** / **0 errores** | ídem |
+| app | `npm test -w app` | 🟢 **915 tests PASS** en **57** archivos | ídem |
+| app | `VITE_SUI_NETWORK=testnet npm run build -w app` | 🟢 `index-*.js` **901,45 kB** (273,61 kB gzip), aviso de chunk > 500 kB (informativo; → issue de code-splitting) | ídem; el MID lo volvió a medir hoy con Node `v26.13.0`: 901,49 kB, la diferencia es el comentario del `--sourcemap` |
+| contracts | build / `--lint` / test / `node --test` / `check` | 🟢 0 warnings / 0 lints / 83 tests / 99 tests / "0 despliegues" | STATUS; #15 **no toca** `contracts/` |
+| Toolchain | Node / npm | `v26.13.0` / `11.20.0` | STATUS |
+| Docker (máquina local) | `docker --version` | `Docker version 29.1.3`; daemon accesible para el usuario (grupo `docker`); **sin `docker buildx`** (builder clásico); imágenes locales: `busybox`, `postgres:16-alpine`, `postgres:17` | medido por el MID hoy |
+
+**Cero delta** = mismos conteos. Solo TASK-1 toca el build de la app, y suma `favicon.svg` al `dist`. Ningún task
+cambia tests ni código de `app/src/`.
+
+## Decisiones del owner (D1..D6, no reabrir)
+
+| # | Decisión | Fuente |
+|---|---|---|
+| D1 | Hosting en **Railway**: el repo deja la imagen lista; crear y conectar el servicio y publicar es del owner | D-20261104-01 (2) |
+| D2 | Sin `railway.json`/`railway.toml`: `Dockerfile` en la raíz y los settings de Railway en el checklist del owner | D-20261104-03 (1), P-1 = (a) |
+| D3 | CSP y cabeceras aplicadas (Caddy), **sin COOP**; si una wallet real no conecta, solo la CSP pasa a `Report-Only` | D-20261104-03 (2), P-2 = (a) |
+| D4 | El code-splitting sale de #15 (issue aparte: lo redacta el MAYOR y lo crea el orquestador) | D-20261104-03 (3), P-3 = (b) |
+| D5 | Favicon SVG propio y simple | D-20261104-03 (4), P-4 = (a) |
+| D6 | Mergear antes de #8 con `Refs #15`; `Closes #15` en el PR posterior a #8 (TASK-6) | D-20261104-03 (5), P-5 = (a) |
+
+**No delegado (N-1..N-5): ningún task lo toca.** Railway (proyecto, GitHub App, settings), cada publicación del
+sitio, #8, los checks requeridos y el rollback son del owner.
+
+## Reglas comunes (todas las tasks)
+
+- **Gate `app` en forma canónica** (`agents.md` §3), desde la raíz del worktree, con output pegado:
+  ```bash
+  export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && node --version   # v26.13.0
+  npm ci && npm audit signatures && npm audit --omit=dev --audit-level=high
+  npm run lint -w app && npm run typecheck -w app && npm test -w app
+  VITE_SUI_NETWORK=testnet npm run build -w app
+  git status --porcelain --untracked-files=all    # solo los archivos del task
+  ```
+  Ningún task toca `contracts/`, así que su gate no se corre: se declara "sin cambios en `contracts/`" con
+  `git diff --stat -- contracts/` vacío.
+- **Testnet:** nada con claves; las lecturas públicas sí. **`~/.sui/`:** solo `stat`/`ls`.
+- **#8:** el worktree de #8 está **congelado**: no se lee ni se escribe. Lo de #8 se lee **solo** con
+  `git show origin/feature/issue-8-testnet-publish:<ruta>`.
+- **Chrome headless:** `--headless=new --user-data-dir=<scratchpad>/chrome-15-<task>` con `HOME`/`XDG_*` aislados en
+  `<scratchpad>`, `--remote-debugging-address=127.0.0.1`, guardar el PID al lanzarlo y cerrar **solo ese PID**
+  (`kill <pid>`; nunca `pkill`/`killall`). El Chrome del usuario puede estar abierto. Con más de una pestaña:
+  `Target.createTarget({ url, newWindow: true })` y nunca `Page.bringToFront`.
+- **Docker:** contenedores y etiquetas propios (`deploy-image-*`, `battleship-app:*`), siempre por nombre o ID.
+  Nunca `docker stop $(docker ps -q)`, `docker system prune` ni `docker rmi` de imágenes ajenas. Las imágenes base
+  que se descarguen se declaran, y al final se borran las que no estaban (`busybox` y las de `postgres` se quedan).
+- **Sin rutas personales** en lo que se pegue: `<repo>`, `<scratchpad>`, `<HOME real>`.
+- **Sin commits ni pushes** (los hace el orquestador). Reporte con la plantilla de `FLUJO_AGENTES.md` §5, incluida
+  "Desviaciones del handoff" (o "ninguna").
+- **Coordinación de la localnet:** solo puede haber **una** localnet a la vez y la está usando #14. TASK-1, TASK-2 y
+  TASK-4 **no** usan localnet y se pueden hacer ya. TASK-3 tiene precondición (ver ahí).
+
+**Orden de los tasks:** TASK-1 → TASK-2 → TASK-4 (en paralelo con la localnet de #14) → TASK-3 (cuando se libere la
+localnet) → TASK-5. TASK-6, después de #8.
+
+---
+
+## TASK-1: favicon — área: app
+
+### 1. Historia de usuario del task
+**Como** jugador, **quiero** ver el ícono del juego en la pestaña, **para** reconocerla entre otras; y **como** DEV,
+quiero que desaparezca el 404 de `/favicon.ico` de la consola en cada carga.
+
+### 2. Contexto
+- `app/index.html` no declara ícono. Los smokes de #9 registraron el 404 de `/favicon.ico` y lo derivaron a #15.
+- `app/public/` no existe. Vite copia `public/` a la raíz de `dist/` tal cual, y con `base` `/` la ruta queda
+  `/favicon.svg`.
+- `app/vite.config.ts` **no** declara `base` (vale `/`), y así queda.
+
+### 3. Qué implementar
+- `app/public/favicon.svg`:
+  - SVG estático propio: un blanco o diana de batalla naval con 2-3 círculos concéntricos y una mira, sin texto ni
+    emoji;
+  - `viewBox="0 0 32 32"`, colores fijos, ≤ 1 kB;
+  - **sin** `<script>`, `<foreignObject>`, `href` externos ni fuentes, y sin licencias de terceros.
+- `app/index.html`: en `<head>`, `<link rel="icon" type="image/svg+xml" href="/favicon.svg" />`.
+
+### 4. Archivos
+- **Tocar:** `app/public/favicon.svg` (nuevo) y `app/index.html`.
+- **NO tocar:** `app/vite.config.ts`, `app/src/**` ni tests.
+
+### 5. Tests / verificaciones
+1. Gate `app` canónico: **915 tests en 57 archivos**, 0 problemas y 0 errores, sin delta.
+2. Después del build: `app/dist/favicon.svg` existe y `grep -c 'rel="icon"' app/dist/index.html` = 1.
+3. `npm run preview -w app -- --host 127.0.0.1 --port 4173 --strictPort` en segundo plano, guardando el PID, y Chrome
+   headless (reglas comunes) con `Network.enable` en `http://127.0.0.1:4173/`:
+   - `GET /favicon.svg` 200 con `content-type` `image/svg+xml`;
+   - **ningún** pedido a `/favicon.ico`.
+   - Pantalla esperada: "La app no está configurada" (no hay `testnet.json`), y está bien así.
+   - Cerrar `preview` y Chrome por sus PIDs.
+
+### 6. Smoke
+No aplica aparte: se verifica en el paso 3 y en el script de TASK-2 (`/favicon.svg` 200).
+
+### 7. Criterios de aceptación
+- Los pasos 1-3 en verde, con output.
+- `git status` solo con los dos archivos.
+
+### 8. Al terminar
+Reporte §5. Commit propuesto por el MID.
+
+---
+
+## TASK-2: imagen de Railway, script de chequeo y ensayo de los dos caminos — área: app/ci
+
+### 1. Historia de usuario del task
+**Como** owner, **quiero** una imagen que sirva el build de testnet con cabeceras de seguridad y que se **niegue** a
+construirse sin el `testnet.json` real, **para** que Railway nunca publique una app rota ni con IDs inventados. **Como**
+revisor, quiero que los dos caminos (sin y con `testnet.json`) estén probados antes de #8 con el mismo script que va a
+usar la CI.
+
+### 2. Contexto
+- **Glob de la config:** `app/src/sui/config.ts:150-155` lo resuelve al compilar (`import: 'default'`), así que los IDs
+  de `testnet.json` quedan literales en el bundle. Sin `testnet.json`, el build compila igual y muestra
+  "La app no está configurada" (`config.ts:97-101`).
+- **`check` de PR #48** (`git show origin/feature/issue-8-testnet-publish:contracts/scripts/publish.mjs`):
+  - `main()` corre primero `checkNodeVersion` con `../.nvmrc` (`:819-821`) y falla con `.nvmrc sin versión válida`
+    si no lo encuentra;
+  - `commandCheck` (`:798-810`) lee solo `contracts/deployments/*.json` y `contracts/Published.toml`;
+  - la coherencia (`deployment.mjs:341-361`) compara `packageId`/`published-at`, `originalPackageId`/`original-id`,
+    `packageVersion`/`version`, `upgradeCapId`/`upgrade-capability` y `chainId`/`chain-id`;
+  - testnet exige el chain id `4c78adac` (`deployment.mjs:6`).
+- **Endpoint gRPC de testnet:** `https://fullnode.testnet.sui.io:443` (`app/src/sui/networks.ts:12`).
+- **Bundle (medido):** sin `eval`/`new Function` ni `WebAssembly`. Orígenes externos: el fullnode,
+  `https://api.slush.app` (`fetch` de metadata al registrar Slush), `https://my.slush.app` (navegación del popup) y
+  MVR (no se usa con IDs `0x`).
+- **Imagen de Caddy 2.11.7:**
+  - trae `setcap cap_net_bind_service=+ep /usr/bin/caddy` y `libcap`;
+  - deja `/config/caddy` y `/data/caddy` con `chmod 1777`, así que `nobody` puede escribir ahí y no hace falta mover
+    `XDG_*` (sugerencia 2 de la ronda 2; se verifica, no se cambia);
+  - tiene un bug de `encode` con **HEAD**, corregido en 2.11.8: las cabeceras se leen siempre con **GET**.
+- **Node:** se usa 26.12.1 y no 26.13.0 por la regla de 7 días (DL-8). Las notas de la release de v26.13.0 dicen:
+  *"Other than updating metadata, such as the `process.release` object, to reflect that the release is LTS, no further
+  changes from Node.js 26.12.1 are included."* La subida de TASK-6 es solo de paridad.
+
+### 3. Qué implementar
+
+#### 3.1 `.dockerignore` (raíz). Contenido exacto
+```
+# Contexto de la imagen de Railway (#15): lista blanca. Todo lo demás queda fuera, incluidos
+# contracts/deployments/localnet.json, .env*, node_modules, dist y .git.
+*
+!package.json
+!package-lock.json
+!.npmrc
+!.nvmrc
+!app/
+!contracts/scripts/publish.mjs
+!contracts/scripts/deployment.mjs
+!contracts/Published.toml
+!contracts/deployments/testnet.json
+app/node_modules
+app/dist
+app/.env*
+app/scripts
+```
+
+#### 3.2 `Dockerfile` (raíz)
+Sigue el modelo del plan v1.1, TASK-2, con estas **invariantes** (cualquier cambio se declara):
+- **Etapa `build`:** `FROM node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c AS build`.
+  Orden obligatorio:
+  1. `COPY .nvmrc ./`
+  2. `COPY contracts/ contracts/`
+  3. `RUN test -f contracts/deployments/testnet.json || { echo "ERROR (#15): falta contracts/deployments/testnet.json. Lo commitea #8 tras la publicación del owner en testnet; sin él no se construye la app (nunca IDs a mano)." >&2; exit 1; }`.
+     El mensaje es **literal**: el script lo busca por la subcadena `falta contracts/deployments/testnet.json`.
+  4. `RUN node contracts/scripts/publish.mjs check`
+  5. `COPY package.json package-lock.json .npmrc ./` y `COPY app/package.json app/`
+  6. `RUN npm ci`
+  7. `COPY app/ app/`
+  8. `ENV VITE_SUI_NETWORK=testnet`
+  9. `RUN npm run build -w app`
+  10. El `RUN` de comprobaciones del bundle:
+      - los 4 IDs (`packageId`, `originalPackageId`, `houseId`, `publishTxDigest`) están en `app/dist/assets`;
+      - no hay `network:"localnet"` ni `"network":"localnet"`;
+      - está `https://fullnode.testnet.sui.io`.
+- **Etapa runtime:** `FROM caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5`.
+  1. `COPY app/Caddyfile /etc/caddy/Caddyfile`
+  2. `COPY --from=build /repo/app/dist /srv`
+  3. `RUN setcap -r /usr/bin/caddy && caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && grep -qF 'https://fullnode.testnet.sui.io' /etc/caddy/Caddyfile`
+  4. `USER nobody`
+  5. `CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]`
+- **Prohibido:**
+  - `ARG` (ninguna variable de Railway entra al build);
+  - `RUN --mount`, heredocs, `COPY --chmod`/`--link` y `# syntax=` (no los admite el builder clásico local);
+  - `EXPOSE` con un puerto fijo distinto de `PORT`; se permite `EXPOSE 8080` como documentación;
+  - secretos de cualquier tipo.
+- **Comentarios:** solo el porqué (LIM-7): lista blanca, orden de `.nvmrc` (#8), regla de 7 días, `setcap`.
+
+#### 3.3 `app/Caddyfile`
+El del plan v1.1, TASK-2, **literal**:
+- opciones globales `admin off`, `persist_config off` y `auto_https off`;
+- site `:{$PORT:8080}`, `root * /srv`, `encode zstd gzip`;
+- bloque `header` con las 6 cabeceras y `-Server`;
+- matcher `@assets { path /assets/*; file }` con `Cache-Control "public, max-age=31536000, immutable"`;
+- `@entry path / /index.html` con `Cache-Control "no-cache"`;
+- `file_server`;
+- **sin** `log`, `try_files`, fallback SPA, COOP ni `browse`.
+
+La CSP literal, en una sola línea dentro de comillas:
+```
+default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://fullnode.testnet.sui.io https://api.slush.app; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+```
+Las otras cabeceras: `X-Content-Type-Options "nosniff"`, `X-Frame-Options "DENY"`, `Referrer-Policy "no-referrer"`,
+`Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"` y
+`Strict-Transport-Security "max-age=31536000"`.
+
+#### 3.4 `app/scripts/check-deploy-image.sh`: contrato
+
+```
+Uso:      bash app/scripts/check-deploy-image.sh <contexto> <puerto>
+          <contexto>  raíz del contexto de build (tiene Dockerfile, .dockerignore y app/Caddyfile)
+          <puerto>    entero 1024..65535: se publica en 127.0.0.1:<puerto> y es el PORT del contenedor
+Entorno:  CHECK_KEEP_TAG  (opcional) en modo positivo, etiqueta extra que NO se borra al salir
+                          (p. ej. battleship-app:ensayo-15, para E-4 y E-6)
+          GITHUB_ACTIONS, GITHUB_STEP_SUMMARY  (si existen) anotaciones ::notice::/::error:: y una línea de resumen
+Modo:     positivo si existe <contexto>/contracts/deployments/testnet.json; si no, negativo
+Salida:   0 = el modo detectado pasó todos sus chequeos; 1 = un chequeo falló ("FALLO: <qué>"); 2 = uso inválido
+Requiere: bash, docker, curl, grep, sed, mktemp. Sin otras dependencias ni red, salvo las descargas de docker
+```
+
+**Comportamiento obligatorio:**
+- `set -euo pipefail`.
+- Las rutas y el puerto se validan antes de tocar Docker (uso inválido → 2).
+- Etiqueta `battleship-app:check-$$` y contenedor `deploy-image-$$`.
+- El log del build va a un `mktemp` **fuera** del contexto.
+- `trap` en `EXIT` que hace `docker rm -f deploy-image-$$`, `docker rmi battleship-app:check-$$` y borra los
+  temporales, todo con `>/dev/null 2>&1 || true`. **No** borra `CHECK_KEEP_TAG`.
+- `docker build`: con `--progress=plain` **solo si** `docker buildx version >/dev/null 2>&1`; siempre con
+  `-f <ctx>/Dockerfile <ctx>`.
+- **Negativo (N1-N3).** El fallo esperado se captura **sin** que `set -e` aborte (sugerencia 4):
+  `if docker build … >"$log" 2>&1; then fail "sin testnet.json la imagen no debe construirse"; fi`.
+  - N1: el build falló.
+  - N2: `grep -qF 'falta contracts/deployments/testnet.json' "$log"`.
+  - N3: mensaje final `OK (negativo): sin contracts/deployments/testnet.json (#8) la imagen se niega a construirse`,
+    con `::notice::` en Actions.
+  - Si falla N2, imprime las últimas 30 líneas del log.
+- **Positivo (P1-P13).** Las cabeceras se leen **con GET**, nunca con HEAD (sugerencia 3):
+  `curl -sS -D <hdrs> -o <body> --max-time 10 <url>`. Los nombres se comparan sin distinguir mayúsculas y se recortan
+  los `\r`. **No** se comprueba `Content-Length`.
+  - **P1:** build verde (si no, las últimas 30 líneas del log). Con `CHECK_KEEP_TAG`, `docker tag` a esa etiqueta.
+  - **P2:** `docker run -d --name deploy-image-$$ --cap-drop=ALL -e PORT=<puerto> -p 127.0.0.1:<puerto>:<puerto> <tag>`.
+    Espera, sondeando cada 1 s y como mucho 30 s, a que `/` dé 200. Si no llega, `docker logs` (últimas 30 líneas)
+    y FALLO.
+  - **P3:** `docker exec deploy-image-$$ id -u` = `65534`.
+  - **P4:** `/` 200 y la `Content-Security-Policy` es **idéntica** a la que tiene el `Caddyfile` del contexto
+    (extraída con `sed` de la línea `Content-Security-Policy "…"`). Además contiene `script-src 'self'` y
+    `frame-ancestors 'none'`.
+  - **P5:** en `/`, valores exactos de `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+    `Referrer-Policy: no-referrer`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`,
+    `Strict-Transport-Security: max-age=31536000` y `Cache-Control: no-cache`.
+  - **P6:** en `/`, **ausencia** de `Cross-Origin-Opener-Policy` y de `Server`.
+  - **P7:** el asset JS que referencia el `index.html` servido (`src="/assets/…js"`) da 200, su `Content-Type` empieza
+    con `text/javascript` y su `Cache-Control` contiene `immutable`.
+  - **P8:** el mismo asset con `-H 'Accept-Encoding: zstd, gzip'` responde `Content-Encoding` `zstd` o `gzip`.
+  - **P9:** `/favicon.svg` 200 con `Content-Type` `image/svg+xml`.
+  - **P10:** `/no-existe` 404.
+  - **P11:** `/game/0x1` 404 (no hay fallback SPA).
+  - **P12:** `/assets/no-existe.js` 404 **sin** `immutable`.
+  - **P13:** mensaje final `OK (positivo): …`, con `::notice::` en Actions.
+- Cada FALLO dice qué chequeo (Nn/Pn), qué se esperaba y qué llegó.
+- Sin `eval`, sin `curl | sh` y sin escribir fuera de los temporales. Comentarios en español, solo el porqué.
+
+### 4. Archivos
+- **Tocar:** `Dockerfile`, `.dockerignore`, `app/Caddyfile` y `app/scripts/check-deploy-image.sh` (todos nuevos).
+- **NO tocar:** `app/src/**`, `app/vite.config.ts`, `app/package.json`, `package-lock.json`, `contracts/**`,
+  `.github/**` (va en TASK-4) y los docs (van en TASK-5).
+
+### 5. Tests / verificaciones (numeradas; cada una con output pegado)
+1. **V-1 a V-3 y E-1 a E-6** del **Anexo A**. Las columnas de resultado se llenan **durante la corrida**.
+2. Gate `app` canónico, sin delta (915/57; 0/0). La app no cambia en este task, pero el build tiene que seguir verde.
+3. `git diff --stat -- contracts/` vacío y `git status` solo con los 4 archivos del task.
+4. Greps sobre los 4 archivos nuevos:
+   - claves y secretos (`suiprivkey`, `PRIVATE KEY`, `mnemonic`, `ghp_`, `github_pat_`, `RAILWAY_TOKEN=`): 0
+     coincidencias;
+   - `ARG` en el Dockerfile: 0;
+   - hex de 40-64: solo los digests públicos de §3.2, declarados.
+
+### 6. Smoke
+Anexo A, parte 1 (V-1..V-3, E-1..E-6).
+
+### 7. Criterios de aceptación
+- El camino **negativo** (V-3) y el **positivo** (E-2) pasan con el **mismo script**.
+- E-3 prueba que `.nvmrc` llega antes del `check` (falla por incoherencia, no por `.nvmrc`).
+- La imagen corre como `nobody` (65534) con `--cap-drop=ALL`.
+- Las 6 cabeceras, la CSP idéntica a la del Caddyfile y la ausencia de COOP y `Server` (P4-P6).
+- El contexto contiene **solo** la lista blanca, también con un `localnet.json` y un `.env.local` presentes (E-1).
+- Al cerrar, ninguna imagen, contenedor ni directorio del ensayo queda vivo (cierre del Anexo A).
+
+### 8. Al terminar
+Reporte §5 con el Anexo A, parte 1, lleno. Declarar las imágenes descargadas y si se borraron.
+
+---
+
+## TASK-3: CSP con el kit montado (localnet aislada, build de producción) — área: app (smoke)
+
+### 1. Historia de usuario del task
+**Como** jugador, **quiero** que la CSP no rompa el kit de wallet, los estilos ni las lecturas, **para** que la app
+servida por Railway funcione igual que en desarrollo.
+
+### 2. Contexto y precondición
+- **PRECONDICIÓN (coordinación con #14):** la localnet aislada de #14 **terminó** y se cerró. Antes de empezar, el
+  orquestador avisa que #14 liberó la localnet. El DEV comprueba, sin `sui`, que no hay nada escuchando en `:9000`
+  (`ss -ltn 'sport = :9000'` sin filas) y que no quedó otro `<SMOKE_DIR>` activo de #14. Si alguna de las dos falla,
+  **no empieza**: lo reporta.
+- E-6 (TASK-2) mide la CSP contra testnet con IDs sintéticos (sin datos). Este task la mide **con datos reales** en la
+  localnet: el kit montado, estilos de Lit, gRPC-web y rutas profundas.
+- En localnet Slush está desactivado (`app/src/sui/dappKit.ts:15`), así que no se mide acá (lo cubren E-6 y TASK-6).
+
+### 3. Qué implementar
+Nada en el repo. Es una corrida de verificación, Anexo A, parte 2 (L-1..L-9):
+- localnet **aislada** de `agents.md` §3, publicación variante B (escribe `contracts/deployments/localnet.json`,
+  ignorado);
+- build de **producción** de localnet: `VITE_SUI_NETWORK=localnet npm run build -w app` (sin burner);
+- Caddy en Docker sirviendo ese `dist` con una **copia** del `app/Caddyfile` en `<SMOKE_DIR>`. La copia solo cambia
+  `connect-src`: `https://fullnode.testnet.sui.io` → `http://127.0.0.1:9000`.
+- El Caddyfile del repo **no se toca** y no gana variables.
+
+### 4. Archivos
+- **Ninguno en el repo.** `contracts/deployments/localnet.json` se crea y se **borra** en el cierre.
+
+### 5. Verificaciones
+Anexo A, parte 2, L-1..L-9.
+
+### 6. Smoke
+Anexo A, parte 2.
+
+### 7. Criterios de aceptación
+- **0** `securitypolicyviolation`. Si hay alguna, se registra `violatedDirective` + `blockedURI` y se aplica **solo**
+  el remedio previsto (`'unsafe-inline'` en `style-src`), como desviación declarada que vuelve a revisión del MID.
+- gRPC 200, estilos del kit aplicados, y la recarga de `#/game/<id>` y de `#/my-games` funciona.
+- El cierre del paso 7 de `agents.md` §3 se cumple completo.
+
+### 8. Al terminar
+Reporte §5 con el Anexo A, parte 2.
+
+---
+
+## TASK-4: job `deploy-image` en la CI — área: ci
+
+### 1. Historia de usuario del task
+**Como** owner, **quiero** que cada PR y cada push construyan la imagen de Railway con el mismo script del ensayo,
+**para** que una imagen rota se vea en la CI y, con *Wait for CI*, Railway no la despliegue.
+
+### 2. Contexto
+- `.github/workflows/ci.yml` tiene los jobs `contracts`, `app` y `framework-drift`; `permissions: contents: read` a
+  nivel workflow y una `concurrency` por PR o commit (`ci.yml:9-16`).
+- `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1` ya está fijada (es el tag v7.0.1, verificado).
+- Settings: `sha_pinning_required: true`; checks requeridos `contracts` y `app`. **No** se agrega `deploy-image` a
+  los requeridos (N-4, owner).
+
+### 3. Qué implementar
+Un job nuevo, después de `app` y antes de `framework-drift`:
+```yaml
+  deploy-image:
+    # Imagen de Railway (#15): sin testnet.json (#8) exige que el build se niegue con el mensaje esperado; con él,
+    # construye, levanta y comprueba cabeceras. No es requerido; Railway lo espera vía "Wait for CI".
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Imagen de Railway (camino según contracts/deployments/testnet.json)
+        run: bash app/scripts/check-deploy-image.sh . 8080
+```
+- Sin `permissions` propios (hereda `contents: read`), sin `secrets`, sin Actions nuevas, sin `if:`, sin steps de
+  stop ni de limpieza (los hace el `trap` del script).
+
+### 4. Archivos
+- **Tocar:** `.github/workflows/ci.yml` (solo el job nuevo).
+- **NO tocar:** los otros jobs, `on:`, `permissions`, `concurrency` y `env`.
+
+### 5. Tests / verificaciones
+1. **actionlint** en un contenedor desechable:
+   `docker run --rm -v <repo>:/repo:ro -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color=never`
+   da 0 hallazgos en todo el workflow. Si aparecen hallazgos en jobs **viejos**, se declaran sin tocarlos y el delta
+   tiene que ser 0. Fallback, si no se puede descargar la imagen:
+   `python3 -c 'import yaml,sys; yaml.safe_load(open(".github/workflows/ci.yml"))'` más una revisión manual,
+   declarado.
+2. `git diff .github/workflows/ci.yml` muestra **solo** el bloque nuevo.
+3. Antes de pushear, una corrida local del mismo comando: `bash app/scripts/check-deploy-image.sh . 18080` (ya hecha
+   en V-3) da 0, en modo negativo.
+4. **En el PR**, que el orquestador pushea después de la revisión: el run tiene `deploy-image` verde **por el camino
+   negativo** (el `::notice::` de N3 en el log) y `contracts`/`app` sin cambios. El orquestador anota el run ID.
+5. Opcional, recomendado: un rojo provocado en un PR desechable, cerrado sin merge, con el Dockerfile **sin** la
+   guarda de §3.2 paso 3. Tiene que fallar en N1 o N2.
+
+### 6. Smoke
+No aplica aparte: el run del PR es la evidencia.
+
+### 7. Criterios de aceptación
+- actionlint 0 (o el fallback declarado).
+- El diff es solo el job.
+- `deploy-image` verde por el camino negativo en el run del PR.
+
+### 8. Al terminar
+Reporte §5. El camino positivo de la CI es el mismo script que pasó E-2.
+
+---
+
+## TASK-5: documentación — área: docs
+
+### 1. Historia de usuario del task
+**Como** owner o como agente, **quiero** encontrar en los docs cómo se construye, verifica y publica la imagen, **para**
+operarla sin leer el plan.
+
+### 2. Contexto
+- `app/README.md` tiene "Testnet" (`:56-65`), "Origen del build publicado" y "Pendientes conocidos" (`:550-553`, el
+  code-splitting "→ #15").
+- `agents.md` §2 (layout), §3 (gate) y §12 ("App: hosting estático (por definir en el backlog)").
+- `documents/STATUS.md`: las filas de build con "code-splitting en #15" (`:49, :76, :82, :88`).
+
+### 3. Qué implementar
+- **`app/README.md`:** sección nueva **"Despliegue (Railway)"**, después de "Testnet", con:
+  - qué es la imagen;
+  - la guarda de #8 con sus mensajes literales (los de DL-3 y `check`);
+  - la lista blanca del contexto;
+  - las cabeceras y la CSP, con el motivo de cada origen de `connect-src` y por qué no hay COOP (popup de Slush);
+  - cómo verificar en local (`bash app/scripts/check-deploy-image.sh . 18080`, y qué hace cada modo);
+  - cómo agregar un origen a la CSP: una directiva por vez, como desviación declarada, incluido el caso del ícono
+    remoto de Slush en `img-src`;
+  - el fallback a `Report-Only`;
+  - la nota "Node 26.12.1 en la imagen por la regla de 7 días; 26.13.0 en TASK-6 (#15)";
+  - "URL pública: se completa después de #8".
+  - Además: "Origen del build publicado" agrega que la imagen excluye `localnet.json` por construcción, y
+    "Pendientes conocidos" cambia "→ #15" por "→ #N" (el issue de code-splitting).
+- **`agents.md`:**
+  - §2: en el árbol, `Dockerfile` y `.dockerignore` (raíz), `app/Caddyfile`, `app/public/` (favicon) y
+    `app/scripts/check-deploy-image.sh`;
+  - §3, "App": una línea sobre el job `deploy-image` (no requerido; mismo script en local) y el comando local;
+  - §12: reemplazar "App: hosting estático (por definir en el backlog)" por "App: Railway (D-20261104-01,
+    D-20261104-03): imagen del `Dockerfile` de la raíz (build de testnet + Caddy con CSP); el owner conecta el
+    servicio, activa *Wait for CI* y publica; sin `testnet.json` la imagen no se construye".
+- **`documents/STATUS.md`:**
+  - fila del ciclo #15 en "Ciclo activo";
+  - baselines de TASK-1/2/4 (y TASK-3 si ya corrió);
+  - "Pendientes del usuario": el checklist del owner, resumido con referencia a la §9 del plan;
+  - en las filas `:49, :76, :82, :88`, **anotar** "(→ #N)" sin reescribirlas.
+- **Issue de code-splitting:** el MAYOR lo redacta y el orquestador lo crea. Mientras no exista, el DEV deja `#N`
+  literal y el orquestador lo reemplaza al commitear.
+
+### 4. Archivos
+- **Tocar:** `app/README.md`, `agents.md`, `documents/STATUS.md`.
+- **NO tocar:** `documents/DECISIONES.md` (D-20261104-03 ya está commiteada en `4e7d1a3`) ni el plan.
+
+### 5. Verificaciones
+1. Sin rutas personales: `git diff | grep -nE '/home/|/Users/|/tmp/claude'` da vacío.
+2. Grep de claves limpio.
+3. Cada referencia a un archivo o línea existe.
+4. Los mensajes citados son idénticos a los de `Dockerfile` y `publish.mjs`.
+
+### 6. Smoke
+No aplica: son docs.
+
+### 7. Criterios de aceptación
+- Las verificaciones 1-4 OK.
+- El README describe los dos modos del script y el fallback de la CSP.
+
+### 8. Al terminar
+Reporte §5 y snippet propuesto para STATUS.
+
+---
+
+## TASK-6 (posterior a #8; PR de seguimiento con `Closes #15`) — área: app/docs
+
+> **No se ejecuta en este ciclo.** Se activa cuando `master` tenga el `testnet.json` y el `Published.toml` de #8 y el
+> owner esté disponible. Va con su propia ronda de revisión.
+
+- **Precondición:** #8 mergeado; la branch de seguimiento (desde `master`) incluye #15.
+- **DEV (solo lecturas públicas de testnet, sin claves):**
+  1. Subir la etapa `build` a `node:26.13.0-bookworm-slim@sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9`
+     (cumple los 7 días desde el 2026-11-04T16:57Z), volver a verificar el digest (V-1) y cambiar la nota del README.
+  2. `bash app/scripts/check-deploy-image.sh . 18080` → **modo positivo** con los IDs reales, P1-P13 OK.
+  3. E-6 con la app real: badge `testnet · nodo OK`; lobby real (o vacío con texto honesto); `#/my-games`; recarga de
+     una ruta profunda; `api.slush.app` sin violación; Slush en el modal; popup con `window.opener !== null`; sin
+     pedidos a `*.mvr.mystenlabs.com`; 0 violaciones, o el remedio de `img-src` por ícono remoto.
+- **Owner:** checklist de la §9 del plan, pasos 1-10, y el smoke B (URL pública, su wallet de extensión, `curl` de
+  cabeceras con **GET**).
+- **Orquestador:** la URL en `app/README.md` (y se pasa a #16), la fila de STATUS y el SMOKE B.
+
+---
+
+## Anexo A: runbook de verificación y ensayo (formato §M5; se llena durante la corrida)
+
+# SMOKE_RAILWAY_DEPLOY, parte A (local, antes de #8)
+> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: (se llena) | Estado: EN CURSO
+
+## Precondiciones
+- Red:
+  - parte 1: ninguna local (solo descargas de imágenes públicas y, en E-6, lecturas **públicas** de testnet sin
+    claves);
+  - parte 2: localnet **aislada** según `agents.md` §3, "Localnet aislada (smokes)", **después** de que se libere la
+    de #14.
+- Cuentas: parte 1, ninguna; parte 2, las de la génesis aislada, solo vía `suic` con el prefijo del paso 3.
+- Cliente: Docker 29.1.3 (sin buildx) y Chrome headless con perfil propio. Node `v26.13.0` en el host.
+- Directorios: `<scratchpad>/ensayo-15/` (parte 1) y `<SMOKE_DIR>` (parte 2), los dos dentro del scratchpad y
+  borrados al cerrar.
+
+## Parte 1: imagen, script y ensayo (TASK-2)
+
+| # | Acción | Resultado esperado | Resultado obtenido | Estado |
+|---|--------|--------------------|--------------------|--------|
+| V-1 | Para `node:26.12.1-bookworm-slim` y `caddy:2.11.7-alpine`: `curl -fsS https://hub.docker.com/v2/repositories/library/<repo>/tags/<tag>` (`.digest`), `gh api repos/nodejs/node/releases` y `gh api repos/caddyserver/caddy/releases` (`published_at`), y `docker pull <imagen>@<digest>`. Anotar la hora UTC | Los digests coinciden con §3.2; versiones con ≥ 7×24 h (26.12.1: 2026-10-21T10:38Z; 2.11.7: 2026-10-03); pull OK | (se llena durante la corrida) | ⏳ |
+| V-2 | `docker run --rm --entrypoint shellcheck -v <repo>:/repo:ro rhysd/actionlint:1.7.12@sha256:b1934ee5…5667 /repo/app/scripts/check-deploy-image.sh` | 0 hallazgos. Si la imagen no trae `shellcheck`, `bash -n` sale con 0 y se declara | (se llena durante la corrida) | ⏳ |
+| V-3 | En el repo real (sin `testnet.json`): `bash app/scripts/check-deploy-image.sh . 18080; echo "exit=$?"` | `exit=0`; `OK (negativo)…`; el log muestra el mensaje de §3.2 paso 3 en el primer `RUN` y **no** se ve `npm ci` ejecutado; anotar el tiempo | (se llena durante la corrida) | ⏳ |
+| E-1a | `mkdir -p <scratchpad>/ensayo-15/ctx` y `git ls-files -z --cached --others --exclude-standard \| xargs -0 cp --parents -t <scratchpad>/ensayo-15/ctx` (desde `<repo>`) | La copia tiene los archivos versionados y los nuevos del task; **sin** `node_modules`, `app/dist` ni `.env.local` | (se llena durante la corrida) | ⏳ |
+| E-1b | En `<ctx>`: `git -C <repo> show origin/feature/issue-8-testnet-publish:contracts/scripts/publish.mjs > <ctx>/contracts/scripts/publish.mjs`, y lo mismo con `deployment.mjs` | Los dos módulos de PR #48 quedan en la copia; el repo no cambia (`git -C <repo> status`) | (se llena durante la corrida) | ⏳ |
+| E-1c | `testnet.json` **sintético**: desde `git show origin/feature/issue-8-testnet-publish:contracts/scripts/fixtures/localnet.deployment.json`, con `network: "testnet"` y `chainId: "4c78adac"` (con `node -e` en un script dentro de `<scratchpad>`), escrito en `<ctx>/contracts/deployments/testnet.json` | Un JSON con los 14 campos del fixture y solo esos 2 cambios | (se llena durante la corrida) | ⏳ |
+| E-1d | `Published.toml` **sintético** en `<ctx>/contracts/Published.toml`, con el formato de `fixtures/Published.localnet.toml` de #48 y una sección `[published.testnet]`: `chain-id = "4c78adac"`, `published-at` = `packageId`, `original-id` = `originalPackageId`, `version` = `packageVersion`, `upgrade-capability` = `upgradeCapId`, `toolchain-version` y `build-config` como en el fixture | Coherente con el json | (se llena durante la corrida) | ⏳ |
+| E-1e | Con Node 26 en el host: `node <ctx>/contracts/scripts/publish.mjs check; echo "exit=$?"` | `1 despliegue(s) válidos y coherentes con Published.toml`, `exit=0` | (se llena durante la corrida) | ⏳ |
+| E-1f | Listado del contexto Docker con `busybox` (ya local): Dockerfile desechable en `<scratchpad>/ensayo-15/ls/` (`FROM busybox` + `COPY . /ctx` + `RUN find /ctx -type f \| sort`), construido con el `.dockerignore` de `<ctx>` (`docker build -f <scratchpad>/ensayo-15/ls/Dockerfile <ctx>`) | Solo: `package.json`, `package-lock.json`, `.npmrc`, `.nvmrc`, `app/**` (sin `node_modules`, `dist`, `.env*` ni `scripts`), los 2 `.mjs`, `Published.toml` y `deployments/testnet.json` | (se llena durante la corrida) | ⏳ |
+| E-1g | Lo mismo sobre `<repo>`, con un `contracts/deployments/localnet.json` (`{}`) y un `app/.env.local` (`VITE_SUI_NETWORK=localnet`) **de prueba** creados antes y **borrados** después | **Ni** `localnet.json` **ni** `.env.local` en el listado; después de borrarlos, `git status` como antes | (se llena durante la corrida) | ⏳ |
+| E-2 | `CHECK_KEEP_TAG=battleship-app:ensayo-15 bash app/scripts/check-deploy-image.sh <ctx> 18080; echo "exit=$?"` | `exit=0`; `OK (positivo)`; P1-P13 en verde: `id -u` 65534 con `--cap-drop=ALL`, CSP idéntica, 6 cabeceras exactas, sin COOP ni `Server`, asset `immutable` y comprimido, favicon 200, los tres 404 (el de `/assets/` sin `immutable`) | (se llena durante la corrida) | ⏳ |
+| E-3 | Regresión de MAJOR-1: en `<ctx>/contracts/Published.toml`, cambiar un hex de `upgrade-capability`; `docker build -t battleship-app:e3-15 <ctx> > <scratchpad>/ensayo-15/e3.log 2>&1; echo "exit=$?"`; restaurar el archivo; `docker rmi battleship-app:e3-15 2>/dev/null \|\| true` | `exit≠0`; el log tiene `deployments incoherentes` y `upgradeCapId`; **no** tiene `.nvmrc sin versión válida` | (se llena durante la corrida) | ⏳ |
+| E-4 | `docker run -d --name deploy-image-e4 --cap-drop=ALL -e PORT=9123 -p 127.0.0.1:9123:9123 battleship-app:ensayo-15`; `curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:9123/`; `docker rm -f deploy-image-e4` | `200` en 9123; contenedor borrado | (se llena durante la corrida) | ⏳ |
+| E-5 | `caddy validate` en el log del build de E-2 | Línea `Valid configuration` (o equivalente) y el `RUN` del runtime con exit 0 | (se llena durante la corrida) | ⏳ |
+| E-6a | `docker run -d --name deploy-image-e6 --cap-drop=ALL -e PORT=18081 -p 127.0.0.1:18081:18081 battleship-app:ensayo-15`; Chrome headless (reglas comunes) con `Network.enable`, `Log.enable` y un listener de `securitypolicyviolation` inyectado con `Page.addScriptToEvaluateOnNewDocument`; abrir `http://127.0.0.1:18081/` | Badge `testnet · nodo OK` (el chain id es el real). Se esperan **errores de lectura** de la House y del lobby (los IDs sintéticos no existen): no son falla. **0** violaciones de `script-src`, `style-src` y `connect-src` | (se llena durante la corrida) | ⏳ |
+| E-6b | En la pestaña: el pedido a `https://api.slush.app/api/wallet/metadata` | Sin violación de CSP. Anotar el status (puede dar 403 de Cloudflare) | (se llena durante la corrida) | ⏳ |
+| E-6c | Abrir el modal de `ConnectButton` | Lista "Slush". Ícono `data:` → OK. Si es `https://…` con violación de `img-src`: anotar el origen y aplicar el remedio (ese origen **solo** en `img-src`, como desviación declarada). **Si E-6b dio 403**, el ícono remoto queda **sin medir** y pasa al smoke B del owner (sugerencia 5): se anota así | (se llena durante la corrida) | ⏳ |
+| E-6d | Elegir "Slush" en el modal | Se abre un target nuevo (popup) que navega a `https://my.slush.app`; `Runtime.evaluate('window.opener !== null')` en el popup da `true`. **No** se inicia sesión; el popup se cierra con `Target.closeTarget` | (se llena durante la corrida) | ⏳ |
+| E-6e | Recorrido de toda la sesión de E-6 | **Ningún** pedido a `*.mvr.mystenlabs.com`; total de `securitypolicyviolation` = 0 (o solo la del ícono remoto ya remediada) | (se llena durante la corrida) | ⏳ |
+| C-1 | **Cierre de la parte 1:** `kill <pid de Chrome>` (y `kill -0` falla); `docker rm -f deploy-image-e6`; `docker rmi battleship-app:ensayo-15`; `docker ps -a --filter name=deploy-image` y `docker images battleship-app` vacíos; `rm -rf <scratchpad>/ensayo-15` (comprobar que ya no existe); borrar las imágenes base que no estaban; `git -C <repo> status --porcelain --untracked-files=all` | Sin contenedores, imágenes ni directorios del ensayo; el repo solo con los archivos del task | (se llena durante la corrida) | ⏳ |
+
+## Parte 2: CSP con el kit en la localnet aislada (TASK-3; solo con la localnet de #14 liberada)
+
+| # | Acción | Resultado esperado | Resultado obtenido | Estado |
+|---|--------|--------------------|--------------------|--------|
+| L-0 | Precondición: aviso del orquestador de que #14 cerró su localnet; `ss -ltn 'sport = :9000'` sin filas; línea base `stat`/`ls` de `<HOME real>/.sui/sui_config/` | Puerto libre; línea base anotada. Si no se cumple, **STOP** y reporte | (se llena durante la corrida) | ⏳ |
+| L-1 | Localnet aislada según `agents.md` §3, pasos 2-5 (preparación, génesis, arranque en segundo plano del harness, `ids.env`), y publicación **variante B** (sin `--out`) desde `contracts/` | `suic chain-identifier` responde; existe `contracts/deployments/localnet.json` (ignorado) | (se llena durante la corrida) | ⏳ |
+| L-2 | Crear una partida abierta por CLI, con el prefijo del paso 3: `PRE act_as "$ADMIN" && suic ptb --split-coins gas "[10000000]" --assign c --move-call "$PKG::game::create_game" @"$HOUSE" c none` (si la sintaxis de `none` difiere, ajustarla con `suic ptb --help` y declararlo). Anotar el `game_id` del `GameCreated` en `ids.env` | Tx `success`; `GAME=0x…` en `ids.env` | (se llena durante la corrida) | ⏳ |
+| L-3 | `VITE_SUI_NETWORK=localnet npm run build -w app` (producción) | Exit 0; `dist` con favicon | (se llena durante la corrida) | ⏳ |
+| L-4 | Copia del Caddyfile: `sed 's#https://fullnode.testnet.sui.io#http://127.0.0.1:9000#' <repo>/app/Caddyfile > <SMOKE_DIR>/Caddyfile` y `diff` contra el original | El `diff` muestra **solo** el cambio de `connect-src` | (se llena durante la corrida) | ⏳ |
+| L-5 | Imagen desechable equivalente a la etapa runtime. En `<SMOKE_DIR>/l5/` se copian `<repo>/app/dist` como `dist/` y el `Caddyfile` de L-4, y un Dockerfile con las mismas líneas de la etapa runtime: `FROM caddy:2.11.7-alpine@sha256:e70b164d…4ee5`, `COPY Caddyfile /etc/caddy/Caddyfile`, `COPY dist /srv`, `RUN setcap -r /usr/bin/caddy && caddy validate …`, `USER nobody` y el mismo `CMD`. Después `docker build -t battleship-app:l5-15 <SMOKE_DIR>/l5` y `docker run -d --name deploy-image-l5 --cap-drop=ALL -e PORT=18082 -p 127.0.0.1:18082:18082 battleship-app:l5-15` | `curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18082/` = 200. El navegador habla directo con `127.0.0.1:9000`; el contenedor solo sirve los estáticos | (se llena durante la corrida) | ⏳ |
+| L-6 | Chrome headless (perfil propio, listener de `securitypolicyviolation`), `http://127.0.0.1:18082/` | Badge `localnet · nodo OK`; el lobby muestra la partida de L-2; los `POST http://127.0.0.1:9000/sui.rpc.v2.*` responden 200 | (se llena durante la corrida) | ⏳ |
+| L-7 | Abrir el modal de `ConnectButton`; en su shadow root, `adoptedStyleSheets.length` | Modal visible ("No wallets installed" en headless); `adoptedStyleSheets.length > 0` | (se llena durante la corrida) | ⏳ |
+| L-8 | Ir a `#/my-games`; después `#/game/$GAME` y **recargar** (`Page.reload`) | Las dos rutas cargan después de recargar; el detalle muestra la partida (`Pending`, monto) | (se llena durante la corrida) | ⏳ |
+| L-9 | Total de la sesión | **0** `securitypolicyviolation`. Si hay alguna, `violatedDirective` + `blockedURI`; solo se admite el remedio de `style-src 'unsafe-inline'`, como desviación | (se llena durante la corrida) | ⏳ |
+| C-2 | **Cierre de la parte 2:** `kill <pid de Chrome>`; `docker rm -f deploy-image-l5`; `docker rmi battleship-app:l5-15`; paso 7 de `agents.md` §3 completo (kill de la red por PID, `kill -0` falla, `rm -rf <SMOKE_DIR>`, `rm -f contracts/deployments/localnet.json`, `rmdir contracts/deployments 2>/dev/null \|\| true`, `stat`/`ls` de `~/.sui/sui_config/` idénticos a L-0, `git status`, `git diff --exit-code -- contracts/Move.lock`, sin `Pub.*.toml`) | Todo limpio; el exit 144 de `sui start` es esperado | (se llena durante la corrida) | ⏳ |
+
+## Si algo falla
+- Capturar: el output del paso (sin rutas personales), las últimas 30 líneas del log de `docker build` o de
+  `docker logs`, y la lista de `securitypolicyviolation` (`violatedDirective`, `blockedURI`).
+- Reportar el número de paso (V-n / E-n / L-n / C-n). Un paso fallido ⇒ **NO PASA**, salvo los remedios previstos
+  (`img-src` por un ícono remoto, `style-src 'unsafe-inline'`), que se declaran como desviación y vuelven a revisión
+  del MID.
+
+## Reporte final
+- Pasos PASA/TOTAL:
+- Hallazgos (n.° de paso + output):
+- Veredicto: [PASA | NO PASA]
