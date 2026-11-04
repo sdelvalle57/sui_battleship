@@ -1,8 +1,8 @@
 import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
 import { SimulationError } from '@mysten/sui/client';
 import type { Transaction } from '@mysten/sui/transactions';
-import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useMutation, useMutationState, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { useState } from 'react';
 import { findMoveAbort, transactionErrorMessage } from '../sui/errors';
 import {
   classifyExecution,
@@ -17,6 +17,7 @@ import {
 } from '../sui/execution';
 import { isTransientReadError } from '../sui/readPolicy';
 import { transactionInvalidations, type TxAction } from './txInvalidation';
+import { txOutcomeOf, txVariablesOf, type TxView, type TxVariables } from './txSession';
 import { useAppConfig } from './useAppConfig';
 
 /** Etapa visible de una transacción (DL-11). */
@@ -32,6 +33,12 @@ export type TxOutcome<T> =
   | { kind: 'failure'; message: string; digest: string | null; cost: bigint | null }
   | { kind: 'unconfirmed'; digest: string };
 
+/**
+ * Resultado que muestra el hook de una acción (M-1 (b) de #12): nunca `unconfirmed`. La alerta "sin confirmar" la dibuja
+ * la vista, desde `useTxTarget().unconfirmed`, una sola vez por objetivo.
+ */
+export type TxResult<T> = Exclude<TxOutcome<T>, { kind: 'unconfirmed' }>;
+
 /** Corte previo a la preflight (M-2): un texto para el usuario y las claves a invalidar. */
 export type TxPrecheckStop = { stop: string; invalidate?: QueryKey[] };
 
@@ -43,19 +50,29 @@ export type ExecuteInput<T> = {
   interpret: (nodeResult: NodeTransactionResult) => T;
 };
 
-/** API del hook: etapa, resultado, si hay una transacción en curso, ejecutar y volver a `idle`. */
+/**
+ * API del hook: etapa y resultado de **su** última ejecución, y ejecutar. El bloqueo (`busy`, "sin confirmar") y su
+ * reconocimiento son de la vista (`useTxTarget`).
+ */
 export type UseExecuteTransaction<T> = {
   stage: TxStage;
-  outcome: TxOutcome<T> | null;
-  isBusy: boolean;
+  outcome: TxResult<T> | null;
   execute: (input: ExecuteInput<T>) => void;
-  reset: () => void;
 };
 
 /** Sin wallet conectada no hay `sender`: se corta antes de cualquier pedido. */
 export const CONNECT_WALLET_MESSAGE = 'Conecta tu wallet';
 /** Prefijo de un fallo al preparar la transacción que no es de simulación ni de red (v1.3): la wallet nunca se abrió. */
 export const PREPARE_FAILED_PREFIX = 'No se pudo preparar la transacción';
+
+/**
+ * Identidad de cada ejecución (M-4): contador de módulo, leído solo desde `execute` (un handler, nunca el render). Es
+ * único dentro de la carga de la página, que es lo que vive el `QueryClient`.
+ */
+let lastRunId = 0;
+function nextRunId(): number {
+  return ++lastRunId;
+}
 
 function errorText(error: unknown): string {
   if (error instanceof Error && error.message !== '') return error.message;
@@ -66,18 +83,22 @@ function errorText(error: unknown): string {
  * Máquina común de transacciones de #11, #12 y #14 (DL-11): verifica (precheck + preflight propia), firma con la wallet,
  * **confirma con el nodo** (éxito solo con su `status.success`, DL-2), espera la indexación si hace falta (DL-5) e
  * invalida las claves de la acción (DL-6). Todo corre dentro de la `mutationFn` (sin reintentos: el usuario decide), así
- * que termina aunque el componente se desmonte; nunca lanza hacia el componente (LIM-8). Un candado síncrono impide el
- * doble envío (M-1). Ningún `failure` sale de un error de la wallet o del SDK cuando ya hay digest (M-3 (b)).
+ * que termina aunque el componente se desmonte; nunca lanza hacia el componente (LIM-8). Ningún `failure` sale de un
+ * error de la wallet o del SDK cuando ya hay digest (M-3 (b)).
+ *
+ * Las mutaciones viven en el `MutationCache` con la clave del objetivo de la vista (DL-7 de #12): el candado es global
+ * por cuenta (`isMutating` con la clave de la cuenta + `mutateAsync` en el mismo tick, V-8), y un "sin confirmar" del
+ * objetivo bloquea hasta que la vista lo reconoce. `gcTime: Infinity` las conserva durante la carga de la página y
+ * `networkMode: 'always'` no las pausa sin red: la preflight falla y lo dice (en vez de quedar "en curso" para siempre).
  */
-export function useExecuteTransaction<T>(): UseExecuteTransaction<T> {
+export function useExecuteTransaction<T>(view: TxView): UseExecuteTransaction<T> {
   const config = useAppConfig();
   const client = useCurrentClient();
   const account = useCurrentAccount();
   const dAppKit = useDAppKit();
   const queryClient = useQueryClient();
   const [stage, setStage] = useState<TxStage>('idle');
-  const [locked, setLocked] = useState(false);
-  const lock = useRef(false);
+  const [runId, setRunId] = useState<number | null>(null);
 
   const ids = { packageId: config.packageId, originalPackageId: config.originalPackageId };
 
@@ -132,7 +153,13 @@ export function useExecuteTransaction<T>(): UseExecuteTransaction<T> {
       if (error instanceof PreflightNetworkError) return failure(PREFLIGHT_NETWORK_MESSAGE);
       if (error instanceof SimulationError) {
         // Un abort dice que el estado on-chain no es el que se mostró: se refresca.
-        if (findMoveAbort(error)) await invalidateAction();
+        if (findMoveAbort(error)) {
+          await invalidateAction();
+          return failure(transactionErrorMessage(error, ids));
+        }
+        // DL-10: sin abort ni `executionError`, el nodo rechazó la transacción antes de simularla (p. ej. la regla de
+        // `Random` o la selección de gas): no es un error de la wallet, que ni se abrió.
+        if (error.executionError === undefined) return failure(`${PREPARE_FAILED_PREFIX}: ${errorText(error)}`);
         return failure(transactionErrorMessage(error, ids));
       }
       return failure(`${PREPARE_FAILED_PREFIX}: ${errorText(error)}`);
@@ -146,7 +173,11 @@ export function useExecuteTransaction<T>(): UseExecuteTransaction<T> {
       digest = (result.Transaction ?? result.FailedTransaction).digest;
     } catch (error) {
       const fromError = digestFromError(error);
-      if (fromError === null) return failure(transactionErrorMessage(error, ids));
+      if (fromError === null) {
+        // NIT-2 (DL-9): una wallet que simula por su cuenta puede rechazar con el abort; el estado mostrado está viejo.
+        if (findMoveAbort(error)) await invalidateAction();
+        return failure(transactionErrorMessage(error, ids));
+      }
       digest = fromError;
     }
 
@@ -188,9 +219,12 @@ export function useExecuteTransaction<T>(): UseExecuteTransaction<T> {
     return { kind: 'success', digest, value, indexed, cost };
   }
 
-  const mutation = useMutation<TxOutcome<T>, never, ExecuteInput<T>>({
+  const mutation = useMutation<TxOutcome<T>, never, TxVariables<T>>({
+    mutationKey: view.key,
     retry: false,
-    mutationFn: async (input) => {
+    gcTime: Infinity,
+    networkMode: 'always',
+    mutationFn: async ({ input }) => {
       const progress: { digest: string | null; invalidate: (() => Promise<void>) | null } = { digest: null, invalidate: null };
       try {
         return await run(input, progress);
@@ -209,29 +243,28 @@ export function useExecuteTransaction<T>(): UseExecuteTransaction<T> {
     },
   });
 
+  // M-1 (a): el resultado sale del caché por `runId`, no de `useMutation().data`: si la vista reconoce un "sin confirmar"
+  // y borra la mutación, el resultado de esta acción pasa a `null` (el observer no se resetea al borrar, V-8).
+  const results = useMutationState({
+    filters: { mutationKey: view.key, predicate: (m) => runId !== null && txVariablesOf(m.state.variables)?.runId === runId },
+    // Lo escribió la `mutationFn` de este hook, con este `T`.
+    select: (m) => txOutcomeOf(m.state.data) as TxOutcome<T> | null,
+  });
+  const last = results.at(-1) ?? null;
+
   const execute = (input: ExecuteInput<T>) => {
-    // Candado síncrono (M-1): se toma antes de cualquier `await`, así dos clics en el mismo tick no envían dos veces.
-    if (lock.current) return;
-    lock.current = true;
-    setLocked(true);
-    void mutation
-      .mutateAsync(input)
-      .catch(() => undefined)
-      .finally(() => {
-        lock.current = false;
-        setLocked(false);
-      });
+    // Candado global por cuenta (DL-7), síncrono: `mutateAsync` despacha `pending` antes de su primer `await` (V-8), así
+    // que un segundo `execute` en el mismo tick, de esta u otra vista, ya lo ve.
+    if (queryClient.isMutating({ mutationKey: view.accountKey }) > 0) return;
+    const unconfirmed = queryClient
+      .getMutationCache()
+      .findAll({ mutationKey: view.key })
+      .some((m) => txOutcomeOf(m.state.data)?.kind === 'unconfirmed');
+    if (unconfirmed) return;
+    const id = nextRunId();
+    setRunId(id);
+    void mutation.mutateAsync({ input, viewId: view.viewId, runId: id, action: input.action }).catch(() => undefined);
   };
 
-  return {
-    stage,
-    outcome: mutation.data ?? null,
-    isBusy: locked || mutation.isPending,
-    execute,
-    reset: () => {
-      if (lock.current) return;
-      mutation.reset();
-      setStage('idle');
-    },
-  };
+  return { stage, outcome: last === null || last.kind === 'unconfirmed' ? null : last, execute };
 }

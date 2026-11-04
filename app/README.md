@@ -72,7 +72,7 @@ src/
 ├── providers/   # QueryClientProvider (política común) > DAppKitProvider > ConfigContext
 ├── components/  # UI sin lógica de negocio (LobbyList, GameDetail, ReadState, Header, CreateGameForm, GameActions…)
 ├── pages/       # páginas del router por hash: HomePage (#/), GameDetailPage (#/game/:id), NotFoundPage
-├── test/        # setup de Vitest y arnés de TanStack Query para tests
+├── test/        # setup de Vitest, arnés de TanStack Query y de la máquina de transacciones para tests
 └── App.tsx      # rutas (appRoutes) + RouterProvider
 scripts/
 ├── localnet-guard.mjs          # guarda compartida de las capturas: solo http://127.0.0.1:9000 y la génesis del despliegue
@@ -108,37 +108,42 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 | `transactionInfo.ts` | hora/checkpoint de una transacción, checkpoint de la publicación (`null` = podada) y hora de un checkpoint | #10 |
 | `gameDetail.ts` | `fetchGame` (detalle por ID), `GAME_REFETCH_MS` y `gameRefetchInterval` (corta el intervalo ante un error definitivo, DL-7) | #10, #11 |
 | `lobby.ts` | `fetchLobbyPage` (lobby por eventos con el `ListEvents` crudo), `lobbyLowerBound` y las constantes calibradas | #10 |
-| `transactions/game.ts` | builders puros de PTB: `buildCreateGameTx` (`splitCoins(gas)` + `create_game`), `buildCancelGameTx`, `buildRejectGameTx`; lanzan ante un ID o un monto inválidos; sin `sender` ni gas | #11 (#12 suma aceptar) |
-| `errors.ts` | `ABORT_MESSAGES` (módulo + código → mensaje), `findMoveAbort` (estructurado, formato del SDK y formato Rust del nodo; `cause` hasta 5 niveles), `abortCodeSuffix` y `transactionErrorMessage` con sus fallbacks | #11 |
-| `execution.ts` | `preflightTransaction` (simulación de una copia, corte de 20 s, `PreflightNetworkError`), `confirmTransaction` (30 s), `waitForCheckpoint` (30 s), `classifyExecution`, `digestFromError`, `networkCost` | #11 |
-| `gameTx.ts` | `parseCreatedGame` (único `GameCreated` del firmante) y `cancelledRefund` (`refund` del `GameCancelled` de esa partida) | #11 |
+| `transactions/game.ts` | builders puros de PTB: `buildCreateGameTx` (`splitCoins(gas)` + `create_game`), `buildCancelGameTx`, `buildRejectGameTx` y `buildAcceptGameTx` (`splitCoins(gas, [bet])` + `accept_game(game, house, coin, random)` con `tx.object.random()`, **último** comando: después de un comando con `Random` el nodo solo admite `TransferObjects`/`MergeCoins`); lanzan ante un ID o un monto inválidos; sin `sender` ni gas | #11, #12 |
+| `errors.ts` | `ABORT_MESSAGES` (módulo + código → mensaje), `findMoveAbort` (estructurado, formato del SDK y formato Rust del nodo; `cause` hasta 5 niveles), `abortCodeSuffix`, `runtimeCancellation` + `RUNTIME_CANCELLED_MESSAGES` (cancelaciones del runtime, DL-11) y `transactionErrorMessage` con sus fallbacks | #11, #12 |
+| `execution.ts` | `preflightTransaction` (simulación de una copia, corte de 20 s, `PreflightNetworkError`; DL-10: un `SimulationError` sin `executionError` cuyo `cause` es un corte de red, según `isPreflightNetworkCause` = `isTransientReadError`, también es `PreflightNetworkError`), `confirmTransaction` (30 s), `waitForCheckpoint` (30 s), `classifyExecution`, `digestFromError`, `networkCost` | #11, #12 |
+| `gameTx.ts` | `parseCreatedGame` (único `GameCreated` del firmante), `cancelledRefund` (`refund` del `GameCancelled` de esa partida) y `parseResolvedGame` (único `GameResolved` de esa partida con `acceptor` = la cuenta; si no, `null`) | #11, #12 |
 | `house.ts` | esquema BCS de la `House`, `houseType`, `parseHouseObject` (tipo exacto, compartida, bytes canónicos, `0 < min_bet <= max_bet`) y `fetchHouse` | #11 |
 | `account.ts` | `fetchSuiBalance` (`balance.balance` de `getBalance`: monedas + saldo de dirección) | #11 |
 | `createGame.ts` | `validateCreateGame` (motivos tipados), `houseTermsChanges`/`houseChangeMessage` (M-2), `CREATE_GAS_RESERVE_MIST`, `GAME_STORAGE_DEPOSIT_MIST` | #11 |
-| `gameActions.ts` | `canCancel` (creador, `Pending`) y `canReject` (invitado, `Pending`) | #11 |
+| `gameActions.ts` | `canCancel` (creador, `Pending`), `canReject` (invitado, `Pending`), `acceptState` (en orden: `not_pending` → `no_account` → `creator` → `not_invited` → `available`) y `NOT_INVITED_HINT` (= el texto de `game`/5) | #11, #12 |
+| `acceptGame.ts` | `ACCEPT_GAS_RESERVE_MIST` (0,01 SUI; ver "Aceptar y resultado"), `acceptBalanceCheck` (`ok`/`insufficient`/`unknown`), `wonBy` y `playerResult` (`won`/`lost` para el creador o el aceptante de una partida resuelta) | #12 |
 
 ### Hooks (`app/src/hooks/`)
 
 | Hook | Qué devuelve |
 |---|---|
-| `queryKeys.ts` | **únicas** claves de TanStack Query: `['sui', red, recurso, …]` (`nodeInfo`, `lobby`, `game`, `txInfo`, `publishCheckpoint`, `checkpointTime`, `house`, `balance` con la dirección normalizada); los `bigint` como string |
-| `txInvalidation.ts` | `TxAction` y `transactionInvalidations`: la tabla única de qué reiniciar/invalidar tras una transacción propia (DL-6) |
-| `useExecuteTransaction` | máquina común de transacciones: `stage`, `outcome` (`success`/`failure`/`unconfirmed`), `isBusy`, `execute`, `reset` (ver "Transacciones (#11)") |
-| `useCreateGame` / `useCancelGame` / `useRejectGame` | hooks finos sobre la máquina: builder, relectura de la House (crear), y lo que se lee del resultado (partida creada y `feeChanged`; reembolso) |
+| `queryKeys.ts` | **únicas** claves de TanStack Query: `['sui', red, recurso, …]` (`nodeInfo`, `lobby`, `game`, `txInfo`, `publishCheckpoint`, `checkpointTime`, `house`, `balance` con la dirección normalizada); los `bigint` como string. Claves de **mutación** (#12): `txAccount(red, cuenta)` = `['sui', red, 'tx', <cuenta normalizada> \| 'none']` y `txTarget(red, cuenta, objetivo)` = `[...txAccount, 'create']` o `[...txAccount, 'game', <id normalizado>]` |
+| `txInvalidation.ts` | `TxAction` (`create`, `cancel`, `reject`, `accept`) y `transactionInvalidations`: la tabla única de qué reiniciar/invalidar tras una transacción propia (DL-6) |
+| `txSession.ts` | lo puro de la máquina (#12, sin React): tipos (`TxTarget`, `TxView`, `TxVariables`, `TxNotice`, `AdoptedTx`), `toTxEntry`, `mountSnapshot` (foto de **todo** el `MutationCache` al montar) y `deriveTargetState` (en curso ajena, "sin confirmar" del objetivo, adopción) |
+| `useTxTarget` | **una** llamada por vista con acciones sobre un objetivo (`{ kind: 'create' }` o `{ kind: 'game', gameId }`): `view` (para los hooks de acción), `busy`, `notice` (`in_flight` / `adopted`), `unconfirmed` y `acknowledge` ("Ya la revisé"). Ver "Transacciones (#11, #12)" |
+| `useExecuteTransaction` | máquina común de transacciones: `useExecuteTransaction(view)` → `stage`, `outcome` (`success`/`failure` de **su** última ejecución, leído del caché por `runId`; nunca `unconfirmed`, que muestra la vista) y `execute` |
+| `useCreateGame` / `useCancelGame` / `useRejectGame` / `useAcceptGame` | hooks finos sobre la máquina, que reciben la `view` de la vista (la partida sale de `view.target`): builder, relectura de la House (crear), y lo que se lee del resultado (partida creada y `feeChanged`; reembolso; el `GameResolved` de la aceptación) |
 | `useHouse` / `useSuiBalance` | la House de la config (sin intervalo; al montar y al foco) y el saldo de la cuenta conectada (sin cuenta no consulta) |
 | `useLobby` (+ `usePublishCheckpoint`) | filas con `isMine`, `ReadStatus` combinado con la publicación, `hasNextPage`, `isFetchingNextPage`, `nextPageError`, `stalled`, `lowerBound`, `end`, `loadMore`, `refresh` |
 | `useGame` | `invalid_id` sin consulta, o la partida con su `ReadStatus`; refresco cada 15 s y al foco, salvo tras un error definitivo (DL-7) |
 | `useTransactionTime` / `useCheckpointTime` | hora inmutable (`staleTime: Infinity`); sin digest (`null`/`''`) o sin número no consultan |
 | `useNodeStatus`, `useWalletAccount`, `useAppConfig` | indicador de red, cuenta conectada y config |
 
-### Componentes de transacción (#11)
+### Componentes de transacción (#11, #12)
 
 | Componente | Qué hace |
 |---|---|
 | `TransactionStatus` | etapa en curso o resultado del nodo: éxito con digest (link solo en testnet), costo de red y nota si no se indexó; "sin confirmar" con digest y sin "Reintentar"; fallo con mensaje y, si se ejecutó, digest y costo |
-| `CreateGameForm` | formulario de la portada (ver "Formulario de creación"); navega al detalle con el aviso en el `state` del router |
-| `GameActions` | "Cancelar" (creador) y "Rechazar" (invitado) en el detalle, cada uno con su `TransactionStatus` |
+| `CreateGameForm` | formulario de la portada (ver "Formulario de creación"); `useTxTarget({ kind: 'create' })`; navega al detalle con el aviso en el `state` del router |
+| `GameActions` | "Aceptar" (ver "Aceptar y resultado"), "Cancelar" (creador) y "Rechazar" (invitado) en el detalle, con **una** `useTxTarget` de la partida y un `TransactionStatus` por acción, más el aviso "en curso", el resultado adoptado y **una** alerta "sin confirmar" con "Ya la revisé" |
+| `GameDetail` | el detalle de la partida; con la partida resuelta y la cuenta conectada como creador o aceptante, "Resultado para ti: ganaste/perdiste" (DL-12, leído del objeto) |
 | `createdNotice.ts` | escribe y lee el aviso de creación del `state` del router (costo como string: react-router serializa la ubicación con `JSON.stringify`) |
+| `txNotice.ts` | el texto "Hay una transacción en curso desde esta cuenta; espera a que termine", común al formulario y al detalle |
 
 ### Lecturas (#10)
 
@@ -188,11 +193,14 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 - Lecturas solo con TanStack Query sobre `useCurrentClient()` y claves de `queryKeys.ts`; nada de `useEffect` para pedir
   datos (PROY-14). La hora de un evento no viene en `listEvents`: sale de la transacción (`timestampMs`).
 
-### Transacciones (#11)
+### Transacciones (#11, #12)
 
-Una sola máquina para crear, cancelar y rechazar (y para aceptar en #12 y el panel de #14): `useExecuteTransaction`.
-Corre entera dentro de la `mutationFn` de TanStack (`retry: false`: una transacción nunca se reintenta sola), así que
-termina aunque el componente se desmonte, y nunca lanza hacia el componente (LIM-8).
+Una sola máquina para crear, cancelar, rechazar y aceptar (y para el panel de #14): `useExecuteTransaction`. Corre
+entera dentro de la `mutationFn` de TanStack (`retry: false`: una transacción nunca se reintenta sola), así que termina
+aunque el componente se desmonte, y nunca lanza hacia el componente (LIM-8). Cada mutación vive en el `MutationCache`
+del `QueryClient` de la pestaña, con la clave de mutación de su objetivo (`queryKeys.txTarget`), `gcTime: Infinity`
+(se conserva durante la carga de la página) y `networkMode: 'always'` (sin red no queda en pausa: la preflight falla con
+el texto de red).
 
 | Etapa | Texto | Qué pasa |
 |---|---|---|
@@ -209,7 +217,11 @@ termina aunque el componente se desmonte, y nunca lanza hacia el componente (LIM
   `status.success: false` del nodo sí es `failure`. Si el nodo confirmó el éxito y no se pudo interpretar el resultado,
   es `success` con `value: null`.
 - **"Sin confirmar":** "La transacción se envió pero la red no la confirmó todavía; revísala antes de volver a
-  intentar", sin "Reintentar". El formulario de creación queda bloqueado hasta "Ya la revisé: crear otra partida".
+  intentar", sin "Reintentar". Bloquea su **objetivo** (el formulario de creación, o esa partida) durante la carga de
+  la página, aunque se salga de la pantalla y se vuelva, hasta que la vista lo reconoce: "Ya la revisé: crear otra
+  partida" en el formulario y "Ya la revisé" en el detalle (`acknowledge` borra esa mutación del caché). La alerta la
+  dibuja **solo** la vista, desde `useTxTarget().unconfirmed`: una por vista, nunca una por acción (el `outcome` de los
+  hooks de acción nunca es `unconfirmed`).
 - **Indexación (S-1 bis de #11):** en el fullnode 1.83, después de ejecutar, `getTransaction` responde "not found" hasta
   que la transacción está en un checkpoint (≈ 0,44 s en localnet) y `getObject` puede devolver un momento la versión
   vieja; `waitForTransaction` vuelve ya con `checkpoint` (≈ 0,6 s). Por eso `indexing` normalmente no pide nada; si hace
@@ -219,18 +231,41 @@ termina aunque el componente se desmonte, y nunca lanza hacia el componente (LIM
   éxito con "La lista puede tardar unos segundos en mostrarlo". La firma no tiene corte (es del usuario). Un error de
   red o el corte en la relectura de la House o en la preflight ⇒ "No se pudo verificar la transacción (red); intenta
   de nuevo", sin pasar por `errors.ts` (M-3 (a)).
-- **Doble envío (M-1):** candado síncrono (`useRef`) tomado antes de cualquier `await` y liberado al terminar; los
-  botones se deshabilitan con `isBusy`.
+- **Candado global por cuenta (DL-7 de #12):** `execute` no hace nada si hay una mutación de la cuenta en curso
+  (`queryClient.isMutating` con la clave `txAccount`, de cualquier objetivo y de cualquier vista) o si el objetivo
+  tiene un "sin confirmar". Como `mutateAsync` despacha `pending` antes de su primer `await`, dos clics en el mismo tick,
+  de una o de dos vistas, ejecutan una sola vez. Los botones se deshabilitan con `useTxTarget().busy`
+  (`useIsMutating` de la cuenta) o con un `unconfirmed` del objetivo.
+- **Avisos de la vista (`useTxTarget().notice`):** `in_flight` = hay una transacción de la cuenta en curso que **no**
+  lanzó esta vista ("Hay una transacción en curso desde esta cuenta; espera a que termine"); la propia nunca la avisa.
+  `adopted` = el resultado de una mutación **ajena** del mismo objetivo que empezó después de montar la vista o estaba
+  en curso al montar (foto `mountSnapshot` de **todo** el caché, así un cambio de cuenta sin desmontar no adopta
+  mutaciones viejas de la otra cuenta); se muestra con el texto de su acción, y un crear adoptado con la partida
+  identificada navega como el propio. Lo que terminó antes de montar no se adopta (no se navega dos veces), y el
+  `adopted` se descarta en cuanto la vista lanza una propia o adopta otra más nueva. La identidad de cada montaje
+  (`viewId`) y de cada ejecución (`runId`) sale de contadores de módulo: ni `crypto.randomUUID()` ni `useId()`.
+- **Límite conocido (R-5):** el candado es **por pestaña** (un `QueryClient` por pestaña). Entre dos pestañas con la
+  misma cuenta, una segunda aceptación, cancelación o rechazo que pasa las dos preflights se **ejecuta** y aborta con
+  `game`/4 (cuesta gas); crear dos veces deja una segunda apuesta (se recupera cancelando) y un depósito de storage que
+  no se recupera.
+- **Errores al preparar (DL-10 de #12):** un `SimulationError` **sin** abort ni `executionError` es un rechazo del nodo
+  antes de simular (p. ej. un comando después del de `Random`, o la selección de gas por saldo insuficiente, ambos con
+  `INVALID_ARGUMENT`): "No se pudo preparar la transacción: …", sin abrir la wallet. Si su `cause` es un corte de red
+  transitorio (`UNAVAILABLE`, …), la preflight lo convierte en `PreflightNetworkError` (texto de red). Con
+  `executionError` y sin abort (p. ej. `InsufficientCoinBalance`): "La red no ejecutó la transacción: …".
+- **NIT-2:** si la wallet rechaza **sin** digest pero el error trae un abort (una wallet que simula por su cuenta), se
+  muestra el abort mapeado y se aplican las invalidaciones de la acción (el estado mostrado está viejo).
 - **Invalidación (DL-6, `txInvalidation.ts`):**
 
   | Acción | `resetQueries` | `invalidateQueries` |
   |---|---|---|
   | crear | `lobby` (vuelve a la primera página) | `balance` de la cuenta |
   | cancelar / rechazar | `lobby` | `game` de esa partida y `balance` de la cuenta |
+  | aceptar | `lobby` | `game` de esa partida, `balance` de la cuenta y `house` (cobró la comisión) |
 
   Nunca `nodeInfo`, `txInfo`, `publishCheckpoint` ni `checkpointTime`. Se aplica también tras un abort en la preflight,
   un fallo del nodo y un "sin confirmar" (el estado pudo cambiar). `done` llega **después** de la relectura: con el lobby
-  montado, "Actualizando datos…" dura lo que tarde esa lectura. #12 y #14 suman sus claves en esta misma tabla.
+  montado, "Actualizando datos…" dura lo que tarde esa lectura. #14 suma aquí las acciones de la House.
 - **Mensajes de abort** (`errors.ts`, M-5): por **módulo + código**, solo si el abort viene de nuestro `packageId` u
   `originalPackageId` (normalizados), con el sufijo de diagnóstico fijo `(código <módulo>/<n>)`, p. ej. "Solo quien creó
   la partida puede cancelarla. (código game/3)". Los textos de `game` 0–10 y `house` 0–4 viven solo en
@@ -240,15 +275,18 @@ termina aunque el componente se desmonte, y nunca lanza hacia el componente (LIM
   |---|---|
   | código desconocido de `game`/`house` | "El contrato rechazó la operación (código game/99)" |
   | abort de otro paquete | "La transacción abortó en `0x1234…abcd::<módulo>` (código N)", sin traducir |
-  | fallo sin abort (gas, objetos, `ExecutionCancelledDueToRandomnessUnavailable`, congestión) | "La red no ejecutó la transacción: …" |
+  | cancelación del runtime sin abort: falta de aleatoriedad (`Unknown` con `ExecutionCancelledDueToRandomnessUnavailable` o "randomness could not be generated") | "La red canceló la transacción sin ejecutarla (la aleatoriedad de la red todavía no está disponible): no cambió nada salvo el costo de red; intenta de nuevo en unos segundos" |
+  | cancelación del runtime sin abort: congestión (`CongestedObjects`) | "La red canceló la transacción sin ejecutarla (hay congestión en un objeto compartido): no cambió nada salvo el costo de red; intenta de nuevo en unos segundos" |
+  | otro fallo sin abort (gas, objetos, `InsufficientCoinBalance`) | "La red no ejecutó la transacción: …" |
   | error de la wallet sin abort | "La wallet no completó la operación: …" o "La wallet no completó la operación (sin detalle del error)" |
-  | otro error al preparar (ni simulación ni red) | "No se pudo preparar la transacción: …" |
+  | `SimulationError` sin abort ni `executionError`, u otro error al preparar (ni simulación ni red) | "No se pudo preparar la transacción: …" |
   | red o corte al verificar | "No se pudo verificar la transacción (red); intenta de nuevo" |
 
   `findMoveAbort` reconoce el abort estructurado y, por texto, **dos** formatos: el del SDK (`abort code: N, in
   '0x…::<módulo>::…'`) y el Rust del nodo (`MoveAbort(MoveLocation { module: ModuleId { address: …, name:
   Identifier("<módulo>") } … }, N)`). La forma en que la CLI **presenta** un abort ("… aborted within function … with
-  code N") no se reconoce: nunca llega a la app (R-1 de #11).
+  code N") no se reconoce: nunca llega a la app (R-1 de #11). Los aborts de aceptar se ubican en
+  `game::assert_acceptable`; el mapeo es por módulo y código, así que no cambia.
 
 ### Formulario de creación
 
@@ -272,7 +310,42 @@ termina aunque el componente se desmonte, y nunca lanza hacia el componente (LIM
   portada con "Partida creada" y el digest.
 - **Detalle:** "Cancelar" solo para el creador y "Rechazar" solo para el invitado, en `Pending`; el reembolso que se
   muestra sale del `GameCancelled` de la transacción. Sin cuenta, el formulario dice "Conecta tu wallet para crear una
-  partida" y el detalle no muestra botones.
+  partida" y el detalle no muestra botones: en una partida `Pending` dice "Conecta tu wallet para aceptar la partida,
+  cancelarla si es tuya o rechazarla si te invitaron", y en una terminada, nada.
+
+### Aceptar y resultado (#12)
+
+- **Quién ve "Aceptar"** (`acceptState`, M-3): solo en `Pending`, con cuenta conectada, si la cuenta no es el creador
+  y, en una invitación, si es el invitado (el invitado ve "Aceptar" y "Rechazar"). El creador no ve "Aceptar" (no se
+  juega contra uno mismo). Una cuenta conectada que abre una invitación ajena ve "Esta invitación es para otra
+  dirección." sin botón (D-20261103-02; el mismo texto que el abort `game`/5). El contrato valida igual (SEG-2).
+- **Antes de aceptar:** "Apuestas `<bet>` SUI, igual que el creador. El ganador se sortea on-chain al ejecutarse la
+  transacción (50 % cada uno) y pagas su gas." y la nota "Si tu wallet muestra una vista previa con un ganador o un
+  cambio de saldo, es una simulación: el sorteo real ocurre cuando la red ejecuta la transacción." (DL-5).
+- **Saldo** (`acceptBalanceCheck`): hace falta la apuesta más **≈ 0,01 SUI** de reserva para el gas
+  (`ACCEPT_GAS_RESERVE_MIST` = 10 000 000 MIST). Si no alcanza, "Aceptar" se deshabilita con "Saldo insuficiente:
+  necesitas `<bet>` SUI de apuesta más ≈ 0.01 SUI de reserva para el gas". Si el saldo no se pudo leer, no bloquea: "No
+  se pudo leer tu saldo: no se verificó si alcanza (la wallet lo hará al firmar)". **Medición** (TASK-1 de #12, S-4, en
+  localnet con precio de gas 1000): el budget que el nodo elige en la preflight de aceptar fue **3 474 748** MIST con
+  una moneda de gas y **4 474 748** con dos; con margen 2× y redondeado hacia arriba a 0,005 SUI, 0,01 SUI (cubre también
+  el costo sin ningún rebate, 1 000 000 + 6 186 400 MIST). Es cortesía: entre `bet` + budget y `bet` + reserva la app
+  marca "insuficiente" un saldo que el nodo aceptaría. El budget escala con el precio de gas de la red: se revisa en #17.
+- **Transacción** (`useAcceptGame`, DL-1/DL-3): `splitCoins(gas, [bet])` con la apuesta del `Game` leído y
+  `accept_game(game, house, coin, random)` como **último** comando; sin `precheck` (la preflight ya valida estado,
+  versión y House). El nodo simula con `Random` (S-1 de #12), así que un abort (`game`/4, 5, 9, 10) sale en la preflight
+  sin abrir la wallet. Por el camino de la wallet, la confirmación de una aceptación tardó 0,6-1,4 s en localnet (S-3).
+- **Resultado (SEG-10):** solo con la confirmación del nodo y del `GameResolved` de **esa** partida con la cuenta como
+  aceptante (`parseResolvedGame`). Mientras tanto, solo los textos neutros de las etapas: ningún ganador anticipado ni
+  animación. Ganaste: "¡Ganaste! Recibiste `<payout>` SUI (pozo `<pot>` SUI − comisión `<fee>` SUI)"; perdiste:
+  "Perdiste: ganó quien creó la partida y recibió `<payout>` SUI (pozo `<pot>` SUI − comisión `<fee>` SUI)"; sin el
+  evento: "Partida aceptada; no se pudo leer el resultado de la transacción: el detalle muestra el ganador". El mismo
+  texto para una aceptación adoptada. El resultado sigue a la vista cuando la partida pasa a "Resuelta" y el botón
+  desaparece.
+- **"Resultado para ti"** (DL-12): en el detalle de una partida resuelta, para el creador y el aceptante, "ganaste" o
+  "perdiste", leído del objeto (`playerResult`); nada para un tercero ni sin cuenta.
+- **Cancelaciones del runtime** (DL-11): una aceptación cancelada por falta de aleatoriedad o por congestión no es éxito
+  ni error del contrato; se muestra el texto de "intenta de nuevo" (ver "Mensajes de abort"), y el reintento es el
+  mismo botón.
 
 ### Fixtures de lectura
 
@@ -281,8 +354,9 @@ capturadas en una localnet desechable) la usan los tests de `sui/`. Cómo recapt
 `contracts/README.md`, "Lectura desde la app" (`node app/scripts/capture-read-fixtures.mjs` dentro de la localnet
 aislada; solo acepta `http://127.0.0.1:9000`).
 
-`contracts/fixtures/game-tx.localnet.json` (#11: House, 7 `SimulationError` reales, 5 transacciones ejecutadas con un
-`MoveAbort` real y el texto Rust del abort) la usan los tests de `sui/` y `hooks/`; se recaptura con
+`contracts/fixtures/game-tx.localnet.json` (#11 y #12: House, 11 `SimulationError` reales, 9 transacciones ejecutadas
+con dos `MoveAbort` reales, entre ellas aceptaciones con cada ganador y sobre una invitación, y el texto Rust del abort)
+la usan los tests de `sui/`, `hooks/` y `components/`; se recaptura con
 `node app/scripts/capture-tx-fixtures.mjs`, con la misma guarda (`app/scripts/localnet-guard.mjs`).
 
 ## Indicador de red
@@ -348,9 +422,12 @@ habilita ni se ofrece.
 
 ## Pendientes conocidos
 
-- El build de testnet pesa ≈ 878 kB (≈ 267 kB gzip; desde #11 entra el SDK de transacciones) y Vite avisa de un chunk
+- El build de testnet pesa ≈ 887 kB (≈ 270 kB gzip; desde #11 entra el SDK de transacciones) y Vite avisa de un chunk
   mayor de 500 kB: el code-splitting queda para #15 (hosting).
 - `done` espera la relectura del lobby si está montado (DL-6): con una red lenta "Actualizando datos…" puede durar
-  varios segundos. Se mide en el smoke de #11 y en testnet (#12, #17).
-- Lo que no prueba el smoke de localnet (una wallet de extensión real y su texto de error, R-1 de #11; la latencia de
-  testnet) queda para el owner en #17.
+  varios segundos. Se mide en los smokes de #11 y #12 (localnet) y en testnet en #17.
+- Lo que no prueba el smoke de localnet (una wallet de extensión real y su texto de error, R-1 de #11; su vista previa de
+  aceptar; la latencia de testnet) queda para el owner en #17.
+- `runtimeCancellation` lee el error estructurado; con digest, la app lo toma de la confirmación del nodo. Solo una
+  wallet que rechazara **sin** digest ante una cancelación caería en "La wallet no completó…" (no observado; se verifica
+  en #17). R-3: la `description` real de la falta de aleatoriedad no se observó en localnet.

@@ -30,6 +30,19 @@ export class PreflightNetworkError extends Error {
   }
 }
 
+/**
+ * Si el `cause` de un `SimulationError` **sin** `executionError` es un corte de red (DL-10 de #12). V-3: con
+ * `SuiGrpcClient`, `build({ client })` envuelve todo error del `SimulateTransaction` en `new SimulationError(message,
+ * { cause })` (`@mysten/sui/dist/grpc/core.mjs:532-534`), así que un nodo caído (`UNAVAILABLE`) llegaba como un
+ * `SimulationError` cualquiera y se mostraba como un error de la wallet, que ni se abrió. Criterio = el de las lecturas
+ * (`isTransientReadError`): los rechazos permanentes medidos en TASK-1 de #12 (comando tras `Random`, S-2; selección de
+ * gas por saldo insuficiente, S-6 bis) llegan con `INVALID_ARGUMENT`, fuera de los códigos transitorios, y un saldo que
+ * no alcanza la apuesta llega con `executionError`.
+ */
+export function isPreflightNetworkCause(cause: unknown): boolean {
+  return isTransientReadError(cause);
+}
+
 /** Resultado de una transacción leído del nodo con efectos y eventos (lo que necesitan DL-2, DL-9 y DL-10). */
 export type NodeTransactionResult = SuiClientTypes.TransactionResult<{ effects: true; events: true }>;
 
@@ -37,7 +50,8 @@ export type NodeTransactionResult = SuiClientTypes.TransactionResult<{ effects: 
  * Preflight propia (DL-3): simula **una copia** con `sender` y `build({ client })` antes de abrir la wallet, para
  * obtener el abort estructurado con cualquier wallet y no abrirla con una transacción condenada. El `tx` recibido queda
  * intacto (sin `sender`): a la wallet va el original sin construir. `SimulationError` se relanza tal cual (lo mapea
- * `errors.ts`); un error transitorio o el corte se relanzan como `PreflightNetworkError`; cualquier otro, tal cual.
+ * `errors.ts`), salvo el envoltorio de un corte de red (DL-10, `isPreflightNetworkCause`); un error transitorio o el corte
+ * se relanzan como `PreflightNetworkError`; cualquier otro, tal cual.
  * `build` no acepta señal: el corte y `signal` cortan la espera, no el pedido en curso.
  */
 export async function preflightTransaction(
@@ -67,7 +81,12 @@ export async function preflightTransaction(
   } catch (error) {
     // Cancelada desde afuera: se propaga la razón de `signal`, no se clasifica.
     signal?.throwIfAborted();
-    if (error instanceof SimulationError) throw error;
+    if (error instanceof SimulationError) {
+      if (error.executionError === undefined && isPreflightNetworkCause(error.cause)) {
+        throw new PreflightNetworkError({ cause: error });
+      }
+      throw error;
+    }
     if (isTransientReadError(error)) throw new PreflightNetworkError({ cause: error });
     throw error;
   } finally {

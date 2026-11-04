@@ -1,6 +1,7 @@
 import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
 import { SimulationError, type SuiClientTypes } from '@mysten/sui/client';
 import { RpcError, type SuiGrpcClient } from '@mysten/sui/grpc';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 import { fromBase64 } from '@mysten/sui/utils';
 import { QueryClient } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -20,7 +21,9 @@ import { queryWrapper } from '../test/queryHarness';
 import { queryKeys } from './queryKeys';
 import type { TxAction } from './txInvalidation';
 import { useAppConfig } from './useAppConfig';
-import { CONNECT_WALLET_MESSAGE, useExecuteTransaction, type ExecuteInput, type TxStage } from './useExecuteTransaction';
+import type { TxTarget } from './txSession';
+import { CONNECT_WALLET_MESSAGE, PREPARE_FAILED_PREFIX, useExecuteTransaction, type ExecuteInput, type TxStage } from './useExecuteTransaction';
+import { useTxTarget } from './useTxTarget';
 
 vi.mock('@mysten/dapp-kit-react', () => ({ useCurrentClient: vi.fn(), useCurrentAccount: vi.fn(), useDAppKit: vi.fn() }));
 vi.mock('./useAppConfig', () => ({ useAppConfig: vi.fn() }));
@@ -100,16 +103,26 @@ function input(action: TxAction = { kind: 'create' }, overrides: Partial<Execute
     ...overrides,
   };
 }
-function render() {
-  return renderHook(() => useExecuteTransaction<string>(), { wrapper: queryWrapper(queryClient) });
+/** Objetivo de la vista para la acción de la entrada (crear o la partida). */
+const targetOf = (action: TxAction): TxTarget => (action.kind === 'create' ? { kind: 'create' } : { kind: 'game', gameId: action.gameId });
+/** El hook con la vista que lo usa (T3-15 (1)): `target` es la fuente de bloqueo y del "sin confirmar". */
+function render(action: TxAction = { kind: 'create' }) {
+  return renderHook(
+    () => {
+      const target = useTxTarget(targetOf(action));
+      return { ...useExecuteTransaction<string>(target.view), target };
+    },
+    { wrapper: queryWrapper(queryClient) },
+  );
 }
 async function runToOutcome(i: ExecuteInput<string> = input()) {
-  const hook = render();
+  const hook = render(i.action);
   act(() => {
     hook.result.current.execute(i);
   });
+  // Terminó: con resultado propio, o "sin confirmar" (que solo muestra la vista, M-1 (b)).
   await waitFor(() => {
-    expect(hook.result.current.outcome).not.toBeNull();
+    expect(hook.result.current.outcome !== null || hook.result.current.target.unconfirmed !== null).toBe(true);
   });
   return hook;
 }
@@ -170,7 +183,7 @@ describe('useExecuteTransaction: happy path', () => {
         expect(result.current.stage).toBe(stage);
       });
       seen.push(result.current.stage);
-      expect(result.current.isBusy).toBe(true);
+      expect(result.current.target.busy).toBe(true);
       await act(async () => {
         gates[name]?.();
         await Promise.resolve();
@@ -181,7 +194,7 @@ describe('useExecuteTransaction: happy path', () => {
     });
     expect(seen).toEqual(['preflight', 'signing', 'confirming', 'indexing']);
     expect(result.current.outcome).toEqual({ kind: 'success', digest: OPEN_DIGEST, value: 'interpreted', indexed: true, cost: 3_941_200n });
-    expect(result.current.isBusy).toBe(false);
+    expect(result.current.target.busy).toBe(false);
   });
 
   it.each([
@@ -217,7 +230,7 @@ describe('useExecuteTransaction: double submit (M-1)', () => {
     expect(preflightTransaction).toHaveBeenCalledTimes(1);
     expect(signAndExecuteTransaction).toHaveBeenCalledTimes(1);
     await waitFor(() => {
-      expect(result.current.isBusy).toBe(false);
+      expect(result.current.target.busy).toBe(false);
     });
     act(() => {
       result.current.execute(input());
@@ -237,7 +250,7 @@ describe('useExecuteTransaction: double submit (M-1)', () => {
       expect(result.current.outcome?.kind).toBe('failure');
     });
     await waitFor(() => {
-      expect(result.current.isBusy).toBe(false);
+      expect(result.current.target.busy).toBe(false);
     });
     act(() => {
       result.current.execute(input());
@@ -342,13 +355,15 @@ describe('useExecuteTransaction: wallet and node', () => {
     signAndExecuteTransaction.mockRejectedValue(Object.assign(new Error('wallet crashed'), { digest: OPEN_DIGEST }));
     vi.mocked(confirmTransaction).mockRejectedValue(new DOMException('timeout', 'TimeoutError'));
     const { result } = await runToOutcome();
-    expect(result.current.outcome).toEqual({ kind: 'unconfirmed', digest: OPEN_DIGEST });
+    expect(result.current.target.unconfirmed?.digest).toBe(OPEN_DIGEST);
+    expect(result.current.outcome).toBeNull();
   });
 
   it('is unconfirmed and still invalidates when the wallet returns a digest and confirmation times out', async () => {
     vi.mocked(confirmTransaction).mockRejectedValue(new DOMException('timeout', 'TimeoutError'));
     const { result } = await runToOutcome(input({ kind: 'cancel', gameId: fixture.ids.games.open }));
-    expect(result.current.outcome).toEqual({ kind: 'unconfirmed', digest: OPEN_DIGEST });
+    expect(result.current.target.unconfirmed?.digest).toBe(OPEN_DIGEST);
+    expect(result.current.outcome).toBeNull();
     expect(resetKeys()).toEqual([LOBBY]);
     expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
   });
@@ -356,7 +371,8 @@ describe('useExecuteTransaction: wallet and node', () => {
   it('is unconfirmed (never failure) and still invalidates when the node answer is malformed after the wallet digest', async () => {
     vi.mocked(confirmTransaction).mockResolvedValue({} as NodeTransactionResult);
     const { result } = await runToOutcome(input({ kind: 'cancel', gameId: fixture.ids.games.open }));
-    expect(result.current.outcome).toEqual({ kind: 'unconfirmed', digest: OPEN_DIGEST });
+    expect(result.current.target.unconfirmed?.digest).toBe(OPEN_DIGEST);
+    expect(result.current.outcome).toBeNull();
     expect(resetKeys()).toEqual([LOBBY]);
     expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
   });
@@ -419,7 +435,7 @@ describe('useExecuteTransaction: indexing (S-1 bis)', () => {
           confirm = resolve;
         }),
     );
-    const { result, unmount } = render();
+    const { result, unmount } = render({ kind: 'cancel', gameId: fixture.ids.games.open });
     act(() => {
       result.current.execute(input({ kind: 'cancel', gameId: fixture.ids.games.open }));
     });
@@ -435,18 +451,52 @@ describe('useExecuteTransaction: indexing (S-1 bis)', () => {
   });
 });
 
-describe('useExecuteTransaction: reset', () => {
-  it('goes back to idle without outcome', async () => {
+describe('useExecuteTransaction: wallet abort without digest (T3-13, NIT-2)', () => {
+  const action: TxAction = { kind: 'cancel', gameId: fixture.ids.games.open };
+
+  it('maps the SDK MoveAbort text of the wallet error and refreshes the data of the action', async () => {
+    const sim = fixture.simulationErrors.cancelNotCreator;
+    if (sim === undefined) throw new Error('fixture');
+    signAndExecuteTransaction.mockRejectedValue(new Error(sim.message));
+    const { result } = await runToOutcome(input(action));
+    expect(result.current.outcome).toEqual({
+      kind: 'failure',
+      message: 'Solo quien creó la partida puede cancelarla. (código game/3)',
+      digest: null,
+      cost: null,
+    });
+    expect(resetKeys()).toEqual([LOBBY]);
+    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+    expect(confirmTransaction).not.toHaveBeenCalled();
+  });
+
+  it('does not invalidate anything when the wallet error has no abort', async () => {
+    signAndExecuteTransaction.mockRejectedValue(new Error('User rejected the request.'));
+    const { result } = await runToOutcome(input(action));
+    expect(result.current.outcome).toMatchObject({ kind: 'failure', message: 'La wallet no completó la operación: User rejected the request.' });
+    expect(resetSpy).not.toHaveBeenCalled();
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('useExecuteTransaction: SimulationError without abort (T3-14, DL-10)', () => {
+  it('shows "No se pudo preparar la transacción: …" for the real gas selection rejection (S-6 bis) and never opens the wallet', async () => {
+    const message = `Unable to perform gas selection due to insufficient SUI balance (in address balance or coins) for account ${normalizeSuiAddress('0x5ca1ab1f')} to satisfy required budget 3474748.`;
+    vi.mocked(preflightTransaction).mockRejectedValue(new SimulationError(message, { cause: new RpcError(message, 'INVALID_ARGUMENT') }));
     const { result } = await runToOutcome();
-    await waitFor(() => {
-      expect(result.current.isBusy).toBe(false);
-    });
-    act(() => {
-      result.current.reset();
-    });
-    await waitFor(() => {
-      expect(result.current.outcome).toBeNull();
-    });
-    expect(result.current.stage).toBe('idle');
+    expect(result.current.outcome).toEqual({ kind: 'failure', message: `${PREPARE_FAILED_PREFIX}: ${message}`, digest: null, cost: null });
+    expect(PREPARE_FAILED_PREFIX).toBe('No se pudo preparar la transacción');
+    expect(signAndExecuteTransaction).not.toHaveBeenCalled();
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps "La red no ejecutó…" for a SimulationError with an executionError and no abort', async () => {
+    const executionError = { $kind: 'Unknown', message: 'InsufficientCoinBalance in command 0', command: 0, Unknown: null } as SuiClientTypes.ExecutionError;
+    vi.mocked(preflightTransaction).mockRejectedValue(
+      new SimulationError('Transaction resolution failed: InsufficientCoinBalance in command 0', { executionError }),
+    );
+    const { result } = await runToOutcome();
+    expect(result.current.outcome).toMatchObject({ kind: 'failure', message: 'La red no ejecutó la transacción: InsufficientCoinBalance in command 0' });
+    expect(signAndExecuteTransaction).not.toHaveBeenCalled();
   });
 });

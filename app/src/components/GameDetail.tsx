@@ -1,3 +1,4 @@
+import { playerResult } from '../sui/acceptGame';
 import { resolutionAmounts, type Game } from '../sui/game';
 import { explorerObjectUrl } from '../sui/explorer';
 import { formatBps, formatMist, formatTimestamp, shortAddress } from '../sui/format';
@@ -29,10 +30,22 @@ function stateLabel(game: Game) {
 /**
  * Detalle de una partida (presentacional). En `Pending` muestra la estimación del reparto y, en `Resolved`, los montos
  * cobrados, ambos con la fórmula de la v1 (`resolutionAmounts`). "Última actividad" es la hora de la última transacción
- * que tocó el objeto, que puede ser una fallida (sonda P6 de #10): nunca se presenta como la que la resolvió.
+ * que tocó el objeto, que puede ser una fallida (sonda P6 de #10): nunca se presenta como la que la resolvió. Con la
+ * partida resuelta y la cuenta conectada como creador o aceptante, "Resultado para ti" (DL-12 de #12), leído del objeto.
  */
-export function GameDetail({ game, lastActivityMs, network }: { game: Game; lastActivityMs: number | null; network: Network }) {
+export function GameDetail({
+  game,
+  lastActivityMs,
+  network,
+  account,
+}: {
+  game: Game;
+  lastActivityMs: number | null;
+  network: Network;
+  account: string | null;
+}) {
   const { pot, fee, payout } = resolutionAmounts(game.bet, game.feeRate);
+  const result = playerResult(game, account);
   const explorerUrl = explorerObjectUrl(network, game.id);
   return (
     <article className="game-detail">
@@ -67,6 +80,12 @@ export function GameDetail({ game, lastActivityMs, network }: { game: Game; last
             <dd>
               {sui(payout)} <small>(según la fórmula del contrato)</small>
             </dd>
+            {result !== null && (
+              <>
+                <dt>Resultado para ti</dt>
+                <dd>{result === 'won' ? 'ganaste' : 'perdiste'}</dd>
+              </>
+            )}
           </>
         )}
         <dt>Última actividad</dt>

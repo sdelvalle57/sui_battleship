@@ -15,7 +15,7 @@ código discrepan, manda el código y se corrige la tabla en el mismo PR (`agent
 | `scripts/*.test.mjs`, `scripts/fixtures/` | Tests (`node --test`) y salidas reales de la CLI 1.83.0 en una localnet desechable |
 | `deployments/<red>.json`, `Published.toml` | Datos de cada publicación (los escribe la primera publicación en testnet, #8) |
 | `fixtures/game-reads.localnet.json` | Lecturas gRPC reales de cada variante de `Game` y de sus eventos, capturadas en una localnet desechable con `app/scripts/capture-read-fixtures.mjs` (#10, ver "Lectura desde la app") |
-| `fixtures/game-tx.localnet.json` | Transacciones reales de crear, cancelar y rechazar (éxitos, un fallo `MoveAbort` ejecutado y 7 `SimulationError` de simulaciones sin firmar) y el objeto House, capturados en una localnet desechable con `app/scripts/capture-tx-fixtures.mjs` (#11, ver "Lectura desde la app") |
+| `fixtures/game-tx.localnet.json` | Transacciones reales de crear, cancelar, rechazar (#11) y aceptar (#12): éxitos (con cada ganador y sobre una invitación), dos fallos `MoveAbort` ejecutados y 11 `SimulationError` de simulaciones sin firmar, y el objeto House, capturados en una localnet desechable con `app/scripts/capture-tx-fixtures.mjs` (ver "Lectura desde la app") |
 
 **Gates (build, lint, test, coverage):** forma canónica en `agents.md` §3 (desde `contracts/`, con
 `-e testnet` y `printf 'n\n' |` delante). Baselines vigentes en `documents/STATUS.md`.
@@ -352,7 +352,13 @@ Una transacción de `accept_game` puede no ejecutarse aunque el contrato no abor
 
 Ambas llegan como `effects.status = failure` con ese `kind` y **sin** `MoveAbort`
 (`crates/sui-types/src/execution_status.rs:259, 270-271` @ `testnet-v1.83.0`); la partida y los fondos apostados
-no cambian. #12 las muestra como "reintentar", nunca como éxito ni como error del contrato (SEG-10).
+no cambian. La app (#12) las reconoce en `runtimeCancellation` de `app/src/sui/errors.ts`: la congestión por el
+`$kind` `CongestedObjects` del SDK, y la falta de aleatoriedad por un `$kind` `Unknown` cuyo texto es el nombre de la
+variante o el texto Rust ("randomness could not be generated", sin distinguir mayúsculas). Muestra un texto neutro
+respecto de la acción, nunca éxito ni error del contrato (SEG-10): "La red canceló la transacción sin ejecutarla (la
+aleatoriedad de la red todavía no está disponible | hay congestión en un objeto compartido): no cambió nada salvo el
+costo de red; intenta de nuevo en unos segundos". El reintento es el mismo botón. En las capturas de #12 no se observó
+ninguna (aceptaciones a 5,8 s y 8,2 s del arranque de la localnet).
 
 ### Versionado del `Game` (D-20261030-15 DV)
 
@@ -439,22 +445,47 @@ transacción (cómputo + storage − rebate de `effects.gasUsed`).
   acepta `http://127.0.0.1:9000` (con otra `--url` sale con error antes de cualquier pedido), exige que el chain id del
   nodo coincida con `contracts/deployments/localnet.json` y es determinista: dos corridas sobre la misma red dan el mismo
   archivo salvo `_meta.capturedAt`. Un cambio de la fixture al recapturar se declara en el PR.
-- **Fixture de transacciones (#11):** `contracts/fixtures/game-tx.localnet.json` = `house` (el objeto, `content` en
-  base64), `simulationErrors` (7 casos `{ sender: <rol>, message, executionError }` del `SimulationError` real de
-  `build({ client })`: `game` 0 a 6), `executed` (`getTransaction` con efectos, eventos y `objectTypes` de crear abierta,
-  crear invitación, cancelar, rechazar y del `cancel_game` fallido; `effects.bcs` y `bcs` de eventos en base64, sin
-  `sender` ni `signatures`) y `cliErrorText` (el texto Rust del abort **del nodo**: `description` del error por gRPC,
-  igual al `effects.status.error` de `sui client tx-block`; no es la línea con que la CLI presenta el error al
-  ejecutar, "… aborted within function … with code N", que la app no reconoce porque nunca le llega). Las simulaciones no firman (`setSender` de una cuenta de la génesis); las direcciones de los
-  datos son de cuentas efímeras (sin claves).
-- **Recaptura de la fixture de transacciones:** dentro de la localnet aislada, después de las transacciones por CLI de
-  `documents/HANDOFF_CREATE_CANCEL.md` (TASK-1: `update_fee_rate` 250; `A` crea `G_OPEN` abierta e invita a `B` en
-  `G_INV`; `A` crea y cancela `G_CANCEL`; `A` invita a `B` en `G_REJ` y `B` la rechaza; al final, `B` llama `cancel_game`
-  sobre `G_OPEN` con `--gas-budget`), con el mismo prefijo de Node 26: `node app/scripts/capture-tx-fixtures.mjs` desde
-  `<repo>`. Comparte la guarda con el script de #10 (`app/scripts/localnet-guard.mjs`: sin SDK ni red en el nivel
-  superior; con otra `--url` sale con código 2 antes de cualquier pedido) y es determinista igual (solo cambia
-  `_meta.capturedAt`). El fallo ejecutado se encuentra como la última transacción sobre `G_OPEN`: nada debe tocar esa
-  partida después.
+- **Fixture de transacciones (#11, aceptar en #12):** `contracts/fixtures/game-tx.localnet.json` = `ids` (paquete, House
+  y partidas: `open`, `invite`, `cancelled`, `rejected`, `acc1`, `accInvite` y las de las tres aceptaciones), `house` (el
+  objeto, `content` en base64; tras las aceptaciones, con `fees_collected` > 0), `simulationErrors` (11 casos
+  `{ sender: <rol>, message, executionError }` del `SimulationError` real de `build({ client })`: `game` 0 a 6 de crear,
+  cancelar y rechazar, y de aceptar `acceptSelfPlay` (`game`/9), `acceptNotInvited` (`game`/5), `acceptNotPending`
+  (`game`/4) y `acceptWrongStake` (`game`/10); los de aceptar abortan en `assert_acceptable`), `executed`
+  (`getTransaction` con efectos, eventos y `objectTypes` de crear abierta, crear invitación, cancelar, rechazar, del
+  `cancel_game` fallido (`cancelNotCreatorExecuted`, `game`/3) y de aceptar: `acceptCreatorWins`, `acceptAcceptorWins`,
+  `acceptInvite` y el `accept_game` fallido (`acceptNotPendingExecuted`, `game`/4); `effects.bcs` y `bcs` de eventos en
+  base64, sin `sender` ni `signatures`) y `cliErrorText` (el texto Rust del abort **del nodo**: `description` del error
+  por gRPC, igual al `effects.status.error` de `sui client tx-block`; no es la línea con que la CLI presenta el error al
+  ejecutar, "… aborted within function … with code N", que la app no reconoce porque nunca le llega). Una sección
+  `runtimeCancelled` existe solo si una captura observó `ExecutionCancelledDueToRandomnessUnavailable` (en #12 no
+  ocurrió). Las simulaciones no firman (`setSender` de una cuenta de la génesis); las direcciones de los datos son de
+  cuentas efímeras (sin claves). **Roles** (los casos llevan el rol, nunca la dirección): `A` crea todas las partidas;
+  `B` es el invitado de `G_INV` y `G_REJ` y el que acepta; `C` es un tercero (el script lo toma como sender del
+  `accept_game` fallido); `ADMIN` publicó y tiene la `HouseCap`. Las cuatro tienen que ser cuentas distintas.
+- **Recaptura de la fixture de transacciones:** dentro de la localnet aislada (génesis nueva, publicación variante B),
+  después de estas transacciones por CLI, **en este orden** (`A`, `B` y `C` no hacen nada antes: `createOpen` tiene que
+  ser la primera transacción de `A`, con la moneda de gas de la génesis, porque los tests de la app usan su costo):
+  1. `ADMIN`: `update_fee_rate` 250;
+  2. `A` crea `G_OPEN` abierta (1000001) **primero** y `G_INV` invitando a `B` (2000002);
+  3. `A` crea `G_CANCEL` **abierta** (3000003) y la cancela; `A` crea `G_REJ` invitando a `B` (4000004) y `B` la
+     rechaza;
+  4. `B` llama `cancel_game` sobre `G_OPEN` con `--gas-budget 100000000` ⇒ fallo ejecutado `game`/3;
+  5. `A` crea `G_ACC1..n` abiertas (1000001) y `B` las acepta una por una hasta tener un ganador `A` y un ganador `B`
+     (tope 8);
+  6. `A` crea `G_ACCINV` invitando a `B` (1000001) y `B` la acepta;
+  7. `C` acepta `G_ACC1` (ya resuelta) con `--gas-budget 100000000` ⇒ fallo ejecutado `game`/4.
+
+  Después, con el mismo prefijo de Node 26: `node app/scripts/capture-tx-fixtures.mjs` desde `<repo>`. Comparte la
+  guarda con el script de #10 (`app/scripts/localnet-guard.mjs`: sin SDK ni red en el nivel superior; con otra `--url`
+  sale con código 2 antes de cualquier pedido) y es determinista igual (solo cambia `_meta.capturedAt`). Selección (por
+  orden de creación): `G_OPEN` = primera abierta pendiente, `G_INV` = primera invitación pendiente, `G_CANCEL` = primera
+  **abierta** cancelada por su creador, `G_REJ` = primera rechazada por su invitado, `G_ACC1` = primera abierta resuelta;
+  `acceptCreatorWins`/`acceptAcceptorWins` = primera `GameResolved` de una abierta con `winner` = creador/aceptante y
+  `acceptInvite` = primera `GameResolved` de una invitación. Los fallos ejecutados se encuentran como la última
+  transacción sobre `G_OPEN` y sobre `G_ACC1`: nada debe tocar esas partidas después. El script aborta con un mensaje
+  claro si falta una partida (también si la única cancelada por su creador es una invitación), si faltan los dos
+  ganadores, si el último fallo sobre `G_ACC1` no es `game`/4 o si `A`, `B`, `C` y `ADMIN` no son cuatro cuentas
+  distintas.
 - **Listas (lobby, #10):** las partidas se descubren por eventos con `eventType` = `<originalPackageId>::game::<Evento>`
   (dirección **completa**: con `0x3` corto el nodo responde `INVALID_ARGUMENT`). En el fullnode público, `listEvents` del
   SDK (sin rango) falla con `OUT_OF_RANGE` ("requested data below earliest available"): el historial está podado

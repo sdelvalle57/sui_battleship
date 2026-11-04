@@ -10,6 +10,12 @@
 
 ---
 
+### D-20261103-02 — Invitación ajena en el detalle: aviso sin botón (STOP P-1 de #12)
+- **Decisión:** una cuenta conectada que abre una invitación dirigida a otra dirección **no ve el botón "Aceptar"**; ve el aviso "Esta invitación es para otra dirección." (el mismo sentido que `ENotInvited`). Nunca se muestra el aviso sin cuenta conectada. El criterio del smoke de #12 "intento con una tercera cuenta (abriendo el detalle por URL) que muestra el error mapeado" se reinterpreta así: en la app, la tercera cuenta recibe el error mapeado `game`/4 al aceptar una partida abierta que otro aceptó antes (carrera); `game`/5 (`ENotInvited`) se cubre por CLI en el smoke y con el test sobre la fixture real.
+- **Alternativa descartada:** mostrar el botón a la tercera cuenta para que falle al pulsarlo (contradice el criterio de visibilidad y ofrece una acción que siempre falla); ocultarlo sin aviso.
+- **Motivo:** contradicción del issue #12 entre el criterio del botón y el del smoke (STOP P-1 del plan v1; la revisión del MAYOR confirmó la recomendación).
+- **Aprobado por:** usuario ("Aviso, sin botón", 2026-11-03). **Fecha:** 2026-11-03.
+
 ### D-20261102-05 — "Rechazar invitación" en la app va en #11
 - **Decisión:** el botón "Rechazar invitación" (llamada `reject_game`, D-20261030-06 (4)) se entrega en #11, junto a "Cancelar", en el detalle de la partida: visible solo para el invitado y solo en `Pending`; usa la misma maquinaria de transacciones (preflight, confirmación por el nodo, mapeo de aborts, invalidación).
 - **Alternativa descartada:** dejarlo para #13 (lista de invitaciones recibidas) o sacarlo del MVP.

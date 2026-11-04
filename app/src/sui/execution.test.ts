@@ -1,11 +1,13 @@
 import { SimulationError, TransactionError, type ClientWithCoreApi, type SuiClientTypes } from '@mysten/sui/client';
 import { RpcError, type SuiGrpcClient } from '@mysten/sui/grpc';
 import { Transaction } from '@mysten/sui/transactions';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   classifyExecution,
   confirmTransaction,
   digestFromError,
+  isPreflightNetworkCause,
   networkCost,
   PREFLIGHT_NETWORK_MESSAGE,
   PreflightNetworkError,
@@ -89,6 +91,41 @@ describe('preflightTransaction', () => {
     expect((error as PreflightNetworkError).cause).toBeInstanceOf(ReadTimeoutError);
   });
 
+  it('turns a SimulationError that wraps a transient RpcError (UNAVAILABLE) into PreflightNetworkError (V-3)', async () => {
+    const simulation = new SimulationError('Failed to fetch', { cause: new RpcError('Failed to fetch', 'UNAVAILABLE') });
+    vi.spyOn(Transaction.prototype, 'build').mockRejectedValue(simulation);
+    const error = await preflightTransaction(CLIENT, newTx(), SENDER).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(PreflightNetworkError);
+    expect(error).toMatchObject({ message: PREFLIGHT_NETWORK_MESSAGE, cause: simulation });
+  });
+
+  it.each([
+    // S-2 de #12: un comando después del MoveCall con Random.
+    ['the Random command rule', 'Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins'],
+    // S-6 bis de #12: selección de gas con saldo insuficiente.
+    [
+      'gas selection with an insufficient balance',
+      `Unable to perform gas selection due to insufficient SUI balance (in address balance or coins) for account ${normalizeSuiAddress('0x5ca1ab1f')} to satisfy required budget 3474748.`,
+    ],
+  ])('rethrows the measured permanent rejection (%s, INVALID_ARGUMENT) as is', async (_name, message) => {
+    const simulation = new SimulationError(message, { cause: new RpcError(message, 'INVALID_ARGUMENT') });
+    vi.spyOn(Transaction.prototype, 'build').mockRejectedValue(simulation);
+    await expect(preflightTransaction(CLIENT, newTx(), SENDER)).rejects.toBe(simulation);
+  });
+
+  it('rethrows a SimulationError without cause or with executionError as is, even with a transient cause', async () => {
+    const withoutCause = new SimulationError('Transaction resolution failed: InsufficientCoinBalance in command 0');
+    const executionError = { $kind: 'Unknown', message: 'InsufficientCoinBalance in command 0', command: 0, Unknown: null } as SuiClientTypes.ExecutionError;
+    const withExecution = new SimulationError('Transaction resolution failed: InsufficientCoinBalance in command 0', {
+      executionError,
+      cause: new RpcError('x', 'UNAVAILABLE'),
+    });
+    for (const simulation of [withoutCause, withExecution]) {
+      vi.spyOn(Transaction.prototype, 'build').mockRejectedValueOnce(simulation);
+      await expect(preflightTransaction(CLIENT, newTx(), SENDER)).rejects.toBe(simulation);
+    }
+  });
+
   it('rethrows a non-transient error as is', async () => {
     const error = new Error('No valid gas coins found for the transaction.');
     vi.spyOn(Transaction.prototype, 'build').mockRejectedValue(error);
@@ -102,6 +139,16 @@ describe('preflightTransaction', () => {
     const reason = new Error('unmounted');
     controller.abort(reason);
     await expect(result).rejects.toBe(reason);
+  });
+});
+
+describe('isPreflightNetworkCause', () => {
+  it('is true for the transient gRPC codes and false for INVALID_ARGUMENT or a non-RPC cause', () => {
+    expect(isPreflightNetworkCause(new RpcError('x', 'UNAVAILABLE'))).toBe(true);
+    expect(isPreflightNetworkCause(new RpcError('x', 'DEADLINE_EXCEEDED'))).toBe(true);
+    expect(isPreflightNetworkCause(new RpcError('x', 'INVALID_ARGUMENT'))).toBe(false);
+    expect(isPreflightNetworkCause(new Error('x'))).toBe(false);
+    expect(isPreflightNetworkCause(undefined)).toBe(false);
   });
 });
 

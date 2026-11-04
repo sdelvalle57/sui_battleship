@@ -45,12 +45,13 @@ function readError(run: () => unknown): unknown {
 }
 
 describe('parseHouseObject', () => {
-  it('parses the real House of the fixture with the genesis values', () => {
+  it('parses the real House of the fixture with the genesis limits and the fees it collected', () => {
     expect(parseHouseObject(objectOf(), PKG)).toEqual({
       id: fixture.ids.houseId,
       version: 1n,
       feeRate: 250,
-      feesCollected: 0n,
+      // Las 3 aceptaciones de la captura de #12 (TASK-1), con comisión 50000 cada una.
+      feesCollected: 150_000n,
       minBet: 1_000_000n,
       maxBet: 50_000_000_000n,
     });

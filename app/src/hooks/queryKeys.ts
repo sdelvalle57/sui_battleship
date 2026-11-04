@@ -1,5 +1,6 @@
-import { normalizeSuiAddress } from '@mysten/sui/utils';
+import { normalizeSuiAddress, normalizeSuiObjectId } from '@mysten/sui/utils';
 import type { Network } from '../sui/networks';
+import type { TxTarget } from './txSession';
 
 /**
  * Claves de TanStack Query de toda la app (DL-13): `'sui'`, la red y el recurso. Así una clave nunca mezcla datos de dos
@@ -27,4 +28,15 @@ export const queryKeys = {
   /** Hora de un checkpoint por número (inmutable). */
   checkpointTime: (network: Network, sequenceNumber: bigint) =>
     ['sui', network, 'checkpointTime', sequenceNumber.toString()] as const,
+  /**
+   * Clave de **mutación** de todas las transacciones de una cuenta (DL-7 de #12): el candado global (`isMutating` con
+   * esta clave parcial) y el "en curso" de cualquier objetivo. Sin cuenta, `'none'`.
+   */
+  txAccount: (network: Network, address: string | null) =>
+    ['sui', network, 'tx', address === null ? 'none' : normalizeSuiAddress(address)] as const,
+  /** Clave de **mutación** de un objetivo de la cuenta: crear, o una partida por ID normalizado (M-5). */
+  txTarget: (network: Network, address: string | null, target: TxTarget) =>
+    target.kind === 'create'
+      ? ([...queryKeys.txAccount(network, address), 'create'] as const)
+      : ([...queryKeys.txAccount(network, address), 'game', normalizeSuiObjectId(target.gameId)] as const),
 };

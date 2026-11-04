@@ -1,14 +1,15 @@
 import type { SuiClientTypes } from '@mysten/sui/client';
 import { fromBase64 } from '@mysten/sui/utils';
 import { describe, expect, it } from 'vitest';
-import { cancelledRefund, parseCreatedGame } from './gameTx';
+import { cancelledRefund, parseCreatedGame, parseResolvedGame } from './gameTx';
 
 type FixtureEvent = { packageId: string; module: string; eventType: string; bcs: string; json: Record<string, unknown> };
 type FixtureTx = { digest: string; status: SuiClientTypes.ExecutionStatus; events: FixtureEvent[] };
 type FixtureResult = { $kind: 'Transaction'; Transaction: FixtureTx };
+type AcceptCase = 'acceptCreatorWins' | 'acceptAcceptorWins' | 'acceptInvite';
 type Fixture = {
-  ids: { originalPackageId: string; games: Record<'open' | 'invite' | 'cancelled' | 'rejected', string> };
-  executed: Record<'createOpen' | 'createInvite' | 'cancel' | 'reject', FixtureResult>;
+  ids: { originalPackageId: string; games: Record<'open' | 'invite' | 'cancelled' | 'rejected' | AcceptCase, string> };
+  executed: Record<'createOpen' | 'createInvite' | 'cancel' | 'reject' | AcceptCase, FixtureResult>;
 };
 const FIXTURE_PATH = '../../../contracts/fixtures/game-tx.localnet.json';
 const fixture = import.meta.glob<Fixture>('../../../contracts/fixtures/game-tx.localnet.json', {
@@ -83,5 +84,70 @@ describe('cancelledRefund', () => {
     expect(cancelledRefund(resultOf(entry), { originalPackageId: PKG, gameId: fixture.ids.games.open })).toBeNull();
     expect(cancelledRefund(resultOf(entry), { originalPackageId: OTHER_PKG, gameId: fixture.ids.games.cancelled })).toBeNull();
     expect(cancelledRefund(resultOf(fixture.executed.createOpen), { originalPackageId: PKG, gameId: fixture.ids.games.open })).toBeNull();
+  });
+});
+
+describe('parseResolvedGame', () => {
+  /** El `GameResolved` real de la fixture (su `json` es la referencia del nodo). */
+  const resolvedJson = (entry: FixtureResult) => {
+    const event = entry.Transaction.events.find((e) => e.eventType.endsWith('::game::GameResolved'));
+    if (!event) throw new Error('la fixture no tiene GameResolved');
+    return event.json as { game_id: string; creator: string; acceptor: string; winner: string };
+  };
+  const options = (name: AcceptCase) => ({
+    originalPackageId: PKG,
+    gameId: fixture.ids.games[name],
+    acceptor: resolvedJson(fixture.executed[name]).acceptor,
+  });
+
+  it.each([
+    ['acceptCreatorWins', 'creator'],
+    ['acceptAcceptorWins', 'acceptor'],
+    ['acceptInvite', 'acceptor'],
+  ] as [AcceptCase, 'creator' | 'acceptor'][])('reads winner, pot, fee and payout of the real %s transaction', (name, winnerRole) => {
+    const entry = fixture.executed[name];
+    const json = resolvedJson(entry);
+    expect(parseResolvedGame(resultOf(entry), options(name))).toEqual({
+      gameId: fixture.ids.games[name],
+      creator: json.creator,
+      acceptor: json.acceptor,
+      winner: json[winnerRole],
+      pot: 2_000_002n,
+      fee: 50_000n,
+      payout: 1_950_002n,
+      transactionDigest: entry.Transaction.digest,
+    });
+  });
+
+  it('accepts the acceptor address in another format', () => {
+    const opts = options('acceptCreatorWins');
+    const upper = opts.acceptor.toUpperCase().replace('0X', '0x');
+    expect(parseResolvedGame(resultOf(fixture.executed.acceptCreatorWins), { ...opts, acceptor: upper })).not.toBeNull();
+  });
+
+  it('returns null without events, with two GameResolved, for another game, another acceptor or another package type', () => {
+    const entry = fixture.executed.acceptAcceptorWins;
+    const opts = options('acceptAcceptorWins');
+    expect(parseResolvedGame(resultOf(entry, () => []), opts)).toBeNull();
+    expect(parseResolvedGame(resultOf(entry, (e) => [...e, ...e]), opts)).toBeNull();
+    expect(parseResolvedGame(resultOf(entry), { ...opts, gameId: fixture.ids.games.open })).toBeNull();
+    expect(parseResolvedGame(resultOf(entry), { ...opts, acceptor: resolvedJson(entry).creator })).toBeNull();
+    expect(
+      parseResolvedGame(
+        resultOf(entry, (e) => e.map((ev) => ({ ...ev, eventType: ev.eventType.replace(PKG, OTHER_PKG) }))),
+        opts,
+      ),
+    ).toBeNull();
+    expect(parseResolvedGame(resultOf(entry), { ...opts, originalPackageId: OTHER_PKG })).toBeNull();
+  });
+
+  it('returns null when the GameResolved bytes are truncated', () => {
+    const broken = resultOf(fixture.executed.acceptInvite, (e) => e.map((ev) => ({ ...ev, bcs: ev.bcs.slice(0, -1) })));
+    expect(parseResolvedGame(broken, options('acceptInvite'))).toBeNull();
+  });
+
+  it('returns null for a create transaction (no GameResolved)', () => {
+    const opts = options('acceptCreatorWins');
+    expect(parseResolvedGame(resultOf(fixture.executed.createOpen), { ...opts, gameId: fixture.ids.games.open })).toBeNull();
   });
 });

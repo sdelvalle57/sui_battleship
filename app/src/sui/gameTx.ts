@@ -1,6 +1,14 @@
 import type { SuiClientTypes } from '@mysten/sui/client';
 import { isExactType } from './game';
-import { gameEventType, parseGameCancelled, parseGameCreated, type GameCreatedEvent, type RawGameEvent } from './events';
+import {
+  gameEventType,
+  parseGameCancelled,
+  parseGameCreated,
+  parseGameResolved,
+  type GameCreatedEvent,
+  type GameResolvedEvent,
+  type RawGameEvent,
+} from './events';
 import { sameAddress } from './ids';
 
 /** Resultado del nodo con los eventos de la transacción (lo que devuelve `confirmTransaction`). */
@@ -58,4 +66,23 @@ export function cancelledRefund(
     .filter((event) => event !== null && sameAddress(event.gameId, gameId));
   const [only] = matches;
   return matches.length === 1 && only ? only.refund : null;
+}
+
+/**
+ * Resultado de una aceptación (DL-2): el **único** `GameResolved` de esta partida en la transacción confirmada por el nodo,
+ * con `acceptor` = la cuenta que firmó. El ganador, el pozo, la comisión y el pago se leen del evento, nunca se calculan
+ * ni se animan antes (SEG-10). Cero o más de uno, ilegible, de otro paquete o de otro aceptante ⇒ `null`: la acción sigue
+ * siendo un éxito honesto, sin resultado que mostrar.
+ */
+export function parseResolvedGame(
+  result: ResultWithEvents,
+  { originalPackageId, gameId, acceptor }: { originalPackageId: string; gameId: string; acceptor: string },
+): GameResolvedEvent | null {
+  const type = gameEventType(originalPackageId, 'GameResolved');
+  const matches = rawEvents(result)
+    .filter((event) => isExactType(event.eventType, type))
+    .map((event) => parseOrNull(() => parseGameResolved(event, originalPackageId)))
+    .filter((event) => event !== null && sameAddress(event.gameId, gameId));
+  const [only] = matches;
+  return matches.length === 1 && only && sameAddress(only.acceptor, acceptor) ? only : null;
 }
