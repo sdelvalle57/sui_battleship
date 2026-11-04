@@ -473,3 +473,409 @@ tests, 99 script tests, 0 deployments.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+---
+
+## TASK-2
+
+## Task completado: HANDOFF_TESTNET_PUBLISH — TASK-2
+
+### Branch (con SHA corto del HEAD)
+
+`feature/issue-8-testnet-publish` @ `4702f5a`, con el diff de TASK-2 sin commitear encima. Handoff v1.1.
+
+### Archivos modificados/creados
+
+- `contracts/scripts/publish.mjs`: M-4 y M-2.
+- `contracts/scripts/publish.test.mjs`: tests nuevos y el de `formatSummary` reemplazado.
+- `documents/STATUS.md`:
+  - nit n-1 del MID: la fila de baseline de TASK-1 cita `4702f5a`;
+  - fila de baseline nueva de `contracts/scripts`;
+  - nota de TASK-2 en la fila "#8 🚧".
+- `documents/REPORTES_TESTNET_PUBLISH.md`: esta sección.
+
+### Qué se implementó (3 líneas máx)
+
+**M-4.** `checkNodeVersion` corre como guarda 0 al principio de `main` (lee `.nvmrc`). El punto de entrada `isEntryPoint`
+ya no depende de `import.meta.main`, así que con Node 20 y 22 el script sale con 1 y un mensaje.
+**M-2.** El resumen imprime `update_fee_rate` y la verificación con el prefijo
+`printf 'n\n' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?…}" sui client`: `200` en testnet, `<bps>` en localnet. Cada comando va
+solo en su línea y la nota del campo es un comentario `#` (m-2).
+
+### Tests y gates (output pegado, por área tocada)
+
+- **Agregados/modificados** (`publish.test.mjs`: 48 → 53, +5):
+  - `main: con un Node que no es el de .nvmrc ⇒ exit 1 y el mensaje, antes de los argumentos, la config y la CLI`.
+    Cubre `['check']` con 20.20.2 y con 22.23.4, `['publish','--network','testnet','--dry-run']` sin `SUI_CONFIG_DIR` y
+    con un `SUI_BIN` inexistente, y `['deploy']`. Este último da 1 y no 2, lo que prueba que la guarda corre antes de
+    `parseCliArgs`. En los cuatro casos el stderr no trae `/` (sin rutas).
+  - `checkNodeVersion: el major de Node debe ser el de .nvmrc`:
+    - `26.13.0` con `'26\n'` y con `'v26\n'` pasa;
+    - `20.20.2`, `22.23.4` y `27.0.0` lanzan con el mensaje exacto;
+    - lanzan `.nvmrc sin versión válida` el `.nvmrc` vacío, `'\n'`, `'lts/*\n'`, `'26.13.0\n'` y `null` (archivo
+      ausente).
+  - `checkNodeVersion: el .nvmrc real del repo acepta el Node que corre los tests (la CI usa .nvmrc)`.
+  - `isEntryPoint: import.meta.main si es boolean; si no, realpath de argv[1] contra el del módulo`:
+    - `true`/`false` se devuelven tal cual, con un espía que confirma que `realpath` no se llama;
+    - con `importMetaMain` `undefined`: mismo archivo → `true`, symlink → `true`, otro archivo → `false`, `argv1`
+      `undefined` o `''` → `false`, `realpath` que lanza → `false`;
+    - un caso con el fs real (`realpathSync` sobre `publish.mjs`).
+  - `formatSummary: los 14 campos y el siguiente paso con el prefijo guardado, sin direcciones de cuentas`. Reemplaza
+    al test viejo:
+    - testnet: línea exacta del comando con `… <houseCapId> 200`, línea exacta de la verificación y sin `<bps>`;
+    - localnet: con `<bps>`;
+    - en los dos: los 14 campos, ninguna línea `/^\s*sui client/m`, el literal `${SUI_CONFIG_DIR:?`, exactamente dos
+      líneas de comando y `assertNoAccountAddress`.
+  - `formatSummary (m-2): en testnet las dos líneas de comando se pegan tal cual (bash -n, sin ejecutar)`.
+    `spawnSync('bash', ['-n', '-c', línea])` da estado 0 en las dos líneas, y la línea de localnet con `<bps>` falla
+    `bash -n`.
+  - El arnés `mainCapturingStderr(argv, options)` ahora pasa `options` a `main`. La cabecera del archivo menciona el
+    único proceso nuevo (`bash -n`).
+- **Mutaciones** (sobre una copia en `<scratchpad>`, para comprobar que los tests detectan las regresiones):
+
+  | Mutación | Resultado |
+  |---|---|
+  | M1: sin la guarda en `main` | 1 test en rojo |
+  | M2: prefijo sin `SUI_CONFIG_DIR` (template literal) | 2 en rojo |
+  | M3: `<bps>` también en testnet | 2 en rojo |
+  | M4: verificación con prosa entre paréntesis, como en la v1 | 2 en rojo (`bash -n` falla) |
+  | M5: `isEntryPoint` ignora `false` | 1 en rojo, después de cambiar `assert.fail` por un espía (ver Desviaciones) |
+  | M7: sin `realpath` | 1 en rojo |
+  | M6: sin el chequeo de `argv1` | sobrevive: mutante equivalente, porque `path.resolve(undefined)` lanza y lo atrapa el `catch`, y `''` resuelve al cwd; en los dos casos sale `false` |
+
+**contracts/scripts (Node, con `export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH`, desde `contracts/`):**
+
+```text
+$ node --version
+v26.13.0
+$ node --test scripts/*.test.mjs; echo "exit=$?"
+✔ parsePublishOutput extrae IDs, versión, digest y timestamp del fixture real (5.017939ms)
+✔ parsePublishOutput no depende de la posición en objectChanges (0.674044ms)
+✔ parsePublishOutput rechaza una transacción que no terminó en success (0.695476ms)
+✔ parsePublishOutput rechaza una salida sin objeto published (0.35129ms)
+✔ parsePublishOutput rechaza dos Houses creadas (0.595554ms)
+✔ parsePublishOutput rechaza una salida sin HouseCap (0.409168ms)
+✔ parsePublishOutput rechaza una salida sin UpgradeCap (0.431896ms)
+✔ parsePublishOutput rechaza una House de otro paquete (0.430846ms)
+✔ parsePublishOutput rechaza una House no compartida (0.684744ms)
+✔ parseDryRunOutput sobre el fixture real: ok, gas estimado y los cuatro IDs (0.729245ms)
+✔ parseDryRunOutput da ok = false si el status no es success o falta un objeto (0.560586ms)
+✔ buildDeployment arma los 14 campos en orden y validateDeployment lo acepta (1.555865ms)
+✔ SEG-3: ningún valor del json armado es una dirección de cuenta del fixture (0.711235ms)
+✔ validateDeployment: falta schemaVersion (0.247876ms)
+✔ validateDeployment: falta network (0.169964ms)
+✔ validateDeployment: falta chainId (0.244563ms)
+✔ validateDeployment: falta packageId (0.178415ms)
+✔ validateDeployment: falta originalPackageId (0.155547ms)
+✔ validateDeployment: falta packageVersion (0.164882ms)
+✔ validateDeployment: falta upgradeCapId (0.170379ms)
+✔ validateDeployment: falta houseId (0.157077ms)
+✔ validateDeployment: falta houseCapId (0.204906ms)
+✔ validateDeployment: falta publishTxDigest (0.163355ms)
+✔ validateDeployment: falta publishTimestamp (0.163606ms)
+✔ validateDeployment: falta sourceCommit (0.129442ms)
+✔ validateDeployment: falta suiCliVersion (0.127741ms)
+✔ validateDeployment: falta frameworkRev (0.13184ms)
+✔ validateDeployment rechaza: clave desconocida (0.269326ms)
+✔ validateDeployment rechaza: ID corto (0.171225ms)
+✔ validateDeployment rechaza: ID en mayúsculas (0.195062ms)
+✔ validateDeployment rechaza: testnet con chain id ajeno (0.190003ms)
+✔ validateDeployment rechaza: localnet con el chain id de testnet (0.161526ms)
+✔ validateDeployment rechaza: localnet con el chain id de mainnet (0.172416ms)
+✔ validateDeployment rechaza: sourceCommit null en testnet (0.204735ms)
+✔ validateDeployment rechaza: network mainnet (0.259387ms)
+✔ validateDeployment rechaza: publishTimestamp sin milisegundos (0.199632ms)
+✔ validateDeployment rechaza: publishTimestamp sin Z (0.176518ms)
+✔ validateDeployment: opcional registrado ausente es válido y con formato malo es error (0.54846ms)
+✔ parsePublishedToml lee cada campo del fixture real (0.870991ms)
+✔ parsePublishedToml rechaza una línea inesperada con su número (0.449293ms)
+✔ parsePublishedToml rechaza: clave desconocida, con su número de línea (0.499505ms)
+✔ parsePublishedToml rechaza: clave duplicada, con su número de línea (0.30513ms)
+✔ parsePublishedToml rechaza: sección duplicada, con su número de línea (0.297411ms)
+✔ parsePublishedToml rechaza: sección incompleta, con su número de línea (0.333493ms)
+✔ parsePublishedToml rechaza: build-config que no es tabla en línea, con su número de línea (0.393427ms)
+✔ parsePublishedToml rechaza: entero mal formado, con su número de línea (0.355287ms)
+✔ parsePublishedToml rechaza: texto sin comillas, con su número de línea (0.271784ms)
+✔ checkConsistency: igual ⇒ [] y cada campo distinto ⇒ una diferencia (0.877606ms)
+✔ readFrameworkRev lee el rev de [pinned.testnet.Sui] del Move.lock del repo (1.325272ms)
+✔ redactAddresses oculta direcciones y deja intactos digests y texto sin hex (0.248607ms)
+✔ normalizeId rellena, pasa a minúsculas y rechaza lo que no es hex (0.217448ms)
+✔ runSui invoca sin shell, con n por stdin, maxBuffer de 64 MiB, cwd contracts/ y el SUI_CONFIG_DIR validado (3.852667ms)
+✔ runSui invoca cada vector permitido (1.833393ms)
+✔ runSui rechaza sin invocar todo vector fuera de la lista blanca (1.518687ms)
+✔ runSui no invoca sin un configDir validado (0.368878ms)
+✔ publishCliArgs: ambas redes, con y sin dry run, siempre dentro de la lista blanca (0.427472ms)
+✔ runGit solo admite status --porcelain y rev-parse HEAD, sin shell y en contracts/ (0.639957ms)
+✔ parseCliArgs: subcomandos y opciones válidos (1.594708ms)
+✔ parseCliArgs rechaza subcomando inválido, opción desconocida o ajena al subcomando y --yes/--force/-y (0.987229ms)
+✔ main: uso inválido ⇒ exit 2; guarda de argumentos ⇒ exit 1 (sin invocar la CLI) (2.52762ms)
+✔ main: --out con --network testnet ⇒ exit 1 sin leer la config ni invocar la CLI (1.124829ms)
+✔ main: con un Node que no es el de .nvmrc ⇒ exit 1 y el mensaje, antes de los argumentos, la config y la CLI (1.08845ms)
+✔ checkNodeVersion: el major de Node debe ser el de .nvmrc (0.627098ms)
+✔ checkNodeVersion: el .nvmrc real del repo acepta el Node que corre los tests (la CI usa .nvmrc) (0.220489ms)
+✔ isEntryPoint: import.meta.main si es boolean; si no, realpath de argv[1] contra el del módulo (0.465848ms)
+✔ checkPublishArgs: red válida y --pubfile-path obligatorio en localnet y prohibido en testnet (0.304686ms)
+✔ checkPublishArgs y checkOutArg: --out prohibido en testnet (también vacío) y admitido en localnet (0.317782ms)
+✔ checkConfigDirGuard rechaza config ausente, relativa, inexistente, sin client.yaml o dentro de ~/.sui (1.001416ms)
+✔ checkConfigDirGuard acepta una config propia y devuelve su realpath (0.250082ms)
+✔ checkConfigDirGuard: una excepción de fs ⇒ SUI_CONFIG_DIR inválido con solo su código, sin ruta ni mensaje original (0.858762ms)
+✔ checkNetworkGuard: env activo distinto ⇒ error sin consultar el chain id (0.292305ms)
+✔ checkNetworkGuard: chain id según la red (0.565025ms)
+✔ readCliJson y chainIdFromCli leen la salida --json de active-env y chain-identifier (0.605506ms)
+✔ redactConfigDir: realpath y valor original ⇒ <SUI_CONFIG_DIR>, la ruta más larga primero, sin tocar el resto (0.378961ms)
+✔ readCliJson, formatCliFailure e interpretCliRun: el stderr de la CLI sale sin la ruta de la config ni direcciones (0.825996ms)
+✔ checkCliVersion compara con SUI_VERSION/SUI_COMMIT de ci.yml (1.045898ms)
+✔ checkTestnetPreconditions: árbol sucio, json o entrada existentes ⇒ error (1.457638ms)
+✔ checkLockUnchanged: testnet distinto ⇒ error; localnet distinto ⇒ aviso; igual ⇒ ok (0.296355ms)
+✔ confirmación: solo en testnet sin dry run; sin TTY o sin "testnet" aborta (0.380049ms)
+✔ confirmación: ninguna variable de entorno la omite (0.414084ms)
+✔ resolveRecordMeta: usa meta.json si existe (0.304348ms)
+✔ resolveRecordMeta: sin meta.json exige los flags (0.325395ms)
+✔ resolveRecordMeta: red o chain id incoherentes con --network ⇒ error (1.695886ms)
+✔ checkDeployments: sin archivos ni Published.toml ⇒ 0 despliegues (0.565637ms)
+✔ checkDeployments: localnet válido sin entrada en Published.toml (1.204026ms)
+✔ checkDeployments: testnet sin Published.toml ⇒ error (1.237553ms)
+✔ checkDeployments: entrada de Published.toml sin json ⇒ error (0.218616ms)
+✔ checkDeployments: nombre de archivo distinto de network ⇒ error (0.26602ms)
+✔ checkDeployments: json inválido ⇒ error (0.406669ms)
+✔ checkDeployments: testnet coherente con su [published.testnet]; una diferencia ⇒ error (0.773391ms)
+✔ checkDeployments: json que no es un objeto ⇒ error legible, sin TypeError (H3) (0.253459ms)
+✔ checkDeployments: Published.toml con formato inválido ⇒ error con su línea (0.208006ms)
+✔ fixtures/localnet.deployment.json = buildDeployment del fixture con los valores fijos (0.254693ms)
+✔ formatSummary: los 14 campos y el siguiente paso con el prefijo guardado, sin direcciones de cuentas (1.011053ms)
+✔ formatSummary (m-2): en testnet las dos líneas de comando se pegan tal cual (bash -n, sin ejecutar) (11.090068ms)
+✔ formatCliFailure: digest de stderr, stderr redactado con y sin 0x y consejo fijo tras publicar (0.261629ms)
+✔ formatCliFailure: sin publicación real (dry run, record) no aconseja buscar el digest; sin dir no lo nombra (0.213707ms)
+✔ formatCliFailure (H-1): estado ≠ 0 con el digest solo en stdout ⇒ solo la línea del digest y el motivo (0.204276ms)
+✔ formatCliFailure (H-1): digests distintos en stderr y stdout ⇒ gana el de stderr (0.151828ms)
+✔ formatCliFailure (H-1): estado ≠ 0 sin digest ⇒ sin línea Digest, con la línea del motivo (0.146461ms)
+✔ interpretCliRun (H-1): estado 0 con stdout no JSON ⇒ no se mira el stdout (ni digest ni motivo) (0.3083ms)
+✔ formatPostPublishFailure: directorio temporal, digest y receta de record, sin direcciones (H2) (0.326768ms)
+✔ interpretCliRun: estado ≠ 0, stdout que no parsea o forma inválida ⇒ solo la ruta, nunca el stdout (0.528957ms)
+✔ interpretCliRun: salida real ⇒ el resultado del parser (0.441024ms)
+ℹ tests 104
+ℹ suites 0
+ℹ pass 104
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 200.286495
+exit=0
+```
+
+Por archivo (`node --test <archivo>`): `deployment.test.mjs` **51 pass / 0 fail** y `publish.test.mjs` **53 pass / 0
+fail**. Total **104 PASS** (99 + 5).
+
+```text
+$ node scripts/publish.mjs check; echo "exit=$?"
+0 despliegues
+exit=0
+$ git diff --exit-code -- Move.lock; echo "exit=$?"
+exit=0
+```
+
+**Contracts:** el handoff no los exige porque no hay cambios Move. Los corrí igual, en forma canónica, para que la
+baseline quede completa:
+
+```text
+$ printf 'n\n' | sui --version
+sui 1.83.0-16d2dc1e05ed
+$ printf 'n\n' | sui move build -e testnet --warnings-are-errors; echo "exit=$?"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+$ printf 'n\n' | sui move build -e testnet --lint --warnings-are-errors; echo "exit=$?"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+$ printf 'n\n' | sui move test -e testnet --warnings-are-errors | grep -v '^\[ PASS'; echo "exit=${PIPESTATUS[1]}"
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+Running Move unit tests
+Test result: OK. Total tests: 83; passed: 83; failed: 0
+exit=0
+```
+
+Resultado: 0 warnings, 0 lints, 83 PASS y lock sin delta. Las 83 líneas `[ PASS ]` son las mismas que en TASK-1.
+
+- **Tablas de contrato y app/src/sui/ sincronizados:** no aplica (sin cambios de contrato). **App:** no aplica.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+
+Ningún `sui client`, ninguna red, ningún digest.
+
+**Node 20, 22 y 26** (rutas absolutas de nvm, desde `contracts/`):
+
+```text
+$ <HOME real>/.nvm/versions/node/v20.20.2/bin/node scripts/publish.mjs check; echo "exit=$?"
+se requiere Node 26 (.nvmrc); este es v20.20.2: corre "nvm use" en la raíz del repo
+exit=1
+$ <HOME real>/.nvm/versions/node/v22.23.4/bin/node scripts/publish.mjs check; echo "exit=$?"
+se requiere Node 26 (.nvmrc); este es v22.23.4: corre "nvm use" en la raíz del repo
+exit=1
+$ <HOME real>/.nvm/versions/node/v26.13.0/bin/node scripts/publish.mjs check; echo "exit=$?"
+0 despliegues
+exit=0
+```
+
+**Antes del cambio:** Node 20 daba `exit=0` sin imprimir nada (M-4 reproducido al empezar el task). Node 22 y 26 daban
+`0 despliegues`.
+
+**Camino `realpath` de `isEntryPoint` con Node 20.** Sirve para ejercer el camino sin `import.meta.main`:
+- el script con ruta absoluta desde otro cwd da el mensaje y `exit=1`;
+- por un symlink en `<scratchpad>` da el mensaje y `exit=1` (con Node 26, por el mismo symlink: `0 despliegues`,
+  `exit=0`);
+- `await import('./scripts/publish.mjs')` con Node 20 no corre `main` (`exitCode=undefined`).
+
+**Resumen real de testnet**, renderizado con `formatSummary` sobre el fixture con `network: testnet`, sin CLI. Abrevio
+los IDs del fixture:
+
+```text
+Siguiente paso obligatorio (#8), no lo ejecuta este script. En la shell donde exportaste tu SUI_CONFIG_DIR
+(README → "Uso en testnet", pasos 6-10):
+  printf 'n\n' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client call --package <packageId> --module house --function update_fee_rate --args <houseId> <houseCapId> 200
+Verificación:
+  printf 'n\n' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client object <houseId> --json   # campo content.fee_rate
+```
+
+**Guarda `:?` de la línea impresa.** Tomé la línea real con ` sui client ` reemplazado por ` echo WOULD-RUN ` (no se
+invoca la CLI) y la corrí con `env -u SUI_CONFIG_DIR bash -c "$LINE"`:
+
+```text
+bash: line 1: SUI_CONFIG_DIR: exporta tu SUI_CONFIG_DIR
+exit=127
+```
+
+No aparece `WOULD-RUN` y el exit es distinto de 0. Este paso es un adelanto informal de A11 (TASK-4).
+
+### Desviaciones del handoff (o "ninguna")
+
+- **Qué cambió:** cuatro detalles que el handoff no especifica.
+  1. `checkNodeVersion` normaliza un `v` inicial en `nodeVersion`, para no imprimir `vv26…`.
+  2. El `.nvmrc` se lee con el `readTextOrNull` existente: si falta, el error es `.nvmrc sin versión válida`, sin la
+     ruta que traería el `ENOENT` de `readFileSync`.
+  3. El test de `bash -n` también afirma que la línea de localnet con `<bps>` **no** parsea. El handoff dice "en localnet
+     no se aplica".
+  4. El mensaje de `.nvmrc` va sin backticks (`.nvmrc sin versión válida`), igual que el `(.nvmrc)` del otro mensaje.
+- **Por qué:**
+  - (1) y (2): el mensaje tiene que salir sin rutas y legible.
+  - (3): verifica la afirmación de la decisión M-2 del handoff ("`<bps>` … no se ejecuta, porque el shell lo toma como
+    redirección").
+  - (4): coherencia entre los dos mensajes.
+- **Verificación extra realizada:**
+  - mutaciones M1-M7 (tabla arriba);
+  - el test de `isEntryPoint` usa un espía en lugar de `assert.fail` dentro de `realpath`, porque el `catch` de
+    `isEntryPoint` atrapaba ese `assert.fail` y la mutación M5 sobrevivía;
+  - corrida con Node 20 por symlink y desde otro cwd;
+  - gates `sui move`.
+
+### Riesgos / pendientes (o "ninguno")
+
+- La guarda exige el **major exacto** de `.nvmrc`. Si algún día `.nvmrc` pasa a `26.13.0` o a `lts/*`, el script falla
+  cerrado con `.nvmrc sin versión válida`: el formato tiene que seguir siendo un major entero.
+- En la CI, `actions/setup-node` con `.nvmrc` da Node 26, así que el test con el `.nvmrc` real pasa. Se confirma en el
+  run del PR.
+- El resumen remite a "pasos 6-10" del runbook de `contracts/README.md`, que todavía no existen: los escribe TASK-3.
+  Hasta entonces el README describe el runbook viejo.
+
+### Documentación
+
+- **READMEs / agents.md:** no aplica en este task. El handoff prohíbe tocar `contracts/README.md`, porque el runbook lo
+  reescribe TASK-3, que incluye la línea "El script exige el Node de `.nvmrc` (26)".
+- **STATUS (ya aplicado en el árbol):**
+  - **n-1:** la fila de baseline de TASK-1 cita `4702f5a`.
+  - **Fila nueva:** `contracts/scripts @ feature/issue-8-testnet-publish (4702f5a + TASK-2 de #8)`, Node `v26.13.0`,
+    2026-11-03. Registra 104 PASS (51 + 53), 0 despliegues, el lock sin delta y Node 20/22 → exit 1.
+  - **Fila "#8 🚧":** TASK-1 con su SHA y una línea de TASK-2.
+
+**Higiene** (grep sobre el diff de los 3 archivos y sobre esta sección): 0 coincidencias de claves (`suiprivkey`,
+`mnemonic`, `privkey`), 0 rutas personales y 0 hex de 40-64 en las líneas agregadas al código y a STATUS. En el resumen
+pegado, los IDs del fixture van abreviados (`<packageId>`, `<houseId>`, `<houseCapId>`).
+
+**Mensaje de commit sugerido:** `contracts: fail closed on a non-.nvmrc Node and print a guarded fee command (#8)`. No
+hice commit ni push.
+
+## Revisión TASK-2: PASA
+
+> MID · 2026-11-03 · Contra `documents/HANDOFF_TESTNET_PUBLISH.md` v1.1 (TASK-2, con m-2), `documents/ESTANDARES.md` y el
+> diff real sobre `4702f5a` (sin commitear: `publish.mjs`, `publish.test.mjs`, `STATUS.md` y este archivo). Gates no
+> re-ejecutados (D-20261030-02): revisé el output pegado. TASK-1 cerró su criterio de G1: CI del PR #48 sobre `4702f5a`
+> verde en los 3 jobs y 0 anotaciones H13 (check-run 126313057465).
+
+**Checklist (FLUJO §5):**
+- **Implementa lo pedido, ni más ni menos; HU del task cumplida:** ✅. M-4 y M-2 como pedía §3 del handoff. `RETRY_ADVICE` y `formatPostPublishFailure` sin tocar. `deployment.mjs`, `fixtures/`, `README` y `ci.yml` fuera del diff.
+- **M-4, guarda de Node:** ✅.
+  - `contracts/scripts/publish.mjs:329`: `checkNodeVersion` es pura y lee el major de `.nvmrc` con el regex del handoff.
+  - Falla cerrada (`.nvmrc` ausente, `null`, `lts/*` o `26.13.0`), con mensaje sin rutas. Usa el `readTextOrNull` existente, así un `ENOENT` no filtra la ruta.
+  - `:821`: es lo primero dentro del `try` de `main`, antes de `parseCliArgs`. El caso `['deploy']` da 1, no 2, y eso lo prueba.
+  - `:839-858`: `isEntryPoint` devuelve el boolean tal cual. Sin él, compara los realpath y atrapa errores. El bloque de entrada ya no depende de `import.meta.main`.
+  - Verificación manual pegada:
+    - Node 20.20.2 y 22.23.4 salen con `exit=1` y el mensaje;
+    - Node 26 da `0 despliegues`;
+    - el camino sin `import.meta.main` funciona con Node 20 desde otro cwd y por symlink;
+    - un `import()` con Node 20 no corre `main`.
+  - Antes del cambio, M-4 se reprodujo (Node 20: `exit=0` mudo).
+- **M-2 y m-2, comando pegable:** ✅.
+  - `:51` `TESTNET_FEE_BPS = 200`, con referencia a D-20261103-01 (LIM-6).
+  - `:54` `OWNER_CLI_PREFIX` es un string normal, con el comentario del porqué (LIM-7).
+  - `:507`, `formatSummary`: `200` en testnet y `<bps>` en localnet; cada comando va solo en su línea; la nota del campo es un comentario `#`; no queda ningún `sui client` sin prefijo.
+  - Nada interpola `${SUI_CONFIG_DIR:?…}`: el test lo comprueba contra el literal.
+- **Tests (PROY-9 / LIM-11):** ✅. `publish.test.mjs` pasa de 48 a 53 (+5): `:281` `main` + guarda, `:312` y `:328` `checkNodeVersion`, `:333` `isEntryPoint`, `:736` `formatSummary` (reemplaza al de la v1) y `:765` `bash -n`.
+  - Son deterministas, sin red y con el entorno restaurado.
+  - `bash -n` solo parsea, y la cabecera del archivo lo declara.
+  - Cubren happy path, rechazos y bordes.
+  - El oráculo del prefijo en el test es un literal propio, independiente del código: no es duplicación (LIM-5).
+  - La tabla de mutaciones M1-M7 muestra que los tests detectan cada regresión. El único sobreviviente (M6) es un mutante equivalente, bien justificado.
+- **Gates:** ✅.
+  - `node --test` **104/104** (51 + 53) con Node v26.13.0.
+  - `check` "0 despliegues".
+  - `git diff --exit-code -- Move.lock` 0.
+  - Además, con los gates `sui move` corridos sin que hiciera falta: 0 / 0 / 83, sin delta.
+- **SEG-3:** ✅.
+  - Sin rutas personales (usa `<HOME real>`, `<scratchpad>`; las del test son ficticias, `/tmp/out`, `/repo/…`).
+  - Sin claves ni hex de 40-64 en las líneas agregadas (lo verifiqué con grep sobre el diff).
+  - El mensaje de error no trae rutas (el test lo afirma).
+- **Desviaciones:** ✅. Las cuatro están declaradas y justificadas y ninguna amplía el alcance:
+  1. normalizar el `v`;
+  2. usar `readTextOrNull`;
+  3. el test negativo de `<bps>`;
+  4. el mensaje sin backticks.
+
+  El cambio de `assert.fail` por un espía se explica con la mutación M5.
+- **Docs (PROY-20):** ✅.
+  - `documents/STATUS.md:40-42`: fila de baseline nueva.
+  - `:43`: la fila de TASK-1 ahora cita `4702f5a`; con eso queda resuelto el nit n-1.
+  - Fila "#8 🚧" actualizada.
+  - El README no se toca a propósito, porque el runbook lo reescribe TASK-3. El riesgo de que los "pasos 6-10" todavía no existan está declarado y se cierra en el próximo task.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Sin hallazgos | — |
+
+**Riesgo aceptado:** la guarda exige que `.nvmrc` sea un major entero (`26`). Es lo que pedía el handoff y falla cerrada; si algún día `.nvmrc` cambia de formato, el script lo dirá con un mensaje claro.
+
+### Siguiente paso
+- Commitear TASK-2: `contracts/scripts/publish.mjs`, `contracts/scripts/publish.test.mjs`, `documents/STATUS.md` y este archivo de reportes, o el reporte en el commit que decida el orquestador.
+- Pushear al PR #48 y confirmar `contracts` verde en la CI. Ahí corre el test del `.nvmrc` real y el de `bash -n` en `ubuntu-24.04`.
+- **TASK-3 autorizado** con el handoff v1.1, incluidos m-1 y m-3. En el runbook, el paso 6 tiene que remitir al comando que ahora imprime el script.
+
+### Mensaje de commit propuesto
+```
+contracts: fail closed on a non-.nvmrc Node and print a guarded fee command (#8)
+
+With Node 20 the script skipped main() and exited 0 silently, so a dry run
+could look successful without running (M-4). main() now checks the Node
+major against .nvmrc before anything else, and the entry point no longer
+depends on import.meta.main. The post-publication summary prints the
+update_fee_rate and verification commands behind
+SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?...}" with printf 'n\n', 200 bps on
+testnet (D-20261103-01) and <bps> on localnet, one pasteable command per
+line (M-2, m-2). Script tests 99 -> 104.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
