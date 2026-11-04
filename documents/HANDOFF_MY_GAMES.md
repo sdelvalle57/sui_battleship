@@ -1,9 +1,26 @@
 # HANDOFF_MY_GAMES
 > Plan: PLAN_MY_GAMES v2 (MAYOR: APPROVE en la segunda ronda, 2026-11-03; `ae2b134`) | Issue: #13 | Branch:
-> `feature/issue-13-my-games` | Versión: v1.3 | Fecha: 2026-11-04
+> `feature/issue-13-my-games` | Versión: v1.4 | Fecha: 2026-11-04
 
 ## Changelog
 
+- **v1.4 (2026-11-04)**: re-revisión de TASK-5 (MID, NO PASA): H-5 sola rompe el escenario de MINOR-6, y la Desviación 1
+  del DEV en T5-12 lo escondía. Se suma **H-6**; cambian T5-12, RM-14 y TASK-6, y hay tests nuevos (T4-16, T4-17,
+  T5-18).
+  - **El problema:** en "Confirmando en la red…" la transacción ya se **ejecutó** on-chain (la wallet devuelve el digest
+    después de ejecutar). Si la cuenta vuelve a A, o la vista se remonta, mientras la transacción de una fila sigue en
+    curso, la relectura del montaje ya trae el estado nuevo. Con H-5, la fila se fija recién al quedar quietas las
+    fuentes, o sea con ese estado nuevo: pasa a "Terminadas", pierde su `GameActions` y el resultado adoptado ya no se
+    ve. Es justo lo que T5-12 pide (MINOR-6). La preparación original de T5-12 (el nodo responde el estado nuevo antes
+    de la relectura del montaje) era la realista. La Desviación 1 la cambió para que la relectura terminara antes y así
+    escondía la regresión.
+  - **La regla (H-6):** además de H-5, las partidas con una transacción **de la cuenta** "viva" para la vista se fijan
+    **en seguida**, con los datos que haya (la caché previa a la transacción), aunque las fuentes estén pidiendo. "Viva"
+    es el mismo criterio de adopción de #12 (`mountSnapshot`): la mutación está en curso, estaba en curso al montar, o
+    empezó después de montar. Las que terminaron antes de montar siguen con H-5 (T5-13, T5-17: sección natural con datos
+    frescos).
+  - **Efecto lateral bueno:** H-6 también cierra RM-14. Una acción sobre una fila todavía sin pin crea una mutación
+    "viva" y la fila se fija en ese render, antes del resultado.
 - **v1.3 (2026-11-04)**: STOP del DEV en T5-13, decidido por el MID: opción **(b)** (`documents/REPORTES_MY_GAMES.md`,
   "Revisión TASK-5"). Cambian TASK-4 §3.3 (fijado), los tests T4-14/T4-15, T5-13, RM-14 y un punto de TASK-6:
   - **El problema:** al remontar la vista (volver a la cuenta A, o simplemente volver a la página después de actuar en el
@@ -182,6 +199,7 @@ git diff --exit-code -- Move.lock
 | **H-2** (SUGGESTION-N1) | `mergeMyGames`: por `gameId`, gana el legible; entre legibles, la mayor `objectVersion` (empate ⇒ cualquiera, es el mismo objeto), con rol `acceptor` si alguna fuente lo trae y el evento más nuevo; entre ilegibles, el evento más nuevo. Un ilegible sin `gameId` no se deduplica | TASK-2 |
 | **H-3** (SUGGESTION-N2) | `GameActions` en `variant='row'`: `settled` = algún `success` en `accept.outcome`, `cancel.outcome`, `reject.outcome` o en el `adopted` del objetivo. Con `settled`, no se muestran `AcceptBlock`, "Cancelar" ni "Rechazar"; los `TransactionStatus` y la alerta "sin confirmar" se mantienen. `variant='detail'` no cambia | TASK-5 |
 | **H-4** (SUGGESTION-N3) | Se documenta en RM-12 y en `app/README.md` cuánto puede durar "Actualizando datos…" con reintentos en la relectura. No cambia código | TASK-6 |
+| **H-6** (v1.4, re-revisión de TASK-5) | Las partidas con una mutación **viva** de la cuenta (en curso, en curso al montar o empezada después de montar; el criterio de adopción de #12) se fijan en seguida con los datos que haya, aunque alguna fuente esté pidiendo. El resto espera a H-5. **Contrato:** en `hooks/txSession.ts`, `type TxGameEntry = { id: number; status: MutationStatus; gameId: string \| null }`, `toTxGameEntry(m: MutationLike): TxGameEntry` (el `gameId` normalizado de `txVariablesOf(...).action`, o `null` para `create` y para lo que no tenga esa forma) y `liveTxGameIds(entries: readonly TxGameEntry[], mount: MountSnapshot): ReadonlySet<string>` (los `gameId` con `status === 'pending'` ∨ `mount.pendingIds.has(id)` ∨ `id > mount.maxId`). En `sui/myGames.ts` se exporta la clave privada como `myGameKey(item): string \| null`, sin otro cambio. En `useMyGames`: `const [mount] = useState(() => mountSnapshot(queryClient.getMutationCache().getAll()))`; `const live = liveTxGameIds(useMutationState({ filters: { mutationKey: queryKeys.txAccount(config.network, address) }, select: toTxGameEntry }), mount)`; `const pinnable = settled ? merged : merged.filter((item) => { const key = myGameKey(item); return key !== null && live.has(key); })`; `const next = address === null ? pins : extendPins(pins, pinnable, address)` | TASK-5 (corrección), TASK-6 |
 | **H-5** (v1.3, STOP de T5-13, opción (b)) | `useMyGames` extiende los pins solo con las dos fuentes quietas (`!isFetching` en las dos). Mientras alguna pide, las filas sin pin van a su sección natural y las fijadas no se mueven. Así, al remontar con datos viejos en la caché, se fija con la relectura fresca y "volver a la página" reagrupa (DL-5, DL-9). Límite: RM-14 | TASK-4 (corrección), TASK-5 (T5-13, T5-17), TASK-6 |
 
 **Textos fijos de la UI** (los usan los tests y el smoke; si el DEV cambia uno, lo declara como desviación):
@@ -675,6 +693,16 @@ desmontar filas en una relectura, y la invalidación tras cada transacción prop
   - mientras pide, H se ve en `pending` sin pin y G sigue en `invitations`;
   - al terminar, H queda fijada en `pending`;
   - una lectura posterior que trae H `Cancelled` la deja en `pending`.
+- T4-16 (v1.4, H-6, en `txSession.test.ts`): `liveTxGameIds`:
+  - incluye una mutación en curso, una que estaba en curso al montar y ya terminó, y una que empezó y terminó después de
+    montar;
+  - excluye una que terminó antes de montar, un `create` y variables sin la forma de la app;
+  - normaliza el `gameId` en forma corta.
+- T4-17 (v1.4, H-6, en `useMyGames.test.tsx`): con la caché de A que tiene G `Pending` (creador) y un `cancel` de G **en
+  curso** al montar, la relectura del montaje (lenta, con un `deferred`) trae G `Cancelled`:
+  - G está fijada en `pending` desde el primer render;
+  - al terminar la relectura sigue en `pending`, con el estado `cancelled`.
+  - Sin la mutación viva, el mismo caso es T4-14 (`finished`).
 - T4-8, T4-8 bis, T4-9, T4-12 y T4-13 se re-corren sin cambiar lo que afirman. En T4-9, el número de renders puede
   moverse en ±1 porque el pin ahora cae en el render en que la fuente queda quieta. Si cambia, se ajusta el número con la
   medición nueva pegada, conservando "≤ 2 extra" y "0 renders en el siguiente `advance`".
@@ -805,6 +833,17 @@ historial, **para** aceptar, rechazar o cancelar sin buscar enlaces.
   invitación) queda `Resolved` por una aceptación hecha desde el detalle (o con `invalidateQueries(myGames)` y la
   respuesta nueva). Al volver a `#/my-games`, G termina en "Terminadas" con "Aceptaste", no en "Invitaciones
   recibidas".
+- T5-12 (v1.4): se **revierte la Desviación 1**, porque la preparación realista es la original. Al volver a A, el nodo
+  ya responde G cancelada **antes** de la relectura del montaje (la transacción se ejecutó antes de "Confirmando…"). Se
+  quita la espera `queryClient.isFetching() === 0`: el `serve(A, cancelada)` va inmediatamente después de ver la fila. Lo
+  que afirma no cambia: el resultado adoptado aparece en la fila.
+- T5-18 (v1.4, H-6; cierra RM-14): caché vieja al montar con G `Pending` (creador) y la relectura del montaje lenta
+  (`deferred`). Mientras pide, el usuario pulsa "Cancelar" en la fila de G (todavía sin pin); el nodo responde
+  `Cancelled`, y la confirmación y la relectura terminan en cualquier orden (los dos órdenes, en un `it.each`). En los
+  dos órdenes:
+  - la fila de G sigue en "Tus partidas pendientes";
+  - muestra "Partida cancelada: se devolvieron 0.003000003 SUI a tu cuenta";
+  - no tiene "Cancelar".
 
 **Regresión del detalle y ayudas:**
 
@@ -857,8 +896,9 @@ app" (listas del lobby).
     - invalidación, con su costo, el corrimiento de la ventana (RM-12) y la duración de "Actualizando datos…" con
       reintentos (H-4);
     - aviso único y acciones ocultas tras un éxito propio en la fila (H-3);
-    - (v1.3) el fijado solo con las dos fuentes quietas (H-5), así "volver a la página" reagrupa con datos frescos, y el
-      límite RM-14;
+    - (v1.3/v1.4) el fijado: con las dos fuentes quietas (H-5), así "volver a la página" reagrupa con datos frescos;
+      y en seguida para las partidas con una transacción viva de la cuenta (H-6), así una fila con una transacción en
+      curso no se mueve aunque se vuelva a la página o se cambie de cuenta. RM-14 queda cerrado;
     - ayudas de D-20261103-03;
   - **"Límite sin indexador":**
     - ventana del nodo (~14,6 días);
@@ -1018,7 +1058,7 @@ completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nu
 | RM-11 | La extracción cambia el lobby | T2-18; paso 6 |
 | RM-12 | `invalidate` relee en serie todas las páginas; con reintentos, "Actualizando datos…" y el candado duran hasta que terminan (H-4); la ventana de invitaciones se puede correr | `app/README.md` (TASK-6) |
 | RM-13 | Tras una relectura fallida, una fila puede tener un estado viejo | Nota DL-17; H-3 oculta la acción si hubo éxito propio; la preflight frena (`game`/4) |
-| RM-14 | (v1.3, H-5) Una acción sobre una fila todavía sin pin, mientras la relectura del montaje dura más que la transacción, puede mover la fila a su sección natural al terminar y perder su `TransactionStatus` | Caso de nodo lento; el resultado sigue leído del objeto en "Terminadas" (SEG-10). Documentado en `app/README.md` (TASK-6) |
+| RM-14 | (v1.3, H-5) Una acción sobre una fila todavía sin pin, mientras la relectura del montaje dura más que la transacción, podía mover la fila a su sección natural al terminar y perder su `TransactionStatus` | **Cerrado en v1.4 por H-6** (la mutación viva fija la fila en ese render; T5-18). Lo único que queda: la primera visita sin caché con una transacción ya en curso. La fila nunca se vio en una sección con acciones, así que no se pierde nada a la vista |
 
 ## Archivos que NO se tocan en todo el ciclo
 
