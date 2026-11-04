@@ -2848,3 +2848,213 @@ App 915 tests in 57 files.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+## TASK-6
+
+## Task completado: HANDOFF_MY_GAMES v1.4 — TASK-6 (docs del ciclo)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-13-my-games` @ `7a3b7fb`. Sin commits: los cambios están en el árbol de trabajo.
+
+### Archivos modificados/creados
+- `app/README.md`: +158/−31, con la sección nueva "Mis partidas (#13)" y su subsección "Límite sin indexador".
+- `contracts/README.md`: +20, en "Lectura desde la app" → "Listas de 'Mis partidas' (#13)".
+- `agents.md`: +3/−1, en §4 "Indexado".
+- Sin cambios: código, `documents/DECISIONES.md` y `documents/STATUS.md` (va como snippet, TASK-6 §4).
+
+### Qué se implementó (3 líneas máx)
+- **`app/README.md`, sección nueva "Mis partidas (#13)":** fuentes, invariantes, ilegibles, secciones, deduplicación (versión Lamport), fijado H-5/H-6 (RM-14 cerrado), pie honesto H-1, V-9, DL-17, paginación, invalidación (RM-12/H-4), acciones H-3 y ayudas.
+- **`app/README.md`, resto:** el "Límite sin indexador" (ventana, caso del creador, costo del escaneo, sin filtro por campo, #51), los mapas y tablas, la máquina (cuenta capturada, `interpret(result, signer)`, etapa por clave, límites de DL-11), la invalidación con `myGames` y el texto R-7.
+- **`contracts/README.md` y `agents.md`:** el filtro por remitente y el escaneo de invitaciones, con lo medido en TASK-1.
+
+### Detalle por archivo
+**`app/README.md`**
+- **Estructura:** `components/` suma `MyGamesSection` y `HistoryTime`; `pages/` suma `MyGamesPage (#/my-games)`; `test/` suma el arnés del escaneo.
+- **Mapa de `sui/`:**
+  - filas nuevas: `eventScan.ts` (`historyLowerBound`, `HISTORY_FLOOR_MARGIN_CHECKPOINTS`, `eventTypeFilter`, `requestEvents` sin `sender`, `requestOrPruned`) y `myGames.ts`;
+  - `explorer.ts` suma `explorerAccountUrl`;
+  - `lobby.ts` ya no lista `lobbyLowerBound`.
+- **Hooks:**
+  - `queryKeys` suma `myGames`/`myActivity`/`myInvitations`;
+  - `txInvalidation` ya no exporta `TxAction`;
+  - `txSession` lista los tipos movidos (DL-12), `TxVariables` con `account`/`targetHash` y `toTxGameEntry`/`liveTxGameIds` (H-6);
+  - `useExecuteTransaction` documenta la etapa ligada al objetivo;
+  - filas nuevas: `useMyGames` (`MyGamesSource` completo) y `useAccountTxBusy`.
+- **Componentes:** el título pasa a "Componentes de transacción y listas (#11, #12, #13)" y no lo cita ningún otro doc.
+  - `GameActions` suma `variant='row'` (H-3);
+  - filas nuevas: `MyGamesSection`/`MyGameRow` y `HistoryTime`;
+  - `txNotice` dice "una vez por página".
+- **"Lecturas":** "Listas por eventos (lo hereda #13)" pasa a "Listas por eventos (lobby y 'Mis partidas')" y remite a la sección nueva.
+- **"Transacciones":**
+  - la preflight sin cuenta "en las variables";
+  - bullet nuevo "Cuenta capturada (DL-11 de #13, MINOR-1 de #12)": firma con `account`, `interpret(nodeResult, signer)`, la wallet que ya no expone la cuenta y la etapa por `targetHash`, con sus límites (remontaje en "Mis partidas", misma instancia con la otra cuenta, #17);
+  - la tabla de invalidación suma `myGames` al final en las cuatro acciones, con su costo.
+- **"Formulario de creación":** texto R-7 nuevo.
+- **"Mis partidas (#13)", nueva:**
+  - dos fuentes (DNF por `sender`, medida en V-2 y S-1; escaneo de invitaciones, V-1);
+  - invariantes y objeto (DL-3); ilegibles por fuente;
+  - secciones (DL-4);
+  - deduplicación H-2 con `objectVersion` Lamport (V-10);
+  - fijado DL-5 + H-5 + H-6, con RM-14 cerrado y el resto que queda (primera visita sin caché con una transacción ya en curso);
+  - pie honesto (DL-16, H-1);
+  - V-9 (página vacía tras `ITEM_LIMIT`, con la forma de los frames);
+  - DL-17, incluido "Reintentar" con la publicación caída;
+  - paginación (50/1; 50/2/20);
+  - invalidación y su costo (RM-12, H-4, ventana que se corre);
+  - acciones en filas (DL-6, H-3, aviso único);
+  - ayudas (D-20261103-03, DL-15).
+- **"Límite sin indexador", nueva:**
+  - ventana de ≈ 14,6 días;
+  - el caso del creador;
+  - costo del escaneo de invitaciones (RM-2);
+  - sin filtro por campo (tampoco en GraphQL);
+  - seguimiento post-MVP en **#51**, que verifiqué con `gh issue view 51`: abierto, "[App] Mostrar en las listas de testnet el historial completo…".
+- **"Pendientes conocidos":**
+  - build ≈ 901 kB / ≈ 274 kB gzip;
+  - `done` espera también a "Mis partidas" (RM-12, H-4);
+  - el cambio de cuenta y el historial podado se verifican en #17.
+
+**`contracts/README.md`, "Lectura desde la app" → "Listas de 'Mis partidas' (#13)"**
+- **La DNF del nodo:** su forma, y por qué el filtro por remitente vale (`ctx.sender()` emite los dos eventos). La app verifica igual `creator`/`acceptor` y no pide `sender`.
+- **El escaneo de invitaciones:** por qué existe (no hay filtro por `opponent`).
+- **Lo medido en S-1/S-2 de TASK-1:**
+  - remitente;
+  - 5 + 5 + 2 dentro de un PTB, también sin `sender`;
+  - V-9;
+  - V-10.
+- **El límite de la ventana:** con remisión a `app/README.md` y a #51.
+
+**`agents.md` §4 "Indexado"**
+- "Mis partidas": actividad con filtro por remitente, invitaciones por escaneo de `GameCreated`, estado leído del objeto.
+- Ventana de testnet de ≈ 14,6 días (D-20261103-03, #51).
+
+### Tests y gates (output pegado, por área tocada)
+- **Tests:** no hay nuevos (TASK-6 §5).
+- **Gates:** no corrí el gate porque no cambió código. El último es el de TASK-5 + C-2 (H-6), sobre este mismo árbol de código: 915 PASS en 57 archivos, lint 0, typecheck 0, build 901.45 kB (273.61 kB gzip).
+- **Verificación de que el diff es solo de docs:**
+```text
+$ git status --porcelain --untracked-files=all
+ M agents.md
+ M app/README.md
+ M contracts/README.md
+$ git diff --stat -- app/src contracts/sources package.json
+(vacío)
+```
+- **Greps sobre las líneas agregadas del diff:**
+  - claves (`suiprivkey|mnemonic|BEGIN .*KEY|private.?key`) y rutas personales (`/home/`, el usuario, `/tmp/claude`, `.nvm/versions`): **0**;
+  - hex de 40-64: **0**.
+- **Coherencia con el código (PROY-20):** contrasté nombres y textos con `app/src/` (TASK-2..5 + H-5/H-6):
+  - `sectionFooter`, `MyGamesSource` (con `retry` releyendo la publicación), `liveTxGameIds` y `myGameKey`;
+  - `useAccountTxBusy` y `explorerAccountUrl` (Suiscan `/account/`);
+  - textos fijos de §1 y orden de la tabla de invalidación;
+  - números del último gate.
+- **Tablas de contrato:** no cambian (no hubo cambios del contrato).
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica. El smoke del ciclo va después de este task.
+
+### Desviaciones del handoff
+1. **`documents/STATUS.md` no se tocó**, aunque el pedido del orquestador mencionaba alinearlo. TASK-6 §4 lo pone en "NO tocar" ("va como snippet").
+   - **Qué entrego:** los snippets de TASK-1..5, más uno de TASK-6, alineados al formato de la tabla "Baselines de gates" (`| área @ ref (TASK-n de #13, sha), entorno, fecha | gate | 🟢 resultado |`), para que los aplique el orquestador.
+2. **Título renombrado en `app/README.md`:** "Componentes de transacción (#11, #12)" pasa a "Componentes de transacción y listas (#11, #12, #13)", porque la tabla ahora incluye `MyGamesSection` y `HistoryTime`. Ningún otro doc citaba ese título.
+3. **El bucle duplicado del lobby no se nombra en "Pendientes conocidos":** el handoff no lo pide (va al issue de limpieza).
+
+### Riesgos / pendientes
+- **Ninguno nuevo.**
+- **Lo que queda para #17** (ya escrito en los READMEs):
+  - el cambio de cuenta con una wallet de extensión (RM-8, RM-9);
+  - el historial podado y el caso del creador en testnet.
+
+### Documentación
+- READMEs / `agents.md`: sí (este task).
+- **Snippets para `documents/STATUS.md`** (tabla "Baselines de gates"; los aplica el orquestador):
+  - `| localnet aislada @ \`feature/issue-13-my-games\` (TASK-1 de #13, \`928bb60\`), CLI \`1.83.0\`, 2026-11-03 | sondas S-1..S-4 de "Mis partidas" | 🟢 chain \`89815ecf\`: la DNF [sender ∧ GameCreated] ∨ [sender ∧ GameResolved] filtra por remitente (S-1; \`0x5ca1ab1e\` ⇒ 0 eventos y \`CHECKPOINT_BOUND\`); cursor dentro de un PTB de 12 \`GameCreated\` con \`limit\` 5 ⇒ 5 + 5 + 2 sin repetidos ni faltantes, también sin \`sender\` (S-2); \`getObjects\` de 15 IDs en 1 llamada, \`Shared\` y legibles, versión Lamport 4 → 415 al aceptar (S-3); escaneo sin \`sender\` con \`opponent == B\` ⇒ solo la invitación de A (S-4). Con exactamente \`limit\` restantes, la página siguiente llega vacía (V-9). Cierre limpio; app 755/52 y contracts 83/99 sin delta |`
+  - `| app @ \`feature/issue-13-my-games\` (TASK-2 de #13, \`8d19872\`), Node \`v26.13.0\`, 2026-11-03 | \`npm run lint -w app\` / \`typecheck\` / \`npm test -w app\` / build de testnet | 🟢 exit 0. **0 problemas** / **0 errores** / **834 tests PASS** en 54 archivos (+79: \`eventScan\` 25, \`myGames\` 51, \`explorer\` +9; \`lobby\` 28 → 22, 6 movidos sin cambiar valores) / \`index-*.js\` 887.14 kB (270.12 kB gzip). \`sui/eventScan.ts\` extraído del lobby (\`readMask\` sin \`sender\`); \`sui/myGames.ts\` (fuentes, invariantes, ilegibles, \`mergeMyGames\`, \`extendPins\`, \`groupMyGames\`, \`sectionFooter\`); \`explorerAccountUrl\` |`
+  - `| app @ \`feature/issue-13-my-games\` (TASK-3 de #13, \`e0d242e\`), Node \`v26.13.0\`, 2026-11-04 | \`npm run lint -w app\` / \`typecheck\` / \`npm test -w app\` / build de testnet | 🟢 exit 0. **0 problemas** / **0 errores** / **841 tests PASS** en 54 archivos (+7: \`useExecuteTransaction\` 6, \`txSession\` 1; aserciones viejas sin cambios) / \`index-*.js\` 887.24 kB (270.17 kB gzip). NIT-1: tipos de la máquina en \`txSession.ts\` (sin imports de \`./\`); MINOR-1 de #12: cuenta y \`targetHash\` en \`TxVariables\`, firma con \`{ transaction, account }\`, \`interpret(result, signer)\`, etapa por clave |`
+  - `| app @ \`feature/issue-13-my-games\` (TASK-4 de #13, con C-1/C-2, \`fcda3f6\`), Node \`v26.13.0\`, 2026-11-04 | \`npm run lint -w app\` / \`typecheck\` / \`npm test -w app\` / build de testnet | 🟢 exit 0. **0 problemas** / **0 errores** / **871 tests PASS** en 55 archivos (+30: \`txInvalidation\` +9, \`useMyGames\` 21 nuevo; listas de claves de \`useExecuteTransaction\`, \`useAcceptGame\` y \`useCancelGame\` con \`myGames\` al final, a propósito) / \`index-*.js\` 887.49 kB (270.24 kB gzip). \`myGames\` al final de \`invalidate\`; \`useMyGames\` (primera carga separada de la relectura, DL-17; pins por cuenta; \`retry\` relee la publicación caída); \`useAccountTxBusy\` |`
+  - `| app @ \`feature/issue-13-my-games\` (TASK-5 de #13, con H-5 y H-6, \`7a3b7fb\`), Node \`v26.13.0\`, 2026-11-04 | \`npm ci\`, auditorías, \`npm run lint -w app\` / \`typecheck\` / \`npm test -w app\` / build de testnet | 🟢 exit 0. 293 paquetes; 292 firmas; 0 vulnerabilidades de producción; **0 problemas** / **0 errores** / **915 tests PASS** en 57 archivos (+44: \`MyGamesSection\` 14, \`MyGamesPage\` 19, \`GameActions\` +4, \`Header\` +1, \`App\` +1, \`useMyGames\` +4, \`txSession\` +2) / \`index-*.js\` 901.45 kB (273.61 kB gzip). Página \`#/my-games\` con tres secciones (H-1, DL-17), \`GameActions variant='row'\` (H-3), aviso único, ayudas de D-20261103-03, R-7; fijado con las dos fuentes quietas (H-5) y en seguida con una transacción viva (H-6, cierra RM-14) |`
+  - `| docs @ \`feature/issue-13-my-games\` (TASK-6 de #13), 2026-11-04 | \`app/README.md\`, \`contracts/README.md\`, \`agents.md\` | 🟢 "Mis partidas (#13)" y "Límite sin indexador" (ventana ≈ 14,6 días, caso del creador, costo del escaneo de invitaciones, sin filtro por campo, #51); mapas de \`sui/\`, hooks y componentes; cuenta capturada y etapa por clave; invalidación con \`myGames\`. Sin cambios de código |`
+=====
+
+---
+
+## Revisión TASK-6: PASA
+
+Revisé el reporte contra el diff real partiendo de `7a3b7fb`: `app/README.md`, `contracts/README.md` y `agents.md`, sin
+código. Lo contrasté con `HANDOFF_MY_GAMES` v1.4, TASK-6, y con el código de TASK-2..5 (H-5, H-6) ya commiteado.
+- **Greps de las líneas agregadas:** 0 hex de 40-64, 0 rutas personales y 0 claves.
+- **#51:** verificado abierto, "[App] Mostrar en las listas de testnet el historial completo…".
+
+**Coherencia docs ↔ código (PROY-20), por foco:**
+- **H-5/H-6:** "Mis partidas (#13)" → "Fijado" describe las dos reglas como están en `useMyGames.ts`:
+  - `settled` con las dos fuentes quietas;
+  - las vivas por `liveTxGameIds` con el criterio de adopción de #12, fijadas en seguida;
+  - el motivo, que la transacción ya se ejecutó en "Confirmando…";
+  - el `txSession.ts` de la tabla de hooks lista `toTxGameEntry`/`liveTxGameIds`.
+- **RM-14:** queda como "cerrado", con el único resto (primera visita sin caché con una transacción en curso), igual
+  que el handoff v1.4.
+- **DL-11:** el bullet "Cuenta capturada" coincide con `useExecuteTransaction.ts`:
+  - `account`/`targetHash` en `TxVariables` y firma con `{ transaction, account }`;
+  - `interpret(nodeResult, signer)`;
+  - rechazo sin digest si la wallet ya no expone la cuenta;
+  - etapa por `targetHash`, con los dos límites (remontaje en "Mis partidas" y la misma instancia con la otra cuenta);
+  - #17 para la wallet de extensión.
+- **Invalidación:** la tabla tiene el orden exacto de `txInvalidation.ts` (`myGames` al final en las cuatro acciones; sin
+  cuenta, ni `balance` ni `myGames`). Documenta el costo (RM-12), los reintentos (H-4), que `invalidateQueries` no lanza
+  y el corrimiento de la ventana.
+
+**Resto:**
+- **Coherente con el código:**
+  - fuentes, invariantes e ilegibles por fuente;
+  - deduplicación con `objectVersion` Lamport (V-10);
+  - pie honesto (H-1);
+  - V-9;
+  - DL-17, incluido "Reintentar" con la publicación caída (C-1 de TASK-4);
+  - paginación 50/1 y 50/2/20;
+  - acciones en filas (H-3) y aviso único;
+  - ayudas (DL-15) con los textos fijos de §1.
+- **"Límite sin indexador":** ventana, caso del creador (SUGGESTION-4 del plan), costo del escaneo, sin filtro por campo
+  (tampoco en GraphQL), #51.
+- **Mapas:**
+  - `sui/`: `eventScan.ts`, `myGames.ts` con `myGameKey`, `explorerAccountUrl` y `lobby.ts` sin `lobbyLowerBound`;
+  - hooks: `queryKeys` y `txInvalidation` sin `TxAction`;
+  - `useMyGames` con el `MyGamesSource` real y `useAccountTxBusy`;
+  - componentes: `MyGamesSection`/`MyGameRow`/`HistoryTime` y `GameActions variant='row'`.
+- **`contracts/README.md`:** la DNF y por qué vale, S-1/S-2, V-9/V-10 y el límite.
+- **`agents.md` §4:** las dos fuentes y la ventana.
+
+**Desviaciones 1-3:** aceptadas.
+1. **`STATUS.md` como snippet:** es lo que dice TASK-6 §4. Los seis snippets están en el formato de la tabla de
+   baselines, con los SHA correctos. Los aplica el orquestador antes del PR, junto con la fila del ciclo y el resultado
+   del smoke.
+2. **Título de la tabla de componentes renombrado:** ningún otro doc lo cita.
+3. **El bucle duplicado no va en "Pendientes conocidos":** correcto, es el issue de limpieza post-ciclo que redacta el
+   MAYOR (revisión de TASK-2).
+
+### Hallazgos
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| N-1 (NIT) | LIM-1 | `app/README.md`, "Mis partidas (#13)" → "Fijado", primera oración | "hasta que la página se remonta (volver a ella, cambiar de cuenta) o hasta que cambia la cuenta" repite "cambiar de cuenta" | Opcional: "hasta 'Actualizar' o hasta que la página se remonta (volver a ella) o cambia la cuenta (los pins guardan su cuenta)". No bloquea |
+
+### Siguiente paso
+
+Smoke del ciclo: el MID genera `documents/SMOKE_MY_GAMES.md` (estado EN CURSO) desde el runbook del handoff v1.4, y el
+DEV lo corre.
+
+### Mensaje de commit propuesto
+
+```
+docs: document my games, the captured account and their limits (#13)
+
+app/README.md gains "Mis partidas (#13)": the two sources (sender DNF and the
+invitation scan), object reads and invariants, sections, Lamport-version
+dedupe, pinning with both sources idle plus live transactions (H-5, H-6),
+honest footers, refetches that keep rows, and "Límite sin indexador" (window,
+the creator case, scan cost, no field filter, #51). The transaction section
+documents the captured account and keyed stage, and the invalidation table
+ends with myGames. contracts/README.md and agents.md describe the lists and
+what TASK-1 measured.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
