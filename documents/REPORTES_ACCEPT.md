@@ -1442,3 +1442,45 @@ and STATUS carry the #12 fixtures and baselines. Adds the TASK-4/TASK-5 reports
 and MID reviews and documents/SMOKE_ACCEPT.md (17 steps, to be filled during the
 run).
 ```
+
+## Smoke del ciclo (`SMOKE_ACCEPT.md`): PASA 17/17
+
+> DEV, 2026-11-03, sobre `ce9174a`. Localnet aislada (`agents.md` §3), variante B, chain `086cca55`. B4 en todo `suic`,
+> también en las lecturas. Chrome headless 156 con perfil desechable en `<SMOKE_DIR>`, CDP solo en `127.0.0.1:9229`, y
+> tres burners en pestañas abiertas con `Target.createTarget({ url, newWindow: true })`, las tres `visible`, sin
+> `Page.bringToFront`. El Chrome del usuario no se tocó: el cierre filtró por el `--user-data-dir` propio.
+
+- **Resultado:** **17/17 PASA** (pasos 0 a 16). Detalle por paso, con digests, pedidos CDP y saldos, en `documents/SMOKE_ACCEPT.md`.
+- **Criterios del issue:**
+  - **Aceptar una abierta** (paso 7) y **una invitación**, con doble click (paso 11): 1 `ExecuteTransaction` cada una.
+  - **Tercera cuenta:**
+    - sin cuenta ve el texto de M-3 (paso 5);
+    - con saldo insuficiente, "Aceptar" deshabilitado con el aviso de "≈ 0.01 SUI de reserva para el gas" (paso 6);
+    - en una invitación ajena, "Esta invitación es para otra dirección." sin botón (paso 9, D-20261103-02);
+    - `game`/4 por carrera en la app: 1 `SimulateTransaction`, 0 `ExecuteTransaction`, saldo de `Z` sin cambios y el detalle "Resuelta" a los 117 ms por la invalidación (paso 12).
+  - **`game`/5 por la CLI:** fallo ejecutado en `assert_acceptable` (paso 10).
+  - **Mismo resultado en las dos cuentas** y "Resultado para ti" ganaste/perdiste (paso 8).
+  - **Invariante de fondos verificado on-chain** en los pasos 7 y 11, y `fees_collected` subiendo 500000 / 1000000 / 500000 / 500000 en los pasos 7, 11, 12 y 15.
+  - **SEG-10:** ningún token de resultado en `.tx-status`/`.game-actions` durante las etapas (pasos 7, 11, 12 y 15).
+  - **MINOR-1, salir y volver no permite un segundo envío:** en creación (paso 14) y en aceptación (paso 15). El "sin confirmar" persiste tras remontar con una sola alerta, y la transacción sí se ejecutó (`success`).
+- **Latencias** (ms, preflight → signing / signing → confirming / confirming → done):
+  - aceptar una abierta (paso 7): 25 / 324 / 664;
+  - invitación (paso 11): 10 / 361 / 1529;
+  - carrera (paso 12): 9 / 706 / 621;
+  - "sin confirmar" a los 30071 ms (paso 14) y 30187 ms (paso 15).
+- **Ganadores:** `X` (creador) en `G1`; `Y` (aceptante) en `G2`, `G3` y `G5`. El paso 13 no hizo falta.
+- **Desviaciones y observaciones** (ninguna es falla):
+  1. **Paso 15:** al volver a `G5`, la vista nueva ya leía "Resuelta" del nodo, así que "Aceptar" estaba **ausente** en vez de deshabilitado. Es la variante que permite la nota del propio paso; el texto "en curso" estaba y no hubo tokens.
+  2. **Paso 11:** el 2.º `click()` encontró el botón habilitado; lo frenó el candado global síncrono (1 `ExecuteTransaction`).
+  3. **Plan B (R-2) sin ocurrir:** ninguna cancelación del runtime en la corrida (R-3 sigue abierto, cubierto por tests).
+  4. **Lecturas `net::ERR_ABORTED`** del primer montaje de `StrictMode` y de los "not found" de `waitForTransaction`. Se anotan y no cuentan.
+- **Firmas de la CLI con cuentas de la génesis** (fondeos, `update_fee_rate` y el `accept_game` de `B` del paso 10), con las tres condiciones de §3:
+  1. Las hizo la CLI bajo el prefijo B4.
+  2. Ningún proceso de Node leyó `<SMOKE_DIR>/net`: el cliente CDP solo habló con `127.0.0.1:9229`, y las direcciones de las burners se guardaron en archivos de `<SMOKE_DIR>`, sin imprimirlas completas.
+  3. No se imprimió ninguna clave.
+- **Cierre (paso 16):** limpio.
+  - Chrome, Vite y `sui` detenidos por PID (`sui` con el exit 144 esperado); `kill -0` falla en los tres; puertos libres.
+  - `<SMOKE_DIR>` (con el perfil) y `contracts/deployments/` borrados.
+  - `~/.sui/` idéntico a la línea base; `Move.lock` sin delta; sin `Published.toml` ni `Pub.*.toml`.
+  - `git status` solo con `documents/SMOKE_ACCEPT.md` (y este reporte).
+- **Veredicto: PASA.**
