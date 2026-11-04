@@ -272,7 +272,8 @@ paso 5 **publica el sitio**.
      "Slush" listado en el modal. Cualquier otro error de consola o de red es rojo. Si esos mensajes no aparecen, el
      ícono remoto se mide ahí;
    - `curl -sS -D - -o /dev/null <URL>` (GET: con HEAD, el `encode` de Caddy 2.11.7 falla) con las cabeceras de la
-     tabla de arriba.
+     tabla de arriba. Si el borde de Railway agrega un `Server` propio (o cabeceras `x-railway-*`), se anota su valor
+     y no es rojo: lo que se quita es el `Server` de Caddy.
 
    Si la wallet no conecta por la CSP, avisar: fallback a `Report-Only`, solo para la CSP. Si algo falla,
    **rollback** desde Deployments **o pausar** el servicio.
