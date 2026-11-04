@@ -1335,3 +1335,568 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ### Snippet para STATUS.md
 
 El del reporte del DEV, sin cambios.
+
+## TASK-4
+
+## Task completado: HANDOFF_MY_GAMES v1.2 — TASK-4 (hooks de "mis partidas")
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-13-my-games` @ `e0d242e`. Sin commits: los cambios están en el árbol de trabajo.
+
+### Archivos modificados/creados
+- **Nuevos:**
+  - `app/src/hooks/useMyGames.ts`
+  - `app/src/hooks/useAccountTxBusy.ts`
+  - `app/src/hooks/useMyGames.test.tsx`: incluye también los tests de `useAccountTxBusy`.
+- **Modificados:**
+  - `app/src/hooks/queryKeys.ts`
+  - `app/src/hooks/txInvalidation.ts`
+  - `app/src/hooks/txInvalidation.test.ts`
+  - `app/src/hooks/useExecuteTransaction.test.tsx`
+  - `app/src/hooks/useAcceptGame.test.tsx` y `app/src/hooks/useCancelGame.test.tsx` (Desviación 1)
+- No toqué `sui/`, `components/`, `pages/` ni la máquina de TASK-3. Tampoco `app/src/test/scanHarness.ts`.
+
+### Qué se implementó (3 líneas máx)
+- **Claves e invalidación:** `queryKeys` suma `myGames`/`myActivity`/`myInvitations` con la dirección normalizada. `transactionInvalidations` agrega `myGames` de la cuenta **al final** de `invalidate` en las cuatro acciones.
+- **`useMyGames`:** dos `useInfiniteQuery` que esperan la cota de la publicación. Cada fuente tiene su `MyGamesSource`, que separa la primera carga de la relectura (DL-17). El fijado es `mergeMyGames` → `extendPins(pins, merged, address)` con `if (next !== pins) setPins(next)`. `refresh` reinicia los pins.
+- **`useAccountTxBusy`:** `useIsMutating` con la clave de la cuenta; sin cuenta devuelve `false`.
+
+### Tests y gates (output pegado, por área tocada)
+
+**Tests nuevos:**
+
+| Test | Archivo | Qué verifica |
+|---|---|---|
+| T4-1 | `txInvalidation.test.ts` (+9) | Las cuatro acciones con cuenta (escrita en mayúsculas) terminan con `myGames` de esa cuenta, una sola vez. Sin cuenta, ninguna incluye `myGames` ni `balance`. `myGames`/`myActivity`/`myInvitations` comparten prefijo con la dirección normalizada |
+| T4-3 | `useMyGames.test.tsx` | Sin cuenta ⇒ `{ kind: 'no_account' }`. 0 llamadas a los fetchers y a `ledgerService.listEvents`/`getObjects` |
+| T4-4 | `useMyGames.test.tsx` | `loading` mientras se espera la publicación y la primera página. `retrying` `{ attempt: 2, max: 3 }` y después `ready` con sus filas. Error de la publicación en las dos fuentes, sin pedir eventos |
+| T4-5 | `useMyGames.test.tsx` | Error no transitorio de la actividad ⇒ esa fuente queda en `error`; las invitaciones, `ready` con su fila y `unreadableEvents` |
+| T4-6 | `useMyGames.test.tsx` | Con datos, una relectura en reintento ⇒ `ready` con `refreshing: true`, `refreshRetrying` `{ 2, 3 }` y secciones intactas. Una relectura fallida ⇒ `refreshError`, secciones intactas. `retry` relee solo esa fuente |
+| T4-7 | `useMyGames.test.tsx` | "Cargar más" de cada fuente con su cursor, sin pedir la otra. Un error no `stalled` deja `hasNextPage: true`, `ready` y `refreshError: null`. `PaginationStalledError` ⇒ `stalled` y `hasNextPage: false`. `history_pruned` ⇒ `end`/`lowerBound` de la última página |
+| T4-8 | `useMyGames.test.tsx` | Las dos lecturas de G se resuelven en el mismo `act` (actividad `Resolved` v415 e invitaciones `Pending` v4) ⇒ G va a `finished` y queda fijada. Una relectura que solo la trae como invitación pendiente no la mueve |
+| T4-8 bis | `useMyGames.test.tsx` | Invitación `Pending` → `invalidateQueries(myGames)` la trae `Resolved` ⇒ sigue en `invitations` (rol `acceptor`, estado `resolved`). `refresh` la pasa a `finished` |
+| T4-9 | `useMyGames.test.tsx` | Una relectura sin IDs nuevos: 1 render. La misma con dos IDs nuevos: 2 renders (+1; el límite es ≤ +2). Un `advance` más: 0 renders, sin bucle |
+| T4-10 | `useMyGames.test.tsx` | Al cambiar de cuenta, los fetchers piden con la dirección nueva, las claves son distintas (las dos quedan en el caché) y las secciones son solo de la cuenta nueva |
+| T4-11 | `useMyGames.test.tsx` | Mutación en curso de la cuenta ⇒ `true`, y `false` al terminar. De otra cuenta ⇒ `false`. Sin cuenta ⇒ `false`. Esa misma cuenta escrita en mayúsculas ⇒ `true` |
+| Extra | `useMyGames.test.tsx` | `refresh` vuelve a pedir una publicación fallida y a la primera página. `refetchOnWindowFocus: false` en las dos queries |
+
+**Conteo por archivo:**
+- `txInvalidation.test.ts`: 7 → 16.
+- `useMyGames.test.tsx` (nuevo): 0 → 19.
+- Resto: sin delta.
+- **Total: 841 → 869** (54 → 55 archivos).
+
+**T4-2: aserciones que cambian a propósito.** Solo se agrega `myGames` al final de la lista esperada de claves invalidadas.
+- `useExecuteTransaction.test.tsx`: una constante nueva, `MY_GAMES = queryKeys.myGames('localnet', PKG, SENDER)` (`:133`), y 12 líneas:
+  - `:202-204`: casos create/cancel/reject de "invalidates exactly the keys of %s, none immutable";
+  - `:318`: "maps a real SimulationError of the fixture, applies the action invalidations and never opens the wallet";
+  - `:369`: "is unconfirmed and still invalidates when the wallet returns a digest and confirmation times out";
+  - `:378`: "is unconfirmed (never failure) and still invalidates when the node answer is malformed after the wallet digest";
+  - `:391`: "fails with the effects message, digest and cost when the node says failure although the wallet said success";
+  - `:401`: "succeeds with value null when interpret throws after the node confirmed (NIT-1), with normal invalidations";
+  - `:428`: "succeeds with indexed false and still invalidates when the checkpoint never comes";
+  - `:449`: "still invalidates when the component unmounts during confirming";
+  - `:470`: "maps the SDK MoveAbort text of the wallet error and refreshes the data of the action";
+  - `:575`: T3-4 "signs, interprets and invalidates with the account captured at the click…".
+- `txInvalidation.test.ts`: las tres listas de create, cancel/reject y accept suman `MY_GAMES`. Los títulos de esos tres tests ahora dicen "… and my games".
+- `useAcceptGame.test.tsx:156` y `useCancelGame.test.tsx:109`: suman `queryKeys.myGames(...)` al final (Desviación 1).
+- Ninguna otra aserción cambió. La `:283` (claves del precheck, `[houseKey]`) sigue igual.
+
+**Verificación extra (mutaciones sobre `useMyGames.ts`).** Hice seis cambios de a uno; todos los atrapa algún test, y después restauré el archivo (`cmp` igual):
+
+| Mutación | Tests que fallan |
+|---|---|
+| Pins sin `mergeMyGames` (invitaciones primero) | T4-8 |
+| `status` como en el lobby | 3 tests de T4-6/T4-7 |
+| `refresh` sin reiniciar pins | T4-8 bis |
+| `hasNextPage` sin `!stalled` | T4-7 stalled |
+| `refreshError` siempre `null` | T4-6 |
+| Sin el `setPins` | T4-8 y T4-8 bis |
+
+**Gates:**
+- **Contracts:** no aplica. `git diff --exit-code -- contracts/` da 0.
+- **App, gate completo en forma canónica:**
+```text
+v26.13.0
+e0d242e
+
+added 293 packages, and audited 295 packages in 21s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit=0
+audited 292 packages in 18s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+exit=0
+found 0 vulnerabilities
+exit=0
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  55 passed (55)
+      Tests  869 passed (869)
+   Start at  00:28:17
+   Duration  34.12s (environment 62%, import 12%, tests 10%, setup 10%, transform 6%, worker 1%)
+
+Environment  jsdom was created 55 times · 198.29s total, 62% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 590 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.27 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-ChanOWIz.js   887.49 kB │ gzip: 270.24 kB
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.54s
+exit=0
+--- git status --porcelain --untracked-files=all
+ M app/src/hooks/queryKeys.ts
+ M app/src/hooks/txInvalidation.test.ts
+ M app/src/hooks/txInvalidation.ts
+ M app/src/hooks/useAcceptGame.test.tsx
+ M app/src/hooks/useCancelGame.test.tsx
+ M app/src/hooks/useExecuteTransaction.test.tsx
+?? app/src/hooks/useAccountTxBusy.ts
+?? app/src/hooks/useMyGames.test.tsx
+?? app/src/hooks/useMyGames.ts
+--- git diff --exit-code -- contracts/
+exit=0
+--- git diff --exit-code -- package.json app/package.json package-lock.json
+exit=0
+```
+
+**Delta contra el baseline (TASK-3):**
+- Tests: +28, y +1 archivo de test.
+- Build: 887.24 → 887.49 kB (270.17 → 270.24 kB gzip). Lo que suma son las claves y la invalidación; `useMyGames` todavía no lo importa la app.
+- Lint, typecheck y auditorías: sin delta.
+- `package*.json` y `contracts/`: sin cambios.
+
+**Lint:** 0, sin `eslint-disable`. `react-hooks/set-state-in-render` no marca el `setPins` condicional (V-7). No hay `useRef` ni `useEffect` en `useMyGames`.
+
+**Greps sobre `git diff` y los 3 archivos nuevos:**
+- Claves, rutas personales, `console.` y `eslint-disable`: vacíos.
+- Hex de 40-64: vacío. Las direcciones de test se arman con `'ab'.repeat(32)` y equivalentes.
+
+**Tablas de contrato y `app/src/sui/`:** no aplica.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica en este task (§6). Las listas reales se ven en el smoke del ciclo (pasos 5-17).
+
+### Desviaciones del handoff
+1. **`useAcceptGame.test.tsx` y `useCancelGame.test.tsx` no estaban en §4.**
+   - **Qué cambió:** como `useExecuteTransaction.test.tsx`, cada uno compara la lista exacta de claves invalidadas, así que fallaban con la tabla nueva. Hice lo mismo que en ese archivo: sumé `myGames` al final de la lista (una línea en cada uno).
+   - **Verificación extra:** ninguna otra aserción cambió (`git diff -U0`: 0 líneas borradas en los dos).
+2. **Sin cuenta, las claves usan `0x0`.** Las dos `useInfiniteQuery` se llaman siempre (reglas de hooks), con `enabled: false` y la dirección `0x0` (constante `NO_ACCOUNT_KEY_ADDRESS`).
+   - **Por qué:** `queryKeys.myActivity`/`myInvitations` piden una dirección. La dirección cero no firma transacciones, así que no choca con una cuenta real.
+   - **Verificación extra:** T4-3 confirma 0 pedidos. Lo único que se pide sin cuenta es la publicación (`getTransaction`), igual que en el lobby.
+3. **`status` con datos y `isFetchingNextPage`.** Con datos, `status` es `{ kind: 'ready', refreshing: isFetching && !isFetchingNextPage }` (§3.3). Durante "cargar más", entonces, `refreshing` es `false`, como en el lobby.
+
+### Riesgos / pendientes
+1. **Pins y cambio de cuenta sin remontar.** El estado de pins es el `useState<MyGamesPins>` literal de MINOR-1, sin la cuenta. Si el hook se usara sin `key={address}`, una partida que aparece en las listas de las dos cuentas conservaría el pin de la cuenta anterior.
+   - TASK-5 remonta con `<MyGamesView key={address} />` (DL-9), así que en la app no pasa. T4-10 cubre claves y filas, no ese caso.
+   - **Opción:** guardar `{ address, pins }` y descartar los pins de otra dirección. Son unas 3 líneas y un test. Lo decide el MID.
+2. **Orden de llegada de las dos fuentes.** T4-8 cubre las dos lecturas en el mismo render (MINOR-1). Si las invitaciones llegan en un render **anterior** al de la actividad, G queda fijada en `invitations` con su estado vigente. Es la regla de DL-5 (la sección donde apareció primero) y RM-6 lo menciona; "Actualizar" la reagrupa.
+3. **"Actualizando datos…" dura más con reintentos** (RM-12, H-4). `myGames` va al final de `invalidate` y relee en serie todas las páginas cargadas de las dos fuentes, con la política de reintentos. Se documenta en TASK-6.
+
+### Documentación
+- READMEs / `agents.md`: no aplica en este task. La tabla de hooks de `app/README.md` (`useMyGames`, `useAccountTxBusy`, claves `myGames` y la invalidación) es de TASK-6.
+- **Snippet propuesto para `documents/STATUS.md`:** `| feature/issue-13-my-games (TASK-4 de #13), 2026-11-04 | hooks de "mis partidas" | 🟢 queryKeys myGames/myActivity/myInvitations; myGames al final de invalidate en las cuatro acciones; useMyGames con dos useInfiniteQuery (cota de la publicación, sin refresco al foco), MyGamesSource por fuente (primera carga separada de la relectura, DL-17), fijado mergeMyGames → extendPins con setState condicional (≤ 1 render extra medido), refresh reinicia pins; useAccountTxBusy. App 869/55 (+28), lint/typecheck 0, build 887.49 kB |`
+=====
+
+---
+
+## Revisión TASK-4: NO PASA (2 correcciones chicas, sin cambios de diseño)
+
+Revisé el reporte contra el diff real partiendo de `e0d242e`: 6 archivos modificados y 3 nuevos en `app/src/hooks/`.
+Lo contrasté con `HANDOFF_MY_GAMES` v1.2, TASK-4, con `documents/ESTANDARES.md` y con el `@tanstack/query-core` instalado.
+La mayor parte está bien. Dos puntos se corrigen antes de TASK-5, porque TASK-5 conecta estas APIs a la UI.
+
+**Foco 1: DL-7, orden y sin claves extra.** ✅ `txInvalidation.ts`:
+- crear: `[balance, myGames]`;
+- cancelar y rechazar: `[game, balance, myGames]`;
+- aceptar: `[game, balance, house, myGames]`;
+- `reset` sigue `[lobby]`;
+- sin cuenta, ni `balance` ni `myGames`;
+- `myGames` = `['sui', red, 'myGames', pkg, normalizeSuiAddress(cuenta)]` y las dos fuentes son sub-claves.
+
+En los tests, las líneas borradas son solo las listas esperadas viejas de `txInvalidation.test.ts` y
+`useExecuteTransaction.test.tsx`, reemplazadas por las mismas con `myGames` al final. Las de `useAcceptGame.test.tsx` y
+`useCancelGame.test.tsx` solo suman la clave (Desviación 1). Ninguna otra aserción cambia.
+
+**Foco 2: DL-17.** ✅ `toSource` separa la primera carga (`deriveReadStatus` de la publicación o de la query) de la
+relectura con datos:
+- `status: ready`;
+- `refreshRetrying` solo con `fetching`, `failureCount > 0` y sin "cargar más";
+- `refreshError` = `isRefetchError` (V-6);
+- `nextPageError`/`stalled` como el lobby, y `hasNextPage` sin `stalled` (H-1: un error no `stalled` deja el botón).
+
+T4-6 y T4-7 lo fijan, y las mutaciones dirigidas muerden.
+
+**Foco 3: fijado sin bucle.** ✅
+- `merged = mergeMyGames(...)` → `extendPins(pins, merged, address)` → `if (next !== pins) setPins(next)`, condicional
+  (V-7);
+- `groupMyGames` usa `next` en el mismo render y deduplica con la misma regla (MINOR-1 de la v1.1);
+- converge: tras el `setPins`, `extendPins` devuelve la misma instancia;
+- T4-9 mide 1 render sin IDs nuevos, 2 con IDs nuevos y 0 en el siguiente;
+- `useState(() => new Map())` perezoso; sin `useRef`, `useEffect` ni `eslint-disable`.
+
+**Foco 4: Desviación 2 (`0x0` sin cuenta).** ✅ Aceptada.
+- Las dos queries quedan con `enabled: false` y no piden nada (T4-3), y el hook sale con `no_account` antes de exponer
+  `retry`/`loadMore`/`refresh`.
+- La clave de la dirección cero no colisiona con ninguna cuenta que firme.
+- `transactionInvalidations` sin cuenta no agrega `myGames`, así que esa clave nunca se invalida.
+- `skipToken` habría sido equivalente; no hace falta cambiarlo.
+
+| Revisión | Resultado |
+|---|---|
+| Implementa lo pedido (§3.1-§3.4) | ✅ salvo C-1 |
+| Capas / PROY-14 | ✅ `hooks/` solo con `@tanstack/react-query`, la raíz del kit y `sui/`; lecturas con `useInfiniteQuery`; `refetchOnWindowFocus: false` (DL-13) |
+| Tests T4-1..T4-11 | ✅ 841 → 869 (+28), 54 → 55 archivos; seis mutaciones atrapadas |
+| Gates | ✅ Completos en forma canónica: lint y typecheck 0, 869/55, build 887.49 kB (270.24 kB gzip); `contracts/` y `package*.json` sin delta |
+
+### Hallazgos
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| C-1 (MINOR) | PROY-16, DL-17 (y el patrón de `useLobby.refresh`) | `app/src/hooks/useMyGames.ts:91-93` (`retry`) y `:72` (`status` desde la publicación) | Si falla la lectura de la publicación (la cota), las dos fuentes muestran el error de la publicación (`:72`), y TASK-5 conecta su `ReadState` a `source.retry`. Pero `retry` hace `query.refetch()`, que **ignora `enabled: false`** (`@tanstack/query-core/build/modern/queryObserver.js:211-270`: `refetch` → `fetch` → `query.fetch` sin mirar `enabled`). Resultado: (1) "Reintentar" **no** vuelve a pedir la publicación, así que el error no se va nunca; (2) dispara el escaneo con `publishCheckpoint: null`, con una cota que no es la de la publicación | `retry` = `publish.isSuccess ? query.refetch() : publish.refetch()`. **Test nuevo T4-12:** con la publicación fallando, `activity.retry()` ⇒ `getTransaction` otra vez y **0** `listEvents`; cuando la publicación responde, las dos fuentes cargan con la cota de la publicación |
+| C-2 (Riesgo 1 del DEV, **aceptado**) | DL-5, DL-9 (defensa en el hook) | `app/src/hooks/useMyGames.ts:110, 145-147, 159` | Los `pins` no guardan la cuenta, así que la corrección del hook depende de que la vista se remonte con `key={address}`. Se aplica el mismo criterio que en la v1.2 del handoff de #12 (M-2 (c)): la regla queda en el hook y no en cada vista que lo use. El costo es mínimo | Estado `{ address: string \| null; pins: MyGamesPins }` (perezoso). Pins efectivos = los guardados si `sameAddress(estado.address, address)` (o los dos `null`); si no, un `Map` vacío. `next = extendPins(efectivos, merged, address)` y un solo `setState` condicional (`next !== estado.pins \|\| la cuenta cambió`) que guarda `{ address, pins: next }`. `refresh` guarda `{ address, pins: new Map() }`. **Test nuevo T4-13:** G aparece para A como creador `Pending` (fijada en `pending`) y para B como invitado `Pending`; sin remontar, se cambia a B ⇒ G en `invitations`; T4-9 sigue sin bucle |
+
+**Desviaciones 1-3:** aceptadas.
+1. **`useAcceptGame.test.tsx`/`useCancelGame.test.tsx`:** es la misma aserción exacta de claves de T4-2; solo suman la
+   clave al final, sin borrar líneas.
+2. **`0x0` sin cuenta:** ver el foco 4.
+3. **`refreshing: false` durante "cargar más":** es lo que pide §3.3 y coincide con el lobby.
+
+**Riesgos del DEV:**
+- **Riesgo 1:** pasa a C-2.
+- **Riesgo 2 (las invitaciones llegan antes que la actividad):** no es un problema en la primera carga.
+  - El ítem de invitaciones trae el objeto **vigente**. Una invitación que la cuenta ya aceptó llega `Resolved` con
+    `acceptor` = cuenta, y `naturalSection` la manda a `finished` aunque el rol sea `invitee`.
+  - Solo se fija en `invitations` lo que se leyó `Pending` al aparecer, que es la regla de DL-5.
+- **Riesgo 3:** va a TASK-6 (H-4/RM-12), como estaba previsto.
+
+### Siguiente paso: correcciones al DEV (C-1 y C-2) dentro de TASK-4
+
+Después, reporte con:
+- el diff de las correcciones;
+- T4-12 y T4-13;
+- el gate completo (se espera 871 tests en 55 archivos, lint 0 sin `eslint-disable`).
+
+TASK-5 no arranca hasta que esa revisión pase. El handoff no cambia: la firma pública de `useMyGames` es la misma; solo
+cambia la semántica de `retry` y el estado interno.
+
+### Mensaje de commit propuesto (para cuando pase, con C-1 y C-2)
+
+```
+app: add the my-games hooks and invalidate them after own transactions (#13)
+
+queryKeys gains myGames/myActivity/myInvitations, and every own transaction
+invalidates the account's my-games prefix last (DL-7). useMyGames runs the two
+infinite queries behind the publish-checkpoint bound, keeps the first load
+apart from refetches so rows never unmount on a failed refetch (DL-17), pins
+each game to the section where it first appeared from the deduplicated items
+with a conditional setState (no loop), keeps pins per account, and retries the
+publish read when it is the failing piece. useAccountTxBusy backs the single
+in-flight notice of the page.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+## TASK-4, correcciones C-1/C-2
+
+> Addendum a la entrega de TASK-4, tras la revisión NO PASA del MID. HEAD `e0d242e`, sin commits. Solo cambian `app/src/hooks/useMyGames.ts` y `app/src/hooks/useMyGames.test.tsx`.
+
+### C-1: `retry` con la publicación sin leer
+- **Qué cambió:** con la publicación sin éxito, `retry` vuelve a pedir la publicación (`publish.refetch()`) y no la fuente. Con la publicación lista, relee la fuente como antes.
+- **Por qué:** `query.refetch()` ignora `enabled: false`. Así, "Reintentar" nunca volvía a pedir la publicación y disparaba el escaneo con `publishCheckpoint: null`.
+- **Tipo:** `toSource` recibe ahora `publish: ReturnType<typeof usePublishCheckpoint>`, que trae `refetch`.
+
+### C-2: los pins guardan su cuenta
+- **Estado:** `useState<PinState>(() => ({ address, pins: new Map() }))`, con `PinState = { address: string | null; pins: MyGamesPins }`.
+- **Pins efectivos:** los guardados si `isSameAccount(pinState.address, address)`, que usa `sameAddress` (o compara los dos `null`). Si la cuenta es otra, `NO_PINS`, un `Map` vacío de módulo que nunca se muta.
+- **Escritura:** `next = extendPins(pins, merged, address)` y un único `setState` condicional, `if (!sameAccount || next !== pinState.pins) setPinState({ address, pins: next })`.
+- **Por qué converge:** en el render siguiente la cuenta es la misma y `extendPins` devuelve la misma instancia.
+- **`refresh`:** guarda `{ address, pins: new Map() }`.
+
+### Diff de las correcciones (`app/src/hooks/useMyGames.ts`, contra la entrega de TASK-4)
+```diff
+@@ imports
+ import type { HistoryLowerBound } from '../sui/eventScan';
++import { sameAddress } from '../sui/ids';
+@@
+ const NO_ACCOUNT_KEY_ADDRESS = '0x0';
+ 
+-/** Estado de una fuente (DL-17) a partir de su query y de la publicación (la cota que espera). Pura. */
+-function toSource(
+-  query: UseInfiniteQueryResult<InfiniteData<MyGamesPage>>,
+-  publish: Parameters<typeof deriveReadStatus>[0] & { isSuccess: boolean },
+-): MyGamesSource {
++/** Pins de una cuenta que todavía no fijó nada. Nunca se muta (`extendPins` devuelve un `Map` nuevo). */
++const NO_PINS: MyGamesPins = new Map();
++
++/** Los pins con la cuenta a la que pertenecen (C-2 de la revisión de TASK-4): los de otra cuenta no valen. */
++type PinState = { address: string | null; pins: MyGamesPins };
++
++function isSameAccount(a: string | null, b: string | null): boolean {
++  return a === null || b === null ? a === b : sameAddress(a, b);
++}
++
++/**
++ * Estado de una fuente (DL-17) a partir de su query y de la publicación (la cota que espera). `retry` relee la
++ * publicación mientras no esté lista (C-1 de la revisión de TASK-4): `refetch` ignora `enabled: false`, y sin la cota
++ * escanearía con `publishCheckpoint: null`.
++ */
++function toSource(query: UseInfiniteQueryResult<InfiniteData<MyGamesPage>>, publish: ReturnType<typeof usePublishCheckpoint>): MyGamesSource {
+@@
+     retry: () => {
+-      void query.refetch();
++      if (publish.isSuccess) void query.refetch();
++      else void publish.refetch();
+     },
+@@ JSDoc de useMyGames
+- * la sección donde apareció (DL-5) hasta "Actualizar" (`refresh`) o hasta que la página se remonte (cambio de cuenta,
+- * DL-9). El fijado se ajusta durante el render (V-7), sin `useEffect` (PROY-14).
++ * la sección donde apareció (DL-5) hasta "Actualizar" (`refresh`) o hasta que cambia la cuenta: los pins guardan su
++ * cuenta y los de otra se descartan, aunque la vista no se remonte (DL-9; C-2 de la revisión de TASK-4). El fijado se
++ * ajusta durante el render (V-7), sin `useEffect` (PROY-14).
+@@
+-  const [pins, setPins] = useState<MyGamesPins>(() => new Map());
++  const [pinState, setPinState] = useState<PinState>(() => ({ address, pins: new Map() }));
+@@
+   // MINOR-1 del handoff v1: el pin sale de la lectura ganadora de H-2 (las mismas listas que deduplica `groupMyGames`).
+-  // `extendPins` devuelve la misma instancia sin IDs nuevos, así que el `setPins` condicional no entra en bucle (V-7).
++  // Un solo `setState` condicional (V-7) que converge: guardado `{ address, pins: next }`, el render siguiente ve la misma
++  // cuenta y `extendPins` devuelve la misma instancia (sin IDs nuevos).
+   const merged = mergeMyGames(activityItems, invitationItems);
+-  const next = address === null ? pins : extendPins(pins, merged, address);
+-  if (next !== pins) setPins(next);
++  const sameAccount = isSameAccount(pinState.address, address);
++  const pins = sameAccount ? pinState.pins : NO_PINS;
++  const next = address === null ? pins : extendPins(pins, merged, address);
++  if (!sameAccount || next !== pinState.pins) setPinState({ address, pins: next });
+@@ refresh
+-      setPins(new Map());
++      setPinState({ address, pins: new Map() });
+```
+
+### Tests nuevos (`app/src/hooks/useMyGames.test.tsx`, 19 → 21)
+
+**T4-12 (C-1):** "retry re-reads the publish checkpoint without scanning, and both sources load with its bound once it answers".
+1. La publicación falla con `INVALID_ARGUMENT`, que no se reintenta. Las dos fuentes quedan en `error` con ese error, y la publicación se pidió 1 vez.
+2. `activity.retry()` con la publicación fallando otra vez:
+   - la publicación se pide de nuevo (2 veces);
+   - las invitaciones siguen en `error`;
+   - **0** llamadas a `fetchMyActivityPage`/`fetchInvitationsPage` y **0** a `ledgerService.listEvents`.
+3. `invitations.retry()` con la publicación respondiendo `59n`:
+   - la publicación se pide por tercera vez;
+   - las dos fuentes cargan, y **todas** las llamadas a los fetchers llevan `publishCheckpoint: 59n` (ninguna con `null`);
+   - `activity` queda `ready` y aparecen las filas de las dos secciones.
+
+**T4-13 (C-2):** "drops the pins of the previous account when switching without remounting".
+1. G está `Pending`; para A llega por la actividad, como creador, y para B por las invitaciones, como invitado.
+2. Con A, G está en `pending` (fijada).
+3. Cambio a B **sin remontar** (`rerender`):
+   - G aparece en `invitations` y `pending` queda vacía;
+   - otro `advance` produce 0 renders (sin bucle).
+4. Al volver a A (con la dirección en mayúsculas), G vuelve a `pending` e `invitations` queda vacía.
+
+T4-9 sigue verde sin cambios: 1 render sin IDs nuevos, 2 con IDs nuevos y 0 en el siguiente.
+
+**Mutaciones (con `cmp` del archivo restaurado):**
+- Revertir C-1 (`retry` = `query.refetch()`) hace fallar solo T4-12.
+- Revertir C-2 (`pins = pinState.pins`) hace fallar solo T4-13.
+
+### Gate completo, job `app` (forma canónica)
+```text
+v26.13.0
+e0d242e
+
+added 293 packages, and audited 295 packages in 20s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit=0
+audited 292 packages in 15s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+exit=0
+found 0 vulnerabilities
+exit=0
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  55 passed (55)
+      Tests  871 passed (871)
+   Start at  00:36:37
+   Duration  34.15s (environment 59%, import 11%, tests 11%, setup 10%, transform 9%, worker 1%)
+
+Environment  jsdom was created 55 times · 187.72s total, 59% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 590 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.27 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-ChanOWIz.js   887.49 kB │ gzip: 270.24 kB
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.16s
+exit=0
+--- git status --porcelain --untracked-files=all
+ M app/src/hooks/queryKeys.ts
+ M app/src/hooks/txInvalidation.test.ts
+ M app/src/hooks/txInvalidation.ts
+ M app/src/hooks/useAcceptGame.test.tsx
+ M app/src/hooks/useCancelGame.test.tsx
+ M app/src/hooks/useExecuteTransaction.test.tsx
+ M documents/REPORTES_MY_GAMES.md
+?? app/src/hooks/useAccountTxBusy.ts
+?? app/src/hooks/useMyGames.test.tsx
+?? app/src/hooks/useMyGames.ts
+--- git diff --exit-code -- contracts/
+exit=0
+--- git diff --exit-code -- package.json app/package.json package-lock.json
+exit=0
+```
+
+### Resultado
+- **Tests:** 869 → **871** (+2: T4-12 y T4-13), en los mismos 55 archivos.
+- **Build:** igual, 887.49 kB (270.24 kB gzip). `useMyGames` todavía no lo importa la app.
+- **Lint y typecheck:** 0, sin `eslint-disable`. `react-hooks/set-state-in-render` acepta el `setState` condicional.
+- **Sin cambios:** `contracts/` y `package*.json`.
+- **`git status`:**
+  - `documents/REPORTES_MY_GAMES.md` aparece modificado por la revisión del MID; no lo toqué;
+  - el resto del árbol es el de la entrega de TASK-4 más estas dos correcciones;
+  - `app/src/test/scanHarness.ts` no se tocó.
+- **Greps sobre `git diff -- app` y los tres archivos nuevos:** claves, rutas personales, `console.`, `eslint-disable` y hex de 40-64: vacíos.
+
+### Desviaciones
+- Ninguna nueva.
+- Las dos aserciones extra de T4-13 (no hay bucle tras el cambio de cuenta y la partida vuelve a A con la dirección en otro formato) amplían lo que se pidió. No cambian ninguna aserción anterior.
+=====
+
+---
+
+## Re-revisión TASK-4: PASA
+
+Revisé el addendum "TASK-4, correcciones C-1/C-2" contra el código real de `app/src/hooks/useMyGames.ts`. Solo cambian
+`useMyGames.ts` y `useMyGames.test.tsx`; el resto del árbol es la entrega ya revisada de TASK-4.
+
+| Corrección | Verificación | Resultado |
+|---|---|---|
+| **C-1** (`retry` con la publicación sin leer) | `toSource` recibe la query de la publicación entera y `retry` = `publish.isSuccess ? query.refetch() : publish.refetch()`. Mientras la publicación no responda, "Reintentar" relee la cota y no dispara el escaneo, aunque `refetch` ignore `enabled`. T4-12: con la publicación fallando, 0 `listEvents` y la publicación se pide otra vez; cuando responde, todas las llamadas llevan `publishCheckpoint: 59n`. Revertir C-1 rompe solo T4-12 | ✅ |
+| **C-2** (pins por cuenta) | Estado `{ address, pins }` perezoso. Los pins efectivos son los guardados solo si `isSameAccount` (`sameAddress`, o los dos `null`); si no, `NO_PINS`, que nunca se muta: `extendPins` devuelve un `Map` nuevo. Un único `setState` condicional, `!sameAccount \|\| next !== pinState.pins`. **Convergencia:** tras guardar `{ address, next }`, el render siguiente ve la misma cuenta y `extendPins` devuelve la misma instancia. Cambiar a "sin cuenta" guarda `{ null, NO_PINS }` y también converge en un render. `refresh` guarda `{ address, new Map() }`. T4-13: sin remontar, G pasa de `pending` (A) a `invitations` (B), con 0 renders extra y de vuelta en A con la dirección en otro formato. T4-9 sigue verde. Revertir C-2 rompe solo T4-13 | ✅ |
+| Lint / reglas de hooks | 0 sin `eslint-disable`; el `setState` sigue condicional (V-7); sin `useRef` ni `useEffect` | ✅ |
+| Gate | Completo en forma canónica: 871/55 (+2), typecheck 0, build igual (887.49 kB, 270.24 kB gzip); `contracts/` y `package*.json` sin delta | ✅ |
+| Greps | Claves, rutas personales, `console.`, `eslint-disable` y hex de 40-64: vacíos (según el reporte; el diff de la corrección no agrega literales) | ✅ |
+
+### Hallazgos
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Ninguno | — |
+
+Desviaciones nuevas: ninguna. Las dos aserciones extra de T4-13 amplían la cobertura sin tocar las anteriores.
+
+### Siguiente paso: TASK-5 autorizado, con `HANDOFF_MY_GAMES` v1.2
+
+- El gate de la app parte de 871 tests en 55 archivos y build de 887.49 kB.
+- En TASK-5, el `ReadState` de cada sección usa `source.retry`, que ahora relee la publicación cuando hace falta. El pie
+  y las notas siguen H-1 y DL-17.
+
+### Mensaje de commit propuesto
+
+```
+app: add the my-games hooks and invalidate them after own transactions (#13)
+
+queryKeys gains myGames/myActivity/myInvitations, and every own transaction
+invalidates the account's my-games prefix last (DL-7). useMyGames runs the two
+infinite queries behind the publish-checkpoint bound, keeps the first load
+apart from refetches so rows never unmount on a failed refetch (DL-17), pins
+each game to the section where it first appeared from the deduplicated items
+with a conditional setState (no loop), keeps pins per account, and retries the
+publish read when it is the failing piece. useAccountTxBusy backs the single
+in-flight notice of the page. App 871 tests in 55 files.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```

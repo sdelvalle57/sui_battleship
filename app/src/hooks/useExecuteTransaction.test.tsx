@@ -130,6 +130,7 @@ const resetKeys = () => resetSpy.mock.calls.map((c) => c[0]?.queryKey);
 const invalidatedKeys = () => invalidateSpy.mock.calls.map((c) => c[0]?.queryKey);
 const LOBBY = queryKeys.lobby('localnet', PKG);
 const BALANCE = queryKeys.balance('localnet', SENDER);
+const MY_GAMES = queryKeys.myGames('localnet', PKG, SENDER);
 
 beforeEach(() => {
   queryClient = new QueryClient();
@@ -198,9 +199,9 @@ describe('useExecuteTransaction: happy path', () => {
   });
 
   it.each([
-    ['create', { kind: 'create' }, [BALANCE]],
-    ['cancel', { kind: 'cancel', gameId: fixture.ids.games.open }, [queryKeys.game('localnet', fixture.ids.games.open), BALANCE]],
-    ['reject', { kind: 'reject', gameId: fixture.ids.games.open }, [queryKeys.game('localnet', fixture.ids.games.open), BALANCE]],
+    ['create', { kind: 'create' }, [BALANCE, MY_GAMES]],
+    ['cancel', { kind: 'cancel', gameId: fixture.ids.games.open }, [queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]],
+    ['reject', { kind: 'reject', gameId: fixture.ids.games.open }, [queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]],
   ] as [string, TxAction, unknown[]][])('invalidates exactly the keys of %s, none immutable', async (_name, action, invalidated) => {
     await runToOutcome(input(action));
     expect(resetKeys()).toEqual([LOBBY]);
@@ -314,7 +315,7 @@ describe('useExecuteTransaction: before the wallet', () => {
       cost: null,
     });
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
     expect(signAndExecuteTransaction).not.toHaveBeenCalled();
   });
 
@@ -365,7 +366,7 @@ describe('useExecuteTransaction: wallet and node', () => {
     expect(result.current.target.unconfirmed?.digest).toBe(OPEN_DIGEST);
     expect(result.current.outcome).toBeNull();
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
   });
 
   it('is unconfirmed (never failure) and still invalidates when the node answer is malformed after the wallet digest', async () => {
@@ -374,7 +375,7 @@ describe('useExecuteTransaction: wallet and node', () => {
     expect(result.current.target.unconfirmed?.digest).toBe(OPEN_DIGEST);
     expect(result.current.outcome).toBeNull();
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
   });
 
   it('fails with the effects message, digest and cost when the node says failure although the wallet said success', async () => {
@@ -387,7 +388,7 @@ describe('useExecuteTransaction: wallet and node', () => {
       digest: FAILED_DIGEST,
       cost: 1_000_294n,
     });
-    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
   });
 
   it('succeeds with value null when interpret throws after the node confirmed (NIT-1), with normal invalidations', async () => {
@@ -397,7 +398,7 @@ describe('useExecuteTransaction: wallet and node', () => {
     const { result } = await runToOutcome(input({ kind: 'create' }, { interpret }));
     expect(result.current.outcome).toEqual({ kind: 'success', digest: OPEN_DIGEST, value: null, indexed: true, cost: 3_941_200n });
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([BALANCE]);
+    expect(invalidatedKeys()).toEqual([BALANCE, MY_GAMES]);
   });
 });
 
@@ -424,7 +425,7 @@ describe('useExecuteTransaction: indexing (S-1 bis)', () => {
     const { result } = await runToOutcome();
     expect(result.current.outcome).toMatchObject({ kind: 'success', indexed: false });
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([BALANCE]);
+    expect(invalidatedKeys()).toEqual([BALANCE, MY_GAMES]);
   });
 
   it('still invalidates when the component unmounts during confirming', async () => {
@@ -445,7 +446,7 @@ describe('useExecuteTransaction: indexing (S-1 bis)', () => {
     unmount();
     confirm(nodeResult(OPEN_OK));
     await waitFor(() => {
-      expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+      expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
     });
     expect(resetKeys()).toEqual([LOBBY]);
   });
@@ -466,7 +467,7 @@ describe('useExecuteTransaction: wallet abort without digest (T3-13, NIT-2)', ()
       cost: null,
     });
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
     expect(confirmTransaction).not.toHaveBeenCalled();
   });
 
@@ -571,7 +572,7 @@ describe('useExecuteTransaction: account switch (MINOR-1 of #12, DL-11 of #13)',
     expect(walletCall(0).account).toBe(ACCOUNT_A);
     expect(interpret).toHaveBeenCalledTimes(1);
     expect(interpret.mock.calls[0]?.[1]).toBe(SENDER);
-    expect(invalidatedKeys()).toEqual([BALANCE]);
+    expect(invalidatedKeys()).toEqual([BALANCE, MY_GAMES]);
   });
 
   it("keeps A's unconfirmed transaction blocking only A: B executes, and A is blocked again on return (T3-5)", async () => {

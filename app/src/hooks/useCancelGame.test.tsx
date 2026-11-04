@@ -106,6 +106,7 @@ describe.each([
     expect(invalidate.mock.calls.map((c) => c[0]?.queryKey)).toEqual([
       queryKeys.game('localnet', gameId),
       queryKeys.balance('localnet', SENDER),
+      queryKeys.myGames('localnet', CONFIG.originalPackageId, SENDER),
     ]);
   });
 });
