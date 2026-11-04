@@ -7,7 +7,13 @@ import { fetchHouse, houseType, parseHouseObject, type HouseObjectInput } from '
 import { isTransientReadError } from './readPolicy';
 import { ReadDataError } from './readErrors';
 
-type FixtureHouse = { objectId: string; type: string; owner: SuiClientTypes.ObjectOwner; content: string };
+type FixtureHouse = {
+  objectId: string;
+  type: string;
+  owner: SuiClientTypes.ObjectOwner;
+  content: string;
+  json: { fees_collected: string };
+};
 type Fixture = { ids: { originalPackageId: string; houseId: string }; house: FixtureHouse };
 const FIXTURE_PATH = '../../../contracts/fixtures/game-tx.localnet.json';
 const fixture = import.meta.glob<Fixture>('../../../contracts/fixtures/game-tx.localnet.json', {
@@ -45,12 +51,12 @@ function readError(run: () => unknown): unknown {
 }
 
 describe('parseHouseObject', () => {
-  it('parses the real House of the fixture with the genesis values', () => {
+  it('parses the real House of the fixture with the genesis limits and the fees it collected', () => {
     expect(parseHouseObject(objectOf(), PKG)).toEqual({
       id: fixture.ids.houseId,
       version: 1n,
       feeRate: 250,
-      feesCollected: 0n,
+      feesCollected: BigInt(HOUSE.json.fees_collected),
       minBet: 1_000_000n,
       maxBet: 50_000_000_000n,
     });

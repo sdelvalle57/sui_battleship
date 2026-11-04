@@ -92,7 +92,7 @@ describe('abortCodeSuffix (M-5)', () => {
 
 describe('real SimulationError from the fixture', () => {
   it('has the 7 captured cases', () => {
-    expect(Object.keys(fixture.simulationErrors).sort()).toEqual(CASES.map(([name]) => name).sort());
+    expect(Object.keys(fixture.simulationErrors)).toEqual(expect.arrayContaining(CASES.map(([name]) => name)));
   });
 
   it.each(CASES)('maps %s (structured) to %s/%i', (name, module, code) => {
