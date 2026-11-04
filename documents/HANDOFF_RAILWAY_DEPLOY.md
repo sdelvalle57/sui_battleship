@@ -1,6 +1,6 @@
 # HANDOFF_RAILWAY_DEPLOY
 > Plan: PLAN_RAILWAY_DEPLOY v1.1 (aprobado por el MAYOR en la ronda 2; commit `4e7d1a3`) | Issue: #15 |
-> Branch: `feature/issue-15-pages-deploy` | Versión: v1.3 | Fecha: 2026-11-04
+> Branch: `feature/issue-15-pages-deploy` | Versión: v1.4 | Fecha: 2026-11-04
 > Decisiones: D-20261104-03 (P-1..P-5 de este plan, tomadas por delegación), D-20261104-01 (delegación y hosting en
 > Railway; llega a `master` con #14), D-20261102-02, D-20261030-13.
 > Este handoff es **autocontenido**. El plan v1.1 tiene el porqué de cada decisión (DL-1..DL-13); acá está lo que hay
@@ -8,6 +8,13 @@
 
 ## Changelog
 
+- **v1.4 (2026-11-04):** surge de la revisión del MID de TASK-5 (NO PASA, 2 MINOR de docs). Afecta solo a TASK-5.
+  - **MINOR-1:** el checklist del owner pasa a un lugar **permanente**, una subsección
+    "Conectar Railway (owner, no delegable)" de `app/README.md`, con los 10 pasos completos de la §9 del plan, las
+    watch paths **literales** incluidas. `STATUS.md` remite a esa subsección y no a la §9 del plan, que desaparece en
+    el housekeeping.
+  - **MINOR-2:** el porqué de `Referrer-Policy` dice lo que la cabecera hace de verdad. Se omite el `Referer`; el
+    `Origin` de los pedidos CORS sigue yendo, porque lo pone el navegador y gRPC-web lo necesita.
 - **v1.3 (2026-11-04):** surge de la revisión del MID de TASK-4 (PASA).
   - actionlint 1.7.12 no acepta `-color=never`: `-color` es booleano y ese valor sale con exit 2. El flag correcto es
     **`-no-color`**. Se corrige en TASK-4 §5.1, y TASK-5 tiene que usar `-no-color` si lo documenta.
@@ -585,7 +592,20 @@ operarla sin leer el plan.
   - qué es la imagen;
   - la guarda de #8 con sus mensajes literales (los de DL-3 y `check`);
   - la lista blanca del contexto;
-  - las cabeceras y la CSP, con el motivo de cada origen de `connect-src` y por qué no hay COOP (popup de Slush);
+  - las cabeceras y la CSP, con el motivo de cada origen de `connect-src` y por qué no hay COOP (popup de Slush).
+    Para `Referrer-Policy: no-referrer`, el porqué es: "los pedidos a terceros (fullnode, Slush) y los enlaces al
+    explorador no llevan `Referer`, es decir, ni la URL ni la ruta de la app. El `Origin` de los pedidos CORS sigue
+    yendo: lo pone el navegador y gRPC-web lo necesita" (v1.4);
+  - **subsección "Conectar Railway (owner, no delegable)"** (v1.4), con los pasos 1-10 de la §9 del plan **completos
+    y literales**:
+    - el paso 2 con New Project → Deploy from GitHub repo;
+    - las watch paths del paso 5, en un bloque de código idéntico al del plan;
+    - en el paso 6, región y sleep a elección del owner;
+    - en el paso 7, el puerto que propone Railway;
+    - en el paso 8, "Deploy latest commit" si no arrancó solo;
+    - en el paso 9, el rollback **o** la pausa del servicio;
+    - el aviso de que, desde el paso 3, cada merge a `master` que toque las watch paths publica el sitio (N-2).
+    - El paso 1 agrega como precondición que TASK-3 (si no corrió en #15) y TASK-6 estén en PASA;
   - cómo verificar en local (`bash app/scripts/check-deploy-image.sh . 8090`, y qué hace cada modo);
   - cómo agregar un origen a la CSP: una directiva por vez, como desviación declarada, incluido el caso del ícono
     remoto de Slush en `img-src`;
@@ -606,7 +626,8 @@ operarla sin leer el plan.
 - **`documents/STATUS.md`:**
   - fila del ciclo #15 en "Ciclo activo";
   - baselines de TASK-1/2/4 (y TASK-3 si ya corrió);
-  - "Pendientes del usuario": el checklist del owner, resumido con referencia a la §9 del plan;
+  - "Pendientes del usuario": una línea que remite a `app/README.md`, "Conectar Railway (owner, no delegable)"
+    (v1.4), sin copiar los pasos;
   - en las filas `:49, :76, :82, :88`, **anotar** "(→ #N)" sin reescribirlas.
 - **Issue de code-splitting:** el MAYOR lo redacta y el orquestador lo crea. Mientras no exista, el DEV deja `#N`
   literal y el orquestador lo reemplaza al commitear.
