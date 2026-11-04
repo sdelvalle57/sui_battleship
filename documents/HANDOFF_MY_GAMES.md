@@ -1,9 +1,32 @@
 # HANDOFF_MY_GAMES
 > Plan: PLAN_MY_GAMES v2 (MAYOR: APPROVE en la segunda ronda, 2026-11-03; `ae2b134`) | Issue: #13 | Branch:
-> `feature/issue-13-my-games` | Versión: v1.2 | Fecha: 2026-11-03
+> `feature/issue-13-my-games` | Versión: v1.3 | Fecha: 2026-11-04
 
 ## Changelog
 
+- **v1.3 (2026-11-04)**: STOP del DEV en T5-13, decidido por el MID: opción **(b)** (`documents/REPORTES_MY_GAMES.md`,
+  "Revisión TASK-5"). Cambian TASK-4 §3.3 (fijado), los tests T4-14/T4-15, T5-13, RM-14 y un punto de TASK-6:
+  - **El problema:** al remontar la vista (volver a la cuenta A, o simplemente volver a la página después de actuar en el
+    detalle), el primer render usa los datos de la caché. TanStack los marcó viejos con la invalidación de DL-7, pero no
+    los relee mientras las queries están inactivas. `extendPins` fijaba esas filas con el estado viejo, y la relectura al
+    montar ya no las movía. Eso contradecía DL-5/DL-9 ("volver a la página o cambiar de cuenta reagrupan").
+  - **La regla nueva (H-5):** `useMyGames` solo extiende los pins cuando **ninguna** de las dos fuentes está pidiendo
+    (`!activityQuery.isFetching && !invitationsQuery.isFetching`). Mientras alguna pide (primera carga, relectura al
+    montar con caché, relectura tras una acción, "Reintentar", "cargar más"), las filas **sin pin** se muestran en su
+    sección natural y las **ya fijadas** no se mueven. Con las dos fuentes quietas, se fija con los datos frescos.
+  - **Alternativas descartadas:**
+    - (a) aceptar el comportamiento y reescribir DL-9: dejaría filas terminadas en "pendientes" en el caso común de volver
+      a la página;
+    - (c) `resetQueries` al montar: pierde las páginas de "cargar más" y exige un efecto (PROY-14);
+    - fijar solo desde datos posteriores al montaje (`dataUpdatedAt`): mismo resultado para el caso del STOP, con más
+      estado.
+  - **Límite que queda (RM-14):** si el usuario actúa sobre una fila todavía sin pin mientras la relectura del montaje
+    sigue en curso, y esa relectura dura más que toda la transacción (nodo lento o reintentando), la fila puede pasar a
+    su sección natural al terminar ("Terminadas", con el resultado leído del objeto) y se pierde su `TransactionStatus`.
+    En el caso normal, la relectura del montaje (≈ 0,1-0,5 s) termina antes que la confirmación (≈ 1 s) y la fila queda
+    fijada en su sección antes del resultado. Se documenta en TASK-6.
+  - **Archivos que ya existen y se suman a §4:** `app/src/test/scanHarness.ts` (TASK-2) y
+    `app/src/components/HistoryTime.tsx` (TASK-5).
 - **v1.2 (2026-11-03)**: tras TASK-1 (revisión del MID: PASA; `documents/REPORTES_MY_GAMES.md`). Lo medido en la
   localnet no cambia ninguna decisión (DL-1..DL-17, H-1..H-4): S-1 confirma el filtro por remitente en `sui 1.83.0` y
   S-2 confirma que el cursor dentro de una transacción no repite ni pierde eventos. Cambian solo §2 (hechos nuevos),
@@ -159,6 +182,7 @@ git diff --exit-code -- Move.lock
 | **H-2** (SUGGESTION-N1) | `mergeMyGames`: por `gameId`, gana el legible; entre legibles, la mayor `objectVersion` (empate ⇒ cualquiera, es el mismo objeto), con rol `acceptor` si alguna fuente lo trae y el evento más nuevo; entre ilegibles, el evento más nuevo. Un ilegible sin `gameId` no se deduplica | TASK-2 |
 | **H-3** (SUGGESTION-N2) | `GameActions` en `variant='row'`: `settled` = algún `success` en `accept.outcome`, `cancel.outcome`, `reject.outcome` o en el `adopted` del objetivo. Con `settled`, no se muestran `AcceptBlock`, "Cancelar" ni "Rechazar"; los `TransactionStatus` y la alerta "sin confirmar" se mantienen. `variant='detail'` no cambia | TASK-5 |
 | **H-4** (SUGGESTION-N3) | Se documenta en RM-12 y en `app/README.md` cuánto puede durar "Actualizando datos…" con reintentos en la relectura. No cambia código | TASK-6 |
+| **H-5** (v1.3, STOP de T5-13, opción (b)) | `useMyGames` extiende los pins solo con las dos fuentes quietas (`!isFetching` en las dos). Mientras alguna pide, las filas sin pin van a su sección natural y las fijadas no se mueven. Así, al remontar con datos viejos en la caché, se fija con la relectura fresca y "volver a la página" reagrupa (DL-5, DL-9). Límite: RM-14 | TASK-4 (corrección), TASK-5 (T5-13, T5-17), TASK-6 |
 
 **Textos fijos de la UI** (los usan los tests y el smoke; si el DEV cambia uno, lo declara como desviación):
 
@@ -598,6 +622,11 @@ desmontar filas en una relectura, y la invalidación tras cada transacción prop
      `const next = extendPins(pins, merged, address); if (next !== pins) setPins(next);` (V-7: `setState` condicional en
      el render); `sections = groupMyGames({ activity: activityItems, invitations: invitationItems, address, pins: next })`,
      que deduplica con la **misma** `mergeMyGames`. El pin y la fila salen siempre de la lectura ganadora de H-2.
+   - **(v1.3, H-5)** `extendPins` solo corre con las dos fuentes quietas:
+     `const settled = !activityQuery.isFetching && !invitationsQuery.isFetching;`
+     `const next = address === null || !settled ? pins : extendPins(pins, merged, address);`. El resto (C-2: pins por
+     cuenta, un solo `setState` condicional) no cambia. `groupMyGames` sigue con `pins: next`: las filas sin pin van a
+     su sección natural.
    - `unreadableEvents` = suma de `unreadableEvents` de las páginas de invitaciones.
    - `refresh`: `setPins(new Map())`, `resetQueries({ queryKey: queryKeys.myGames(...) })` y `publish.refetch()` si la
      publicación falló.
@@ -635,6 +664,20 @@ desmontar filas en una relectura, y la invalidación tras cada transacción prop
   bucle.
 - T4-10: cambio de cuenta: claves distintas y secciones de la cuenta nueva (sin ítems de la anterior).
 - T4-11: `useAccountTxBusy`: `true` con una mutación en curso de la cuenta, `false` con una de otra cuenta y sin cuenta.
+- T4-14 (v1.3, H-5): **caché vieja al montar.** Se monta el hook, se carga G `Pending` como creador (fijada en
+  `pending`) y se desmonta. Con el hook desmontado, `invalidateQueries(myGames)` y la próxima respuesta trae G
+  `Cancelled`. Al montar una instancia nueva:
+  - el primer render muestra G en `pending` desde la caché, **sin pin**;
+  - al terminar la relectura, G está en `finished` y fijada ahí;
+  - un render más no la mueve.
+- T4-15 (v1.3, H-5): **sin pins mientras una fuente pide.** Con G fijada en `invitations`, una relectura (invalidación)
+  en curso trae además H, nueva y `Pending` como creador:
+  - mientras pide, H se ve en `pending` sin pin y G sigue en `invitations`;
+  - al terminar, H queda fijada en `pending`;
+  - una lectura posterior que trae H `Cancelled` la deja en `pending`.
+- T4-8, T4-8 bis, T4-9, T4-12 y T4-13 se re-corren sin cambiar lo que afirman. En T4-9, el número de renders puede
+  moverse en ±1 porque el pin ahora cae en el render en que la fuente queda quieta. Si cambia, se ajusta el número con la
+  medición nueva pegada, conservando "≤ 2 extra" y "0 renders en el siguiente `advance`".
 
 ### 6. Smoke
 
@@ -755,8 +798,13 @@ historial, **para** aceptar, rechazar o cancelar sin buscar enlaces.
 
 - T5-12: A en curso → B (la página remonta: sin filas ni resultado de A) → A con la transacción todavía en curso ⇒ al
   terminar, el resultado adoptado aparece en la fila.
-- T5-13: A en curso → B → A ya terminada ⇒ sin resultado; la partida con su estado leído del nodo en su sección
-  natural.
+- T5-13 (v1.3): A en curso → B → A ya terminada ⇒ sin resultado de la transacción ("Partida cancelada: se
+  devolvieron…" ausente); al terminar la relectura del montaje, G está en `section[data-section="finished"]` con
+  "Cancelada: la apuesta volvió a quien la creó", sin "Cancelar" y fuera de "Tus partidas pendientes".
+- T5-17 (v1.3): volver a la página después de actuar fuera de ella. Con "Mis partidas" desmontada, la partida G (una
+  invitación) queda `Resolved` por una aceptación hecha desde el detalle (o con `invalidateQueries(myGames)` y la
+  respuesta nueva). Al volver a `#/my-games`, G termina en "Terminadas" con "Aceptaste", no en "Invitaciones
+  recibidas".
 
 **Regresión del detalle y ayudas:**
 
@@ -809,6 +857,8 @@ app" (listas del lobby).
     - invalidación, con su costo, el corrimiento de la ventana (RM-12) y la duración de "Actualizando datos…" con
       reintentos (H-4);
     - aviso único y acciones ocultas tras un éxito propio en la fila (H-3);
+    - (v1.3) el fijado solo con las dos fuentes quietas (H-5), así "volver a la página" reagrupa con datos frescos, y el
+      límite RM-14;
     - ayudas de D-20261103-03;
   - **"Límite sin indexador":**
     - ventana del nodo (~14,6 días);
@@ -968,6 +1018,7 @@ completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nu
 | RM-11 | La extracción cambia el lobby | T2-18; paso 6 |
 | RM-12 | `invalidate` relee en serie todas las páginas; con reintentos, "Actualizando datos…" y el candado duran hasta que terminan (H-4); la ventana de invitaciones se puede correr | `app/README.md` (TASK-6) |
 | RM-13 | Tras una relectura fallida, una fila puede tener un estado viejo | Nota DL-17; H-3 oculta la acción si hubo éxito propio; la preflight frena (`game`/4) |
+| RM-14 | (v1.3, H-5) Una acción sobre una fila todavía sin pin, mientras la relectura del montaje dura más que la transacción, puede mover la fila a su sección natural al terminar y perder su `TransactionStatus` | Caso de nodo lento; el resultado sigue leído del objeto en "Terminadas" (SEG-10). Documentado en `app/README.md` (TASK-6) |
 
 ## Archivos que NO se tocan en todo el ciclo
 
