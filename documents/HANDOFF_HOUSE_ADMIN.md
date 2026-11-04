@@ -1,8 +1,23 @@
 # HANDOFF_HOUSE_ADMIN
 > Plan: PLAN_HOUSE_ADMIN v1.1 (MAYOR: APPROVE en la ronda corta, 2026-11-04; `0bfd916`) | Issue: #14 | Branch:
-> `feature/issue-14-house-admin` | Versión: v1 | Fecha: 2026-11-04
+> `feature/issue-14-house-admin` | Versión: v1.1 | Fecha: 2026-11-04
 
 ## Changelog
+
+- **v1.1 (2026-11-04)**: revisión del MAYOR del handoff v1 (APPROVE con 4 MINOR y 5 SUGGESTION). Cambian solo TASK-1
+  (§3.2, §3.4, §3.7), TASK-3 (§3.1, T3-1) y el smoke; TASK-2, TASK-4, TASK-5 y TASK-6 no cambian.
+
+| Hallazgo de la revisión del handoff v1 | Cambio en v1.1 |
+|---|---|
+| **MINOR-1** (TASK-1 usaba `app.env` sin decir cómo crearlo ni con la guarda) | TASK-1 §3.2: se crea `<SMOKE_DIR>/app.env` en la preparación, con la guarda `[ -z "$SUI_CONFIG_DIR" ] \|\| { echo APPENV-FAIL; return 97; }` en la **primera línea**, igual que en el smoke. §3.4 (captura) y §3.7 (sonda S-2 en Node) lo cargan solos, nunca con `env.sh` |
+| **MINOR-2** (`toTxGameEntry` con "el resto ⇒ `null`" no era exhaustivo) | TASK-3 §3.1: un `case` por cada `TxAction['kind']` (`create` y las tres de la House ⇒ `null`; `cancel`/`reject`/`accept` ⇒ el `gameId` normalizado), **sin `default`**, en una función con tipo de retorno explícito (`string \| null`). T3-1 suma la tercera prueba local: quitar un `case` ⇒ `typecheck` rojo |
+| **MINOR-3** (el paso 10 no tenía con qué medir los botones) | Precondiciones ("Registro del candado") y pasos 9, 10 y 16: en el **mismo** `Runtime.evaluate` del clic se instala antes un `setInterval` de 250 ms que guarda en `window.__lockLog` `[t, disabled de los botones de los tres [data-house-action], presencia de IN_FLIGHT_TEXT, texto de la etapa visible]`, y se corta al aparecer el resultado. El paso 10 pega el log del paso 9, y el 16 el suyo |
+| **MINOR-4** (el cliente CDP como demonio no se cerraba ni se verificaba) | Precondiciones: si el cliente CDP corre en segundo plano, se lanza con `exec`, deja el PID en `cdp.pid` y escucha en `127.0.0.1:9339`. Pasos 0 y 20: `:9339` en la lista de `ss -ltn`; el paso 20 lo mata por PID y verifica con `kill -0` en otra llamada |
+| SUGGESTION-1 (`SMOKE_DIR` en `app.env` y `chrome.env`) | **Aplicada:** los dos declaran `SMOKE_DIR=<ruta literal>` (los comandos de `vite`, Chrome y el CDP usan `"$SMOKE_DIR/…pid"` cargando solo ese archivo) |
+| SUGGESTION-2 ("1 `ListOwnedObjects`" en el paso 3) | **Aplicada:** "≥ 1, anotado" (el refetch al foco puede sumar uno); sigue "0 sin cuenta en `T0`" en el paso 2 |
+| SUGGESTION-3 (S-2 medía desde que terminó la CLI) | **Aplicada** (TASK-1 §3.7): el sondeo de Node arranca en segundo plano **antes** de la llamada a la CLI, con marcas de tiempo absolutas; la CLI anota las suyas antes y después |
+| SUGGESTION-4 (`pgrep` del perfil no vacío tras el `kill`) | **Aplicada** (paso 20): se matan solo los PIDs que lista `pgrep -af <SMOKE_DIR>/chrome-profile` (todos llevan el perfil en la línea de comandos) y se vuelve a verificar; nunca por nombre |
+| SUGGESTION-5 (`W2` "fondeada" sin necesitarlo) | **Aplicada:** `W2` no se fondea (el paso 17 solo conecta y mira) |
 
 - **v1 (2026-11-04)**: primera versión. Integra D-20261104-02 (P-1..P-4 = (a); N-2 ya decidido) y la ronda corta del
   MAYOR sobre el plan v1.1 (APPROVE con 1 MINOR y 2 SUGGESTION):
@@ -178,7 +193,7 @@ Rutas relativas a `<repo>/node_modules/`; `@mysten/sui` 2.37.0, `@mysten/dapp-ki
   prefijo del paso 3, tampoco los de solo lectura; siempre `suic`/`"$SUI"`; `SUI_CONFIG_DIR` solo `$SMOKE_DIR/net`. En este
   documento `PRE` = `. <SMOKE_DIR>/env.sh && { . <SMOKE_DIR>/ids.env 2>/dev/null || true; } && smoke_guard &&` y se
   **escribe** delante de cada `suic`. Una sola localnet (puerto 9000). Para `node`/`npm`/`vite`, `<SMOKE_DIR>/app.env`
-  (con la guarda de §Smoke); nunca `env.sh`, `app.env` y `chrome.env` en la misma llamada. Nunca `new-address`. Los
+  (creado en TASK-1 §3.2, con la guarda en la primera línea); nunca `env.sh`, `app.env` y `chrome.env` en la misma llamada. Nunca `new-address`. Los
   scripts y sondas en Node solo hablan con `http://127.0.0.1:9000` por gRPC y no leen `<SMOKE_DIR>/net`.
 - **Testnet:** nada con claves; este ciclo no necesita lecturas de testnet.
 - **Placeholders** en todo lo commiteado y en el output pegado (`FLUJO_AGENTES.md` §2): `<repo>`, `<HOME real>`,
@@ -237,6 +252,21 @@ los hooks se prueben contra datos del nodo y no contra suposiciones.
 2. Localnet aislada (`agents.md` §3 pasos 2-5), génesis nueva, publicación **variante B**. Cuentas de la génesis `ADMIN`
    (publica), `A`, `B` en `ids.env` (tres distintas). `PKG`, `HOUSE`, `HOUSE_CAP` a `ids.env` desde
    `contracts/deployments/localnet.json` (`packageId`, `houseId`, `houseCapId`) con `sed`/`grep`, sin Node en esa llamada.
+   **En la misma preparación (MINOR-1 de v1.1)**, en una llamada sin `sui`, crear `<SMOKE_DIR>/app.env` con las rutas
+   escritas literalmente y la guarda en la **primera línea**:
+
+   ```sh
+   # <SMOKE_DIR>/app.env — Node 26 para scripts y sondas; nunca en la misma llamada que env.sh o chrome.env
+   [ -z "$SUI_CONFIG_DIR" ] || { echo APPENV-FAIL; return 97; }
+   SMOKE_DIR=<SMOKE_DIR>
+   REPO=<repo>
+   NODE=<HOME real>/.nvm/versions/node/v26.13.0/bin/node
+   export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH
+   ```
+
+   No toca `HOME` ni `SUI_CONFIG_DIR`. Un `APPENV-FAIL` detiene el task y se reporta. Toda llamada con `node` de este task
+   empieza con `. <SMOKE_DIR>/app.env &&` (y, si necesita IDs, `. <SMOKE_DIR>/ids.env &&`, que solo tiene `export`s de
+   IDs y direcciones); nunca con `env.sh`.
 3. **Transacciones por CLI, en este orden** (S-4; con el cap en `ADMIN` todo el tiempo):
    1. `PRE act_as "$ADMIN" && suic call --package "$PKG" --module house --function update_fee_rate --args "$HOUSE" "$HOUSE_CAP" 250`
    2. `PRE act_as "$ADMIN" && suic call --package "$PKG" --module house --function update_bet_limits --args "$HOUSE" "$HOUSE_CAP" 2000000 10000000000`
@@ -246,7 +276,7 @@ los hooks se prueben contra datos del nodo y no contra suposiciones.
    - Si la CLI exige `--gas-budget` o cambia la sintaxis, se declara. Si hace falta medir el camino de la wallet, el de
      S-1 bis de #11 (`suic ptb … --serialize-signed-transaction` y ejecución de esos bytes por gRPC desde Node), firmado
      por la CLI bajo `PRE`.
-4. **`capture-house-fixtures.mjs`** (con `app.env`; `node app/scripts/capture-house-fixtures.mjs` desde `<repo>`), con
+4. **`capture-house-fixtures.mjs`** (`. <SMOKE_DIR>/app.env && cd "$REPO" && "$NODE" app/scripts/capture-house-fixtures.mjs`), con
    la guarda como primera instrucción (código 2 ante otra `--url` antes de importar el SDK). **Solo lee y simula**:
    - roles on-chain (nunca escritos): `ADMIN` = dueño del cap (`getObject(houseCapId)`), `A` = `creator` del único
      `GameCreated`, `B` = `acceptor` del único `GameResolved`; aborta si no son tres cuentas distintas o si el cap no está
@@ -268,12 +298,21 @@ los hooks se prueben contra datos del nodo y no contra suposiciones.
 6. **S-6 (sonda en `<scratchpad>`, fuera de la fixture):** el budget que elige el nodo en la preflight de cada acción
    (`build({ client })` con `setSender(ADMIN)` de `update_fee_rate(260)`, de `update_bet_limits` con otros valores y de
    `withdraw_fees`, que aquí abortará: anotar solo las dos primeras).
-7. **S-2 (sonda en `<scratchpad>`, al final, fuera de la fixture):** hasta 5 corridas de:
-   `PRE act_as "$ADMIN" && suic call --package "$PKG" --module house --function transfer_house_cap --args "$HOUSE_CAP" "$A"`;
-   desde Node, `waitForTransaction(digest)` y sondeo cada 100 ms de `listOwnedObjects(A, tipo)` y de `getObject(cap)`
-   hasta ver a `A` como dueño, y de `listOwnedObjects(ADMIN, tipo)` hasta verlo vacío (ms de cada uno). Entre corridas,
-   la devolución `PRE act_as "$A" && suic call … transfer_house_cap --args "$HOUSE_CAP" "$ADMIN"` (declarada: cuenta de la
-   génesis, firmada por la CLI con `PRE`).
+7. **S-2 (sonda en `<scratchpad>`, al final, fuera de la fixture):** hasta 5 corridas, cada una así (SUGGESTION-3 de
+   v1.1: el sondeo arranca **antes** de la CLI):
+   1. sonda de Node en segundo plano del harness, con `app.env` e `ids.env` y `exec` (PID en `<SMOKE_DIR>/s2.pid`):
+      `. <SMOKE_DIR>/app.env && . <SMOKE_DIR>/ids.env && echo $$ > "$SMOKE_DIR/s2.pid" && exec "$NODE"
+      <scratchpad>/s2-probe.mjs "$HOUSE_CAP" "$A" "$ADMIN" > "$SMOKE_DIR/s2-<n>.log" 2>&1`. Cada 100 ms, con
+      `Date.now()` absoluto en cada línea, `listOwnedObjects(nuevo dueño, tipo)`, `listOwnedObjects(dueño anterior, tipo)`
+      y `getObject(cap)`; termina sola al ver al dueño nuevo por las dos vías y al anterior vacío, o a los 30 s;
+   2. en otra llamada, la CLI con marcas de tiempo: `PRE date +%s%3N > "$SMOKE_DIR/s2-<n>.cli" && act_as "$ADMIN" &&
+      suic call --package "$PKG" --module house --function transfer_house_cap --args "$HOUSE_CAP" "$A" > /dev/null &&
+      date +%s%3N >> "$SMOKE_DIR/s2-<n>.cli"`;
+   3. en otra llamada, `kill -0 "$(cat <SMOKE_DIR>/s2.pid)"` falla (la sonda terminó); se anotan los ms desde el fin de la
+      CLI hasta el primer acierto de `getObject` y de cada `listOwnedObjects`;
+   4. la devolución, con la sonda de nuevo antes (dueño nuevo `ADMIN`, anterior `A`):
+      `PRE act_as "$A" && suic call --package "$PKG" --module house --function transfer_house_cap --args "$HOUSE_CAP"
+      "$ADMIN"` (declarada: cuenta de la génesis, firmada por la CLI con `PRE`).
 8. Cierre: paso 7 de `agents.md` §3 más las verificaciones del paso 20 del smoke (puertos libres, `kill -0` en otra
    llamada antes de `rm -rf <SMOKE_DIR>`, `~/.sui/` igual a la línea base, sin `contracts/deployments/`).
 
@@ -449,8 +488,11 @@ mismo como "en curso" (NIT-3 de #12) y nada de las partidas cambie.
 ### 3. Qué implementar
 
 1. `txSession.ts`: `TxAction`, `TxTarget`/`HouseTarget`, `ExecuteInput` (§4); `TX_ACTION_KINDS` + `ACTION_KINDS` y
-   `TxValueMap` + `TxValueByAction` (H-4); `toTxGameEntry` con `switch` sobre `action.kind` (`cancel`/`reject`/`accept` ⇒
-   `normalizeSuiAddress(action.gameId)`; el resto ⇒ `null`). Importa los tipos de eventos de `../sui/houseAdmin` (solo
+   `TxValueMap` + `TxValueByAction` (H-4); `toTxGameEntry` (MINOR-2 de v1.1) con un `case` por **cada**
+   `TxAction['kind']`, **sin `default`**, en una función con tipo de retorno explícito (p. ej. `function
+   actionGameId(action: TxAction): string | null`), así una acción nueva sin su `case` rompe el `typecheck` (`cancel`/`reject`/`accept` ⇒
+   `normalizeSuiAddress(action.gameId)`; `create`, `updateFeeRate`, `updateBetLimits` y `withdrawFees` ⇒ `null`, cada una
+   con su `case`). `toTxGameEntry` la usa sobre `txVariablesOf(...)?.action` (sin acción reconocida ⇒ `null`). Importa los tipos de eventos de `../sui/houseAdmin` (solo
    tipos; `txSession.ts` sigue sin importar nada de `./`).
 2. `queryKeys.ts`: `houseCap` y `txTarget` con `switch` exhaustivo.
 3. `txInvalidation.ts`: filas de H-5 (`case` por acción; sin `default`).
@@ -471,8 +513,9 @@ mismo como "en curso" (NIT-3 de #12) y nada de las partidas cambie.
 
 ### 5. Tests obligatorios
 
-- T3-1 (H-4): demostración en el reporte (prueba local **no** commiteada): quitar `withdrawFees` de `TX_ACTION_KINDS` y,
-  aparte, de `TxValueMap` ⇒ `npm run typecheck -w app` rojo en los dos casos; pegar los dos errores y restaurar.
+- T3-1 (H-4, MINOR-2 de v1.1): demostración en el reporte (pruebas locales **no** commiteadas), una por vez: quitar
+  `withdrawFees` de `TX_ACTION_KINDS`; quitarlo de `TxValueMap`; quitar el `case 'accept'` de la función de `gameId` de
+  `toTxGameEntry` ⇒ `npm run typecheck -w app` rojo en los tres casos; pegar los tres errores y restaurar.
 - T3-2: `txVariablesOf` reconoce `updateFeeRate`, `updateBetLimits` y `withdrawFees`; rechaza `{ kind: 'migrate' }`.
 - T3-3 (NIT-3): `deriveTargetState` con una mutación **propia** en curso de `updateFeeRate` sobre el objetivo `house` ⇒
   `inFlightForeign: false`, `notice: null`.
@@ -752,20 +795,20 @@ completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nu
   solo lectura.
 - **Testnet:** nada.
 - **Cuentas:**
-  - de la génesis, en `ids.env` (no se pegan): `ADMIN` (publica y tiene el cap hasta el paso 6), `A` (fondea las burners
-    y crea partidas) y `B` (acepta). Tres cuentas distintas;
-  - wallets de la app: burner `W` en `T1` (recibe el cap) y burner `W2` en `T2` (sin cap), fondeadas con 2 SUI cada una
-    por CLI desde `A`;
+  - de la génesis, en `ids.env` (no se pegan): `ADMIN` (publica y tiene el cap hasta el paso 6), `A` (fondea a `W` y crea
+    partidas) y `B` (acepta). Tres cuentas distintas;
+  - wallets de la app: burner `W` en `T1` (recibe el cap), fondeada con 2 SUI por CLI desde `A`, y burner `W2` en `T2`
+    (sin cap), **sin fondos**: el paso 17 solo conecta y mira (SUGGESTION-5 de v1.1);
   - nunca `new-address`; nadie firma como una burner por CLI ni lee `<SMOKE_DIR>/net` desde Node.
 - **Archivos de entorno** (rutas literales en el archivo real; aquí placeholders), **nunca dos en la misma llamada**:
   - `env.sh` (solo `sui`/`suic`, el de `agents.md` §3);
-  - `app.env`: `NODE`, `VITE_JS`, `REPO` y `PATH` de Node 26; no toca `HOME` ni `SUI_CONFIG_DIR`. **Primera línea, la
-    guarda** (SUGGESTION-1 de #13): `[ -z "$SUI_CONFIG_DIR" ] || { echo APPENV-FAIL; return 97; }`. Un `APPENV-FAIL`
-    detiene el smoke;
-  - `chrome.env`: `CHROME` (ruta literal del binario) y `HOME`/`XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`XDG_DATA_HOME` dentro
-    de `<SMOKE_DIR>/chrome-home`;
-  - procesos en segundo plano del harness con `exec` y el PID en `<SMOKE_DIR>`: `sui.pid`, `vite.pid`, `chrome.pid`
-    (`sui start` sale con 144 ante SIGTERM y `vite` con 143: esperados).
+  - `app.env`: el de TASK-1 §3.2 más `VITE_JS`: **primera línea, la guarda** (SUGGESTION-1 de #13)
+    `[ -z "$SUI_CONFIG_DIR" ] || { echo APPENV-FAIL; return 97; }`, y después `SMOKE_DIR`, `REPO`, `NODE`, `VITE_JS` y
+    `PATH` de Node 26, todo con rutas literales; no toca `HOME` ni `SUI_CONFIG_DIR`. Un `APPENV-FAIL` detiene el smoke;
+  - `chrome.env`: `SMOKE_DIR` (ruta literal, SUGGESTION-1 de v1.1), `CHROME` (ruta literal del binario) y
+    `HOME`/`XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`XDG_DATA_HOME` dentro de `<SMOKE_DIR>/chrome-home`;
+  - procesos en segundo plano del harness con `exec` y el PID en `<SMOKE_DIR>`: `sui.pid`, `vite.pid`, `chrome.pid` y,
+    si el cliente CDP corre como demonio, `cdp.pid` (`sui start` sale con 144 ante SIGTERM y `vite` con 143: esperados).
 - **Navegador (🌐):**
   - **Arranque literal** de Chrome, como comando en segundo plano del harness:
     ```sh
@@ -775,9 +818,14 @@ completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nu
     ```
     Perfil propio en `<SMOKE_DIR>/chrome-profile`; nunca el Chrome ni el perfil del usuario, que puede estar abierto en la
     máquina. Cierre **solo** con `kill "$(cat <SMOKE_DIR>/chrome.pid)"`, nunca `pkill`/`killall`; verificación con
-    `pgrep -af <SMOKE_DIR>/chrome-profile` vacío;
+    `pgrep -af <SMOKE_DIR>/chrome-profile` vacío. Si no da vacío, se matan **solo** los PIDs que lista (todos llevan el
+    perfil en su línea de comandos) y se vuelve a verificar; nunca por nombre (SUGGESTION-4 de v1.1);
   - cliente CDP propio en Node 26 sin dependencias (`fetch` + `WebSocket`), en `<SMOKE_DIR>` (no se commitea), contra
-    `127.0.0.1:9229`; una sesión por pestaña con `Target.attachToTarget` y `Network.enable`;
+    `127.0.0.1:9229`; una sesión por pestaña con `Target.attachToTarget` y `Network.enable`. **Si corre como demonio**
+    (como en #13; MINOR-4 de v1.1): comando en segundo plano del harness con `app.env` y `exec`, PID en `cdp.pid`,
+    escuchando solo en `127.0.0.1:9339`:
+    `. <SMOKE_DIR>/app.env && echo $$ > "$SMOKE_DIR/cdp.pid" && exec "$NODE" "$SMOKE_DIR/cdp.mjs" --port 9339 >
+    "$SMOKE_DIR/cdp.log" 2>&1`. Se cierra por PID en el paso 20 y `:9339` entra en `ss -ltn` de los pasos 0 y 20;
   - **cada pestaña con `Target.createTarget({ url, newWindow: true })`**, todas visibles (`document.visibilityState ===
     'visible'`), **nunca** `Page.bringToFront`;
   - después de fondear una burner se navega **solo por hash** (`location.hash`): recargar cambia su dirección, y la de
@@ -792,6 +840,12 @@ completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nu
   lecturas `net::ERR_ABORTED` del doble montaje de `StrictMode` no cuentan (se anotan).
 - **Observador:** antes de cada acción, `Runtime.evaluate` instala un `MutationObserver` que guarda en `window.__txLog`
   `[performance.now(), selector, texto]` de `[data-house-action] .tx-status` y de `section.house-admin [role="status"]`.
+- **Registro del candado (MINOR-3 de v1.1; pasos 9 y 16):** en el **mismo** `Runtime.evaluate` del clic, **antes** del
+  `click()`, se instala `window.__lockLog = []` y un `setInterval` de 250 ms que agrega `[performance.now(), { fee, limits,
+  withdraw }` (el `disabled` del botón de cada `[data-house-action]`)`, inFlight` (si `section.house-admin` contiene
+  `IN_FLIGHT_TEXT`)`, stage` (el texto de `.tx-status` del bloque de la acción, o `null`)`]`; el intervalo se corta
+  (`clearInterval`) cuando aparece el texto de resultado o a los 30 s. La primera muestra se toma en el mismo tick del
+  clic.
 - **Tokens de resultado (H-6, SEG-10, mayúsculas exactas):** "Comisión actualizada", "Límites actualizados",
   "Retiraste". Ninguno puede aparecer mientras se vean "Verificando la transacción…", "Esperando la firma en la wallet…",
   "Confirmando en la red…" o "Actualizando datos…".
@@ -807,27 +861,27 @@ completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nu
 
 | # | Acción | Resultado esperado | Resultado obtenido | Estado |
 |---|--------|--------------------|--------------------|--------|
-| 0 | DEV: preparación (`agents.md` §3 paso 2) + `app.env` (con la guarda) + `chrome.env`. Línea base: `stat -c '%y %s %n'` y `ls` de `<HOME real>/.sui/sui_config/` (nunca `cat`); `test ! -e <repo>/contracts/deployments/localnet.json`; `test ! -e <repo>/contracts/Published.toml` y ningún `<repo>/contracts/Pub.*.toml`; `ss -ltn` sin `:9000`, `:9123`, `:9184`, `:5003`, `:5173` ni `:9229`; ningún `sui start` de otra sesión; `git status --porcelain` | Línea base anotada; nada de lo anterior existe; 6 puertos libres; árbol limpio | (se llena durante la corrida) | ⏳ |
+| 0 | DEV: preparación (`agents.md` §3 paso 2) + `app.env` (guarda en la primera línea) + `chrome.env` (los dos con `SMOKE_DIR`). Línea base: `stat -c '%y %s %n'` y `ls` de `<HOME real>/.sui/sui_config/` (nunca `cat`); `test ! -e <repo>/contracts/deployments/localnet.json`; `test ! -e <repo>/contracts/Published.toml` y ningún `<repo>/contracts/Pub.*.toml`; `ss -ltn` sin `:9000`, `:9123`, `:9184`, `:5003`, `:5173`, `:9229` ni `:9339`; ningún `sui start` de otra sesión; `git status --porcelain` | Línea base anotada; nada de lo anterior existe; 7 puertos libres; árbol limpio | (se llena durante la corrida) | ⏳ |
 | 1 | DEV: génesis y arranque (`sui.pid`); `PRE suic chain-identifier`; `PRE suic addresses --json` ⇒ `ADMIN`, `A`, `B` a `ids.env`; publicación variante B (`PRE act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs publish --network localnet --pubfile-path "$SMOKE_DIR/Pub.localnet.toml"`); `PKG`, `HOUSE`, `HOUSE_CAP` a `ids.env` desde `localnet.json` (sin Node en esa llamada); `PRE suic object "$HOUSE_CAP" --json` y `PRE suic object "$HOUSE" --json` | Red arriba; `active-env` = `localnet`; exit 0; `Move.lock` sin delta; dueño del cap = `ADMIN` (por rol); House con `fee_rate` 0, 1000000 / 50000000000, `fees_collected` 0, `version` 1 | | ⏳ |
 | 2 | DEV: `vite` dev en segundo plano (`. <SMOKE_DIR>/app.env && cd "$REPO/app" && echo $$ > "$SMOKE_DIR/vite.pid" && VITE_SUI_NETWORK=localnet exec "$NODE" "$VITE_JS" --host 127.0.0.1 --port 5173 --strictPort > "$SMOKE_DIR/vite.log" 2>&1`) y, en otra llamada en segundo plano, Chrome con la línea literal de las precondiciones; `curl -sf http://127.0.0.1:5173/`; `curl -sf http://127.0.0.1:9229/json/version`. 🌐 `T0` sin conectar (`newWindow`) en `#/admin` | 200 con `<div id="root">`; CDP solo en 127.0.0.1; `T0`: "Conecta la wallet que tiene el HouseCap para administrar la House"; **0** `ListOwnedObjects` (POST) en `T0`; sin enlace "Administrar House" | | ⏳ |
-| 3 | 🌐 `T1` (`newWindow`, `Network.enable`); conectar la burner `W`; dirección del `title` de `.account-badge` a `ids.env`. DEV: `PRE act_as "$A" && suic ptb --split-coins gas "[2000000000]" --assign c --transfer-objects "[c]" @$W`; 🌐 `#/nada` → `#/` | `visibilityState === 'visible'`; saldo 2 SUI en el formulario; misma dirección (sin recarga); sin enlace "Administrar House"; **1** `ListOwnedObjects` (POST) por la detección del encabezado | | ⏳ |
+| 3 | 🌐 `T1` (`newWindow`, `Network.enable`); conectar la burner `W`; dirección del `title` de `.account-badge` a `ids.env`. DEV: `PRE act_as "$A" && suic ptb --split-coins gas "[2000000000]" --assign c --transfer-objects "[c]" @$W`; 🌐 `#/nada` → `#/` | `visibilityState === 'visible'`; saldo 2 SUI en el formulario; misma dirección (sin recarga); sin enlace "Administrar House"; **≥ 1** `ListOwnedObjects` (POST) por la detección del encabezado, anotado (el refetch al foco puede sumar uno; SUGGESTION-2 de v1.1) | | ⏳ |
 | 4 | 🌐 `T1`: `location.hash = '#/admin'` | `.house-no-permission` con "Sin permisos: esta cuenta no tiene el HouseCap de esta House." y "Volver a comprobar"; sin `.house-config` ni `[data-house-action]` (P-1) | | ⏳ |
 | 5 | DEV: `PRE act_as "$A" && suic ptb --split-coins gas "[200000000]" --assign c --move-call "$PKG::game::create_game" @$HOUSE c.0 none --json` (`G0`, ID a `ids.env`); `PRE suic object "$G0" --json` | `G0.fee_rate` = 0 (comisión vigente al crearla) | | ⏳ |
 | 6 | DEV: `PRE act_as "$ADMIN" && suic call --package "$PKG" --module house --function transfer_house_cap --args "$HOUSE_CAP" "$W" --json`; `PRE suic object "$HOUSE_CAP" --json` | Evento `HouseCapTransferred` con `recipient` = `W` (por rol); dueño del cap = `W` | | ⏳ |
 | 7 | 🌐 `T1`: `location.hash = '#/'` y luego `'#/admin'`; si sigue "Sin permisos" (atraso del índice, S-2), "Volver a comprobar" hasta 3 veces con 1 s entre clics | Aparece "Administrar House" en el encabezado; `.house-config`: "0 bps (0 %)", mínimo 0.001 SUI, máximo 50 SUI, acumulado 0 SUI, versión 1; retiro deshabilitado con "No hay comisiones para retirar."; se anota cuántos "Volver a comprobar" hicieron falta | | ⏳ |
 | 8 | 🌐 `T1`: comisión `1001`, `abc`, `-1`, `2.5` y `0` (uno por vez) | Cada uno con su texto de §1 (`too_high`, `invalid` ×3, `unchanged`) y "Actualizar comisión" deshabilitado; **0** `SimulateTransaction` | | ⏳ |
-| 9 | 🌐 `T1`: observador; comisión `250` ⇒ resumen; clic en "Actualizar comisión". DEV: `PRE suic tx-block <digest> --json`; `PRE suic object "$HOUSE" --json`; `PRE suic object "$G0" --json` | Resumen "De 0 bps (0 %) a 250 bps (2.5 %)" antes del clic; etapas en orden; **ningún token** durante las etapas (H-6); después "Comisión actualizada: de 0 bps (0 %) a 250 bps (2.5 %). Las partidas ya creadas conservan la suya." con el digest; 2 `SimulateTransaction` + 1 `ExecuteTransaction`; `FeeRateUpdated` 0 → 250; House `fee_rate` 250; `G0.fee_rate` sigue 0; `.house-config` ya muestra "250 bps (2.5 %)" al terminar | | ⏳ |
-| 10 | 🌐 `T1`: durante el paso 9 (muestreo cada 250 ms del observador) | Mientras corre, los botones de los tres bloques deshabilitados y **ningún** `IN_FLIGHT_TEXT` en `section.house-admin` (NIT-3: la propia no se ve como ajena) | | ⏳ |
+| 9 | 🌐 `T1`: observador; comisión `250` ⇒ resumen; en un mismo `Runtime.evaluate`, el registro del candado y el clic en "Actualizar comisión"; al terminar, leer `window.__lockLog`. DEV: `PRE suic tx-block <digest> --json`; `PRE suic object "$HOUSE" --json`; `PRE suic object "$G0" --json` | Resumen "De 0 bps (0 %) a 250 bps (2.5 %)" antes del clic; etapas en orden; **ningún token** durante las etapas (H-6); después "Comisión actualizada: de 0 bps (0 %) a 250 bps (2.5 %). Las partidas ya creadas conservan la suya." con el digest; 2 `SimulateTransaction` + 1 `ExecuteTransaction`; `FeeRateUpdated` 0 → 250; House `fee_rate` 250; `G0.fee_rate` sigue 0; `.house-config` ya muestra "250 bps (2.5 %)" al terminar | | ⏳ |
+| 10 | 🌐 `T1`: `window.__lockLog` del paso 9 (pegado) | En toda muestra con `stage` de una etapa en curso, `fee`, `limits` y `withdraw` en `disabled: true` e `inFlight: false` (NIT-3: la propia no se ve como ajena); al final, `limits` vuelve a habilitarse si su validación lo permite | | ⏳ |
 | 11 | 🌐 `T1`: `location.hash = '#/'` | El formulario de creación muestra "Comisión 2.5 %" (la invalidación de `house` en la misma pestaña) | | ⏳ |
 | 12 | 🌐 `T1`, `#/admin`: límites `0`/`10`, luego `5`/`1`, luego `-1`/`10` | `zero_min`, `min_above_max`, `negative` con sus textos; "Actualizar límites" deshabilitado; **0** `SimulateTransaction` | | ⏳ |
 | 13 | 🌐 `T1`: observador; límites `0.002`/`10` ⇒ resumen; en **un mismo** `Runtime.evaluate`: clic en "Actualizar límites", `location.hash = '#/'` a los 50 ms y `'#/admin'` a los 300 ms (adopción). DEV: `PRE suic tx-block <digest> --json`; `PRE suic object "$HOUSE" --json` | Resumen "De 0.001–50 SUI a 0.002–10 SUI"; al volver, el panel muestra el resultado **adoptado** "Límites actualizados: mínimo 0.002 SUI, máximo 10 SUI (antes 0.001–50 SUI)." (o, si terminó antes de remontar, la configuración nueva sin resultado: se anota cuál pasó, ambos son correctos por `mountSnapshot`); `BetLimitsUpdated` con los cuatro montos; House 2000000 / 10000000000; ningún token durante las etapas | | ⏳ |
 | 14 | DEV: `PRE act_as "$A" && suic ptb --split-coins gas "[200000000]" --assign c --move-call "$PKG::game::create_game" @$HOUSE c.0 none --json` (`G1`); `PRE act_as "$B" && suic ptb --split-coins gas "[200000000]" --assign c --move-call "$PKG::game::accept_game" @$G1 @$HOUSE c.0 @0x8 --json`; lo mismo de `B` sobre `G0`; `PRE suic object "$HOUSE" --json` | `G1.fee_rate` 250; `GameResolved` de `G1` con `fee` 10000000 y de `G0` con `fee` 0; House `fees_collected` 10000000 | | ⏳ |
 | 15 | 🌐 `T1`: "Actualizar" de `.house-config`. DEV: `PRE suic balance $W` | Acumulado "0.01 SUI"; botón "Retirar 0.01 SUI a tu cuenta" habilitado; saldo de `W` anotado | | ⏳ |
-| 16 | 🌐 `T1`: observador; clic en "Retirar 0.01 SUI a tu cuenta". DEV: `PRE suic tx-block <digest> --json`; `PRE suic object "$HOUSE" --json`; `PRE suic balance $W` | Etapas en orden; ningún token durante las etapas; "Retiraste 0.01 SUI de comisiones a tu cuenta." con digest y costo de red; 2 `SimulateTransaction` + 1 `ExecuteTransaction`; la transacción tiene 2 comandos (`withdraw_fees` y `TransferObjects` a `W`); `FeesWithdrawn.amount` 10000000 = `fees_collected` previo; House `fees_collected` 0; saldo de `W` = anterior + 10000000 − costo de red (gas de la tx); el botón vuelve a deshabilitarse con "No hay comisiones para retirar." | | ⏳ |
+| 16 | 🌐 `T1`: observador; en un mismo `Runtime.evaluate`, el registro del candado y el clic en "Retirar 0.01 SUI a tu cuenta"; al terminar, leer y pegar `window.__lockLog`. DEV: `PRE suic tx-block <digest> --json`; `PRE suic object "$HOUSE" --json`; `PRE suic balance $W` | Etapas en orden; ningún token durante las etapas; en `__lockLog`, los tres botones deshabilitados e `inFlight: false` mientras corre; "Retiraste 0.01 SUI de comisiones a tu cuenta." con digest y costo de red; 2 `SimulateTransaction` + 1 `ExecuteTransaction`; la transacción tiene 2 comandos (`withdraw_fees` y `TransferObjects` a `W`); `FeesWithdrawn.amount` 10000000 = `fees_collected` previo; House `fees_collected` 0; saldo de `W` = anterior + 10000000 − costo de red (gas de la tx); el botón vuelve a deshabilitarse con "No hay comisiones para retirar." | | ⏳ |
 | 17 | 🌐 `T2` (`newWindow`, `Network.enable`): conectar la burner `W2`; `location.hash = '#/admin'` | `visibilityState === 'visible'` en `T1` y `T2`; en `T2`, sin enlace "Administrar House" y `.house-no-permission`; en `T1`, el panel sigue con su último resultado | | ⏳ |
 | 18 | DEV: `PRE act_as "$ADMIN" && suic call --package "$PKG" --module house --function update_fee_rate --args "$HOUSE" "$HOUSE_CAP" 300`; `PRE suic object "$HOUSE" --json` | La CLI falla al armar o ejecutar (el cap es de `W`); House sigue en 250: custodia verificada (SEG-2) | | ⏳ |
 | 19 | 🌐 `T1`: recuento final de pedidos (POST) desde el paso 3 | Solo los métodos de las precondiciones; ningún `SimulateTransaction` fuera de las acciones de los pasos 9, 13 y 16; anotado el total de `ListOwnedObjects` | | ⏳ |
-| 20 | DEV: cierre = `agents.md` §3 paso 7 más la app: `kill` por PID de Chrome (`chrome.pid`), `vite` (`vite.pid`; exit 143 esperado) y `sui` (`sui.pid`; exit 144 esperado); el cliente CDP ya terminó; **en otra llamada**, `kill -0` falla en los tres; `pgrep -af <SMOKE_DIR>/chrome-profile` vacío (el Chrome del usuario no se toca); `ss -ltn` con **9000, 9123, 9184, 5003, 5173 y 9229** (puerto del CDP) libres; recién entonces `rm -f <repo>/contracts/deployments/localnet.json`, `rmdir <repo>/contracts/deployments 2>/dev/null \|\| true`, `rm -rf <SMOKE_DIR>` (perfil incluido) y `test ! -e`; **sin cargar `env.sh`**, `stat`/`ls` de `<HOME real>/.sui/sui_config/` idénticos a la línea base; `git diff --exit-code -- contracts/Move.lock`; ni `contracts/Published.toml` ni `contracts/Pub.*.toml`; `git status --porcelain` solo con `documents/SMOKE_HOUSE_ADMIN.md` | Todo limpio; `~/.sui/` sin cambios | | ⏳ |
+| 20 | DEV: cierre = `agents.md` §3 paso 7 más la app: `kill` por PID del cliente CDP si corre como demonio (`cdp.pid`), de Chrome (`chrome.pid`), `vite` (`vite.pid`; exit 143 esperado) y `sui` (`sui.pid`; exit 144 esperado); **en otra llamada**, `kill -0` falla en todos; `pgrep -af <SMOKE_DIR>/chrome-profile` vacío (si no, solo esos PIDs y otra verificación; el Chrome del usuario no se toca); `ss -ltn` con **9000, 9123, 9184, 5003, 5173, 9229** (depuración de Chrome) **y 9339** (cliente CDP) libres; recién entonces `rm -f <repo>/contracts/deployments/localnet.json`, `rmdir <repo>/contracts/deployments 2>/dev/null \|\| true`, `rm -rf <SMOKE_DIR>` (perfil incluido) y `test ! -e`; **sin cargar `env.sh`**, `stat`/`ls` de `<HOME real>/.sui/sui_config/` idénticos a la línea base; `git diff --exit-code -- contracts/Move.lock`; ni `contracts/Published.toml` ni `contracts/Pub.*.toml`; `git status --porcelain` solo con `documents/SMOKE_HOUSE_ADMIN.md` | Todo limpio; `~/.sui/` sin cambios | | ⏳ |
 
 ### Qué no cubre este smoke (y dónde está cubierto)
 
