@@ -1,6 +1,6 @@
 # HANDOFF_RAILWAY_DEPLOY
 > Plan: PLAN_RAILWAY_DEPLOY v1.1 (aprobado por el MAYOR en la ronda 2; commit `4e7d1a3`) | Issue: #15 |
-> Branch: `feature/issue-15-pages-deploy` | Versión: v1.1 | Fecha: 2026-11-04
+> Branch: `feature/issue-15-pages-deploy` | Versión: v1.2 | Fecha: 2026-11-04
 > Decisiones: D-20261104-03 (P-1..P-5 de este plan, tomadas por delegación), D-20261104-01 (delegación y hosting en
 > Railway; llega a `master` con #14), D-20261102-02, D-20261030-13.
 > Este handoff es **autocontenido**. El plan v1.1 tiene el porqué de cada decisión (DL-1..DL-13); acá está lo que hay
@@ -8,6 +8,18 @@
 
 ## Changelog
 
+- **v1.2 (2026-11-04):** surge de la revisión del MID de TASK-2 (PASA). Afecta solo a TASK-4 y TASK-5; TASK-2 ya está
+  aprobado con el contrato v1.1.
+  - **MINOR-1 de TASK-2:** N2 se endurece en dos chequeos, N2a y N2b (§3.4).
+    - N2a busca la línea de **salida** del error de la guarda, no la línea `RUN` que imprime el builder.
+    - N2b exige que el log **no** muestre `RUN npm ci`, es decir, que el build se haya cortado en la guarda.
+    - Se implementa y se prueba en **TASK-4**, porque ahí corre por primera vez con BuildKit (CI). Incluye un rojo
+      provocado local: una guarda que no corta tiene que fallar en N2b.
+  - **Observación 1 de TASK-2 (DL-8):** se confirma que la regla de 7 días se mide sobre la **versión**
+    (`published_at` del release), no sobre el digest. Un *rebuild* de docker-library de la misma versión (por ejemplo,
+    el índice de `caddy:2.11.7-alpine`, del 2026-10-30) no reinicia el plazo. Es lo que dicen el plan v1.1 (DL-8) y
+    la revisión del MAYOR de la v1. TASK-5 lo documenta en el README.
+  - Corrección de redacción en TASK-4 §5.1 (actionlint).
 - **v1.1 (2026-11-04):** responde a la revisión del MAYOR del handoff v1 (APPROVE con 2 MINOR y 5 sugerencias) y
   agrega la coordinación de puertos con #14.
   - **MINOR-1 (capas e intermedios del builder clásico):**
@@ -343,10 +355,20 @@ Requiere: bash, docker, curl, grep, sed, mktemp. Sin otras dependencias ni red, 
 - **Negativo (N1-N3).** El fallo esperado se captura **sin** que `set -e` aborte (sugerencia 4):
   `if docker build … >"$log" 2>&1; then fail "sin testnet.json la imagen no debe construirse"; fi`.
   - N1: el build falló.
-  - N2: `grep -qF 'falta contracts/deployments/testnet.json' "$log"`.
+  - N2 (endurecido en v1.2; se implementa en TASK-4):
+    - **N2a:** `sed 's/\x1b\[[0-9;]*m//g' "$log" >"$log.plain"` y después
+      `grep -qE '^(#[0-9]+ [0-9]+\.[0-9]+ )?ERROR \(#15\): falta contracts/deployments/testnet\.json' "$log.plain"`.
+      Va en dos pasos, con un archivo, y no con `sed | grep -q`: con `pipefail`, el `grep -q` que corta temprano puede
+      dejar a `sed` con SIGPIPE y dar un falso fallo. N2b lee el mismo `$log.plain`.
+      Es la línea de **salida** del `echo` de la guarda. El builder clásico la pinta en rojo (`ESC[91m`), así que
+      primero se quitan los códigos ANSI. Va sin prefijo con el builder clásico, y con el prefijo `#<n> <segundos> `
+      con BuildKit `--progress=plain`. El MID ya la probó contra el log real de V-3 (línea 19, coincide) y contra una
+      muestra con formato de BuildKit (coincide). **No** cuenta la línea `Step n/m : RUN test -f …` ni la de
+      `[build n/m] RUN …`, que también contienen la subcadena.
+    - **N2b:** `! grep -qE 'RUN npm ci' "$log.plain"`. El build se cortó en la guarda: no llegó a `npm ci`.
+    - Si cualquiera de los dos falla, se imprimen las últimas 30 líneas del log y sale `FALLO: N2a…` o `FALLO: N2b…`.
   - N3: mensaje final `OK (negativo): sin contracts/deployments/testnet.json (#8) la imagen se niega a construirse`,
     con `::notice::` en Actions.
-  - Si falla N2, imprime las últimas 30 líneas del log.
 - **Positivo (P1-P13).** Las cabeceras se leen **con GET**, nunca con HEAD (sugerencia 3):
   `curl -sS -D <hdrs> -o <body> --max-time 10 <url>`. Los nombres se comparan sin distinguir mayúsculas y se recortan
   los `\r`. **No** se comprueba `Content-Length`.
@@ -482,24 +504,46 @@ Un job nuevo, después de `app` y antes de `framework-drift`:
 - Sin `permissions` propios (hereda `contents: read`), sin `secrets`, sin Actions nuevas, sin `if:`, sin steps de
   stop ni de limpieza (los hace el `trap` del script).
 
+### 3 bis. N2 endurecido en `app/scripts/check-deploy-image.sh` (v1.2, MINOR-1 de TASK-2)
+- Reemplazar el chequeo N2 actual (`grep -qF 'falta contracts/deployments/testnet.json'`) por **N2a** y **N2b**, como
+  dice §3.4. Mensajes: `FALLO: N2a: el build falló, pero no por la guarda de testnet.json (no está la línea de salida
+  'ERROR (#15): falta contracts/deployments/testnet.json')` y `FALLO: N2b: el build pasó la guarda y llegó a 'RUN npm
+  ci' (la guarda no corta el build)`.
+- Si BuildKit en la CI resulta tener otro formato de prefijo, se ajusta **solo** el prefijo opcional de N2a y se
+  declara, con la línea real del log del run.
+- El resto del script no cambia.
+
 ### 4. Archivos
-- **Tocar:** `.github/workflows/ci.yml` (solo el job nuevo).
-- **NO tocar:** los otros jobs, `on:`, `permissions`, `concurrency` y `env`.
+- **Tocar:** `.github/workflows/ci.yml` (solo el job nuevo) y `app/scripts/check-deploy-image.sh` (solo N2, §3 bis).
+- **NO tocar:** los otros jobs, `on:`, `permissions`, `concurrency` y `env`; el resto del script; `Dockerfile`,
+  `.dockerignore` y `app/Caddyfile` (aprobados en TASK-2).
 
 ### 5. Tests / verificaciones
 1. **actionlint** en un contenedor desechable:
    `docker run --rm -v <repo>:/repo:ro -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color=never .github/workflows/ci.yml`.
-   El archivo va explícito: en un worktree, `.git` es un archivo que apunta a un gitdir del host que no está montado,
-   y la detección del proyecto podría fallar.
-   da 0 hallazgos en todo el workflow. Si aparecen hallazgos en jobs **viejos**, se declaran sin tocarlos y el delta
+   Tiene que dar 0 hallazgos en todo el workflow. El archivo va explícito porque en un worktree `.git` es un archivo
+   que apunta a un gitdir del host que no está montado, y la detección del proyecto podría fallar. Si aparecen hallazgos en jobs **viejos**, se declaran sin tocarlos y el delta
    tiene que ser 0. Fallback, si no se puede descargar la imagen:
    `python3 -c 'import yaml,sys; yaml.safe_load(open(".github/workflows/ci.yml"))'` más una revisión manual,
    declarado.
 2. `git diff .github/workflows/ci.yml` muestra **solo** el bloque nuevo.
-3. Antes de pushear, una corrida local del mismo comando: `bash app/scripts/check-deploy-image.sh . 8090` (ya hecha
-   en V-3) da 0, en modo negativo.
+3. Antes de pushear, con el N2 nuevo:
+   - **3a, shellcheck** (V-2) del script: 0 hallazgos.
+   - **3b, negativo real:** `bash app/scripts/check-deploy-image.sh . 8090` da `exit=0`, con `OK (negativo)` (builder
+     clásico).
+   - **3c, rojo provocado local de N2b:**
+     - en una copia del contexto en `<scratchpad>/n2-15/ctx`, armada como E-1a pero **sin** `testnet.json`, cambiar
+       en el `Dockerfile` la guarda a `RUN test -f contracts/deployments/testnet.json || echo "ERROR (#15): falta
+       contracts/deployments/testnet.json. …"` (sin `>&2; exit 1`);
+     - `bash app/scripts/check-deploy-image.sh <scratchpad>/n2-15/ctx 8090; echo "exit=$?"` tiene que dar `exit=1`
+       con `FALLO: N2b`. N1 pasa: el build igual falla más adelante, en las comprobaciones del bundle o en
+       `publish.mjs`. N2a pasa porque la línea se imprime.
+   - **3d, limpieza por línea base,** como C-1: línea base antes de 3b, borrar solo los IDs nuevos (intermedias
+     `<none>` y las bases que no estaban), sin `prune`; `rm -rf <scratchpad>/n2-15`; `:8090` libre.
 4. **En el PR**, que el orquestador pushea después de la revisión: el run tiene `deploy-image` verde **por el camino
-   negativo** (el `::notice::` de N3 en el log) y `contracts`/`app` sin cambios. El orquestador anota el run ID.
+   negativo** (el `::notice::` de N3 en el log) y `contracts`/`app` sin cambios. El orquestador anota el run ID y
+   pega del log de BuildKit la línea que cumplió N2a, para que quede probado que el prefijo con BuildKit es el
+   esperado.
 5. Opcional, recomendado: un rojo provocado en un PR desechable, cerrado sin merge, con el Dockerfile **sin** la
    guarda de §3.2 paso 3. Tiene que fallar en N1 o N2.
 
@@ -507,8 +551,9 @@ Un job nuevo, después de `app` y antes de `framework-drift`:
 No aplica aparte: el run del PR es la evidencia.
 
 ### 7. Criterios de aceptación
-- actionlint 0 (o el fallback declarado).
-- El diff es solo el job.
+- actionlint 0 (o el fallback declarado); shellcheck 0.
+- El diff es solo el job y el N2 del script.
+- 3b en verde y 3c en rojo **por N2b**, con la limpieza de 3d.
 - `deploy-image` verde por el camino negativo en el run del PR.
 
 ### 8. Al terminar
@@ -538,7 +583,9 @@ operarla sin leer el plan.
   - cómo agregar un origen a la CSP: una directiva por vez, como desviación declarada, incluido el caso del ícono
     remoto de Slush en `img-src`;
   - el fallback a `Report-Only`;
-  - la nota "Node 26.12.1 en la imagen por la regla de 7 días; 26.13.0 en TASK-6 (#15)";
+  - la nota "Node 26.12.1 en la imagen por la regla de 7 días; 26.13.0 en TASK-6 (#15)", con el criterio de DL-8:
+    se mide sobre la **versión** (`published_at` del release) y no sobre el digest; un rebuild de docker-library de la
+    misma versión no reinicia el plazo (observación 1 de TASK-2);
   - "URL pública: se completa después de #8".
   - Además: "Origen del build publicado" agrega que la imagen excluye `localnet.json` por construcción, y
     "Pendientes conocidos" cambia "→ #15" por "→ #N" (el issue de code-splitting).
