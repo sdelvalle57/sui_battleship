@@ -1,6 +1,6 @@
 # HANDOFF_RAILWAY_DEPLOY
 > Plan: PLAN_RAILWAY_DEPLOY v1.1 (aprobado por el MAYOR en la ronda 2; commit `4e7d1a3`) | Issue: #15 |
-> Branch: `feature/issue-15-pages-deploy` | Versión: v1.4 | Fecha: 2026-11-04
+> Branch: `feature/issue-15-pages-deploy` | Versión: v1.5 | Fecha: 2026-11-04
 > Decisiones: D-20261104-03 (P-1..P-5 de este plan, tomadas por delegación), D-20261104-01 (delegación y hosting en
 > Railway; llega a `master` con #14), D-20261102-02, D-20261030-13.
 > Este handoff es **autocontenido**. El plan v1.1 tiene el porqué de cada decisión (DL-1..DL-13); acá está lo que hay
@@ -8,6 +8,15 @@
 
 ## Changelog
 
+- **v1.5 (2026-11-04):** surge de la revisión del MID de TASK-3 (PASA, 11/11) y del hallazgo **H-1** del DEV.
+  - **H-1:** la comprobación (b) del `RUN` de bundle no detecta un `localnet.json` embebido. Vite 8 emite el JSON como
+    objeto con template literals (``network:`localnet` ``), y el patrón solo aceptaba comillas dobles.
+  - Se corrige **en este PR** con el nuevo **TASK-2b**: el patrón pasa a ser
+    `network"?:[^[:alnum:]]localnet[^[:alnum:]]`, que acepta cualquier delimitador y no tiene comillas que escapar.
+  - El literal del Dockerfile de §3.2 queda actualizado.
+  - Se agrega la **parte 3** del Anexo A (H-1..H-5), con rojo antes y verde después.
+  - TASK-2b también cubre los docs que dependen del cambio: la línea (b) del README, `style-src` confirmado por
+    TASK-3, y la fila de TASK-3 y H-1 en STATUS.
 - **v1.4 (2026-11-04):** surge de la revisión del MID de TASK-5 (NO PASA, 2 MINOR de docs). Afecta solo a TASK-5.
   - **MINOR-1:** el checklist del owner pasa a un lugar **permanente**, una subsección
     "Conectar Railway (owner, no delegable)" de `app/README.md`, con los 10 pasos completos de la §9 del plan, las
@@ -272,7 +281,7 @@ RUN set -eu; \
       v="$(node -p "require('./contracts/deployments/testnet.json').$f")"; \
       grep -rqF "$v" app/dist/assets || { echo "ERROR (#15): $f de testnet.json no está en el bundle" >&2; exit 1; }; \
     done; \
-    if grep -rqE 'network:"localnet"|"network":"localnet"' app/dist/assets; then echo "ERROR (#15): localnet en el bundle" >&2; exit 1; fi; \
+    if grep -rqE 'network"?:[^[:alnum:]]localnet[^[:alnum:]]' app/dist/assets; then echo "ERROR (#15): localnet en el bundle" >&2; exit 1; fi; \
     grep -rqF 'https://fullnode.testnet.sui.io' app/dist/assets
 
 FROM caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
@@ -654,6 +663,75 @@ Reporte §5 y snippet propuesto para STATUS.
 
 ---
 
+## TASK-2b: la comprobación (b) del bundle detecta `localnet` en cualquier forma (H-1) — área: app/ci + docs
+
+### 1. Historia de usuario del task
+**Como** owner, **quiero** que la imagen se niegue a construirse si por cualquier vía entra un `localnet.json` al
+bundle, **para** que la segunda barrera de "Origen del build publicado" funcione de verdad y no dependa solo de la
+lista blanca del `.dockerignore`.
+
+### 2. Contexto
+- **Qué falla:** `Dockerfile:22` busca `network:"localnet"|"network":"localnet"`. El DEV midió en TASK-3 (L-3, bundle
+  real de localnet) que Vite 8 emite el registro como
+  ``var _R={schemaVersion:1,network:`localnet`,chainId:`…`,…}``, con template literals, y el patrón da 0 coincidencias.
+- **Por qué no es grave hoy:**
+  - la lista blanca (E-1f/E-1g) impide que `localnet.json` entre al contexto;
+  - la comprobación (a) exige los 4 IDs de `testnet.json`;
+  - el Dockerfile y la imagen todavía no se publicaron.
+- **Patrón nuevo:** `network"?:[^[:alnum:]]localnet[^[:alnum:]]`.
+  - Acepta `"network":"localnet"`, `network:"localnet"`, ``network:`localnet` `` y `network:'localnet'`.
+  - **No** toma `r===`localnet`` (el `burnerWalletEnabled` de `config.ts`), ``e.network===`localnet` `` (`dappKit.ts`),
+    `localnet:{grpcUrl…}` (`networks.ts`) ni `` `sui:localnet` `` (wallet-standard). El MID lo comprobó contra el bundle
+    de testnet actual, con 0 coincidencias, y contra muestras de las 4 formas.
+  - Es POSIX ERE y no lleva comillas simples ni backticks, así que no hay que escaparlo dentro del `RUN '…'`.
+  - El grep del host del MID es `ugrep`, y en él `[[:punct:]]` no tomó el backtick. Por eso se usa
+    `[^[:alnum:]]`, y por eso **hay que probarlo dentro de la imagen** (GNU grep de bookworm), que es lo que hacen
+    H-2 y H-3.
+
+### 3. Qué implementar
+- **`Dockerfile`, línea de (b):** reemplazar solo el patrón:
+  `if grep -rqE 'network"?:[^[:alnum:]]localnet[^[:alnum:]]' app/dist/assets; then echo "ERROR (#15): localnet en el bundle" >&2; exit 1; fi; \`
+  Es idéntico al literal de §3.2 v1.5; el mensaje no cambia. Nada más del Dockerfile cambia.
+- **`app/README.md`:**
+  - en "La imagen", el ítem "que no haya `network:"localnet"`" pasa a ser "que no haya un registro de `localnet`
+    embebido (`network` con valor `localnet` en cualquier forma: comillas dobles, simples o el template literal que
+    emite Vite 8)";
+  - en la CSP, el ítem de `style-src 'self'` pasa de "se confirma en TASK-3 … pendiente" a "**confirmado** en TASK-3
+    de #15: con el kit montado (lobby, modal, rutas profundas), 0 violaciones; Lit aplica sus estilos por
+    `adoptedStyleSheets` y no inserta `<style>`".
+- **`documents/STATUS.md`:**
+  - fila de baseline de TASK-3 (el snippet del DEV), más una fila de TASK-2b con el resultado de la parte 3;
+  - en la fila del ciclo #15, TASK-3 pasa a ✅ y se agrega "H-1 corregido (TASK-2b)".
+- **`documents/SMOKE_RAILWAY_DEPLOY.md`:** la parte 3 llena (Anexo A, parte 3).
+
+### 4. Archivos
+- **Tocar:** `Dockerfile` (solo esa línea), `app/README.md`, `documents/STATUS.md`, `documents/SMOKE_RAILWAY_DEPLOY.md`.
+- **NO tocar:** `.dockerignore`, `app/Caddyfile`, `app/scripts/check-deploy-image.sh`, `ci.yml`, `app/src/**`,
+  `contracts/**`.
+
+### 5. Verificaciones
+1. **Anexo A, parte 3 (H-1..H-5),** con resultados pegados.
+2. `git diff Dockerfile` muestra **una** línea cambiada, la de (b).
+3. Gate `app`: **no aplica**, porque no cambia `app/` salvo el README. Se declara.
+4. Greps sobre el diff: claves 0, rutas personales 0, hex nuevos 0.
+
+### 6. Smoke
+Anexo A, parte 3.
+
+### 7. Criterios de aceptación
+- **H-2 (rojo):** con el patrón **viejo**, un contexto con `localnet.json` forzado **construye la imagen**. Esto
+  reproduce H-1.
+- **H-3 (verde):** con el patrón **nuevo**, el mismo contexto **falla** en (b) con `ERROR (#15): localnet en el bundle`.
+- **H-4:** el camino positivo sin `localnet.json` sigue en verde (`check-deploy-image.sh` con `exit=0`), sin falsos
+  positivos con GNU grep.
+- **H-5:** el camino negativo sigue en verde.
+- **Cierre:** Docker vuelve a la línea base y el scratchpad queda sin el ensayo.
+
+### 8. Al terminar
+Reporte §5. Lo revisa el MID; el commit va antes del ready del PR #57.
+
+---
+
 ## TASK-6 (posterior a #8; PR de seguimiento con `Closes #15`) — área: app/docs
 
 > **No se ejecuta en este ciclo.** Se activa cuando `master` tenga el `testnet.json` y el `Published.toml` de #8 y el
@@ -729,6 +807,21 @@ Reporte §5 y snippet propuesto para STATUS.
 | L-8 | Ir a `#/my-games`; después `#/game/$GAME` y **recargar** (`Page.reload`) | Las dos rutas cargan después de recargar; el detalle muestra la partida (`Pending`, monto) | (se llena durante la corrida) | ⏳ |
 | L-9 | Total de la sesión | **0** `securitypolicyviolation`. Si hay alguna, `violatedDirective` + `blockedURI`; solo se admite el remedio de `style-src 'unsafe-inline'`, como desviación | (se llena durante la corrida) | ⏳ |
 | C-2 | **Cierre de la parte 2:** `kill <pid de Chrome>`; `docker rm -f deploy-image-l5`; `docker rmi battleship-app:l5-15`; limpieza por la línea base de L-0, con las mismas reglas que C-1 (incluido `caddy:2.11.7-alpine` si se descargó de nuevo), con las dos diferencias vacías, sin `prune`, y borrar `<scratchpad>/docker-base-15-l`; `ss -ltn` sin filas en `8093` y `9230`; paso 7 de `agents.md` §3 completo (kill de la red por PID, `kill -0` falla, `rm -rf <SMOKE_DIR>`, `rm -f contracts/deployments/localnet.json`, `rmdir contracts/deployments 2>/dev/null \|\| true`, `stat`/`ls` de `~/.sui/sui_config/` idénticos a L-0, `git status`, `git diff --exit-code -- contracts/Move.lock`, sin `Pub.*.toml`) | Todo limpio; el exit 144 de `sui start` es esperado | (se llena durante la corrida) | ⏳ |
+
+## Parte 3: H-1, comprobación (b) del bundle (TASK-2b)
+
+Puertos: 8090 (script) y nada más. Línea base de Docker al empezar (`docker ps -aq`/`docker images -aq` en
+`<scratchpad>/docker-base-15-h/`), como en V-1.
+
+| # | Acción | Resultado esperado | Resultado obtenido | Estado |
+|---|--------|--------------------|--------------------|--------|
+| H-0 | Línea base de Docker; `ss -ltn 'sport = :8090'` sin filas | Base anotada (contenedores, imágenes); puerto libre | (se llena durante la corrida) | ⏳ |
+| H-1 | Contexto `<scratchpad>/h1-15/ctx` igual que E-1a..E-1e: archivos versionados y nuevos, `publish.mjs`/`deployment.mjs` de #48, y `testnet.json` y `Published.toml` sintéticos coherentes. **Además, solo en esta copia:** `contracts/deployments/localnet.json`, copiado **literal** de `git show origin/feature/issue-8-testnet-publish:contracts/scripts/fixtures/localnet.deployment.json`, y la línea `!contracts/deployments/localnet.json` agregada al final del `.dockerignore` de **la copia**. `node <ctx>/contracts/scripts/publish.mjs check` | `2 despliegue(s) válidos y coherentes con Published.toml` (localnet no exige `[published.localnet]`); el repo no cambia (`git status`) | (se llena durante la corrida) | ⏳ |
+| H-2 | **Rojo, el patrón viejo:** en la copia, volver la línea (b) del `Dockerfile` al patrón viejo (`'network:"localnet"\|"network":"localnet"'`); `docker build --force-rm -t battleship-app:h2-15 <ctx> > <scratchpad>/h1-15/h2.log 2>&1; echo "exit=$?"`; mostrar del log el Step de (b) y el `grep -o` del registro localnet en el bundle si hace falta; `docker rmi battleship-app:h2-15` | `exit=0`: la imagen se construye **con** `localnet` embebido, lo que reproduce H-1 | (se llena durante la corrida) | ⏳ |
+| H-3 | **Verde, el patrón nuevo:** restaurar la línea (b) del `Dockerfile` de la copia a la del repo (v1.5); `docker build --force-rm -t battleship-app:h3-15 <ctx> > <scratchpad>/h1-15/h3.log 2>&1; echo "exit=$?"`; `docker rmi battleship-app:h3-15 2>/dev/null \|\| true` | `exit≠0`; el log tiene `ERROR (#15): localnet en el bundle` en el Step de las comprobaciones del bundle; los Steps anteriores (guarda, `check`, `npm ci`, build) pasaron | (se llena durante la corrida) | ⏳ |
+| H-4 | **Sin falsos positivos:** borrar `localnet.json` y la línea `!…localnet.json` de la copia; `bash app/scripts/check-deploy-image.sh <ctx> 8090; echo "exit=$?"` | `exit=0`, `OK (positivo)` (P1-P13): con GNU grep, el patrón nuevo no toma nada del bundle de testnet | (se llena durante la corrida) | ⏳ |
+| H-5 | Negativo en el repo real: `bash app/scripts/check-deploy-image.sh . 8090; echo "exit=$?"` | `exit=0`, `OK (negativo)` | (se llena durante la corrida) | ⏳ |
+| C-3 | **Cierre:** limpieza por la línea base de H-0 con las reglas de C-1 (solo IDs nuevos: `<none>`, `battleship-app:*` y las bases descargadas; sin `prune`); repetir el `comm` (vacío); `rm -rf <scratchpad>/h1-15 <scratchpad>/docker-base-15-h`; `:8090` libre; `git status` solo con los archivos de TASK-2b | Todo limpio | (se llena durante la corrida) | ⏳ |
 
 ## Si algo falla
 - Capturar: el output del paso (sin rutas personales), las últimas 30 líneas del log de `docker build` o de
