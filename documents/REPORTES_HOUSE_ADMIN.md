@@ -2573,3 +2573,185 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 > #14 TASK-5b ✅ (2026-11-04, revisión MID PASA): SM-1 del smoke corregido (campos sin editar siguen a la House vigente;
 > borradores por campo; T5-17 reproduce el caso). App 1156 tests en 65 archivos (+7), build 917.02 kB.
+
+## Task completado: HANDOFF_HOUSE_ADMIN — TASK-6
+
+### Branch (con SHA corto del HEAD)
+
+`feature/issue-14-house-admin` @ `72858b8` (handoff v1.5; sin commits del DEV).
+
+### Archivos modificados/creados
+
+- `app/README.md` (+121 / −11).
+- `contracts/README.md` (+41 / −3).
+- `agents.md` (+13 / −6).
+- `documents/STATUS.md` (+10 / −1).
+- No cambian (verificado con `git diff --exit-code`): el código (`app/src`, `app/scripts`, `contracts/sources`,
+  `contracts/fixtures`), `documents/DECISIONES.md`, el plan y el handoff.
+
+### Qué se implementó (3 líneas máx)
+
+- La sección "Panel de la House (#14)" de `app/README.md` documenta el panel de punta a punta. Además, `app/README.md`
+  suma el panel a los mapas, a la tabla de invalidación y a la fixture.
+- `contracts/README.md` suma la fixture y su recaptura, el checklist de `transfer_house_cap` por CLI y la fila de
+  `version()`.
+- `agents.md` suma §2, el espejo `HOUSE_MAX_FEE_BPS` y los layouts en §5, y N-3 en §12. `STATUS.md` suma las filas de
+  #14 (TASK-1..6 y el smoke) y la fila del ciclo "en progreso".
+
+### Tests y gates (output pegado, por área tocada)
+
+- Agregados/modificados: ninguno. Por indicación del orquestador, no corrí el gate: el diff es solo de docs (4
+  archivos). El último gate de la app es el de TASK-5b: 1156/65, 917.02 kB.
+- **T6-1:** los conteos y tamaños citados coinciden con los reportes de cada task:
+
+  | Task | Tests | Archivos | Build |
+  |---|---|---|---|
+  | TASK-1 | 915 | 57 | — |
+  | TASK-2 (con H-1) | 1049 | 60 | 901.53 kB |
+  | TASK-3 | 1068 | 60 | 902.36 kB |
+  | TASK-4 | 1101 | 62 | 902.36 kB |
+  | TASK-5 | 1149 | 65 | 917.01 kB |
+  | TASK-5b | 1156 | 65 | 917.02 kB |
+
+  El "≈ 917 kB" de "Pendientes conocidos" es el de TASK-5/5b. El smoke da 21/21, con 0,86-1,08 s del clic al resultado
+  y 0,34-0,62 s de "Confirmando" al resultado, tomados de `SMOKE_HOUSE_ADMIN.md` (pasos 9, 13 y 16).
+- **T6-2:** el grep de claves (`suiprivkey|mnemonic|BEGIN .*KEY`), rutas personales y hex de 40-64 sobre `git diff` sale
+  vacío.
+- **T6-3:** cada nombre exportado que citan los READMEs existe en el código (`grep` de `export … <nombre>`):
+  - `houseCap.ts`: `houseCapType`, `parseHouseCapObject`, `fetchHouseCap`, `HOUSE_CAP_MAX_PAGES`,
+    `checkHouseCapOwnership`, `HOUSE_CAP_LOST_MESSAGE`;
+  - `houseAdmin.ts`: `HOUSE_MAX_FEE_BPS`, `validateFeeRate`, `validateBetLimits`, `canWithdraw`, `houseEventType`,
+    `parseFeeRateUpdated`, `parseBetLimitsUpdated`, `parseFeesWithdrawn`;
+  - `transactions/house.ts`: `buildUpdateFeeRateTx`, `buildUpdateBetLimitsTx`, `buildWithdrawFeesTx`;
+  - hooks: `useHouseCap`, `CapKnowledge`, `houseCapPrecheck`, `useUpdateFeeRate`, `useUpdateBetLimits`,
+    `useWithdrawFees`, `queryKeys.houseCap`;
+  - `txSession.ts`: `TX_ACTION_KINDS`, `TxValueMap`;
+  - componentes y páginas: `HouseAdminPanel`, `HouseAdminPage`;
+  - el motivo `'incomplete'`, `app/scripts/capture-house-fixtures.mjs` y `contracts/fixtures/house-admin.localnet.json`.
+- Tablas de contrato (`contracts/README.md`) y `app/src/sui/` sincronizados: sí. Cambió el texto de la fila de
+  `version()`, no el contrato.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+
+No aplica (solo docs).
+
+### Desviaciones del handoff
+
+1. - Qué cambió: no corrí el gate de la app que pide §5 ("sin delta respecto de TASK-5").
+   - Por qué: el orquestador indicó "Solo docs, sin gate". El diff no toca código (`git diff --exit-code` sobre `app/src`,
+     `app/scripts`, `contracts/sources` y `contracts/fixtures` sale en 0).
+   - Verificación extra realizada: T6-1..T6-3 de arriba.
+2. - Qué cambió:
+     - la fila de `version()` de `contracts/README.md` ya no dice que el panel "la usa para detectar una House que no
+       coincide": dice lo que hace, mostrar el campo `version` del objeto, y que la app no replica `VERSION`;
+     - en `app/README.md`, la frase "La app no replica `MAX_FEE_BPS`" pasa a nombrar el espejo del panel;
+     - en `agents.md` §5, la fila de la fórmula remite a la fila nueva "Comisión máxima".
+   - Por qué: las frases anteriores anticipaban #14 y ya no eran exactas.
+   - Verificación extra realizada: `grep` de `MAX_FEE_BPS` y de `version()` en los cuatro documentos.
+3. - Qué cambió: en `STATUS.md`, la fila "Siguiente" reemplaza "#14 (panel de la House)" por "cierre de #14 (fila de
+     arriba)", y la fila nueva de #14 queda 🚧.
+   - Por qué: el cierre (✅, SHA de merge y artefactos borrados) lo hace el housekeeping.
+   - Verificación extra realizada: no aplica.
+
+### Riesgos / pendientes
+
+- Las filas de baseline citan los SHAs de los commits de cada task: `f2bdb20`, `7070c0d`, `68514ec`, `9ce0594`,
+  `0b4ae20`, `e26dd24`, `72858b8`. El housekeeping suma la fila del merge.
+
+### Documentación
+
+- READMEs / `agents.md` actualizados: sí (PROY-20), en este task.
+- Snippet propuesto para `documents/STATUS.md`: ya incluido en esta entrega. Son las filas de baseline de TASK-1..6 y del
+  smoke, más la fila "#14 (panel de administración de la House) 🚧". Para el housekeeping:
+
+  > #14 (panel de administración de la House) | ✅ <fecha> | PR <n> mergeado (`<sha>`); MAYOR <veredicto>. `#/admin`
+  > con detección del `HouseCap` por tipo y regla de certeza, comisión/límites/retiro total a la cuenta que firma sobre la
+  > máquina común (NIT-3 de #12 cerrado), campos con borrador (SM-1). Smoke en localnet aislada 21/21. App 1156 tests en
+  > 65 archivos, build 917.02 kB; contracts sin cambios de código. Checklist del owner en testnet en #17. Artefactos
+  > borrados en el housekeeping (`git show <sha>:documents/PLAN_HOUSE_ADMIN.md`, `HANDOFF_`, `SMOKE_`,
+  > `REPORTES_HOUSE_ADMIN.md`)
+
+### Checklist del owner en testnet (para el body de #17, P-4 / D-20261104-02 (4))
+
+Lista para pegar. Ningún agente la corre.
+
+```markdown
+### Panel de la House (#14) en testnet — owner, con su wallet
+
+- [ ] Tras #8 (con `contracts/deployments/testnet.json` mergeado): si la dirección publicadora no es la de la wallet de navegador que va a administrar, pasarle el `HouseCap` **por CLI** desde el `SUI_CONFIG_DIR` propio, con `transfer_house_cap` (la app no lo transfiere). Antes, el checklist de `contracts/README.md`, "Qué pasa si se pierde el cap": destino = dirección de cuenta (no un ID de objeto), verificada dos veces (irreversible). La dirección publicadora también tiene el `UpgradeCap`: no importar su clave en una wallet de navegador (D-20261102-03, N-3).
+- [ ] Abrir la app de testnet con la wallet del cap: aparece "Administrar House" en el encabezado y `#/admin` muestra la comisión fijada en #8, los límites, lo acumulado y la versión 1 (si dice "Sin permisos" justo después de recibir el cap, "Volver a comprobar").
+- [ ] Comisión: cambiarla (p. ej. +1 bps), verificar el resumen "De X bps (x %) a Y bps (y %)" y el resultado "Comisión actualizada: …" con el digest, y `FeeRateUpdated` en el explorador; restaurarla al valor de #8 de la misma forma. **Entre las dos transacciones no anunciar el juego**: una partida creada en ese intervalo conserva la comisión intermedia para siempre.
+- [ ] Límites: cambiarlos y restaurarlos; resumen "De … SUI a … SUI", resultado "Límites actualizados: …" y `BetLimitsUpdated` en el explorador.
+- [ ] Retiro (tras al menos una partida resuelta con comisión): anotar "Comisiones acumuladas", pulsar "Retirar <monto> SUI a tu cuenta" y comparar el `amount` de `FeesWithdrawn` y lo recibido en la wallet (monto − gas) con ese valor; después, el botón queda deshabilitado con "No hay comisiones para retirar.".
+- [ ] La ventana de la wallet muestra en cada acción la transacción esperada (en el retiro, `withdraw_fees` y la transferencia a la **misma** cuenta que firma).
+- [ ] Con otra cuenta (sin el cap): sin enlace "Administrar House" y "Sin permisos: esta cuenta no tiene el HouseCap de esta House." en `#/admin`.
+```
+
+---
+
+## Revisión TASK-6: PASA
+
+> MID, 2026-11-04. Revisado contra el diff real (`app/README.md`, `contracts/README.md`, `agents.md`, `documents/STATUS.md`,
+> sin commitear sobre `72858b8`). Sin gate: el task no toca código (desviación 1, indicada por el orquestador; el último
+> gate de la app es el de TASK-5b, `72858b8`).
+
+**Coherencia con el código (comprobada contra los archivos de `app/src/` y `contracts/`):**
+
+- **`app/README.md`, "Panel de la House (#14)":** la regla de certeza (`null` solo con 0 objetos y fin de páginas,
+  `invariant`, `incomplete` con el tope de 3 o un cursor `null`, errores de red por la política común) es la de
+  `houseCap.ts:74-108`; `CapKnowledge` y la tabla de estados son las de `useHouseCap.ts` y `HouseAdminPage.tsx`; el
+  `precheck` por `getObject` con `notFound`/`deleted` como cap perdido es el de `checkHouseCapOwnership`; el retiro total a
+  `sender` con 2 comandos es `useWithdrawFees` + `buildWithdrawFeesTx`; los borradores de TASK-5b coinciden con
+  `HouseAdminPanel.tsx` (incluido "tras un fallo, el admin vuelve a escribir"); el límite de T4-15 cita el texto real del
+  nodo. Las medidas (S-2: 0-452 ms y ≤ 83 ms; smoke: 0 "Volver a comprobar", 0,86-1,08 s y 0,34-0,62 s, 2 + 1 pedidos) son
+  las del reporte y el SMOKE.
+- **Mapas:** `houseCap.ts`, `houseAdmin.ts`, `transactions/house.ts`, `readErrors.ts` (`incomplete`), `queryKeys`
+  (`houseCap`, `txTarget` con `house`), `useTxTarget`, `useHouseCap`, los hooks de acción, `HouseAdminPanel` y la ruta
+  existen con esos nombres. La tabla de invalidación agrega exactamente las dos filas de H-5. `build(sender)`/`precheck(signal,
+  sender)` coincide con `txSession.ts` y `useExecuteTransaction.ts`.
+- **`contracts/README.md`:** la fixture nueva y su recaptura con el orden de TASK-1 (y la PTB del retiro tal como corrió);
+  la fila de `version()` corregida (la app muestra el campo y no replica `VERSION`, D-7); la "Nota para #14" convertida en
+  checklist de `transfer_house_cap` por CLI (N-1), con la exposición del `UpgradeCap` (N-3).
+- **`agents.md`:** §2 con la fixture y el script; §5 con las filas del espejo `HOUSE_MAX_FEE_BPS` (a revisar en todo upgrade
+  que toque `MAX_FEE_BPS`) y de los layouts del cap y de los eventos de admin, y sin la frase que anticipaba #14; §12 con
+  `#/admin`, `transfer_house_cap` por CLI y el `UpgradeCap`.
+- **Desviación 2 (tres frases que anticipaban #14):** las reescritas ("Nota para #14", "#14 suma aquí las acciones de la
+  House", "La app no replica `house::MAX_FEE_BPS`; si una vista lo replica (#14)…") dicen ahora lo que hay. Aceptada.
+- **`STATUS.md`:** las 8 filas de baseline coinciden con los reportes revisados (conteos, builds, SHAs, chains de TASK-1 y
+  del smoke); la fila de #14 en 🚧 con lo que falta (desviación 3, aceptada: el ✅ va en el housekeeping).
+- **Sin rutas personales ni claves** en lo agregado (grep vacío; los hex de 40-64 que aparecen son los ficticios
+  preexistentes del ejemplo de `deployments`).
+
+**Checklist del owner para #17:** está completa en el SMOKE ("Qué no cubre este smoke", seis casillas: cap a la wallet con
+N-3 y el `UpgradeCap`, comisión y su restauración sin anunciar el juego entre medio, límites, retiro contra
+`fees_collected`, otra cuenta sin permisos), y `app/README.md` ("Pendientes conocidos") remite al body de #17. **Ojo:** el
+SMOKE se borra en el housekeeping, así que el orquestador tiene que copiar esas seis casillas al body de #17 **antes del
+merge** de #14 (P-4, D-20261104-02 (4)) y decirlo en el comentario de cierre de #14.
+
+### Hallazgos
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| NIT-1 | `agents.md` §3 ("toda invocación de `sui` … va precedida de `printf 'n\n' \|`") | `contracts/README.md`, "Qué pasa si se pierde el cap", casillas 1 y 3 | Los comandos de la checklist del owner (`sui client object <destino>` y `sui client object <HOUSE_CAP_ID> --json`) van sin `printf 'n\n' \|` ni `SUI_CONFIG_DIR=<su dir>`, a diferencia de los otros comandos del owner del mismo README (`printf 'n\n' \| SUI_CONFIG_DIR=<su dir> sui client --json tx-block …`) | En el mismo commit de TASK-6 (lo puede aplicar el orquestador, es texto): `printf 'n\n' \| SUI_CONFIG_DIR=<su dir> sui client object <destino>` y `printf 'n\n' \| SUI_CONFIG_DIR=<su dir> sui client object <HOUSE_CAP_ID> --json`. No bloquea |
+
+### Siguiente paso
+
+Commit de TASK-6 (con NIT-1 aplicado) → push → PR de #14 contra `master` con el body propuesto → revisión de integración
+del MAYOR. Antes del merge: las seis casillas al body de #17.
+
+### Mensaje de commit propuesto
+
+```
+docs: document the House admin panel, its fixture and limits (#14)
+
+TASK-6: app/README.md "Panel de la House (#14)" (detection by type and
+the certainty rule, CapKnowledge states, re-check, draft fields,
+getObject precheck, the T4-15 limit, CLI-only migrate and
+transfer_house_cap, smoke measurements), sui/, hooks and components
+maps, H-5 invalidation rows and build(sender); contracts/README.md
+fixture, recapture order and the transfer_house_cap checklist with
+the UpgradeCap note; agents.md layout, the HOUSE_MAX_FEE_BPS mirror and
+the HouseCap/event layouts, and the publisher note; STATUS baselines.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
