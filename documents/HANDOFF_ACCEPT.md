@@ -1,9 +1,15 @@
 # HANDOFF_ACCEPT
 > Plan: PLAN_ACCEPT v2 (MAYOR: APPROVE en la segunda ronda, 2026-11-03, con condición; `b853c51`) | Issue: #12 | Branch:
-> `feature/issue-12-accept-resolve` | Versión: v1.3 | Fecha: 2026-11-03
+> `feature/issue-12-accept-resolve` | Versión: v1.4 | Fecha: 2026-11-03
 
 ## Changelog
 
+- **v1.4 (2026-11-03)**: tras TASK-3 (revisión del MID: PASA). Solo cambia TASK-4: `hooks/txSession.ts` reconoce las
+  variables de una mutación solo si `action.kind` está en `ACTION_KINDS` (`txSession.ts:68, 80`), que hoy es
+  `create`/`cancel`/`reject`. Sin sumar `accept`, una aceptación propia tendría `viewId`/`runId` `null`: la vista la
+  vería como ajena (`notice: in_flight` sobre su propia transacción) y `useAcceptGame` nunca encontraría su resultado por
+  `runId`. TASK-4 §3.1 y T4-1 lo cubren. Además, `app/README.md` (`:126`, `:222-223`) describe la API vieja
+  (`isBusy`, `reset`, candado `useRef`): lo reescribe TASK-5.
 - **v1.3 (2026-11-03)**: tras TASK-1 (revisión del MID: PASA; `documents/REPORTES_ACCEPT.md`). Cambian solo TASK-2,
   TASK-4 (un texto), TASK-5 y el paso 6 del smoke; nada de TASK-3. Lo medido:
   - **DL-10 sin acotar (S-2, S-6 bis):** ningún rechazo permanente llega con un código transitorio. La regla de
@@ -524,6 +530,8 @@ un resultado antes de tiempo. **No entrega:** docs (TASK-5).
   `GameDetailPage.tsx`; `useSuiBalance` (sin cuenta no consulta).
 
 ### 3. Qué implementar
+0. **`txSession.ts`** (v1.4): `ACTION_KINDS` suma `'accept'`; `TxValueByAction` suma `accept: GameResolvedEvent | null`
+   (y con eso `AdoptedTx`). Sin esto, la aceptación propia no se reconoce como propia ni se lee su resultado.
 1. **`txInvalidation.ts`** (DL-6): `case 'accept'` ⇒ `{ reset: [lobby], invalidate: [game(id), ...balance, house(network,
    houseId)] }`; el comentario `:14` deja de decir "#12 … suman la House aquí" (queda "#14").
 2. **`useAcceptGame(view, game)`:** `execute({ action: { kind: 'accept', gameId }, build: () => buildAcceptGameTx({
@@ -552,13 +560,13 @@ un resultado antes de tiempo. **No entrega:** docs (TASK-5).
 - **Tocar:** `app/src/hooks/{txInvalidation,useAcceptGame}.ts` y tests (`useAcceptGame.test.tsx` nuevo),
   `app/src/components/{GameActions,GameDetail}.tsx` y tests, `app/src/pages/GameDetailPage.tsx` y su test,
   `app/src/index.css` solo si hace falta un estilo mínimo.
-- **NO tocar:** `sui/`, `useExecuteTransaction.ts`, `useTxTarget.ts`, `txSession.ts` (salvo un bug de TASK-3, declarado),
+- **NO tocar:** `sui/`, `useExecuteTransaction.ts`, `useTxTarget.ts`, `txSession.ts` (salvo `ACTION_KINDS` y `TxValueByAction` de §3.0, v1.4, o un bug de TASK-3 declarado),
   `TransactionStatus.tsx`.
 
 ### 5. Tests obligatorios
 | # | Caso |
 |---|---|
-| T4-1 | `useAcceptGame`: el builder recibe `game.bet`, `config.houseId` y el `gameId` de la vista; el valor es el evento de la fixture real; `null` si el resultado no trae el evento; invalidaciones exactas (`lobby` reset; `game`, `balance`, `house` invalidate) y ninguna de `txInfo`/`publishCheckpoint`/`checkpointTime`/`nodeInfo` |
+| T4-1 | `useAcceptGame`: el builder recibe `game.bet`, `config.houseId` y el `gameId` de la vista; el valor es el evento de la fixture real; `null` si el resultado no trae el evento; invalidaciones exactas (`lobby` reset; `game`, `balance`, `house` invalidate) y ninguna de `txInfo`/`publishCheckpoint`/`checkpointTime`/`nodeInfo`; **v1.4:** con la máquina real (`useTxTarget` + `useAcceptGame` sobre un `QueryClient` real), una aceptación propia en curso da `busy: true` y `notice` `null` (no se ve como ajena), y al terminar su `outcome` se lee por `runId`; `txVariablesOf` reconoce `action.kind === 'accept'` (`txSession.test.ts`) |
 | T4-2 | **M-3:** `GameActions` sin cuenta: `pending` ⇒ el texto nuevo y sin botones; `resolved` y `cancelled` ⇒ **ningún** aviso ni botón |
 | T4-3 | creador ⇒ sin "Aceptar" (sí "Cancelar"); abierta y otra cuenta ⇒ "Aceptar" con las dos notas de DL-5 y la apuesta; invitado ⇒ "Aceptar" y "Rechazar"; tercero en invitación ⇒ `NOT_INVITED_HINT` sin "Aceptar" (D-20261103-02) |
 | T4-4 | saldo `insufficient` ⇒ deshabilitado con el aviso; `unknown` ⇒ habilitado con su aviso; `ok` ⇒ habilitado sin aviso |
@@ -735,4 +743,4 @@ El MID propone el body del PR con `Closes #12` y:
 - pendientes: #17 para la vista previa de una extensión, R-5, la latencia en testnet y la reserva de gas con el precio
   de testnet.
 
-Mensaje propuesto para esta versión: `docs: update #12 handoff after TASK-1 findings, v1.3 (#12)`.
+Mensaje propuesto para esta versión: `docs: add #12 TASK-3 report and MID review, handoff v1.4 (#12)`.
