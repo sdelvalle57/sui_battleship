@@ -1,9 +1,15 @@
 # HANDOFF_HOUSE_ADMIN
 > Plan: PLAN_HOUSE_ADMIN v1.1 (MAYOR: APPROVE en la ronda corta, 2026-11-04; `0bfd916`) | Issue: #14 | Branch:
-> `feature/issue-14-house-admin` | Versión: v1.2 | Fecha: 2026-11-04
+> `feature/issue-14-house-admin` | Versión: v1.3 | Fecha: 2026-11-04
 
 ## Changelog
 
+- **v1.3 (2026-11-04)**: revisión de TASK-2 (MID, NO PASA por un hallazgo de tests; `documents/REPORTES_HOUSE_ADMIN.md`,
+  "Revisión TASK-2"). El código de `fetchHouseCap` ya relanza tal cual los errores de red (`RpcError` transitorio,
+  `ReadTimeoutError` del corte de 10 s), así que `useHouseCap` sigue la política común de lecturas de #10 (DL-5: 3 intentos,
+  esperas de 1 s y 2 s, "Reintentando… (intento n de m)"); solo sus `ReadDataError` (`invariant`, `incomplete`,
+  `wrong_type`, `malformed`) son definitivos y muestran "Reintentar". Ningún test lo fijaba: se suman **T2-17** (TASK-2) y
+  **T4-16** (TASK-4). Nada más cambia.
 - **v1.2 (2026-11-04)**: tras TASK-1 (revisión del MID: PASA; `documents/REPORTES_HOUSE_ADMIN.md`, "Revisión TASK-1").
   Lo medido no cambia ninguna decisión (D-1..D-7, H-1..H-6): S-1 confirma la detección por tipo en el nodo local, S-2
   confirma que `getObject` va delante del índice (base de H-3), y S-5 llega como `SimulationError` **sin**
@@ -469,6 +475,13 @@ contrato, PTB del retiro) tenga su test contra datos reales.
   `FeesWithdrawn` 10000000; con otra `houseId`, sin evento, con dos eventos o con bytes rotos ⇒ `null`.
 - T2-16: `transactionErrorMessage` con los cuatro `simulationErrors` de la fixture ⇒ el texto de `ABORT_MESSAGES.house[0|1|2]`
   con el sufijo `(código house/<n>)`.
+- T2-17 (v1.3, política de lecturas DL-5): `fetchHouseCap` relanza **la misma instancia** del error de red, sin
+  convertirlo en `ReadDataError` ni en `null`: (a) `listOwnedObjects` rechaza con `new RpcError('down', 'UNAVAILABLE')` en
+  el primer pedido ⇒ rechaza con ese error, `isTransientReadError(error) === true` y `shouldRetryRead(0, error) === true`;
+  (b) lo mismo en el **segundo** pedido, después de una página `{ [], hasNextPage: true, cursor: 'c1' }` (un corte a mitad
+  de la paginación no deja un resultado parcial); (c) nodo colgado (timers falsos, como el test del corte de
+  `checkHouseCapOwnership`) ⇒ `ReadTimeoutError`, transitorio; (d) contraste: `ReadDataError('incomplete')` e
+  `invariant` ⇒ `isTransientReadError === false`.
 
 ### 6. Smoke
 
@@ -476,7 +489,7 @@ No aplica.
 
 ### 7. Criterios de aceptación
 
-- T2-1..T2-16 en verde; gate de la app completo; `npm test` = 915 + los nuevos, sin tests viejos modificados salvo los
+- T2-1..T2-17 en verde; gate de la app completo; `npm test` = 915 + los nuevos, sin tests viejos modificados salvo los
   casos sumados a `readErrors.test.ts` y `errors.test.ts`.
 - Grep de capas: `grep -rn "react\|hooks/\|components/" app/src/sui/houseCap.ts app/src/sui/houseAdmin.ts
   app/src/sui/transactions/house.ts` vacío.
@@ -613,6 +626,9 @@ cada camino (cap perdido, abort, éxito, "sin confirmar") esté probado.
 - T4-1: sin cuenta ⇒ `{ kind: 'no_account' }` y ningún `listOwnedObjects`.
 - T4-2: con cuenta, la clave es `queryKeys.houseCap(…)` con la dirección normalizada; con datos de la fixture ⇒ `known`
   con el cap; con `nonOwner` ⇒ `known` con `null`.
+- T4-16 (v1.3, DL-5): primera lectura con `RpcError` `UNAVAILABLE` en los 3 intentos (timers falsos) ⇒ `status`
+  `retrying` (intento 2 de 3 y 3 de 3) mientras reintenta y después `error`; `cap` **siempre** `{ kind: 'unknown' }`, nunca
+  `known` con `null`; si el tercer intento responde con el cap ⇒ `known` con el cap y `status` `ready`.
 - T4-3 (H-2): primera lectura fallida (error no transitorio) ⇒ `cap: { kind: 'unknown' }` y `status.kind === 'error'`;
   nunca `known` con `null`.
 - T4-4 (H-2): con un cap ya leído, `refetch` que falla ⇒ `cap` sigue `known` con el cap y `status` en error (o
@@ -644,7 +660,7 @@ No aplica.
 
 ### 7. Criterios de aceptación
 
-- T4-1..T4-14 en verde; gate completo; los mocks del cliente suman `listOwnedObjects` y `getObject` del cap sin romper
+- T4-1..T4-16 en verde; gate completo; los mocks del cliente suman `listOwnedObjects` y `getObject` del cap sin romper
   los tests viejos.
 
 ### 8. Al terminar
