@@ -1679,8 +1679,8 @@ En el handoff completo, el hex largo solo aparece donde ya estaba declarado (los
 **5. Dirección de cuenta: ✅, 0 en el repo**
 - La busqué **sin imprimirla**: lectura pública gRPC del `sender` de `4yK3mtfz…` y búsqueda en todos los archivos de
   `git ls-files`, leídos del worktree con los cambios sin commitear. Cuatro formas: completa, primeros 16 hex, últimos 16
-  y la abreviada de la app (`643a…8a3d`). Resultado: **0 archivos** en las cuatro.
-- `grep -nE '643a|8a3d'` en los tres archivos: vacío.
+  y la abreviada de la app (forma `xxxx…xxxx` del "Creador"). Resultado: **0 archivos** en las cuatro.
+- `grep` de la forma abreviada en los tres archivos: vacío.
 - La forma abreviada aparece **solo** en `<scratchpad>/b10/run/b10-out.txt` (texto visible de `#/game/…`, "Creador"),
   que no se commitea. No aparece en `REPORTE_TASK5_8.txt` ni en `probe-out.txt`. El `ADMIN` de la localnet de B11 no se
   imprimió.
