@@ -10,6 +10,13 @@
 
 ---
 
+### D-20261104-06 — Custodia del `HouseCap` en testnet (N-3 de #14, decidida en #8)
+- **Decisión:** el `HouseCap` de la publicación en testnet del 2026-11-04 (#8) se queda en la dirección publicadora, que el owner importó en su wallet de navegador y desde la que administra el panel (`#/admin`). No hay `transfer_house_cap`. El `UpgradeCap` y el `Publisher` siguen en la misma dirección (D-20261103-01 (1)).
+- **Riesgo aceptado:** la cuenta que firma en el panel tiene también el `UpgradeCap` y el `Publisher`. Quien la controle puede upgradear el paquete y publicar código que mueva el `stake` de las partidas `Pending` y las comisiones (`contracts/README.md`, "Modelo de confianza"). Se acepta **solo en testnet**. Es reversible con `transfer_house_cap` (checklist de `contracts/README.md`, "Qué pasa si se pierde el cap") y **no vale como precedente para mainnet** (`agents.md` §12, "Mainnet").
+- **Alternativa descartada:** `transfer_house_cap` por CLI a otra wallet de navegador, que deja el `UpgradeCap` y el `Publisher` fuera de la extensión.
+- **Motivo:** N-3 (`contracts/README.md`, "Qué pasa si se pierde el cap"; `agents.md` §12) deja la elección al owner. Con la publicadora ya importada no hace falta ninguna transacción. La custodia queda verificada cuando B5 de #8 da PASA (`HouseCap`, `UpgradeCap` y `Publisher` con dueño = el sender de la publicación, `true` ×3). Recién entonces S-5 de #17 queda cumplido, sin `dcap`. Si B5 falla, la premisa cae y N-3 se reabre (STOP).
+- **Aprobado por:** usuario ("lo dejo", 2026-11-04). **Fecha:** 2026-11-04.
+
 ### D-20261104-04 — README raíz: cierre, IDs de testnet e idioma (STOPs de producto del plan de #16, tomadas por el orquestador por delegación del usuario, D-20261104-01)
 - **Decisión:** (1) **P-1 = (a):** el PR principal de #16 va con `Refs #16`; `Closes #16` va en el PR de seguimiento que completa lo que depende de #8 (URL pública de Railway, enlace a `testnet.json`), igual que #15. (2) **P-2 = (a):** el README **enlaza** `contracts/deployments/testnet.json` y no copia IDs (se puede republicar hasta #17, D-20261103-01). (3) **P-3 = (a):** el README va en español, coherente con la UI y los docs; el inglés queda fuera de alcance.
 - **Alternativa descartada:** (1) `Closes #16` con un issue nuevo para lo de #8, o esperar a #8 para todo; (2) copiar el package ID con enlace a Suiscan; (3) inglés o bilingüe.

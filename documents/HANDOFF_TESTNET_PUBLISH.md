@@ -2,8 +2,9 @@
 
 > Plan: — (chore; hace de plan la revisión de pre-vuelo del MAYOR, `documents/REVISION_PREVUELO_TESTNET.md` §2.4, §3.3 y §4,
 > veredicto APTO CON PRE-REQUISITOS) | Issue: #8 | Branch: `feature/issue-8-testnet-publish` | PR: #48 (draft) |
-> **Versión: v1.1** | Fecha: 2026-11-03 | Autor: MID | Estado: v1 aprobada por el MAYOR (APPROVE, 0 🔴/🟠, 6 🟡,
-> 5 🔵); la v1.1 solo incorpora esa revisión y no vuelve a revisión (lo aceptó el MAYOR)
+> **Versión: v1.2.1** | Fecha: 2026-11-04 | Autor: MID | Estado: v1 aprobada por el MAYOR (APPROVE, 0 🔴/🟠, 6 🟡,
+> 5 🔵), incorporada en v1.1. v1.2 (addendum S-3) revisada por el MAYOR (APPROVE con cambios, 0 🔴/🟠, 4 🟡, 9 🔵);
+> **v1.2.1 incorpora MINOR-1..4 y los 🔵 1-9, aprobada por el MAYOR; TASK-5 autorizado** sobre el head mergeado `24afcec`
 
 ## Changelog
 
@@ -11,6 +12,8 @@
 |---|---|---|
 | v1 | 2026-11-03 | Versión inicial. Aprobada por el MAYOR; TASK-1 autorizado con esta versión |
 | v1.1 | 2026-11-03 | Revisión del MAYOR de la v1. **m-1** (TASK-3 (d) y A12): la regla de cierre M-7 chequea cada ruta por separado (`test ! -e` y `compgen -G`), no con un único `ls`. **m-2** (TASK-2): la verificación impresa lleva el campo en un comentario `#`, para que la línea se pueda pegar, con su test. **m-3** (TASK-3, pasos 1 y 5): un `localnet.json` viejo se detecta y se borra en el paso 1. **m-4** (TASK-5 §3.2): la sonda corre por stdin con cwd `<repo>/app`, así resuelve `@mysten/sui`. **m-5** (A5): `D` va a `ids.env`. **m-6** (G1): la branch queda congelada entre G1 y G3. **s-1** adoptado (paso 1: chequeo de que el realpath de `SUI_CONFIG_DIR` esté fuera de `~/.sui`). **s-2** hecho (PR #48 en draft, la CI ya corre). **s-3** adoptado (permalink al `<head>` en el comentario de #8, que se publica en G1). **s-4** adoptado (B7 no falla por partidas ajenas creadas antes de la comisión). **s-5** adoptado (la sonda solo imprime booleanos, IDs y montos, y sus errores solo el mensaje). Comentario de #8 con PR #48. El addendum por P-C pasa a llamarse v1.2 |
+| v1.2 | 2026-11-04 | **Addendum S-3** (secuencia S-1..S-8 de `HANDOFF_SMOKE_MVP.md` de #17). P-C **no** se usó: la PV medida en el paso 2 fue 140, así que la v1.2 es este addendum y no hay v1.3. Registra G2 y G3 hechos (publicación del owner desde `26f2676`, commit `327f5d4`) y el merge de `master` (`24afcec`, S-2). **§0** nuevo con el baseline del head mergeado, leído de su CI (run 41846247546), y el delta contra `26f2676` declarado (§0.2); el baseline v1/v1.1 queda como histórico. **§"Entrega del owner"** nueva (B0 resuelto, N-3 decidido: "lo dejo"). **TASK-5:** §2 con los modelos gRPC vigentes (los números de línea de `capture-tx-fixtures.mjs` cambiaron con #12); §3.1 sobre `327f5d4` en vez de `HEAD`; B4 anota `initial_shared_version` (1 en testnet, 2 en el ensayo de localnet; nada lo compara); B5 = custodia final por N-3; B8 con el saldo como *address balance*; B9 con los conteos de §0; B10 suma `#/my-games` y `#/admin` sin wallet con sus textos literales; B11 apunta a los smokes en localnet posteriores (TASK-2 de #17); la tabla del smoke se actualiza a v1.2. **TASK-6:** los docs de `master` ya traen #12-#16, así que se precisa qué se toca y qué **no** (lo de #15 y #16); `agents.md` §12 conserva las líneas de Railway; `README.md:27` pierde "(PR #48)" solo si TASK-5 de #16 no lo hizo; reconciliación del texto de custodia del runbook (`contracts/README.md:687-688`, era `:600-601` en `26f2676`) con el texto neutral de N-3 que trajo `master`, más la decisión N-3; STATUS "Siguiente" corregido (#12 y #14 ya están mergeados). Texto propuesto para registrar N-3 en `DECISIONES.md`. Recordatorio S-5 |
+| v1.2.1 | 2026-11-04 | Revisión del MAYOR de la v1.2 (APPROVE con cambios: 0 🔴/🟠, 4 🟡, 9 🔵), sin otra ronda. **MINOR-1:** el bundle se exige **idéntico** al de la CI (`index-B3BeMVQC.js   917.80 kB │ gzip: 277.96 kB`); cualquier diferencia de nombre o tamaño es STOP (§3.3, B9). **MINOR-2:** D-20261104-06 suma el riesgo aceptado (la cuenta del panel tiene también el `UpgradeCap` y el `Publisher`; solo testnet, reversible, sin precedente para mainnet), y se quita el relato de cómo se creó la cuenta (observaciones y paso 0 del runbook). **MINOR-3:** S-5 se cumple recién cuando B5 da PASA; si B5 falla, STOP y N-3 se reabre. **MINOR-4:** D-20261103-01 está en la branch de #8, no en `master`. **🔵 1-9:** includes de `getTransaction` (`transaction`, `balanceChanges`); paso 12 del runbook después de B1-B5; comando mecánico del delta de `Move.toml`; `app/README.md` conserva la oración del explorador; `D-20261103-01` sin enlace en `README.md`; `GAME` abreviado `0x6173…6858` en la higiene y el smoke; el *address balance* queda como observación, no va a los docs durables; D-20261104-06 la aplica el orquestador en la branch de #8 **antes de TASK-6** (texto final abajo); línea de estado y aviso de baseline al MID de #17 |
 
 > Decisión (2026-11-03, s-1): se adopta. Las llamadas `suio` del runbook (comisión, custodia, smoke) no pasan por el
 > script, así que nada comprueba que `SUI_CONFIG_DIR` apunte fuera de `~/.sui`; una línea en el paso 1 cubre ese hueco.
@@ -50,7 +53,54 @@ llega a 141 o más: addendum de este handoff); cambios en el código Move; upgra
 
 ---
 
-## 0. Baseline de gates verificado (2026-11-03, `c144d40`)
+## 0. Baseline de gates verificado — v1.2 (2026-11-04, `24afcec`, head mergeado)
+
+Rige para TASK-5 y TASK-6. Lo leyó el MID de la CI del head, sin correr gates (D-20261030-02).
+
+### 0.1 Head y CI
+
+| Qué | Valor | Fuente |
+|---|---|---|
+| Branch | `feature/issue-8-testnet-publish` @ `24afcec` = merge de `master` (`eb5332e`, trae #12-#16) sobre `327f5d4` (G3), con merge commit (S-2, D7). PR #48 en draft | `git log` |
+| Publicación | desde `26f2676` (`sourceCommit` de `testnet.json`), ancestro de `24afcec`. CI de `26f2676`: run 41754236438 (`pull_request`), `contracts`, `app` y `framework-drift` *success* | `git merge-base --is-ancestor`, `gh api …/commits/26f2676/check-runs` |
+| CI de `24afcec` | run **41846247546** (`pull_request`): `contracts` (job 126630406415), `app` (126630406692), `framework-drift` (126630406271) y `deploy-image` (126630405583), los cuatro *success*. Anotaciones: 0 en `contracts`, `app` y `framework-drift` (sin aviso H13: lock al día); 1 *notice* en `deploy-image` (P13) | `gh api …/commits/24afcec/check-runs`, `…/check-runs/<id>/annotations`, `gh run view 41846247546 --log` |
+| contracts | build **0 warnings**, `--lint` **0 lints** (los dos con `--warnings-are-errors`), test **83 PASS** (`Total tests: 83; passed: 83; failed: 0`); `Move.lock` sin delta; cero claves | log del job `contracts` |
+| contracts/scripts | `node --test scripts/*.test.mjs` **104 PASS** (`ℹ tests 104`, `pass 104`, `fail 0`); `check` = **`1 despliegue(s) válidos y coherentes con Published.toml`** | log del job `contracts` |
+| app | `npm ci` (11 *moderate* solo dev, #35); 292 firmas verificadas; `npm audit --omit=dev --audit-level=high` **0**; lint 0; typecheck 0; **1156 tests PASS en 65 archivos**; build testnet `dist/assets/index-B3BeMVQC.js` **917.80 kB** (277.96 kB gzip); árbol limpio | log del job `app` |
+| deploy-image | **Modo positivo** ("el contexto tiene contracts/deployments/testnet.json"): **P1-P13** en verde. P1 imagen construida; P2 responde en `:8080`; P3 corre como 65534 con `--cap-drop=ALL`; P4 CSP idéntica a la del `Caddyfile`; P5 cabeceras y `Cache-Control` exactas; P6 sin COOP ni `Server`; P7-P8 `index-B3BeMVQC.js` 200 `immutable` y con zstd; P9 favicon; P10-P12 los tres 404; P13 `OK (positivo): …` con `::notice::` | log del job `deploy-image` |
+| CLI / Node | `sui 1.83.0-16d2dc1e05ed` (`ci.yml`, sin cambios); Node v26.13.0 (`.nvmrc` = 26) | `ci.yml`, STATUS Toolchain |
+| `Move.lock` | `05ad86a3…` (piso de la PV 140) en `[pinned.testnet.MoveStdlib]` y `[pinned.testnet.Sui]`; sin delta desde `26f2676` | `git diff 26f2676 24afcec -- contracts/Move.lock` vacío |
+
+### 0.2 Delta contra `26f2676` (lo que trajo `master`)
+
+`git diff --stat 26f2676 24afcec`: 116 archivos. Por área:
+
+- **`contracts/`:** `sources/`, `tests/`, `scripts/` y `Move.lock` **sin cambios**. Cambian `Move.toml` (+1 línea,
+  `license = "Apache-2.0"`, #16), `README.md` (#12-#14: fixtures, cancelaciones del runtime, checklist del cap, panel,
+  "Mis partidas"), `fixtures/game-tx.localnet.json` (#12) y `fixtures/house-admin.localnet.json` (nueva, #14). G3 agrega
+  `deployments/testnet.json` y `Published.toml` (`327f5d4`, tal cual).
+  - El `license` del manifest no entra en el bytecode, así que el paquete que compila `24afcec` es el publicado. Prueba
+    en la CI: con `Published.toml` presente y el `Move.toml` nuevo, build, lint y test sin warnings (§0.1). TASK-5 §3.3
+    lo repite en local.
+- **`app/`:** #12 (aceptar), #13 (`#/my-games`), #14 (`#/admin`, panel de la House), #15 (`Caddyfile`, `public/`,
+  `scripts/check-deploy-image.sh`), `app/package.json` (+`license`, #16).
+- **Raíz y CI:** `Dockerfile` y `.dockerignore` (#15); job `deploy-image` en `ci.yml` (#15, no requerido); `README.md`
+  reescrito (#16); `license` en `package.json` (+1 línea) y `package-lock.json` (+2, raíz y `app`), #16.
+- **`documents/` y `agents.md`:** STATUS, DECISIONES (D-20261104-01..04) y los artefactos de #15 y #16 (`PLAN_`,
+  `HANDOFF_`, `REPORTES_`, `SMOKE_RAILWAY_DEPLOY.md`, que borra su housekeeping, no este PR).
+
+**Conteos contra el baseline de `26f2676`** (run 41754236438) y de `master` `eb5332e` (run 41819936013):
+
+| Gate | `26f2676` | `master` `eb5332e` | `24afcec` | Por qué |
+|---|---|---|---|---|
+| contracts test | 83 | 83 | 83 | sin cambios Move |
+| `node --test` | 104 | 99 | **104** | los 5 tests de TASK-2 de #8 no están en `master` |
+| `check` | 0 despliegues | 0 despliegues | **1 despliegue(s)** | `testnet.json` + `[published.testnet]` (G3) |
+| app tests / archivos | 630 / 46 | 1156 / 65 | **1156 / 65** | #12-#14 |
+| `index-*.js` | 877.90 kB | 917.02 kB | **917.80 kB** | #12-#14, más los IDs de `testnet.json` en el bundle (+0,78 kB contra `master`) |
+| `deploy-image` | (no existía) | negativo | **positivo, P1-P13** | `testnet.json` presente |
+
+### 0.3 Baseline v1/v1.1 (2026-11-03, `c144d40`; histórico, ya no rige)
 
 | Qué | Valor | Fuente |
 |---|---|---|
@@ -67,9 +117,66 @@ llega a 141 o más: addendum de este handoff); cambios en el código Move; upgra
 | Manifest del framework @ `testnet-v1.83.0` | clave `140` = `05ad86a3e86c522deea116f80dc2bf2309a53363`, clave `139` = `719fb29…`; clave máxima **140** | `crates/sui-framework-snapshot/manifest.json` (lectura pública por tag) |
 | `~/.sui/sui_config/` | solo `client.yaml`, 244 B, mtime 2026-10-30 17:52:52 | `ls` / `stat` |
 
-**Ventana:** devnet ya está en PV 141 (pre-vuelo §2.1). Con la cadencia observada, `testnet-v1.84` y la PV 141 en testnet
+**Ventana (v1/v1.1):** devnet ya está en PV 141 (pre-vuelo §2.1). Con la cadencia observada, `testnet-v1.84` y la PV 141 en testnet
 pueden llegar en 1-2 semanas. TASK-1 a TASK-4 conviene cerrarlos sin pausas; si la PV sube antes de publicar, rige P-C
-(§"Secuencia", puerta G2).
+(§"Secuencia", puerta G2). **v1.2:** cerrada; el owner publicó con PV 140 (época 1273) y P-C no se usó. Que la PV suba
+después no afecta a TASK-5 ni a TASK-6: el `framework-drift` volvería a avisar H13 (informativo) y el repin queda para
+el próximo cambio del paquete.
+
+## Entrega del owner (G2) y estado de las puertas (v1.2)
+
+| Puerta | Estado |
+|---|---|
+| G1 | ✅ head `26f2676` con la CI verde (run 41754236438); D-20261103-01 con S-4 y la autorización del owner |
+| G2 | ✅ 2026-11-04: el owner corrió el runbook, pasos 0-11, desde `26f2676`. PV **140**, época **1273** (paso 2). Dry run: `Gas estimado: 47246000 MIST.` |
+| G3 | ✅ `327f5d4`: `contracts/deployments/testnet.json` y `contracts/Published.toml` tal cual (`check` = 1 despliegue). Después, S-2: merge de `master` en `24afcec` |
+
+Entrega del paso 11 (todo público; es la fila B0 de la Parte B):
+
+| Clave | Valor |
+|---|---|
+| Publicación (`publishTxDigest`) | `4yK3mtfz4e2Ztn3V9XCP7aeCxL7gHHt4r4ffbfoZXo7s` |
+| Comisión 0 → 200 | `BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw` |
+| Crear (`min_bet`) | `FpqGNLhCFdK8rEdLJdQwMKqd2bEigiHsuzah1zrXJXu4` → `GAME` = `0x61735068a62428f0cab8f397e82cb206515dac97426f1ceb49d5633e8e756858` |
+| Cancelar | `9up8hCmk7hJMhqxNeufyr2PTCBp5nsNyGfgLuVnnsVP7` |
+| Custodia (paso 8) | `HouseCap`, `UpgradeCap` y `Publisher` en la dirección publicadora: sí ×3 |
+| PV / época (paso 2) | 140 / 1273 |
+
+Observaciones del orquestador (sin datos de la cuenta):
+
+- **Saldo como *address balance*.** Según el owner, el saldo estaba como *address balance* y `--split-coins gas` del paso
+  9 funcionó igual. Una lectura pública del MAYOR no es concluyente: la comisión y cancelar tienen `gasData.payment`
+  vacío, pero crear tiene un objeto de pago. Queda como observación del orquestador; no va a los docs durables. B8 anota
+  la forma real.
+- **`initial_shared_version` de la House = 1** en testnet (en el ensayo de localnet, A7, fue 2). El runbook ya dice `N`,
+  así que no es desvío. Nada de TASK-5 lo compara con 2 (B4 solo lo anota), ni la app (`contracts/README.md:625`: lo
+  resuelve el SDK). Va como aviso para la sonda de #17.
+- **Cuenta publicadora.** La publicadora es también la cuenta con la que el owner firma en el panel (`#/admin`).
+
+> **N-3 decidido por el owner (2026-11-04, textual: "lo dejo").** El `HouseCap` se queda en la dirección publicadora, que
+> el owner ya administra desde su wallet de navegador. No hay `transfer_house_cap` ni digest `dcap`. Como lo decidió
+> **antes** de B5, B5 verifica la custodia definitiva (`HouseCap`, `UpgradeCap` y `Publisher` con dueño `S`, `true` ×3) y
+> **no hace falta ninguna transacción**. S-5 de #17 queda cumplido **cuando B5 dé PASA** (`true` ×3): "custodia =
+> publicadora importada", sin `dcap`. **Si B5 falla, STOP al MID: N-3 se reabre.** El orquestador registra la decisión en
+> `DECISIONES.md` como D-20261104-06, en la branch de #8 y **antes de TASK-6** (§"Texto de D-20261104-06").
+>
+> **Recordatorio S-5:** la custodia N-3 va **después de B5**. Con "lo dejo" no hay nada que ejecutar. Si el owner cambiara
+> de idea, el `transfer_house_cap` va recién después de B5, por CLI y con el checklist de `contracts/README.md`, "Qué
+> pasa si se pierde el cap"; su digest es el `dcap` de #17.
+
+**Para #17 (lo lleva el orquestador al MID de #17; este handoff no edita el de #17):**
+
+- `digests.json` va **sin** `dcap`. El bloque `pre` de la sonda imprime `sin dcap: 0.5 solo con el dueño actual`, y el
+  dueño que lee 0.5 es la publicadora (el `S` de B3/B5 de #8).
+- En la plantilla de `SMOKE_MVP.md`, "custodia por `<transfer_house_cap | publicadora importada>`" se completa con
+  **publicadora importada**.
+- Si la publicadora también juega como la cuenta A, `W = A` y la suma de `final` es la de v1.1. Si no juega, es el caso
+  "cap en una cuenta que no juega" que re-ensayó TASK-2b. C-1 cubre los dos, y la elección es del owner en #17.
+- **Baseline de `master` después de S-4** (para el §0 de `HANDOFF_SMOKE_MVP.md:108-110`, que dice 99 y "0 despliegues"):
+  scripts **104**, `check` = `1 despliegue(s) válidos y coherentes con Published.toml`, `index-B3BeMVQC.js` 917.80 kB y
+  `deploy-image` positivo (§0.1).
+- `initial_shared_version` de la House en testnet = 1 (§ arriba). La sonda no lo compara; si algún check nuevo lo usara,
+  tendría que leerlo de la red y no asumir el 2 de localnet.
 
 ## Decisiones del owner (no reabrir)
 
@@ -82,6 +189,7 @@ pueden llegar en 1-2 semanas. TASK-1 a TASK-4 conviene cerrarlos sin pausas; si 
 | D5 | `~/.sui/sui_config/` queda **sin claves para siempre** | D-20261030-07 |
 | D6 | `deployments/testnet.json` (14 campos, sin direcciones) lo escribe solo el script; `Published.toml` es la fuente y se commitea | D-20261102-01 |
 | D7 | Merge con **merge commit**, nunca squash: los SHAs citados (y el `sourceCommit`) siguen existiendo en `master` | D-20261030-09 |
+| D8 (v1.2) | **N-3:** el `HouseCap` se queda en la dirección publicadora, ya importada en la wallet de navegador del owner; sin `transfer_house_cap` | owner, "lo dejo" (2026-11-04); D-20261104-06 (§"Texto de D-20261104-06"), con el riesgo aceptado y la condición de B5 |
 
 ## Decisiones del MID (actuar y reportar)
 
@@ -162,6 +270,10 @@ G3  entrega del owner (runbook paso 11) → el orquestador commitea testnet.json
         ▼
 TASK-5 verificación post-publicación ─▶ TASK-6 docs post-publicación ─▶ revisión de integración del MAYOR ─▶ merge
 ```
+
+**v1.2:** G1, G2 y G3 ✅ (§"Entrega del owner"). La congelación de m-6 terminó con `327f5d4`; después vino el merge de
+`master` (`24afcec`, S-2), que es el head de TASK-5 y TASK-6. Sigue la regla de P-6: ni rebase ni squash, porque
+`26f2676` tiene que seguir siendo ancestro de `master`. TASK-5 empieza recién cuando el MAYOR revise esta v1.2 (S-3).
 
 ---
 
@@ -722,6 +834,10 @@ Reporte §5 con la Parte A completa. Commit sugerido: `docs: rehearse the testne
 > **Condicionado a la entrega del owner** (runbook paso 11) y al commit del orquestador de `contracts/deployments/testnet.json`
 > + `contracts/Published.toml`, **tal cual los generó el script y la CLI**, en un commit propio:
 > `contracts: record the testnet deployment (#8)`. Ningún agente edita esos dos archivos.
+>
+> **v1.2: precondiciones cumplidas.** Entrega recibida, commit `327f5d4` ("chore: record the testnet publication from
+> 26f2676 (#8)") y merge de `master` en `24afcec`. Se corre sobre `24afcec`, o sobre el head que pase el orquestador si
+> es descendiente y solo agrega docs, con el baseline de §0. **Autorizado recién con la revisión del MAYOR de la v1.2.**
 
 ### 1. Historia de usuario del task
 
@@ -732,19 +848,38 @@ en verde con los archivos publicados, **para** cerrar #8 con evidencia y sin hab
 ### 2. Contexto
 
 - Lectura pública por gRPC con `SuiGrpcClient` (`@mysten/sui` 2.37.0, ya instalado por `npm ci` en el workspace) contra
-  `https://fullnode.testnet.sui.io:443` (`app/src/sui/networks.ts:12`). Modelo de las llamadas:
-  `app/scripts/capture-tx-fixtures.mjs:23,66,94-96,125,137,196` (`getObject` con `include: { json: true }`,
-  `getTransaction` con `effects`/`events`/`objectTypes`). Sin `sui client`, sin firmar nada.
+  `https://fullnode.testnet.sui.io:443` (`app/src/sui/networks.ts:12`). Modelo de las llamadas (**v1.2**: #12 y #14
+  cambiaron las líneas que citaba la v1.1):
+  - `getTransaction({ digest, include: { effects: true, events: true, objectTypes: true } })`:
+    `app/scripts/capture-tx-fixtures.mjs:251` y `capture-house-fixtures.mjs:246`. **v1.2.1:** la sonda pide además
+    `transaction: true` (sender `S`: B3, B6 y B7) y `balanceChanges: true` (B8), como el modelo de #17
+    (`HANDOFF_SMOKE_MVP.md:252-254`): `{ effects: true, events: true, objectTypes: true, transaction: true, balanceChanges: true }`;
+  - `getObject` de la House con `include: { content: true, json: true }`: `capture-house-fixtures.mjs:261`;
+  - `getObject` del cap y su dueño: `capture-house-fixtures.mjs:107` y `:260`;
+  - `getServiceInfo` (chain id): `capture-house-fixtures.mjs:79`;
+  - `ListEvents` por tipo con la cota de historial: `app/src/sui/eventScan.ts` (`eventTypeFilter`, `requestEvents`,
+    `historyLowerBound`).
+
+  Sin `sui client`, sin firmar nada.
 - La "cuenta del owner" se identifica **sin conocer la dirección**: es el `sender` de la transacción de publicación
   (`publishTxDigest`). Se guarda en memoria como `S` y solo se imprimen comparaciones (`true`/`false`).
 
 ### 3. Qué implementar
 
-1. **Archivos** (`contracts/`): `git show --stat HEAD` (solo los dos archivos); `node scripts/publish.mjs check` →
-   `1 despliegue(s) válidos y coherentes con Published.toml`; `jq` de `deployments/testnet.json`: 14 claves, `network`
-   `testnet`, `chainId` `4c78adac`, `packageId` = `originalPackageId`, `packageVersion` 1, `suiCliVersion`
-   `1.83.0-16d2dc1e05ed`, `frameworkRev` `05ad86a3…`; `git merge-base --is-ancestor <sourceCommit> HEAD` → 0, y CI verde
-   en ese commit (`gh api repos/sdelvalle57/sui_battleship/commits/<sourceCommit>/check-runs`).
+1. **Archivos** (`contracts/`):
+   - **v1.2:** `git show --stat 327f5d4` (el commit de G3, solo los dos archivos; `HEAD` ya es el merge). Además,
+     `git diff --exit-code 327f5d4 HEAD -- contracts/deployments/testnet.json contracts/Published.toml` = 0: el merge no
+     los tocó;
+   - `node scripts/publish.mjs check` → `1 despliegue(s) válidos y coherentes con Published.toml`;
+   - `jq` de `deployments/testnet.json`: 14 claves, `network` `testnet`, `chainId` `4c78adac`, `packageId` =
+     `originalPackageId`, `packageVersion` 1, `suiCliVersion` `1.83.0-16d2dc1e05ed`, `frameworkRev` `05ad86a3…`,
+     `sourceCommit` = el SHA completo de `26f2676`;
+   - `git merge-base --is-ancestor <sourceCommit> HEAD` → 0, y CI verde en ese commit
+     (`gh api repos/sdelvalle57/sui_battleship/commits/<sourceCommit>/check-runs`: run 41754236438, §0.1);
+   - **v1.2:** `git diff --stat <sourceCommit> HEAD -- contracts/sources contracts/Move.lock` vacío, y
+     `git diff -U0 <sourceCommit> HEAD -- contracts/Move.toml | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) '` da
+     exactamente una línea, `+license = "Apache-2.0"` (§0.2). Cualquier otro delta en esas rutas: STOP, porque el head ya
+     no compila lo publicado.
 2. **Sonda gRPC.** El script vive en `<scratchpad>/verify-testnet.mjs` y no se commitea.
    - **Cómo se corre (m-4):** por stdin, con cwd en `<repo>/app`:
      `cd <repo>/app && "$NODE" --input-type=module < <scratchpad>/verify-testnet.mjs`. En ESM, el `import` de un
@@ -758,22 +893,38 @@ en verde con los archivos publicados, **para** cerrar #8 con evidencia y sin hab
      `error.message`, sin `error.cause` ni la respuesta, y el DEV revisa que ese mensaje no traiga hex de 64 antes de
      pegarlo.
    - Checks: los de la Parte B (§6).
-3. **Gates con los archivos publicados:** los de contracts de TASK-1 §5 (0 / 0 / 83, `node --test` N de TASK-2,
-   `check` = 1 despliegue, `git diff --exit-code -- Move.lock`) y los del job `app` (`agents.md` §3: `npm ci`, audit, lint,
-   typecheck, test, `VITE_SUI_NETWORK=testnet npm run build -w app`), con árbol limpio al final. Si `sui move build/test`
-   cambia de comportamiento porque `Published.toml` ya trae `[published.testnet]` (warning nuevo, conteo distinto):
-   STOP con el output.
+3. **Gates con los archivos publicados**, con el baseline de §0.1 (v1.2):
+   - contracts, como en TASK-1 §5: build 0 warnings, lint 0, test **83**, `node --test` **104**, `check` =
+     **`1 despliegue(s) válidos y coherentes con Published.toml`**, `git diff --exit-code -- Move.lock`;
+   - los del job `app` (`agents.md` §3: `npm ci`, audit, lint, typecheck, test, `VITE_SUI_NETWORK=testnet npm run build -w app`):
+     lint 0, typecheck 0, **1156 tests en 65 archivos**, y la línea del build **idéntica** a la de la CI:
+     `dist/assets/index-B3BeMVQC.js   917.80 kB │ gzip: 277.96 kB`;
+   - árbol limpio al final.
+
+   Si `sui move build/test` cambia de comportamiento porque `Published.toml` ya trae `[published.testnet]` (warning nuevo,
+   conteo distinto): STOP con el output. La CI de `24afcec` ya dio 0/0/83 con los dos archivos y el `Move.toml` de #16.
+   Un conteo de la app distinto de 1156/65 también es STOP. **Cualquier diferencia de nombre o de tamaño del bundle**
+   contra `index-B3BeMVQC.js   917.80 kB │ gzip: 277.96 kB` es STOP con el output (MINOR-1 de la v1.2). El build es
+   reproducible (`git diff --stat eb5332e 24afcec -- app/` vacío), y sin `testnet.json` el bundle da 917.02 kB.
 4. **🌐 App de testnet, solo lectura** (cierra la rama "con `testnet.json`" del paso 15 del smoke de #9): build de testnet
    + `npm run preview -w app` en `127.0.0.1` + Chrome headless con perfil desechable (reglas de navegador de `agents.md`
    §3 paso 6; sin wallet). Sin `contracts/deployments/localnet.json` en la máquina (README de la app, "Origen del build").
-5. **Localnet aislada, variante B, con los archivos publicados** (lo que van a vivir los smokes de #12): publicación
-   efímera sin `--out`, `check` con los dos json y cierre con la regla M-7. Si `test-publish --build-env testnet` falla o
-   toca `Published.toml` porque ya existe `[published.testnet]`: STOP. No revierte la publicación, pero bloquea los
-   smokes de #12 y hay que decidirlo antes.
+   **v1.2:** cuatro rutas, `#/`, `#/game/<GAME>`, `#/my-games` y `#/admin`, con los textos literales de B10 (salen de
+   `app/src` @ `24afcec`). La imagen de Railway con cabeceras y CSP la cubre `deploy-image` (§0.1) y el smoke B de #15
+   (S-7), no este paso.
+5. **Localnet aislada, variante B, con los archivos publicados** (lo que van a vivir los smokes en localnet posteriores,
+   TASK-2 de #17; sus ensayos corrieron hasta ahora sin `[published.testnet]`): publicación efímera sin `--out`, `check`
+   con los dos json y cierre con la regla M-7. Si `test-publish --build-env testnet` falla o toca `Published.toml` porque
+   ya existe `[published.testnet]`: STOP. No revierte la publicación, pero bloquea los smokes en localnet posteriores
+   (TASK-2 de #17 y las recapturas de fixtures) y hay que decidirlo antes.
 
 ### 4. Archivos
 
 - **Tocar:** `documents/SMOKE_TESTNET_PUBLISH.md` (Parte B), `documents/STATUS.md` (filas de baseline/evidencia).
+  - **v1.2, en el smoke:** el encabezado pasa a "handoff v1.2". Las columnas "Acción" y "Resultado esperado" de B0, B4,
+    B5, B8, B9, B10 y B11 se copian de la tabla de §6 de esta versión **antes** de correr. B0 se completa con la
+    entrega de §"Entrega del owner" (el owner ya la dio: se anota como `owner: …`, sin otra fuente). La nota
+    "Pendiente: se completa después de G3" se quita. Las filas se llenan durante la corrida (FLUJO §6).
 - **NO tocar:** `contracts/deployments/testnet.json`, `contracts/Published.toml`, código.
 
 ### 5. Gates
@@ -784,18 +935,18 @@ Los del punto 3, con output pegado; `git status --porcelain --untracked-files=al
 
 | # | Acción | Resultado esperado |
 |---|---|---|
-| B0 | Entrega del owner (runbook paso 11) | 2 archivos sin editar; 4 digests; custodia "sí" ×3; PV 140 + época del paso 2 |
+| B0 | Entrega del owner (runbook paso 11) | 2 archivos sin editar; 4 digests; custodia "sí" ×3; PV 140 + época del paso 2. **v1.2: ya recibida** (§"Entrega del owner"): se anota como `owner: …` con los 4 digests, `GAME` abreviado `0x6173…6858` (DL-5: el ID completo no se pega en el smoke), PV 140, época 1273, gas estimado del dry run 47246000 MIST y N-3 = "lo dejo"; los dos archivos = `327f5d4` |
 | B1 | Punto 1 de §3 (archivos, `check`, `sourceCommit`, CI) | todo como en §3.1 |
 | B2 | gRPC: chain id del servicio | `4c78adac` |
 | B3 | gRPC: `getTransaction(publishTxDigest)` | `success`; objetos creados: el paquete `packageId`, la House `houseId` (compartida), `houseCapId`, `upgradeCapId` y un `0x2::package::Publisher`; `S` = sender (no se imprime) |
-| B4 | gRPC: `getObject(houseId)` con `json` | dueño `Shared`; `fee_rate` 200, `min_bet` 1000000, `max_bet` 50000000000, `version` 1, `fees_collected` 0 (o el acumulado si ya hubo partidas aceptadas: anotarlo) |
-| B5 | gRPC: dueño de `houseCapId`, `upgradeCapId` y del `Publisher` | `AddressOwner == S` → `true` ×3 (la dirección no se imprime) |
+| B4 | gRPC: `getObject(houseId)` con `json` | dueño `Shared`; `fee_rate` 200, `min_bet` 1000000, `max_bet` 50000000000, `version` 1, `fees_collected` 0 (o el acumulado si ya hubo partidas aceptadas: anotarlo). **v1.2:** anotar el `initialSharedVersion` leído (se espera 1; en el ensayo de localnet fue 2). Es informativo: ningún valor lo hace NO PASA |
+| B5 | gRPC: dueño de `houseCapId`, `upgradeCapId` y del `Publisher` | `AddressOwner == S` → `true` ×3 (la dirección no se imprime). **v1.2:** es la custodia **definitiva**, porque N-3 = "lo dejo" (sin `transfer_house_cap`, sin `dcap`). Se anota así en la fila, como evidencia de S-5 de #17. **v1.2.1:** un `false` es NO PASA y STOP al MID: N-3 se reabre (D-20261104-06) |
 | B6 | gRPC: `getTransaction(<digest comisión>)` | `success`; sender `== S`; `FeeRateUpdated` `old_fee_rate` 0 → `new_fee_rate` 200; checkpoint > el de la publicación y < el de la creación |
 | B7 | gRPC: `getTransaction(<digest crear>)` + todos los `GameCreated` del paquete (`ListEvents` por tipo `<originalPackageId>::game::GameCreated`) | `success`; sender `== S`; `bet` 1000000, `fee_rate` 200, `opponent` none; todos los `GameCreated` con creador `== S` tienen `fee_rate` 200 (ninguna partida del owner nació con comisión 0). **s-4:** una partida de otro creador con `fee_rate` ≠ 200 (creada por un tercero antes de la comisión) se anota en la tabla con su `game_id` y su `fee_rate` (es inocua en testnet, D-20261030-11) y **no** hace NO PASA; solo se imprime `creador == S` → `false`, no su creador |
-| B8 | gRPC: `getTransaction(<digest cancelar>)` + `getObject(GAME)` | `success`; `GameCancelled` `refund` 1000000 y `cancelled_by == creator == S`; `Game` en `Cancelled` con `stake` 0; `balanceChanges` de `S`: crear = −(1000000 + gas neto), cancelar = +1000000 − gas neto |
-| B9 | Gates de §3.3 | verdes, conteos anotados |
-| B10 | 🌐 §3.4: `#/`, `#/game/<GAME>` | indicador "testnet · nodo OK"; lobby con el texto honesto de "sin partidas abiertas" (salvo que alguien haya creado una); detalle de `GAME` "Cancelada" con comisión 2 %; sin wallet de desarrollo; consola sin errores |
-| B11 | §3.5: localnet aislada, variante B (`agents.md` §3 paso 4 (B)), `"$NODE" scripts/publish.mjs check` con la red arriba, cierre M-7 | publicación `exit=0`; `check` = `2 despliegue(s) válidos y coherentes con Published.toml`; `Published.toml` y `testnet.json` sin cambios; lock sin delta; cierre limpio (`localnet.json` borrado, `deployments/` sigue con `testnet.json`) |
+| B8 | gRPC: `getTransaction(<digest cancelar>)` + `getObject(GAME)` | `success`; `GameCancelled` `refund` 1000000 y `cancelled_by == creator == S`; `Game` en `Cancelled` con `stake` 0; `balanceChanges` de `S` en SUI: crear = −(1000000 + gas neto), cancelar = +1000000 − gas neto, con gas neto = `computationCost + storageCost − storageRebate` de `effects.gasUsed`. **v1.2:** el owner pagó desde el *address balance* (sin `Coin<SUI>`): se anota la forma en que el nodo reporta esos cambios (entradas de `S`, cantidad por transacción). La igualdad tiene que cerrar igual; si no cierra, NO PASA con los números |
+| B9 | Gates de §3.3 | verdes; **v1.2:** contracts 0 / 0 / **83**, `node --test` **104**, `check` = **`1 despliegue(s) válidos y coherentes con Published.toml`**, `Move.lock` sin delta; app lint 0, typecheck 0, **1156 tests en 65 archivos**, build testnet **idéntico** a la CI, `dist/assets/index-B3BeMVQC.js   917.80 kB │ gzip: 277.96 kB` (cualquier diferencia: STOP); árbol limpio |
+| B10 | 🌐 §3.4: `#/`, `#/game/<GAME>`, `#/my-games` y `#/admin`, sin wallet | en todas: indicador **`testnet · nodo OK`**, botón "Conectar wallet", enlace "Mis partidas" y **sin** "Administrar House" (sin cuenta no se sabe si tiene el cap). `#/`: "Conecta tu wallet para crear una partida"; lobby con el texto honesto: `No hay partidas abiertas` (se espera este: la cota es la publicación, del 2026-11-04) o `No hay partidas abiertas en el historial disponible del nodo (desde <fecha>)` si la cota sale del piso del nodo (`LobbyList.tsx:68-77`); si alguien creó una, se anota. `#/game/<GAME>`: estado "Cancelada", comisión **`2 %`**. `#/my-games`: **"Conecta tu wallet para ver tus partidas e invitaciones"**, sin listas. `#/admin`: **"Conecta la wallet que tiene el HouseCap para administrar la House"**, sin datos de la House. Sin wallet de desarrollo; consola sin errores |
+| B11 | §3.5: localnet aislada, variante B (`agents.md` §3 paso 4 (B)), `"$NODE" scripts/publish.mjs check` con la red arriba, cierre M-7 | publicación `exit=0`; `check` = `2 despliegue(s) válidos y coherentes con Published.toml`; `Published.toml` y `testnet.json` sin cambios; lock sin delta; cierre limpio (`localnet.json` borrado, `deployments/` sigue con `testnet.json`). Es el camino de los smokes en localnet posteriores (TASK-2 de #17) |
 
 ### 7. Criterios de aceptación
 
@@ -822,34 +973,125 @@ el historial.
 Criterio 6 de #8: STATUS (fila de despliegue), `agents.md` §5/§12 y `contracts/README.md` → "Despliegues". Los IDs salen
 de `deployments/testnet.json` (fuente: `Published.toml`; si un doc discrepa del json, manda el json).
 
+**v1.2, lo que ya trae `master` (`24afcec`).** Los docs ya tienen las secciones de #12, #13, #14, #15 y #16. TASK-6 solo
+cambia lo que depende de la publicación y es de #8. Lo que depende de #8 pero es de otro issue **no se toca**: lo
+completan TASK-6 de #15 (S-6) y TASK-5 de #16 (S-8), con su revisión. Números de línea @ `24afcec`:
+
+| Archivo:línea | Qué dice hoy | Dueño |
+|---|---|---|
+| `README.md:36` y `:47` | "se completa después de #8" (URL pública e IDs de testnet) | TASK-5 de #16 (sus criterios cuentan esos textos) |
+| `README.md:177` | roadmap: #8 "Pendiente" | TASK-5 de #16 |
+| `README.md:26-27` | "D-20261103-01 ([PR #48](…))" | **#8**, ver §3; solo si TASK-5 de #16 no lo quitó antes |
+| `app/README.md:58-59` ("Testnet") | "lo publica #8 (owner). Hasta entonces … pantalla de error de configuración" | **#8** |
+| `app/README.md:69-71`, `:96-100`, `:178-185`, `:206-222` ("Despliegue (Railway)") | URL pública, guarda de la imagen y su mensaje literal, camino negativo/positivo, precondiciones del checklist | #15 (TASK-6, S-6) y #16 (TASK-5, S-8) |
+| `agents.md:33-34`, `:47-48` (§2) | "`contracts/deployments/` y `contracts/Published.toml` (los escribe la primera publicación en testnet, #8) llegan con su issue" | **#8** |
+| `agents.md:259` (§5) | fila "Package ID / object IDs por red" | **#8** |
+| `agents.md:394-407` (§12) | "Orden de #8", "Dirección publicadora" (texto neutral de N-3), "Post-publicación (#8)" | **#8** |
+| `agents.md:408-409` (§12) | "**App:** Railway …" | #15: **se conserva tal cual** |
+| `contracts/README.md:16`, `:121-122`, `:124-128`, `:574-577`, `:672`, `:687-688` | tabla inicial, checklist del cap (N-3), "Fee por defecto 0", intro de "Despliegues", "Uso en testnet", paso 0 del runbook | **#8** |
+| `documents/HANDOFF_RAILWAY_DEPLOY.md`, `HANDOFF_README.md`, `PLAN_*`, `REPORTES_*`, `SMOKE_RAILWAY_DEPLOY.md` | artefactos de #15 y #16 | sus housekeepings |
+
+**Desalineación del texto de custodia (v1.2).** El paso 0 del runbook (`contracts/README.md:687-688`; era `:600-601` en
+`26f2676`) dice: "La dirección activa es la misma que usa en la wallet del navegador, porque el panel admin (#14) firma
+con ella". Ese texto de #8 da por hecho que la publicadora **es** la wallet del panel. `master` trajo después, en #14 y su
+housekeeping (MINOR-2), el texto **neutral** de N-3: "Si no es la wallet del navegador del panel admin, el owner le pasa
+el cap con `transfer_house_cap`… importarla en una wallet de navegador los expone a la extensión… Decisión del owner
+(N-3)" (`contracts/README.md:121-122`, `agents.md:401-405`). Hay que reconciliar los dos y registrar lo que decidió el
+owner ("lo dejo", §"Entrega del owner"). El diff `git diff 26f2676 24afcec -- contracts/README.md` no toca el runbook:
+la desalineación es de contenido, no un conflicto del merge.
+
 ### 3. Qué implementar
 
-- **`documents/STATUS.md`:** sección nueva **"Despliegues"** (tras "Toolchain"): `| Red | Fecha | packageId | Digest de
-  publicación | sourceCommit | CLI / framework | Comisión | Smoke |` con la fila de testnet (`200 bps` + digest de la
-  comisión; digests de crear/cancelar). H13 cerrado ("publicado con PV 140"). "Pendientes del usuario": el ítem
-  "Post-publicación (#8)" pasa a ✅ con fecha y 200 bps. Fila de #9: rama "con `testnet.json`" del paso 15 ✅ (B10).
-  "Siguiente": #12 y #14 (desbloqueado por #8). "Ciclo activo": #8 sigue 🚧 hasta el merge (el housekeeping lo cierra).
-- **`agents.md`:** §2, `contracts/deployments/` y `contracts/Published.toml` "existen desde #8" (también en los
-  comentarios del árbol); §5, en la fila "Package ID / object IDs por red", "testnet: `deployments/testnet.json` (#8)";
-  §12, "Orden de #8" pasa a "**Testnet: publicado el `<fecha>` (#8)**, `packageId` `<…>`; runbook: `contracts/README.md` →
-  'Uso en testnet'; republicar solo bajo D-20261103-01 (2)" y "Post-publicación (#8)" ✅ con 200 bps.
-- **`contracts/README.md`:** tabla inicial (fila `deployments/<red>.json`, `Published.toml`: "testnet desde #8");
-  "Fee por defecto 0": "En testnet, 200 bps desde la publicación (D-20261103-01, tx `<digest>`)"; "Despliegues": párrafo
-  "Testnet" con `packageId`, fecha y "IDs completos en `deployments/testnet.json`"; "Uso en testnet": una línea al inicio,
-  "Publicado el `<fecha>` (#8). Una republicación sigue este runbook bajo D-20261103-01 (2), con la operación previa que
-  registra esa decisión".
-- **`app/README.md` → "Testnet":** "`contracts/deployments/testnet.json` existe desde #8: un build con
-  `VITE_SUI_NETWORK=testnet` lee la House y las partidas reales del fullnode público" (en lugar de "lo publica #8…
-  muestra la pantalla de error").
+Los valores (`packageId`, digests, fecha) se copian de `deployments/testnet.json` y de §"Entrega del owner" (con `jq -r`,
+nunca a mano). Ningún ID más que el `packageId` se copia a los docs; el resto, "en `deployments/testnet.json`". Si se
+republica (D-20261103-01 (2)), el PR de la republicación actualiza estas líneas.
+
+- **`documents/STATUS.md`:**
+  - sección nueva **"Despliegues"** (tras "Toolchain"): `| Red | Fecha | packageId | Digest de publicación |
+    sourceCommit | CLI / framework | Comisión | Custodia | Smoke |`, con la fila de testnet: 2026-11-04; el `packageId`;
+    `publishTxDigest`; `26f2676`; `1.83.0-16d2dc1e05ed` / `05ad86a3…` (PV 140, época 1273); `200 bps` + digest de la
+    comisión; "`HouseCap`, `UpgradeCap` y `Publisher` en la publicadora (N-3: «lo dejo», 2026-11-04)"; digests de
+    crear/cancelar y "Parte B N/12";
+  - H13: agregar "publicado con PV 140 (época 1273) el 2026-11-04";
+  - "Pendientes del usuario":
+    - el ítem "Post-publicación (#8)" pasa a ✅ 2026-11-04 con 200 bps y el digest de la comisión;
+    - en "A revisar por el owner a su vuelta", la frase de N-3 pasa a "N-3: ✅ D-20261104-06, decidido por el owner el 2026-11-04
+      («lo dejo»: el `HouseCap` queda en la publicadora; sin `transfer_house_cap`)";
+    - ítem nuevo: "Runbook de #8, paso 12: borrar los dos `battleship-publish-*`". Lo hace el owner **después de B1-B5
+      PASA de TASK-5** (su único uso es `record`, y TASK-5 es el primer cruce independiente del json contra la cadena).
+      TASK-6 escribe el ítem con su estado real en ese momento: ✅ con fecha, o pendiente;
+  - fila de #9: rama "con `testnet.json`" del paso 15 ✅ (B10 de #8);
+  - "Ciclo activo", fila #8: G2/G3 (publicación del 2026-11-04 desde `26f2676`, `327f5d4`), merge de `master`
+    (`24afcec`), TASK-5 (Parte B N/12) y TASK-6. Sigue 🚧 hasta el merge (el housekeeping lo cierra);
+  - **"Siguiente" (v1.2: #12 y #14 ya están mergeados):** "#8 (TASK-5/6, revisión de integración y merge = S-4 de #17);
+    después #15 TASK-6 (S-6), Railway (S-7, owner), #16 TASK-5 (S-8) y #17 TASK-3", y se conserva la lista post-MVP
+    vigente.
+- **`agents.md`:**
+  - §2 (`:33-34`): "`contracts/deployments/testnet.json` y `contracts/Published.toml` existen desde #8 (primera
+    publicación en testnet, 2026-11-04):", que reemplaza "(los escribe la primera publicación en testnet, #8) llegan con
+    su issue:". En el árbol (`:47-48`), `deployments/` dice "testnet.json desde #8; localnet.json efímero e ignorado" y
+    `Published.toml`, "(#8) … commiteado desde la publicación";
+  - §5, fila "Package ID / object IDs por red": "testnet: `deployments/testnet.json` (#8)";
+  - §12:
+    - "Orden de #8" pasa a "**Testnet: publicado el 2026-11-04 (#8)** desde `26f2676`, `packageId` `<…>`; runbook:
+      `contracts/README.md` → 'Uso en testnet'; republicar solo bajo D-20261103-01 (2), con su operación previa";
+    - "Dirección publicadora": se conserva el texto neutral y se agrega "N-3 decidido (D-20261104-06, 2026-11-04, «lo dejo»): en
+      testnet el `HouseCap` sigue en la publicadora, que el owner usa en su wallet de navegador; sin
+      `transfer_house_cap`";
+    - "Post-publicación (#8)": ✅ con 200 bps y el digest de la comisión; se conserva la regla ("o las partidas creadas
+      antes quedan con comisión 0"), que vale para una republicación;
+    - "**App:** Railway …" y "Mainnet" **sin cambios**.
+- **`contracts/README.md`:**
+  - tabla inicial (`:16`): "testnet desde #8" en la fila `deployments/<red>.json`, `Published.toml`;
+  - "Fee por defecto 0" (`:128`): "En testnet, 200 bps desde la publicación (D-20261103-01, tx `<digest>`)";
+  - "Despliegues" (`:574-575`): "`testnet.json` (lo commitea #8)" pasa a "`testnet.json` (commiteado en #8)", y un
+    párrafo "Testnet" con `packageId`, fecha, `sourceCommit` corto e "IDs completos en `deployments/testnet.json`";
+  - "Uso en testnet" (`:672`), una línea al inicio: "Publicado el 2026-11-04 (#8). Una republicación sigue este runbook
+    bajo D-20261103-01 (2), con la operación previa que registra esa decisión". El título **no** cambia: lo enlazan
+    `README.md:134` y el comentario de #8;
+  - **paso 0 del runbook (`:687-688`), reconciliado con N-3 (v1.2):** la frase "La dirección activa es la misma que usa en la
+    wallet del navegador, porque el panel admin (#14) firma con ella." se reemplaza por (el DEV puede ajustar la
+    redacción, no el contenido):
+
+    > La dirección activa es la **publicadora**: recibe el `HouseCap`, el `UpgradeCap` y el `Publisher`. Cómo llega el
+    > `HouseCap` a la wallet del navegador del panel admin (#14, `#/admin`) es decisión del owner (N-3): importar la
+    > publicadora en esa wallet (expone también el `UpgradeCap` y el `Publisher` a la extensión) o, después de verificar
+    > la custodia (paso 8), pasarle el cap con `transfer_house_cap` por CLI, con el checklist de "Qué pasa si se pierde
+    > el cap". En la publicación del 2026-11-04, el `HouseCap` quedó en la publicadora (N-3: «lo dejo»,
+    > D-20261104-06).
+
+  - checklist de "Qué pasa si se pierde el cap" (`:121-122`): al ítem de N-3 se le agrega "En testnet, D-20261104-06, decidido el
+    2026-11-04: el cap se queda en la publicadora («lo dejo»)". El resto del checklist queda igual: rige para una
+    transferencia futura.
+- **`app/README.md` → "Testnet" (`:58-59`):** "`contracts/deployments/testnet.json` existe desde #8 (publicación del
+  2026-11-04): un build con `VITE_SUI_NETWORK=testnet` lee la House y las partidas reales del fullnode público. Sin ese
+  archivo (p. ej., en el PR de una republicación), el build compila pero muestra la pantalla de error de configuración".
+  Reemplaza las dos primeras oraciones de `:58-59`; la de "Explorador: Suiscan (`explorer.ts`); en localnet, sin link."
+  queda. Nada más de `app/README.md`.
+- **`README.md:26-27` (v1.2):** solo si TASK-5 de #16 todavía no lo hizo (`grep -n 'PR #48' README.md`), se quita
+  "([PR #48](https://github.com/sdelvalle57/sui_battleship/pull/48))" y queda `D-20261103-01` sin enlace, como cita el
+  README las demás decisiones (`README.md:44`). Por la secuencia (S-4 antes de S-8), lo normal es que siga ahí y lo quite
+  este task. El orquestador avisa al MID de #16 que el "quitar `(PR #48)` si quedó" de su TASK-5 queda sin efecto
+  (coordinación con S-8). Nada más de `README.md`: `:36`, `:47` y el roadmap son de #16.
 
 ### 4. Archivos
 
-- **Tocar:** `documents/STATUS.md`, `agents.md`, `contracts/README.md`, `app/README.md`.
-- **NO tocar:** los archivos publicados, código, `DECISIONES.md`.
+- **Tocar:** `documents/STATUS.md`, `agents.md`, `contracts/README.md`, `app/README.md` (solo "Testnet") y `README.md`
+  (solo `:26-27`, con la condición de §3).
+- **NO tocar:** los archivos publicados, código, `DECISIONES.md` (D-20261104-06 la aplica el orquestador antes
+  de este task, §"Texto de D-20261104-06"), lo de #15 y #16 de la tabla de §2, los títulos de sección enlazados.
 
 ### 5. Gates
 
-Solo docs (`git diff --stat`, grep de higiene sobre el diff). La CI del PR corre completa.
+Solo docs:
+
+- `git diff --stat`, con los archivos de §4;
+- greps de higiene (§R-6 de `HANDOFF_SMOKE_MVP.md` de #17, los tres de §"Higiene") sobre el diff. Los únicos hex de
+  64 nuevos son el `packageId`, declarado en el reporte; ninguna dirección de cuenta;
+- `jq -r .packageId contracts/deployments/testnet.json` = el valor de cada doc (`grep -c` por archivo);
+- anclas: ningún `#…` de `README.md` ni de los docs tocados apunta a un título cambiado.
+
+La CI del PR corre completa.
 
 ### 6. Smoke
 
@@ -857,7 +1099,11 @@ No aplica (docs).
 
 ### 7. Criterios de aceptación
 
-Criterio 6 de #8 cumplido; IDs idénticos a `testnet.json`; sin direcciones de cuenta.
+- Criterio 6 de #8 cumplido; `packageId` idéntico a `testnet.json`; sin direcciones de cuenta.
+- El paso 0 del runbook y el texto de N-3 de `contracts/README.md` y `agents.md` dicen lo mismo (neutral + decisión).
+- "Siguiente" de STATUS sin #12 ni #14.
+- `grep -c "se completa después de #8" README.md` = 2: ese texto es de TASK-5 de #16 y no se toca.
+- `agents.md` §12 conserva las líneas de Railway.
 
 ### 8. Al terminar
 
@@ -866,7 +1112,36 @@ del PR (lo propone el MID) y revisión de integración del MAYOR.
 
 ---
 
+## Texto de D-20261104-06 (N-3; final, v1.2.1)
+
+Lo aplica el **orquestador** en `documents/DECISIONES.md`, en la branch de #8 y **antes de TASK-6** (SUG-8 de la v1.2),
+así los docs de TASK-6 citan el ID y la revisión de integración lo verifica. El MID no edita `DECISIONES.md`. ID: `master`
+llega hasta D-20261104-04, la branch de #17 usa 05 y ningún otro worktree usa 06. Al mergear #17, el conflicto se
+resuelve con 06 arriba de 05.
+
+> ### D-20261104-06 — Custodia del `HouseCap` en testnet (N-3 de #14, decidida en #8)
+> - **Decisión:** el `HouseCap` de la publicación en testnet del 2026-11-04 (#8) se queda en la dirección publicadora,
+>   que el owner importó en su wallet de navegador y desde la que administra el panel (`#/admin`). No hay
+>   `transfer_house_cap`. El `UpgradeCap` y el `Publisher` siguen en la misma dirección (D-20261103-01 (1)).
+> - **Riesgo aceptado:** la cuenta que firma en el panel tiene también el `UpgradeCap` y el `Publisher`. Quien la
+>   controle puede upgradear el paquete y publicar código que mueva el `stake` de las partidas `Pending` y las comisiones
+>   (`contracts/README.md`, "Modelo de confianza"). Se acepta **solo en testnet**. Es reversible con `transfer_house_cap`
+>   (checklist de `contracts/README.md`, "Qué pasa si se pierde el cap") y **no vale como precedente para mainnet**
+>   (`agents.md` §12, "Mainnet").
+> - **Alternativa descartada:** `transfer_house_cap` por CLI a otra wallet de navegador, que deja el `UpgradeCap` y el
+>   `Publisher` fuera de la extensión.
+> - **Motivo:** N-3 (`contracts/README.md`, "Qué pasa si se pierde el cap"; `agents.md` §12) deja la elección al owner.
+>   Con la publicadora ya importada no hace falta ninguna transacción. La custodia queda verificada cuando B5 de #8 da PASA
+>   (`HouseCap`, `UpgradeCap` y `Publisher` con dueño = el sender de la publicación, `true` ×3). Recién entonces S-5 de
+>   #17 queda cumplido, sin `dcap`. Si B5 falla, la premisa cae y N-3 se reabre (STOP).
+> - **Aprobado por:** usuario ("lo dejo", 2026-11-04). **Fecha:** 2026-11-04.
+
+---
+
 ## Texto propuesto para D-20261103-01 (P-2; lo aplica el owner, el MID no edita `DECISIONES.md`)
+
+> **v1.2.1:** aplicado en la branch de #8 (`documents/DECISIONES.md:49`, con S-4 y la autorización "Sí, autorizo"); llega
+> a `master` con este PR. Queda como registro.
 
 **Para agregar al final de la decisión (2), S-4 del pre-vuelo:**
 
@@ -889,6 +1164,8 @@ del PR (lo propone el MID) y revisión de integración del MAYOR.
 ---
 
 ## Comentario para #8 (lo publica el orquestador en G1)
+
+> **v1.2:** publicado en #8 el 2026-11-04 01:30 UTC (G1). Queda como registro; no se vuelve a publicar.
 
 Se publica en G1, cuando TASK-3 y TASK-4 están commiteados y pusheados y el `<head>` tiene la CI en verde. Antes de
 publicarlo, reemplazar las **dos** apariciones de `<head>`: el SHA completo de 40 caracteres en el permalink y el corto en
@@ -946,14 +1223,19 @@ PRE-REQUISITOS).
 
 ## STOPs
 
-Ninguno abierto en este handoff. Puntos que **son** STOP si aparecen durante la ejecución:
+Ninguno abierto en este handoff (v1.2: G2 sin STOP; P-C no se usó). Puntos que **son** STOP si aparecen durante la
+ejecución:
 
 - TASK-1 / G2: PV de testnet ≠ 140 → P-C (addendum v1.2: subir la CLI, `ci.yml`, `publish.test.mjs:480-481`, recaptura
   de `scripts/fixtures/`, repin, y TASK-4 de nuevo).
 - TASK-1: delta del lock distinto del esperado.
 - TASK-4: `Move.lock` cambia en el dry run o en la publicación efímera.
 - Runbook paso 5 (owner): cualquier cambio además de los dos archivos esperados.
-- TASK-5: los gates cambian con `Published.toml` presente, o `test-publish` falla con `[published.testnet]` (bloquea #12).
+- TASK-5: los gates cambian con `Published.toml` presente, o `test-publish` falla con `[published.testnet]` (bloquea los
+  smokes en localnet posteriores, TASK-2 de #17).
+- TASK-5 (v1.2): `contracts/sources/` o `Move.lock` difieren entre `26f2676` y el head, o `Move.toml` difiere en algo más
+  que `license` (§3.1); conteos de la app distintos de 1156/65 (§3.3).
+- TASK-6 (v1.2): un cambio que pida tocar lo de #15 o #16 de la tabla de §2 de TASK-6.
 
 ## Higiene de este documento
 
@@ -963,3 +1245,8 @@ Ninguno abierto en este handoff. Puntos que **son** STOP si aparecen durante la 
   framework de Sui de la PV 140) y `719fb2960ccfbf9f4d33041f8ea5146d30671696` (git rev del framework de la PV 139). Resto:
   SHAs cortos de este repo, commit corto de la release de la CLI (`16d2dc1e05ed`), chain ids públicos de 8 hex
   (`4c78adac` testnet, `35834a8a` mainnet) e IDs de runs de Actions.
+- **v1.2:** un ID de objeto de 64 hex, público y declarado: `GAME`, en la forma DL-5 `0x6173…6858` (la partida del
+  smoke del owner, creada en `FpqGNLhC…`). Completo, solo en la tabla de §"Entrega del owner"; en el smoke va abreviado. Los cuatro digests de la entrega son base58 (públicos, sin hex). Ningún otro ID del
+  despliegue está copiado: salen de `contracts/deployments/testnet.json`. IDs de jobs de Actions (12 dígitos decimales).
+  Greps §R-6 (`HANDOFF_SMOKE_MVP.md` de #17) corridos sobre esta versión: el de 40-64 hex da solo los dos revs del
+  framework y `GAME`; el de `0x` + 8 hex da solo `GAME`; el de secretos y rutas, vacío.
