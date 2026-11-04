@@ -10,6 +10,12 @@
 
 ---
 
+### D-20261104-01 — Delegación de STOPs durante la ausencia del owner y hosting de la app (#14-#16, #15)
+- **Decisión:** (1) Mientras el owner está ausente (desde el 2026-11-04, ~12 h, hasta su vuelta), el orquestador avanza #14, #15, #16 y lo que haga falta del MVP, y ante un STOP de **producto** en un plan aplica la opción recomendada por el MID/MAYOR. Cada una se registra en este archivo como "tomada por el orquestador por delegación del usuario (D-20261104-01)" para que el owner la revise al volver. **No se delega** nada que toque fondos, el contrato on-chain, publicaciones o upgrades (testnet o mainnet), claves o settings del repo: eso sigue frenándose hasta que vuelva el owner. (2) #15 aloja la app en **GitHub Pages**, desplegada por GitHub Actions. Activar Pages es un setting del repo: el orquestador deja todo listo y el interruptor queda para el owner (o para una autorización expresa en el momento).
+- **Alternativa descartada:** (1) frenar cada issue con STOP hasta la vuelta del owner; (2) Vercel o Netlify (requieren una cuenta y conectar el repo, solo el owner).
+- **Motivo:** el owner publica en testnet (#8) dentro de ~12 h y pidió adelantar lo máximo posible.
+- **Aprobado por:** usuario ("sigues con #14 y los siguientes necesarios … encargate de adelantar lo maximo posible"; "Tomar la recomendada"; "GitHub Pages", 2026-11-04). **Fecha:** 2026-11-04.
+
 ### D-20261103-03 — Historial de "Mis partidas" en testnet: la ventana del fullnode (STOP P-1 de #13)
 - **Decisión:** las listas de "Mis partidas" (invitaciones recibidas, partidas pendientes propias y terminadas) leen, como el lobby, solo el historial que conserva el fullnode público de testnet (~14,6 días, piso `lowestAvailableCheckpoint`), con un texto honesto que lo dice. Se suman dos ayudas: un campo "Abrir partida por ID" y, solo en testnet, un enlace "Ver tu historial completo en el explorador". Una partida más vieja sigue abriéndose por su enlace o su ID, o por la CLI. Confirma D-20261102-04 (1) para las listas de #13; queda un issue de seguimiento post-MVP con la medición de GraphQL.
 - **Alternativa descartada:** GraphQL de Mysten solo en testnet (dos caminos de lectura, el de testnet sin prueba en localnet, dependencia de otro servicio; reabre D-20261102-02 (1)); recordar las partidas propias en el navegador (no cubre invitaciones recibidas ni otros dispositivos).
