@@ -553,3 +553,256 @@ Refs #15
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+## TASK-4
+
+## Task completado: HANDOFF_RAILWAY_DEPLOY — TASK-4 (job `deploy-image` en la CI + N2 endurecido)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-15-pages-deploy` @ `78b1a50` (handoff v1.2). No hice commits.
+
+### Archivos modificados/creados
+- `.github/workflows/ci.yml`: +15 líneas. Solo el job `deploy-image`, entre `app` y `framework-drift`. Lo copié del bloque YAML de §3 del handoff con un parser e insertado antes de `  framework-drift:`.
+- `app/scripts/check-deploy-image.sh`: +11/−2. Solo N2, que pasa a ser N2a + N2b (§3 bis / §3.4 v1.2).
+
+### Qué se implementé (3 líneas máx)
+El job `deploy-image` (ubuntu-24.04, 15 min, `bash`) hace checkout fijado con `persist-credentials: false` y corre `bash app/scripts/check-deploy-image.sh . 8080`. No tiene `permissions` propios, `secrets`, Actions nuevas ni `if:`.
+N2a quita los códigos ANSI y deja el log en `$log.plain`, en dos pasos y sin pipe. Después busca la línea de **salida** de la guarda, con el prefijo opcional `#<n> <s> ` de BuildKit.
+N2b falla si `$log.plain` contiene `RUN npm ci`. Los mensajes `FALLO: N2a…` y `FALLO: N2b…` son los literales de §3 bis.
+
+### Tests y gates (output pegado, por área tocada)
+- **Agregados/modificados:** ninguno en Vitest ni en Move.
+- **Contracts:** sin cambios; `git diff --stat -- contracts/ | wc -l` da 0.
+- **CI:** resultados de la verificación 1 (actionlint).
+- **App:** gate canónico con Node `v26.13.0` / npm `11.20.0`. **Sin delta contra §0.**
+  - `npm ci` 293 paquetes, 292 firmas;
+  - 0 vulnerabilidades de producción (11 *moderate* de dev, #35);
+  - lint 0 y typecheck 0;
+  - **915 PASS en 57 archivos**;
+  - el build da `index-Ck3iRlQ-.js` **901.45 kB** (273.61 kB gzip) y el aviso de chunk > 500 kB (D4).
+- **Tablas de contrato / `app/src/sui/`:** no aplica.
+
+**Gate `app`.** Comando: `export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && node --version && npm --version && npm ci && npm audit signatures && npm audit --omit=dev --audit-level=high && npm run lint -w app && npm run typecheck -w app && npm test -w app && VITE_SUI_NETWORK=testnet npm run build -w app; echo "EXIT=$?"; git status --porcelain --untracked-files=all; git diff --stat -- contracts/ | wc -l`
+```text
+v26.13.0
+11.20.0
+
+added 293 packages, and audited 295 packages in 8s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+audited 292 packages in 8s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+found 0 vulnerabilities
+
+> lint
+> eslint . --max-warnings 0
+
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  57 passed (57)
+      Tests  915 passed (915)
+   Start at  03:49:42
+   Duration  21.25s (environment 61%, tests 13%, import 10%, setup 10%, transform 5%, worker 1%)
+
+Environment  jsdom was created 57 times · 118.99s total, 61% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 596 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.46 kB │ gzip:   0.29 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-Ck3iRlQ-.js   901.45 kB │ gzip: 273.61 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.09s
+EXIT=0
+ M .github/workflows/ci.yml
+ M app/scripts/check-deploy-image.sh
+0
+```
+
+**1. actionlint.** Imagen `rhysd/actionlint:1.7.12@sha256:b1934ee5…5667`, con el archivo explícito.
+- Con `-color=never`, tal como dice el handoff, sale con **exit 2**: `invalid boolean value "never" for -color: parse error`.
+- Lo repetí con `-no-color` (Desviación 1): `docker run --rm -v <repo>:/repo:ro -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5…5667 -no-color .github/workflows/ci.yml` da **exit=0, 0 hallazgos**.
+- En `-verbose` dice `Using project at /repo`, `Found 0 parse errors`, `Found total 0 errors in 89 ms`, y no avisa que shellcheck esté deshabilitado, así que también revisó los `run:`.
+- Baseline: el `ci.yml` de HEAD, en un directorio aparte, también da exit=0. **Delta 0.**
+
+**2. `git diff .github/workflows/ci.yml`:** solo el bloque nuevo, 15 líneas `+` y ninguna `-`:
+```diff
+@@ -180,6 +180,21 @@ jobs:
+           git status --porcelain --untracked-files=all
+           test -z "$(git status --porcelain --untracked-files=all)"
+ 
++  deploy-image:
++    # Imagen de Railway (#15): sin testnet.json (#8) exige que el build se niegue con el mensaje esperado; con él,
++    # construye, levanta y comprueba cabeceras. No es requerido; Railway lo espera vía "Wait for CI".
++    runs-on: ubuntu-24.04
++    timeout-minutes: 15
++    defaults:
++      run:
++        shell: bash
++    steps:
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
++        with:
++          persist-credentials: false
++      - name: Imagen de Railway (camino según contracts/deployments/testnet.json)
++        run: bash app/scripts/check-deploy-image.sh . 8080
++
+   framework-drift:
+```
+
+**Diff del script** (solo el bloque N2; el resto del script no cambia):
+```diff
+-  if ! grep -qF 'falta contracts/deployments/testnet.json' "$log"; then
++  # N2a: la línea de salida del echo de la guarda, no la línea "Step n/m : RUN …" que también tiene la subcadena.
++  # El builder clásico la pinta con códigos ANSI y BuildKit le antepone "#<n> <segundos> ". En dos pasos con un
++  # archivo: con pipefail, un grep -q que corta temprano puede matar a sed con SIGPIPE y dar un falso fallo.
++  sed 's/\x1b\[[0-9;]*m//g' "$log" >"$log.plain"
++  if ! grep -qE '^(#[0-9]+ [0-9]+\.[0-9]+ )?ERROR \(#15\): falta contracts/deployments/testnet\.json' "$log.plain"; then
+     tail_log "docker build" "$log"
+-    fail "N2: el build falló, pero no por la guarda de testnet.json (se esperaba 'falta contracts/deployments/testnet.json' en el log)"
++    fail "N2a: el build falló, pero no por la guarda de testnet.json (no está la línea de salida 'ERROR (#15): falta contracts/deployments/testnet.json')"
++  fi
++  # N2b: el build tiene que cortarse en la guarda, sin llegar a npm ci.
++  if grep -qE 'RUN npm ci' "$log.plain"; then
++    tail_log "docker build" "$log"
++    fail "N2b: el build pasó la guarda y llegó a 'RUN npm ci' (la guarda no corta el build)"
+   fi
+```
+N2b se escribe `if grep -qE …; then fail`, que equivale a la condición `! grep -qE 'RUN npm ci'` del handoff. `$log.plain` vive en el `mktemp -d` del script y lo borra el trap.
+
+**3a. shellcheck** (binario de la imagen de actionlint, ShellCheck 0.11.0): `exit=0`, sin output. `bash -n` ok.
+
+**3d, línea base.** La tomé **antes** de cualquier pull, a las 2026-11-04T08:45:38Z: **2 contenedores, 3 imágenes** (`postgres:17`, `postgres:16-alpine`, `busybox:latest`).
+
+**3b. Negativo real** (`TMPDIR=<scratchpad>/tmp15t4 bash app/scripts/check-deploy-image.sh . 8090`; `:8090` libre antes de empezar):
+```text
+Modo negativo: el contexto no tiene contracts/deployments/testnet.json
+OK (negativo): sin contracts/deployments/testnet.json (#8) la imagen se niega a construirse
+exit=0
+segundos=20
+```
+Los 20 s incluyen volver a bajar `node:26.12.1`, que se había borrado en C-1. No quedan `battleship-app:*` ni `deploy-image-*`.
+
+Para ver qué línea cumple N2a repetí el mismo build (etiqueta propia `b3-15`, borrada después) y le apliqué los mismos `sed`/`grep`:
+```text
+--- N2a (líneas que coinciden)
+19:ERROR (#15): falta contracts/deployments/testnet.json. Lo commitea #8 tras la publicación del owner en testnet; sin él no se construye la app (nunca IDs a mano).
+--- subcadena laxa vieja (para comparar)
+17:Step 5/19 : RUN test -f contracts/deployments/testnet.json || { echo "ERROR (#15): falt
+19:ERROR (#15): falta contracts/deployments/testnet.json. Lo commitea #8 tras la publicaci
+21:The command '/bin/sh -c test -f contracts/deployments/testnet.json || { echo "ERROR (#1
+--- N2b
+0
+```
+- La línea cruda empieza con `033 [ 9 1 m ERROR (#…`: confirma que antes de buscar hay que quitar los códigos ANSI.
+- N2a coincide **solo** con la línea de salida (19). Ya no acepta la `Step 5/19 : RUN …` (17) ni la `The command …` (21).
+
+**3c. Rojo provocado de N2b.**
+- Preparación: copia como en E-1a en `<scratchpad>/n2-15/ctx` (185 archivos, **sin** `contracts/deployments`). En su `Dockerfile` cambié la guarda (`diff` contra el original):
+```text
+< RUN test -f contracts/deployments/testnet.json || { echo "ERROR (#15): falta … (nunca IDs a mano)." >&2; exit 1; }
+> RUN test -f contracts/deployments/testnet.json || echo "ERROR (#15): falta … (nunca IDs a mano)."
+```
+- Corrida: `bash app/scripts/check-deploy-image.sh <scratchpad>/n2-15/ctx 8090` (`:8090` libre). Últimas líneas del output:
+```text
+Modo negativo: el contexto no tiene contracts/deployments/testnet.json
+--- últimas 30 líneas de docker build ---
+…
+Step 13/19 : RUN set -eu;     for f in packageId originalPackageId houseId publishTxDigest; do …
+ ---> Running in 0aabd65d192b
+node:internal/modules/cjs/loader:1607
+…
+Error: Cannot find module './contracts/deployments/testnet.json'
+…
+Node.js v26.12.1
+ ---> Removed intermediate container 0aabd65d192b
+The command '/bin/sh -c set -eu; …' returned a non-zero code: 1
+FALLO: N2b: el build pasó la guarda y llegó a 'RUN npm ci' (la guarda no corta el build)
+exit=1
+segundos=100
+```
+- Resultado: **`exit=1` por N2b**.
+  - N1 pasó: el build falló más adelante, en el Step 13, la comprobación del bundle.
+  - N2a pasó: se llegó a N2b porque la línea de la guarda se imprime.
+  - El trap no dejó etiqueta `check-$$` ni contenedor.
+
+**3d. Limpieza por línea base** (como C-1, sin `prune`):
+1. Contenedores nuevos: **0**.
+2. Imágenes nuevas: **13**, todas mías, borradas por ID con `docker rmi` en 2 pasadas:
+   - 11 intermedias `<none>` con `Cmd [node]`, derivadas de `node:26.12.1`, que no estaba en la base;
+   - `node:26.12.1-bookworm-slim@…e28c`;
+   - `rhysd/actionlint@…5667`.
+
+   Caddy no se descargó, porque ningún build llegó a la etapa runtime.
+3. `comm` repetido: contenedores nuevos 0, imágenes nuevas 0, faltantes de la base `ps=0 img=0`. Quedan `postgres:17`, `postgres:16-alpine` y `busybox:latest`, y los contenedores ajenos `cancerbero_back-db-1` y `backend-postgres-1` corriendo, sin tocar.
+4. `rm -rf <scratchpad>/n2-15`, junto con `tmp15t4` y la línea base; `ls` da "No such file or directory".
+5. `:8090` y `:9230` con 0 filas. No usé ningún puerto de #14.
+
+**Greps sobre el diff:**
+- claves y secretos: 0;
+- rutas personales: 0;
+- en el job: 0 `secrets.`, 0 `permissions:`, 0 `if:`;
+- hex de 40-64 en líneas añadidas: solo el SHA público de `actions/checkout@3d3c42e5…0b1 # v7.0.1`, ya fijado en los otros jobs. No hay `uses:` nuevos fuera de ese checkout.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica: sin localnet, sin testnet y sin transacciones. La verificación 4 queda para el orquestador:
+- después del push, el run del PR tiene que dar `deploy-image` verde **por el camino negativo** (`::notice::OK (negativo)…`), con `contracts` y `app` sin cambios;
+- hay que anotar el run ID y pegar la línea del log de BuildKit que cumplió N2a. Esperada: `#<n> <s> ERROR (#15): falta contracts/deployments/testnet.json. …`.
+- Si BuildKit en el runner usa otro prefijo, §3 bis permite ajustar **solo** el prefijo opcional de N2a.
+
+La verificación 5 (rojo en un PR desechable) es opcional y no la hice.
+
+### Desviaciones del handoff
+1. **actionlint con `-no-color` en lugar de `-color=never`.**
+   - Qué cambió: el flag de la verificación 1.
+   - Por qué: en actionlint 1.7.12, `-color` es booleano y `-color=never` sale con exit 2 por parse error. El flag equivalente para desactivar el color es `-no-color`, según el `-help` de la imagen.
+   - Verificación extra: corrí el mismo comando sobre el `ci.yml` de HEAD, que da exit 0, así que el delta es 0. Confirmé además que shellcheck estuvo activo dentro de actionlint.
+   - Sugerencia: corregir el comando en el handoff y en lo que documente TASK-5.
+2. **`TMPDIR=<scratchpad>/tmp15t4` en las corridas locales y build repetido para mostrar la línea de N2a.** Es el mismo criterio que las desviaciones 2 y 3 de TASK-2, ya aceptadas. El script no cambia por esto.
+
+### Riesgos / pendientes
+- El prefijo de BuildKit en la CI solo se va a confirmar con el run del PR (verificación 4). El ensayo local usa el builder clásico, porque esta máquina no tiene buildx.
+- `deploy-image` no es check requerido (N-4, owner).
+- Las imágenes descargadas (`node`, `actionlint`) se borraron en 3d.
+
+### Documentación
+- **READMEs y `agents.md`:** no en este task; va en TASK-5. Habría que documentar el job `deploy-image`, N2a/N2b y el flag `-no-color` de actionlint (Desviación 1).
+- **Snippet propuesto para `documents/STATUS.md`:**
+  > #15 TASK-4: job `deploy-image` en `ci.yml`. Corre `bash app/scripts/check-deploy-image.sh . 8080`, sin Actions nuevas, sin `permissions`/`secrets`/`if:`, no requerido; actionlint 1.7.12 da 0 hallazgos (con `-no-color`). Además, N2 del script endurecido en N2a (línea de salida de la guarda, sin ANSI, prefijo opcional de BuildKit) y N2b (sin `RUN npm ci`). shellcheck 0; negativo real `exit=0`; rojo provocado `exit=1` por N2b; Docker limpio por línea base. Gate `app` sin delta (915/57, 901.45 kB). Pendiente: run del PR con `deploy-image` verde por el camino negativo y la línea de N2a con BuildKit.
+=====

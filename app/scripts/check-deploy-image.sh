@@ -89,9 +89,18 @@ if [ ! -f "$ctx/contracts/deployments/testnet.json" ]; then
   if docker "${build[@]}" >"$log" 2>&1; then
     fail "N1: sin testnet.json la imagen no debe construirse, y el build terminó en verde"
   fi
-  if ! grep -qF 'falta contracts/deployments/testnet.json' "$log"; then
+  # N2a: la línea de salida del echo de la guarda, no la línea "Step n/m : RUN …" que también tiene la subcadena.
+  # El builder clásico la pinta con códigos ANSI y BuildKit le antepone "#<n> <segundos> ". En dos pasos con un
+  # archivo: con pipefail, un grep -q que corta temprano puede matar a sed con SIGPIPE y dar un falso fallo.
+  sed 's/\x1b\[[0-9;]*m//g' "$log" >"$log.plain"
+  if ! grep -qE '^(#[0-9]+ [0-9]+\.[0-9]+ )?ERROR \(#15\): falta contracts/deployments/testnet\.json' "$log.plain"; then
     tail_log "docker build" "$log"
-    fail "N2: el build falló, pero no por la guarda de testnet.json (se esperaba 'falta contracts/deployments/testnet.json' en el log)"
+    fail "N2a: el build falló, pero no por la guarda de testnet.json (no está la línea de salida 'ERROR (#15): falta contracts/deployments/testnet.json')"
+  fi
+  # N2b: el build tiene que cortarse en la guarda, sin llegar a npm ci.
+  if grep -qE 'RUN npm ci' "$log.plain"; then
+    tail_log "docker build" "$log"
+    fail "N2b: el build pasó la guarda y llegó a 'RUN npm ci' (la guarda no corta el build)"
   fi
   ok "OK (negativo): sin contracts/deployments/testnet.json (#8) la imagen se niega a construirse"
   exit 0
