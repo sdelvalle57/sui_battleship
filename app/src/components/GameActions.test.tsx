@@ -2,8 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useCancelGame } from '../hooks/useCancelGame';
-import type { TxOutcome, UseExecuteTransaction } from '../hooks/useExecuteTransaction';
+import type { TxResult, UseExecuteTransaction } from '../hooks/useExecuteTransaction';
 import { useRejectGame } from '../hooks/useRejectGame';
+import type { TxView } from '../hooks/txSession';
+import { useTxTarget, type TxTargetState } from '../hooks/useTxTarget';
 import { useWalletAccount } from '../hooks/useWalletAccount';
 import type { AppConfig } from '../sui/config';
 import type { Game, GameState } from '../sui/game';
@@ -13,6 +15,7 @@ vi.mock('../hooks/useAppConfig', () => ({ useAppConfig: vi.fn() }));
 vi.mock('../hooks/useWalletAccount', () => ({ useWalletAccount: vi.fn() }));
 vi.mock('../hooks/useCancelGame', () => ({ useCancelGame: vi.fn() }));
 vi.mock('../hooks/useRejectGame', () => ({ useRejectGame: vi.fn() }));
+vi.mock('../hooks/useTxTarget', () => ({ useTxTarget: vi.fn() }));
 
 const CREATOR = `0x${'a'.repeat(64)}`;
 const INVITEE = `0x${'b'.repeat(64)}`;
@@ -24,16 +27,25 @@ function game(opponent: string | null, state: GameState = { kind: 'pending' }): 
   return { id: ID, version: 1n, houseId: ID, creator: CREATOR, opponent, bet: 2_000_000n, stake: 2_000_000n, feeRate: 250, state };
 }
 function txHook(overrides: Partial<UseExecuteTransaction<bigint | null>> = {}) {
-  return { stage: 'idle', outcome: null, isBusy: false, execute: vi.fn(), reset: vi.fn(), ...overrides } as UseExecuteTransaction<bigint | null>;
+  return { stage: 'idle', outcome: null, execute: vi.fn(), ...overrides } as UseExecuteTransaction<bigint | null>;
 }
 const cancel = vi.fn();
 const reject = vi.fn();
-function setup(address: string | null, opts: { cancel?: Partial<UseExecuteTransaction<bigint | null>>; reject?: Partial<UseExecuteTransaction<bigint | null>> } = {}) {
+const VIEW: TxView = { target: { kind: 'game', gameId: ID }, viewId: 1, key: ['tx', 'game', ID], accountKey: ['tx'], targetHash: '' };
+function setup(
+  address: string | null,
+  opts: {
+    cancel?: Partial<UseExecuteTransaction<bigint | null>>;
+    reject?: Partial<UseExecuteTransaction<bigint | null>>;
+    target?: Partial<TxTargetState<TxView['target']>>;
+  } = {},
+) {
   vi.mocked(useWalletAccount).mockReturnValue({ address, short: address === null ? null : 'x' });
+  vi.mocked(useTxTarget).mockReturnValue({ view: VIEW, busy: false, notice: null, unconfirmed: null, acknowledge: vi.fn(), ...opts.target });
   vi.mocked(useCancelGame).mockReturnValue({ ...txHook(opts.cancel), cancel });
   vi.mocked(useRejectGame).mockReturnValue({ ...txHook(opts.reject), reject });
 }
-const success = (value: bigint | null): TxOutcome<bigint | null> => ({ kind: 'success', digest: DIGEST, value, indexed: true, cost: 1n });
+const success = (value: bigint | null): TxResult<bigint | null> => ({ kind: 'success', digest: DIGEST, value, indexed: true, cost: 1n });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -72,7 +84,8 @@ describe('GameActions', () => {
     render(<GameActions game={game(INVITEE)} />);
     expect(screen.queryByRole('button', { name: 'Rechazar' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
-    expect(cancel).toHaveBeenCalledWith(ID);
+    expect(cancel).toHaveBeenCalledWith();
+    expect(useTxTarget).toHaveBeenCalledWith({ kind: 'game', gameId: ID });
   });
 
   it('shows only Rechazar to the invitee and rejects this game', () => {
@@ -80,7 +93,8 @@ describe('GameActions', () => {
     render(<GameActions game={game(INVITEE)} />);
     expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Rechazar' }));
-    expect(reject).toHaveBeenCalledWith(ID);
+    expect(reject).toHaveBeenCalledWith();
+    expect(useTxTarget).toHaveBeenCalledWith({ kind: 'game', gameId: ID });
   });
 
   it('shows no Rechazar on an open game', () => {
@@ -90,7 +104,7 @@ describe('GameActions', () => {
   });
 
   it('disables the buttons and shows the stage while busy', () => {
-    setup(CREATOR, { cancel: { isBusy: true, stage: 'signing' } });
+    setup(CREATOR, { cancel: { stage: 'signing' }, target: { busy: true } });
     render(<GameActions game={game(null)} />);
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
     expect(screen.getByRole('status')).toHaveTextContent('Esperando la firma en la wallet…');

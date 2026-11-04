@@ -1,0 +1,186 @@
+import type { Mutation, MutationStatus, QueryKey } from '@tanstack/react-query';
+import { hashKey } from '@tanstack/react-query';
+import type { GameCreatedEvent } from '../sui/events';
+import type { TxAction } from './txInvalidation';
+import type { ExecuteInput, TxOutcome, TxResult } from './useExecuteTransaction';
+
+/**
+ * Sesión de transacciones de la pestaña (DL-7/DL-8 de #12), en funciones puras sin React: qué ve una vista de las
+ * mutaciones del `MutationCache` de su cuenta. El caché (un `QueryClient` por carga de página) es la única fuente: así
+ * salir de la pantalla y volver no permite un segundo envío ni pierde el resultado de la que estaba en curso.
+ */
+
+/** Objetivo de una transacción: el formulario de creación o una partida. */
+export type TxTarget = { kind: 'create' } | { kind: 'game'; gameId: string };
+export type CreateTarget = Extract<TxTarget, { kind: 'create' }>;
+export type GameTarget = Extract<TxTarget, { kind: 'game' }>;
+
+/**
+ * Una vista con acciones sobre un objetivo (M-5): `key` = clave de mutación del objetivo (`queryKeys.txTarget`),
+ * `accountKey` = la de la cuenta (`queryKeys.txAccount`), `targetHash` = `hashKey(key)` para comparar claves sin
+ * recorrerlas, `viewId` = identidad del montaje (M-4).
+ */
+export type TxView<T extends TxTarget = TxTarget> = {
+  target: T;
+  viewId: number;
+  key: QueryKey;
+  accountKey: QueryKey;
+  targetHash: string;
+};
+
+/** Variables de cada mutación: la entrada de la acción y quién la lanzó (vista y ejecución). */
+export type TxVariables<T> = { input: ExecuteInput<T>; viewId: number; runId: number; action: TxAction };
+
+/**
+ * Lo que se lee de una creación exitosa: la partida creada (DL-9 de #11; `null` si no se pudo identificar) y si la
+ * comisión guardada difiere de la mostrada (M-2 de #11).
+ */
+export type CreateGameValue = {
+  created: GameCreatedEvent | null;
+  feeChanged: { from: number; to: number } | null;
+};
+
+/** Valor del resultado de cada acción (lo que devuelve su `interpret`). */
+export type TxValueByAction = { create: CreateGameValue; cancel: bigint | null; reject: bigint | null };
+
+/** Una mutación ajena adoptada (M-2): su acción y su resultado, con el tipo de valor de esa acción. */
+export type AdoptedTx = {
+  [K in keyof TxValueByAction]: { action: K; outcome: TxResult<TxValueByAction[K]> };
+}[keyof TxValueByAction];
+
+/** Aviso de la vista: hay una transacción ajena de la cuenta en curso, o se adoptó el resultado de una ajena. */
+export type TxNotice = { kind: 'in_flight' } | { kind: 'adopted'; adopted: AdoptedTx };
+
+/** Proyección plana de una mutación del caché (la misma para `useMutationState` y para la foto de montaje). */
+export type TxEntry = {
+  id: number;
+  status: MutationStatus;
+  viewId: number | null;
+  runId: number | null;
+  action: TxAction | null;
+  sameTarget: boolean;
+  outcome: TxOutcome<unknown> | null;
+};
+
+/** Lo mínimo de una `Mutation` que se lee (una `Mutation` real cumple este tipo). */
+export type MutationLike = Pick<Mutation, 'mutationId' | 'state'> & { options: { mutationKey?: QueryKey } };
+
+const ACTION_KINDS = new Set(['create', 'cancel', 'reject']);
+const OUTCOME_KINDS = new Set(['success', 'failure', 'unconfirmed']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** `viewId`, `runId` y `action` de las variables de una mutación propia de la app; `null` si no tienen esa forma. */
+export function txVariablesOf(value: unknown): { viewId: number; runId: number; action: TxAction } | null {
+  if (!isRecord(value)) return null;
+  const { viewId, runId, action } = value;
+  if (typeof viewId !== 'number' || typeof runId !== 'number') return null;
+  if (!isRecord(action) || typeof action.kind !== 'string' || !ACTION_KINDS.has(action.kind)) return null;
+  // La forma de cada acción la fijó `execute` al lanzar la mutación (TxVariables).
+  return { viewId, runId, action: action as TxAction };
+}
+
+/** El resultado guardado por la `mutationFn` (`TxOutcome`), o `null` si todavía no hay o no tiene esa forma. */
+export function txOutcomeOf(data: unknown): TxOutcome<unknown> | null {
+  if (!isRecord(data) || typeof data.kind !== 'string' || !OUTCOME_KINDS.has(data.kind)) return null;
+  // Lo escribió la `mutationFn` de `useExecuteTransaction`, que siempre devuelve un `TxOutcome`.
+  return data as TxOutcome<unknown>;
+}
+
+/** Proyección de una mutación para una vista: campos planos y si es del mismo objetivo (por `hashKey`). */
+export function toTxEntry(view: Pick<TxView, 'targetHash'>): (m: MutationLike) => TxEntry {
+  return (m) => {
+    const variables = txVariablesOf(m.state.variables);
+    return {
+      id: m.mutationId,
+      status: m.state.status,
+      viewId: variables?.viewId ?? null,
+      runId: variables?.runId ?? null,
+      action: variables?.action ?? null,
+      sameTarget: m.options.mutationKey !== undefined && hashKey(m.options.mutationKey) === view.targetHash,
+      outcome: txOutcomeOf(m.state.data),
+    };
+  };
+}
+
+/** Foto del caché al montar una vista (M-2 (c)): el mayor `mutationId` y los que estaban en curso. */
+export type MountSnapshot = { maxId: number; pendingIds: ReadonlySet<number> };
+
+/**
+ * Foto pura del `MutationCache` **entero** al montar (M-2 (c), v1.2): sin filtrar por cuenta ni objetivo. Al montar,
+ * todas son ajenas (la vista todavía no lanzó nada). Como los `mutationId` son monótonos, una mutación con `id >
+ * maxId` empezó después de montar, aunque haya empezado y terminado entre dos renders.
+ */
+export function mountSnapshot(mutations: readonly Pick<Mutation, 'mutationId' | 'state'>[]): MountSnapshot {
+  let maxId = 0;
+  const pendingIds = new Set<number>();
+  for (const m of mutations) {
+    maxId = Math.max(maxId, m.mutationId);
+    if (m.state.status === 'pending') pendingIds.add(m.mutationId);
+  }
+  return { maxId, pendingIds };
+}
+
+/** Estado derivado de una vista sobre su objetivo. */
+export type TargetState = {
+  inFlightForeign: boolean;
+  notice: TxNotice | null;
+  unconfirmed: { digest: string; mutationId: number } | null;
+};
+
+/**
+ * Deriva lo que muestra una vista (DL-8, M-1, M-2) de las mutaciones de su **cuenta** (`entries`):
+ * - `inFlightForeign`: una mutación de la cuenta en curso, de cualquier objetivo, que no lanzó esta vista;
+ * - `unconfirmed`: la más nueva del objetivo que terminó "sin confirmar", propia o ajena (bloquea el objetivo hasta
+ *   `acknowledge`);
+ * - `notice`: `in_flight` si hay una ajena en curso; si no, la ajena del objetivo más nueva que se puede adoptar
+ *   (terminada, no "sin confirmar", y que empezó después de montar o estaba en curso al montar), solo si es más nueva
+ *   que toda mutación propia de la vista (M-2 (a): lanzar una propia la descarta). Lo terminado antes de montar nunca se
+ *   adopta, así el formulario no navega dos veces.
+ */
+export function deriveTargetState({
+  entries,
+  viewId,
+  mount,
+}: {
+  entries: readonly TxEntry[];
+  viewId: number;
+  mount: MountSnapshot;
+}): TargetState {
+  let inFlightForeign = false;
+  let unconfirmed: TargetState['unconfirmed'] = null;
+  let ownMaxId = 0;
+  let adoptable: { entry: TxEntry; outcome: TxOutcome<unknown>; action: TxAction } | null = null;
+  for (const entry of entries) {
+    const own = entry.viewId === viewId;
+    if (own) ownMaxId = Math.max(ownMaxId, entry.id);
+    if (entry.status === 'pending' && !own) inFlightForeign = true;
+    if (!entry.sameTarget) continue;
+    const { outcome, action } = entry;
+    if (outcome?.kind === 'unconfirmed' && (unconfirmed === null || entry.id > unconfirmed.mutationId)) {
+      unconfirmed = { digest: outcome.digest, mutationId: entry.id };
+    }
+    const finished = entry.status === 'success' || entry.status === 'error';
+    const startedAfterMount = entry.id > mount.maxId || mount.pendingIds.has(entry.id);
+    if (
+      !own &&
+      finished &&
+      outcome !== null &&
+      outcome.kind !== 'unconfirmed' &&
+      action !== null &&
+      startedAfterMount &&
+      (adoptable === null || entry.id > adoptable.entry.id)
+    ) {
+      adoptable = { entry, outcome, action };
+    }
+  }
+  let notice: TxNotice | null = null;
+  if (inFlightForeign) notice = { kind: 'in_flight' };
+  else if (adoptable !== null && adoptable.entry.id > ownMaxId) {
+    // El valor del resultado es el de la acción de esa mutación: su `interpret` lo produjo con ese tipo.
+    notice = { kind: 'adopted', adopted: { action: adoptable.action.kind, outcome: adoptable.outcome } as AdoptedTx };
+  }
+  return { inFlightForeign, notice, unconfirmed };
+}
