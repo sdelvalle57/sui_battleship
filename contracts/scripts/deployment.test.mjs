@@ -34,7 +34,8 @@ const DIGEST = 'C8teaea3BBUvqFnAJ7WidwvBYAgE7zpNWsZ1gEkiwBCz';
 const TIMESTAMP_MS = '1793631179013';
 const SOURCE_COMMIT = 'eb8489d239e661c22134d5c2eea019f0a67d25db';
 const SUI_CLI_VERSION = '1.83.0-16d2dc1e05ed';
-const FRAMEWORK_REV = '719fb2960ccfbf9f4d33041f8ea5146d30671696';
+const FRAMEWORK_REV = '719fb2960ccfbf9f4d33041f8ea5146d30671696'; // fixture localnet.deployment.json: registro histórico (PV 139)
+const LOCK_FRAMEWORK_REV = '05ad86a3e86c522deea116f80dc2bf2309a53363'; // Move.lock del repo: piso de la PV 140 (repin de #8)
 
 const localnetDeployment = () =>
   buildDeployment({
@@ -322,7 +323,7 @@ test('checkConsistency: igual ⇒ [] y cada campo distinto ⇒ una diferencia', 
 
 test('readFrameworkRev lee el rev de [pinned.testnet.Sui] del Move.lock del repo', () => {
   const lock = readFileSync(new URL('../Move.lock', import.meta.url), 'utf8');
-  assert.equal(readFrameworkRev(lock), FRAMEWORK_REV);
+  assert.equal(readFrameworkRev(lock), LOCK_FRAMEWORK_REV);
   assert.throws(() => readFrameworkRev('[pinned.testnet.MoveStdlib]\nrev = "' + 'a'.repeat(40) + '"\n'), /pinned\.testnet\.Sui/);
 });
 

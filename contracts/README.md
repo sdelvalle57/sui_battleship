@@ -498,7 +498,7 @@ Ejemplo con IDs **ficticios**:
   "publishTimestamp": "2026-11-05T14:03:12.345Z",
   "sourceCommit": "5555555555555555555555555555555555555555",
   "suiCliVersion": "1.83.0-16d2dc1e05ed",
-  "frameworkRev": "719fb2960ccfbf9f4d33041f8ea5146d30671696"
+  "frameworkRev": "05ad86a3e86c522deea116f80dc2bf2309a53363"
 }
 ```
 
