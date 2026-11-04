@@ -425,6 +425,6 @@ testnet con una wallet real.
 | `documents/STATUS.md` | Ciclos activos, baselines de gates, hallazgos y pendientes |
 | `documents/FLUJO_AGENTES.md` | Pipeline multi-agente: roles, permisos, plantillas |
 | `documents/agentes/*.md` | Prompts de rol (DEV / MID / MAYOR / ORQUESTADOR) |
-| `README.md` | Visión del producto y roadmap original (2025-03) |
+| `README.md` | Visión del MVP 1 vs 1, reglas, guía de juego y de desarrollo, arquitectura, roadmap real y licencia (#16) |
 | `contracts/README.md` | Contrato on-chain: tablas de funciones, eventos y abort codes, authZ, versionado y operación |
 | `app/README.md` | App web: requisitos, scripts, red del build, localnet/testnet, capas, mapa de `app/src/sui/`, dependencias y avisos de seguridad |

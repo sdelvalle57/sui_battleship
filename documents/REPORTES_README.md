@@ -1111,3 +1111,222 @@ Includes the TASK-3 report and the MID review.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+---
+
+## TASK-4
+
+## Task completado: HANDOFF_README — TASK-4
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-16-readme` @ `f125e5d` (TASK-3 commiteado). `agents.md` y `documents/STATUS.md` sin commitear.
+
+### Archivos modificados/creados
+- `agents.md`: 1 línea, la fila `README.md` de §14 (`:428`).
+- `documents/STATUS.md`: +13 / −5.
+- Punto de partida, fila "6. Docs y despliegue".
+- 3 baselines nuevas: TASK-3, TASK-2 y TASK-1.
+- H10 cerrado.
+- Fila "Licencia".
+- Fila de #15 (corrección condicional).
+- Fila nueva de #16 y fila "Siguiente".
+- Viñeta de #16 en "Pendientes del usuario".
+
+### Qué se implementó (3 líneas máx)
+- `agents.md` §14 describe el README nuevo.
+- STATUS:
+- cierra H10;
+- registra #16 en el ciclo activo y en el punto de partida;
+- suma los campos `license` a la fila Licencia y las baselines de TASK-1..TASK-3;
+- registra el merge de PR #57 en las filas de #15 y "Siguiente";
+- agrega en "Pendientes del usuario" los de #16: revisar D-20261104-04, N-2 y el cierre de #16 con TASK-5.
+
+### Precondición y verificación de la corrección condicional
+```
+$ timeout 60 git -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch -q https://github.com/sdelvalle57/sui_battleship.git master:refs/remotes/origin/master; echo "fetch-exit=$?"
+fetch-exit=0
+$ git rev-parse --short origin/master
+5e51356
+$ git merge-base --is-ancestor origin/master HEAD; echo "anc=$?"
+anc=0
+```
+Precondición cumplida: TASK-3 en PASA y `master` dentro de la branch.
+
+`git show origin/master:documents/STATUS.md` todavía trae la fila de #15 con "Branch `feature/issue-15-pages-deploy`, PR #57 (`Refs #15`)", sin el merge. "Siguiente" sigue diciendo "listo para pasar a ready tras TASK-2b". El orquestador no lo corrigió en `master`, así que la corrección se aplica.
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados: ninguno. Sin cambios de código, así que no hubo gates (handoff §0).
+- Tablas de contrato y `app/src/sui/`: no aplica.
+
+**Diff:**
+```
+$ git status --porcelain --untracked-files=all
+ M agents.md
+ M documents/STATUS.md
+$ git diff --stat
+ agents.md           |  2 +-
+ documents/STATUS.md | 18 +++++++++++++-----
+ 2 files changed, 14 insertions(+), 6 deletions(-)
+```
+```diff
+--- a/agents.md
++++ b/agents.md
+@@ -428 +428 @@
+-| `README.md` | Visión del producto y roadmap original (2025-03) |
++| `README.md` | Visión del MVP 1 vs 1, reglas, guía de juego y de desarrollo, arquitectura, roadmap real y licencia (#16) |
+```
+`git diff -- agents.md` toca solo la fila de §14, como pide el criterio de aceptación.
+
+```diff
+--- a/documents/STATUS.md
++++ b/documents/STATUS.md
+@@ -18 +18 @@
+-| 6. Docs y despliegue | ⬜ |
++| 6. Docs y despliegue | 🚧 README raíz reescrito en #16 (🚧: TASK-1..TASK-3 en la branch, PR principal con `Refs #16`; TASK-5 completa URL e IDs después de #8). Publicación en testnet: #8, pendiente del owner (PR #48). Hosting en Railway: #15, imagen lista (PR #57 mergeado, `5e51356`); conectar y publicar después de #8 (owner) |
+@@ -39,0 +40,3 @@   (al principio de "Baselines de gates", lo más reciente primero)
++| docs @ `feature/issue-16-readme` (TASK-3 de #16, `f125e5d`), 2026-11-04 | `README.md` raíz | 🟢 Despliegue (contratos por el owner, app en Railway), Administración de la House (`#/admin`, "Administrar House", textos de `master` `5e51356`) y Roadmap (corte 2026-11-04, estados por `gh api`, #60 post-MVP); `Dockerfile`/`.dockerignore` en el árbol; Docker opcional; H-1/H-2 de TASK-2 corregidos. §R-2 2/2, §R-3 vacío, §R-4 68 OK (31 anclas re-verificadas contra `master`), §R-5 solo D-20261103-01 (PR #48). Sin cambios de código |
++| docs @ `feature/issue-16-readme` (TASK-2 de #16, `93a0661`), 2026-11-04 | `README.md` raíz | 🟢 Reescrito en español: aviso `[!WARNING]`, qué es, reglas del MVP, jugar en testnet (2 placeholders hasta #8), arquitectura, estructura, desarrollo local, documentación y licencia. §R-2 2/2, §R-3 vacío, §R-4 41 OK (anclas de §R-4 verificadas), §R-5 solo D-20261103-01 (PR #48). Sin cambios de código |
++| contracts/ + app @ `feature/issue-16-readme` (TASK-1 de #16, `3776c3d`; medido sobre `deaadbb` + TASK-1, antes del merge de #14 y #15), CLI `1.83.0`, Node `v26.13.0`, 2026-11-04 | gates completos de `contracts` y `app` | 🟢 exit 0. `license = "Apache-2.0"` en `Move.toml`, `package.json` y `app/package.json` (lock +2/−0). 0 warnings / 0 lints / 83 tests PASS; `Updating dependencies` 0; `Move.lock` sin delta; scripts 99 PASS; `check` 0 despliegues; `npm ci` 293; 292 firmas; 0 vulnerabilidades de producción; lint 0 / typecheck 0 / **915 tests** en 57 archivos; `index-*.js` 901.45 kB (273.61 kB gzip). Cero delta contra `deaadbb`; sin fallback. La medición sobre `5e51356` + #16 la da la CI del PR principal |
+@@ -127 +130 @@
+-| H10 | docs | README dice "2 vs 2"; el diseño es 1 vs 1. Roadmap marca el Escrow como diseñado. | Actualizar README en el issue de docs |
++| H10 | docs | README dice "2 vs 2"; el diseño es 1 vs 1. Roadmap marca el Escrow como diseñado. | ✅ 2026-11-04 (#16): README reescrito (1 vs 1, sin Escrow, reglas, guía, roadmap) |
+@@ -142 +145 @@
+-| Licencia | ✅ 2026-10-30 | Apache-2.0 (D-20261030-14): `LICENSE` en la raíz y cabecera `// Copyright (c) 2025-2026 sdelvalle57` + SPDX en los fuentes Move |
++| Licencia | ✅ 2026-10-30 | Apache-2.0 (D-20261030-14): `LICENSE` en la raíz y cabecera `// Copyright (c) 2025-2026 sdelvalle57` + SPDX en los fuentes Move. #16 (TASK-1, `3776c3d`): campo `license = "Apache-2.0"` en `contracts/Move.toml`, `package.json` y `app/package.json` (y su reflejo en `package-lock.json`) |
+@@ -153,2 +156,3 @@
+-| #15 (hosting de la app en Railway) | 🚧 2026-11-04 | Branch `feature/issue-15-pages-deploy`, PR #57 (`Refs #15`); plan v1.1 y handoff v1.5; … (resto sin cambios)
++| #15 (hosting de la app en Railway) | 🚧 2026-11-04 | PR #57 mergeado (`5e51356`, `Refs #15`); plan v1.1 y handoff v1.5; … (resto sin cambios: Hecho TASK-1..TASK-5 y TASK-2b; **Pendiente:** TASK-6 después de #8 (camino positivo real, Node 26.13.0, URL y `Closes #15`); checklist del owner; code-splitting → #58)
++| #16 (README raíz) | 🚧 2026-11-04 | Branch `feature/issue-16-readme`; plan v1 y handoff v1.2; D-20261104-04 (P-1..P-3 por delegación). Hecho: TASK-1, campo `license` en los manifiestos (`3776c3d`); TASK-2, README en español (`93a0661`); TASK-3, despliegue, administración de la House y roadmap (`f125e5d`); TASK-4, `agents.md` §14 y este STATUS. **Pendiente:** PR principal con `Refs #16`; TASK-5 después de #8 (URL pública e IDs de testnet, PR de seguimiento con `Closes #16`). El cierre lo hace el housekeeping de ese PR |
+-| Siguiente | ⏳ | #8 (PR #48 en draft, congelado en `26f2676`: publicación en testnet por el owner); #15 (PR #57, listo para pasar a ready tras TASK-2b; TASK-6 en el seguimiento); #16 (TASK-3/TASK-4 tras #15; TASK-5 tras #8); post-MVP: #51, #53, #54, #56, #58, #60 |
++| Siguiente | ⏳ | #8 (PR #48 en draft, congelado en `26f2676`: publicación en testnet por el owner); #15 (TASK-6 después de #8); #16 (PR principal con `Refs #16`; TASK-5 después de #8); post-MVP: #51, #53, #54, #56, #58, #60 |
+@@ -200,0 +205,4 @@   (al final de "Pendientes del usuario")
++- **#16:** revisar D-20261104-04 (P-1..P-3, tomada por delegación, D-20261104-01; también en la lista de arriba).
++  **N-2 (no delegable):** el merge del PR principal toca las watch paths de Railway (`package.json`, `app/package.json`,
++  `package-lock.json`): si Railway ya está conectado sin la preautorización del owner, el merge publica el sitio y espera
++  al owner. Después de #8, TASK-5 (PR de seguimiento con `Closes #16`) completa la URL y los IDs y cierra #16.
+```
+La fila de #15 aparece recortada en el diff pegado. En el archivo, el único cambio de esa fila es el prefijo: "Branch `feature/issue-15-pages-deploy`, PR #57 (`Refs #15`);" pasa a "PR #57 mergeado (`5e51356`, `Refs #15`);". El estado 🚧 y los pendientes ya estaban y quedan iguales: TASK-6 después de #8 y el checklist del owner.
+
+**§R-3 sobre lo agregado** (las 14 líneas `+` del diff de los dos archivos, en `<scratchpad>/task4.added`):
+```
+$ git diff -U0 -- agents.md documents/STATUS.md | /usr/bin/grep '^+' | /usr/bin/grep -v '^+++' > <scratchpad>/task4.added; wc -l < <scratchpad>/task4.added
+14
+$ /usr/bin/grep -nE '[0-9a-fA-F]{40,64}' <scratchpad>/task4.added; echo "e1=$?"
+e1=1
+$ /usr/bin/grep -niE 'suiprivkey|mnemonic|seed phrase|/home/|/Users/' <scratchpad>/task4.added; echo "e2=$?"
+e2=1
+$ /usr/bin/grep -nE '0x[0-9a-fA-F]{8,}' <scratchpad>/task4.added; echo "e3=$?"
+e3=1
+```
+Los tres salen vacíos. Los únicos hex que agregué son SHAs cortos de 7 caracteres: `3776c3d`, `93a0661`, `f125e5d`, `5e51356` y `deaadbb`.
+
+**Coherencia con los reportes de TASK-1..TASK-3** (criterio de aceptación):
+
+| Valor en STATUS | Reporte |
+|---|---|
+| contracts 0 / 0 / 83, `Updating dependencies` 0, `Move.lock` sin delta, scripts 99, `check` 0 | TASK-1 |
+| `npm ci` 293, 292 firmas, 0 de producción, lint 0, typecheck 0, 915 tests en 57 archivos, 901.45 kB (273.61 kB gzip) | TASK-1 |
+| lock +2/−0, sin fallback | TASK-1 |
+| §R-4 41 OK, §R-2 2/2, §R-5 solo D-20261103-01 (PR #48) | TASK-2 |
+| §R-4 68 OK, 31 anclas re-verificadas, #60 post-MVP | TASK-3 |
+
+Ningún conteo contradice los reportes. No hay medición sobre `5e51356`: esa la da la CI del PR principal.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica. No corrí ningún `sui`, ni localnet, ni nada contra testnet. Solo el fetch HTTPS y `git show` de solo lectura.
+
+### Desviaciones del handoff
+1. **Qué cambió:** las filas de #15 y "Siguiente" de STATUS, que no son de #16.
+ - **Por qué:** es la corrección condicional que piden el handoff v1.2 y el ajuste 1 del MID. `master` `5e51356` todavía no registra el merge de PR #57, y TASK-4 ya toca STATUS, así que deja el archivo coherente.
+ - **Verificación extra realizada:** con `git show origin/master:documents/STATUS.md` confirmé que el texto viejo sigue en `master`.
+ - **Qué tocó, acotado:**
+   - en #15, solo el prefijo ("PR #57 mergeado (`5e51356`, `Refs #15`)");
+   - en "Siguiente", se quitó "listo para pasar a ready" y quedaron #15 (TASK-6 después de #8) y #16 (PR principal + TASK-5);
+   - #60 ya estaba en post-MVP y se conserva.
+2. **Qué cambió:** STATUS no tenía una fila de #16 en el ciclo activo, así que la agregué entre #15 y "Siguiente".
+ - **Por qué:** el handoff pide "fila de #16 en el ciclo activo: 🚧 en curso con PR principal y el pendiente TASK-5".
+ - **Verificación extra realizada:** la fila sigue el formato de las de #14 y #15.
+3. **Qué cambió:** D-20261104-04 ya estaba en "Pendientes del usuario" (`STATUS.md:195`, "A revisar por el owner a su vuelta"). La viñeta nueva de #16 la nombra y remite a esa línea, sin duplicar el texto.
+ - **Por qué:** cumple el ajuste 3 del MID sin repetir el texto de esa línea.
+ - **Verificación extra realizada:** ninguna.
+4. **Qué cambió:** la fila de #16 da TASK-4 como hecho y el punto de partida pone #16 en 🚧, aunque esos cambios todavía no están commiteados.
+ - **Por qué:** STATUS describe el estado que queda al commitear este task, igual que en los ciclos anteriores.
+ - **Verificación extra realizada:** ninguna.
+
+### Riesgos / pendientes
+- **N-2 (no delegable):** sigue vigente para el merge del PR principal y quedó registrado en "Pendientes del usuario".
+- **TASK-5 (después de #8):**
+- completa los dos placeholders del README;
+- pasa D-20261103-01 sin `(PR #48)` si #8 mergeó;
+- pone #8 en "Hecho" y actualiza #15 en el roadmap;
+- cierra #16 con su housekeeping.
+- `agents.md` §1 ("Foco actual (oct-2026)") está viejo, pero queda fuera del alcance de #16 (ajuste 4 del MID).
+
+### Documentación
+- READMEs / `agents.md` actualizados: sí, `agents.md` §14, la fila `README.md`.
+- Snippet para `documents/STATUS.md`: ya va en este task. Las filas de baselines usan los snippets de los reportes de TASK-1..TASK-3.
+
+**Commit propuesto (handoff):** `docs: map the new README and close STATUS H10 (#16)`.
+
+---
+
+## Revisión TASK-4: PASA
+
+Revisión del MID (2026-11-04) contra `documents/ESTANDARES.md` y el handoff v1.2, TASK-4, más los ajustes de la
+revisión de TASK-3. Leí el diff real con `git diff -- agents.md documents/STATUS.md` (2 archivos, +14/−6).
+
+### Checklist
+- [x] **`agents.md`:** cambia **solo** la fila de `README.md` en §14 (`agents.md:428`), con el texto del handoff. No
+      toca ninguna otra sección (PROY-20).
+- [x] **STATUS, lo pedido:**
+      - H10 queda ✅ 2026-11-04 (#16);
+      - fila "6. Docs y despliegue" con README (#16), publicación (#8) y hosting (#15), cada uno con su estado real;
+      - fila "Licencia" con los campos `license` de TASK-1 (`3776c3d`);
+      - fila nueva de #16 en 🚧, con los SHAs reales de TASK-1..TASK-3 y TASK-5 pendiente;
+      - 3 baselines (TASK-1 marcado "medido sobre `deaadbb` + TASK-1", con 915/57, sin inventar una medición sobre
+        `5e51356`; TASK-2 y TASK-3 "Sin cambios de código");
+      - "Pendientes del usuario" con D-20261104-04, N-2 y el cierre por TASK-5.
+- [x] **Ajuste de la revisión de TASK-3:**
+      - la fila de #15 registra el merge de PR #57 (`5e51356`, `Refs #15`) y mantiene sus pendientes;
+      - en "Siguiente" se quitó "listo para pasar a ready" y se sumó #60 a post-MVP.
+- [x] **Coherencia:** los SHAs citados (`3776c3d`, `93a0661`, `f125e5d`, `5e51356`) coinciden con
+      `git log --oneline origin/master..HEAD`. Los conteos coinciden con los reportes de TASK-1..TASK-3. No hay filas
+      duplicadas.
+- [x] **§R-3** sobre las 14 líneas agregadas: vacío (output pegado).
+- [x] **Desviaciones declaradas.**
+
+### Decisión sobre las desviaciones (las 4 aceptadas)
+1. **Filas de #15 y "Siguiente":** es la corrección condicional que pidió la v1.2. `master` no la tenía, así que se
+   aplicó y quedó acotada a esas dos filas.
+2. **Fila nueva de #16:** la pedía TASK-4 ("fila del ciclo de #16 en curso"). No es una desviación real.
+3. **La viñeta de #16 remite a la línea 195:** evita duplicar la lista de decisiones delegadas (LIM-5) y deja N-2 y el
+   cierre en un solo lugar.
+4. **STATUS describe el estado posterior al commit:** es la convención del repo. STATUS viaja en el mismo commit que el
+   cambio que describe (PROY-20), igual que en los ciclos anteriores.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Ninguno | — |
+
+### Siguiente paso
+- **TASK-4 aprobado.** Con eso se completan TASK-1..TASK-4. El orquestador abre el PR principal con `Refs #16`
+  (D-20261104-04 (1)); el body propuesto está en el scratchpad del orquestador.
+- Antes del merge: **N-2** (Railway todavía no está conectado, así que hoy no aplica) y la revisión de integración
+  del MAYOR (FLUJO §7).
+- TASK-5 queda en **NO EMPEZAR** hasta #8 y el dominio de Railway.
+- **Sin housekeeping en este PR:** el ciclo sigue activo hasta TASK-5 (FLUJO §9).
+
+### Mensaje de commit propuesto
+```
+docs: map the new README and close STATUS H10 (#16)
+
+agents.md §14 now describes the rewritten root README. STATUS closes H10,
+updates the "Docs y despliegue" and license rows, adds the #16 cycle row and
+the TASK-1..TASK-3 baselines, and lists D-20261104-04 and the N-2 Railway
+watch-path warning among the owner's pending items. It also records the PR #57
+merge in the #15 row and refreshes "Siguiente" (#60 added). Includes the
+TASK-4 report and the MID review.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
