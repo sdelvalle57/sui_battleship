@@ -2130,3 +2130,172 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 > `HouseAdminPanel` (configuración, comisión, límites y retiro; un objetivo, un aviso, una alerta, adoptado con el texto del
 > evento); enlace "Administrar House" solo con el cap conocido. App 1149 tests en 65 archivos (+48), build 917.01 kB.
 > Smoke en localnet antes de TASK-6 (handoff v1.4).
+
+## Smoke del ciclo
+
+> DEV, 2026-11-04. Runbook y resultados: `documents/SMOKE_HOUSE_ADMIN.md` (handoff v1.4), llenado **durante** la
+> corrida. Branch `feature/issue-14-house-admin` @ `2f33058`, sin commits del DEV.
+
+### Resultado
+
+**PASA, 21/21** (pasos 0 a 20). Corrió sobre una localnet aislada (génesis nueva, chain id `e37ebd4e`) con la variante B,
+`PRE` en todo `suic` (también en las lecturas) y `app.env` con la guarda en la primera línea, nunca cargado junto a
+`env.sh` o `chrome.env`. Chrome headless con la línea literal (`--user-data-dir` propio, `:9229`). El cliente CDP propio
+corrió como demonio con `exec` (`cdp.pid`, `:9339`). Cada pestaña se abrió con `newWindow: true` (`T0`, `T1`, `T2`, todas
+`visible`), nunca con `Page.bringToFront`, y la navegación fue solo por hash: `W` nunca cambió de dirección. Los campos
+precargados se llenaron con `el.focus(); el.select()` + `Input.insertText`. Se contaron solo los `POST` de gRPC-web.
+
+### Lo central, con evidencia (digests completos en el SMOKE)
+
+- **Detección y P-1:**
+  - sin cuenta, 0 `ListOwnedObjects` (paso 2);
+  - `W` sin cap ⇒ "Sin permisos" sin datos de la House (paso 4);
+  - con el cap recibido por `transfer_house_cap` firmado como `ADMIN` (`3cSZwB…x3F4`, paso 6), el panel y el enlace
+    aparecieron sin ningún "Volver a comprobar" (paso 7);
+  - `W2` sin cap ⇒ sin enlace y "Sin permisos" (paso 17).
+- **Comisión (pasos 8-11):**
+  - los cinco inválidos dan su texto, con 0 `SimulateTransaction`;
+  - `250` ⇒ "De 0 bps (0 %) a 250 bps (2.5 %)" y luego "Comisión actualizada: …" (`BXcaUc…wc8k`), con
+    `FeeRateUpdated` 0 → 250;
+  - `G0` conserva su `fee_rate` 0;
+  - la home muestra 2.5 % sin recargar.
+- **Límites (pasos 12-13):**
+  - `zero_min`, `min_above_max` y `negative` con 0 `SimulateTransaction`;
+  - `0.002`/`10` con navegación a `#/` y vuelta a `#/admin` durante la transacción ⇒ caso **adoptado**: `IN_FLIGHT_TEXT`
+    en la vista remontada y después el texto de éxito (`C5Wozv…B8D3`);
+  - `BetLimitsUpdated` con los cuatro montos.
+- **Retiro (pasos 14-16):**
+  - `G1` con 250 bps ⇒ `fee` 10000000; `G0` ⇒ `fee` 0;
+  - "Retirar 0.01 SUI a tu cuenta" ⇒ "Retiraste 0.01 SUI de comisiones a tu cuenta." (`CWdVVs…ZcXy`);
+  - la transacción tiene **2 comandos**, `withdraw_fees` y `TransferObjects([Result 0], Input 2)`, con `Input 2` = `W`;
+  - `FeesWithdrawn.amount` 10000000, la House queda en 0;
+  - saldo de `W` 2006010857 = 1997999238 + 10000000 − 1988381.
+- **H-6 / SEG-10:** en las tres acciones, las etapas salieron en orden y no apareció ningún token de resultado durante
+  ellas (`__leaks` vacío). Cada una costó 2 `SimulateTransaction` + 1 `ExecuteTransaction`.
+- **Candado (pasos 10 y 16, `__lockLog` pegado):** en toda muestra con una etapa en curso, los tres botones
+  `disabled: true` e `inFlight: false`. NIT-3 queda cerrado en la UI real.
+- **Custodia (paso 18):** `ADMIN` ya no puede `update_fee_rate`: la CLI falla al armar ("Dry run failed") y la House sigue
+  en 250.
+- **Cierre (paso 20):**
+  - `kill` por PID de los cuatro procesos, con `kill -0` fallando en otra llamada;
+  - `pgrep` del perfil vacío y los 7 puertos libres;
+  - `<SMOKE_DIR>` y `contracts/deployments/` borrados;
+  - `~/.sui/` idéntico a la línea base y `Move.lock` sin delta;
+  - `git status` solo con el SMOKE (y este reporte).
+
+### Hallazgos
+
+| # | Severidad | Paso | Problema | Propuesta |
+|---|---|---|---|---|
+| SM-1 | 🟡 MINOR (UX, sin riesgo de fondos) | 13 → 16 | Los campos del panel se precargan con la House del **montaje** (`useState` inicial). Tras el remontaje del paso 13, que montó con la House en caché (0.001/50), los campos de límites siguieron en `0.001`/`50` después de que la configuración pasara a 0.002/10. El bloque ofrecía "De 0.002–10 SUI a 0.001–50 SUI" con el botón habilitado: un clic revierte el cambio. El resumen junto al botón (P-3) lo muestra y el contrato valida igual | A decidir por el MID: volver a precargar un campo no tocado cuando cambia el valor vigente, por ejemplo con `key` del bloque atada a `minBet`/`maxBet` (y `feeRate`). Es un cambio de `HouseAdminPanel.tsx` más un test con la House que cambia después del montaje |
+
+**Observaciones (no son fallos):**
+- Paso 19: la lista de métodos esperados del runbook no incluye `GetServiceInfo` (el indicador de red del encabezado,
+  en todas las páginas) ni `GetBalance`/`ListEvents` de las visitas a `#/` que pide el propio runbook. Con `T1` quieto en
+  `#/admin` solo se ve `GetServiceInfo`. Ningún método nuevo sale del panel.
+- Paso 7: el índice de dueños ya estaba al día; hicieron falta 0 "Volver a comprobar".
+- Paso 18: el error de la CLI es de la estimación de gas ("Could not determine the gas budget. Error: Dry run failed"),
+  sin digest. No se ejecutó nada.
+
+### Desviaciones del runbook
+
+- Ninguna en los pasos. Detalles de herramienta:
+  - el cliente CDP es un demonio HTTP propio (`/open`, `/eval`, `/insert`, `/mark`, `/count`), llamado con `curl` desde
+    llamadas que no cargan ningún env;
+  - el detector de fugas del observador excluye los tokens que ya estaban en pantalla antes de cada acción. En el paso
+    16, el adoptado del paso 13 desapareció al lanzar el retiro propio (M-2 (a)), así que no hubo nada que excluir
+    durante las etapas.
+
+---
+
+## Revisión del smoke: PASA (21/21)
+
+> MID, 2026-11-04. Revisado `documents/SMOKE_HOUSE_ADMIN.md` (llenado durante la corrida, sobre `2f33058`) contra el runbook
+> del handoff v1.4, y la sección "Smoke del ciclo" del DEV. No corrí nada.
+
+**Contra el runbook, paso por paso:**
+
+- **Reglas de la localnet y del navegador:** B4 con `PRE` en todo `suic`, también en las lecturas; `app.env` con la guarda
+  en la primera línea y nunca junto a `env.sh`/`chrome.env`; Chrome con la línea literal y su `--user-data-dir`; el cliente
+  CDP como demonio con `exec` y `cdp.pid` (MINOR-4 de v1.1); pestañas con `newWindow: true`, todas `visible`; navegación
+  solo por hash (`W` no cambió de dirección); campos con `focus`/`select` + `insertText` (v1.4); solo `POST` de gRPC-web.
+- **Detección y P-1 (pasos 2, 4, 7, 17):** sin cuenta, 0 `ListOwnedObjects`; sin cap, "Sin permisos" sin datos; con el cap
+  recibido por `transfer_house_cap` (firmado por la CLI como `ADMIN`, nunca como la burner), enlace y panel sin "Volver a
+  comprobar"; `W2` sin cap, sin enlace.
+- **Acciones (pasos 8-16):** validaciones con 0 `SimulateTransaction`; cada acción con 2 `SimulateTransaction` + 1
+  `ExecuteTransaction`; textos de éxito iguales a los de §1 y solo tras la confirmación (`__leaks` vacío, H-6); los costos
+  de la UI coinciden con el gas del `tx-block`; `G0` conserva 0 bps y su `GameResolved` cobra 0 (D-20261030-06 §3);
+  `FeesWithdrawn.amount` = `fees_collected` previo y el saldo de `W` cierra al MIST (2006010857 = 1997999238 + 10000000 −
+  1988381). El retiro real tiene **2 comandos** con `TransferObjects([Result 0], W)`: queda verificada en la red la forma de
+  la desviación 1 de TASK-2.
+- **Candado y NIT-3 (pasos 10 y 16):** en toda muestra de `__lockLog` con una etapa en curso, los tres botones deshabilitados
+  e `inFlight: false`. En el paso 13 se dio el caso **adoptado**: la vista remontada vio la mutación como ajena
+  (`IN_FLIGHT_TEXT`, correcto para otra vista) y después adoptó el resultado con el texto del evento.
+- **Custodia (paso 18):** ver observación 2. **Cierre (paso 20):** completo; el orquestador lo confirmó por su cuenta.
+
+**Observaciones del DEV:**
+
+1. **Paso 19, `GetServiceInfo` (y `GetBalance`/`ListEvents`) fuera de la lista:** es un defecto del runbook, no de la app.
+   `GetServiceInfo` es el sondeo del indicador de red del encabezado (#9, cada 20 s en toda página) y `GetBalance`/
+   `ListEvents` salen de las visitas a `#/` que pide el propio runbook. Lo que el paso protege se cumple: ningún método
+   nuevo sale del panel y no hay `SimulateTransaction`/`ExecuteTransaction` fuera de los pasos 9, 13 y 16. **PASA**; la
+   lista se corrige en el handoff v1.5 para una próxima corrida.
+2. **Paso 18, la CLI falla en el dry run:** es lo esperado ("falla al **armar** o ejecutar"). La CLI estima el gas con un dry
+   run y ese dry run falla porque el cap es de otra cuenta; el texto ("Could not determine the gas budget. Error: Dry run
+   failed") no nombra la causa, pero la custodia queda probada igual: el cap es de `W` (paso 6, `suic object`), no hay
+   digest ni nada ejecutado, y la House sigue en 250. **PASA**.
+
+### SM-1: se corrige ahora, antes de TASK-6 (TASK-5b del handoff v1.5)
+
+**Decisión del MID** (detalle interno de implementación, sin STOP: no toca contrato, fondos ni el alcance; corrige un
+defecto de UX de este ciclo): se corrige dentro del ciclo, antes de TASK-6. Coincido con el orquestador: es el panel del
+owner, y el defecto le ofrece con el botón habilitado revertir una decisión suya (comisión o límites) que acaba de tomar; el
+resumen de P-3 lo hace visible, pero no lo impide.
+
+**Qué no se hace y por qué:** un `key` del bloque atado a los valores vigentes resolvería el caso, pero remontaría el bloque
+también cuando el admin **está escribiendo** y la House cambia (otra pestaña, un adoptado), y le borraría lo escrito.
+
+**Especificación (TASK-5b del handoff v1.5):**
+- **Archivo:** `app/src/components/HouseAdminPanel.tsx` (`FeeBlock`, `LimitsBlock`) y sus tests.
+- **Comportamiento:** cada campo con un borrador `draft: string | null`; el valor mostrado es `draft ?? <valor vigente>`, así
+  un campo sin editar sigue a la House en cada render (sin `useEffect`, `key` ni `setState` en el render); `onChange` fija el
+  borrador; los errores solo con algún borrador (reemplaza `touched`); al lanzar la acción, los borradores del bloque vuelven
+  a `null` en el mismo handler (los campos pasan a la House vigente y, tras la relectura de H-5, a la nueva); un campo
+  editado conserva su texto si la House cambia, con el resumen contra la House nueva.
+- **Tests:** T5-16 (campos sin tocar siguen a la House), **T5-17 (reproduce SM-1; rojo antes del cambio)**, T5-18 (un campo
+  editado se conserva y el otro sigue), T5-19 (al lanzar se vacían los borradores), T5-20 (tras un fallo, el valor vigente y
+  el error en el bloque). Gate completo.
+- **Smoke:** no hace falta repetirlo; T5-17 reproduce el caso de forma determinista. Si el MAYOR lo pide, solo la secuencia
+  13 → 16 sobre una génesis nueva.
+
+### Siguiente paso
+
+1. Commitear el smoke (SMOKE + esta revisión y el reporte del DEV) y el handoff v1.5.
+2. DEV: **TASK-5b** (SM-1).
+3. Después, **TASK-6** (docs), que suma la línea de TASK-5b y puede citar lo medido en el smoke (del clic al resultado 0,86-1,08 s, de "Confirmando" al resultado 0,34-0,62 s;
+   0 "Volver a comprobar"; 2 `SimulateTransaction` + 1 `ExecuteTransaction` por acción).
+
+### Mensaje de commit del smoke
+
+```
+docs: record #14 house admin smoke, PASS 21/21 (#14)
+
+Isolated localnet, variant B: HouseCap handed to the browser burner
+with transfer_house_cap via CLI; detection and no-permission states,
+fee and bet-limit updates with event texts only after confirmation,
+adopted result after a remount, full withdraw to the signer with two
+commands and the balance reconciled to the MIST, lock log with the
+own transaction never seen as foreign (NIT-3), custody check from the
+old holder, clean close. SM-1 (stale prefilled fields after a remount)
+goes to TASK-5b; handoff v1.5.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+Si el handoff v1.5 va en otro commit: `docs: house admin handoff v1.5, TASK-5b for SM-1 (#14)`.
+
+### Snippet para STATUS.md
+
+> #14 smoke ✅ (2026-11-04): localnet aislada, PASA 21/21 (cap a la burner por `transfer_house_cap`; comisión, límites con
+> adopción y retiro total con 2 comandos y saldo conciliado; candado sin aviso propio; custodia; cierre limpio). SM-1
+> (campos precargados que no siguen a la House tras un remontaje) → TASK-5b antes de TASK-6 (handoff v1.5).
