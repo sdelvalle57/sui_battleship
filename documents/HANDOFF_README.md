@@ -1,6 +1,16 @@
 # HANDOFF_README
 > Plan: PLAN_README v1 (aprobado por el MAYOR, 2026-11-04) | Issue: #16 | Branch: `feature/issue-16-readme` |
-> Versión: v1 | Fecha: 2026-11-04 | Autor: MID
+> Versión: v1.1 | Fecha: 2026-11-04 | Autor: MID
+
+**Changelog v1.1** (revisión del MAYOR del handoff v1, APPROVE con 2 MINOR y 4 sugerencias, todas tomadas):
+- MINOR-1: el build de TASK-1 §5 escribe a un log con `echo "exit=$?"`, sin `| tee`, para no tapar el exit code; el
+  `grep "Updating dependencies"` corre sobre ese log;
+- MINOR-2: nueva §R-8. Toda mención `#N` / `PR #N` del README va con URL completa y la verifica §R-4. La única excepción
+  es el literal `se completa después de #8`;
+- sugerencia 1: la precondición de TASK-3 verifica con `gh` que los PRs de #14 y #15 están `MERGED`, con `git fetch`;
+- sugerencia 2: la lista de lo prohibido admite las cifras que fija una decisión, con la decisión citada al lado;
+- sugerencia 3: las líneas de reemplazo de TASK-5 llevan su marcador de lista;
+- sugerencia 4: N-3 deja TASK-1 **frenado**, no en fallback, hasta que decida el MID.
 
 **Changelog v1:** primera versión. Incorpora la revisión del MAYOR del plan v1 (APPROVE):
 - MINOR-1: el placeholder va entero en un renglón y se cuenta de dos formas (§R-2);
@@ -91,7 +101,11 @@ Rojos conocidos: ninguno. Criterio de TASK-1: **cero delta** en todo lo anterior
      (`\p{N}`), espacio, `-` o `_`, y cada espacio → `-`. Los encabezados dentro de bloques de código no cuentan. Un slug
      repetido en el mismo archivo lleva `-1`, `-2`… en orden de aparición;
   4. **absoluto (`https://`):** `curl -sS -o /dev/null -w '%{http_code}' -L <url>` da 2xx;
-  5. imprime una línea por enlace con `OK`/`FAIL` y sale ≠ 0 si alguno falla. Se pega el output completo.
+  5. **referencias a issues y PRs (§R-8):** borra del texto los literales `se completa después de #8` y los enlaces
+     `[…](https://github.com/sdelvalle57/sui_battleship/issues/N)` o `…/pull/N` cuyo texto nombra ese mismo `N`; en lo
+     que queda, `#[0-9]+` no aparece (un `#N` o `PR #N` suelto es `FAIL`). Las anclas `#…` dentro de las URLs de los
+     enlaces relativos no cuentan: se borran con su enlace;
+  6. imprime una línea por enlace con `OK`/`FAIL` y sale ≠ 0 si alguno falla. Se pega el output completo.
 
   Anclas que existen hoy en `deaadbb` (calculadas con esa regla; el script del DEV las tiene que dar igual):
   `contracts/README.md#battleshiphouse`, `#battleshipgame`, `#estados`, `#flujo-de-fondos`, `#comisión`,
@@ -101,11 +115,16 @@ Rojos conocidos: ninguno. Criterio de TASK-1: **cero delta** en todo lo anterior
   `agents.md#2-repositorio-monorepo`, `#3-comandos-por-área-sin-makefile`, `#localnet-aislada-smokes`, `#app-app`,
   `#4-arquitectura-de-runtime`, `#14-mapa-de-documentación`.
 - **§R-5: referencias a decisiones.** Cada `D-YYYYMMDD-N` citado en el README existe en `documents/DECISIONES.md` de la
-  branch, **salvo** D-20261103-01 mientras #8 no mergee: entonces se escribe `D-20261103-01 (PR #48)`. Verificación:
+  branch, **salvo** D-20261103-01 mientras #8 no mergee: entonces se escribe `D-20261103-01 (PR #48)`, con el PR enlazado (§R-8). Verificación:
   ```bash
   for d in $(grep -oE 'D-[0-9]{8}-[0-9]+' README.md | sort -u); do grep -q "^### $d " documents/DECISIONES.md && echo "OK $d" || echo "AUSENTE $d"; done
   ```
   Solo puede salir `AUSENTE D-20261103-01`, y únicamente si el README lo escribe con `(PR #48)`.
+- **§R-8: issues y PRs enlazados.** En el README, toda mención `#N` o `PR #N` va como enlace con su URL completa:
+  `[#N](https://github.com/sdelvalle57/sui_battleship/issues/N)` o `[PR #N](https://github.com/sdelvalle57/sui_battleship/pull/N)`
+  (en un archivo del repo, GitHub no autoenlaza `#N`). La verifica §R-4 (pasos 4 y 5). **Única excepción:** el literal
+  `se completa después de #8`, que no se enlaza para que §R-2 lo siga encontrando con `grep`. Vale para las citas como
+  `D-20261103-01 ([PR #48](…/pull/48))` y "seguimiento [#51](…/issues/51)".
 - **§R-6: Node.** Los agentes anteponen `export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && node --version &&`
   (`v26.13.0`) a todo comando de Node o npm (`agents.md` §3, "App (`app/`)").
 - **§R-7: al terminar cada task:** reporte con la plantilla de `documents/FLUJO_AGENTES.md` §5, en
@@ -169,7 +188,7 @@ licencia Apache-2.0, **para** no tener que inferirla del archivo `LICENSE` o de 
 ### 4. Archivos a tocar / NO tocar
 
 - **Tocar:** `contracts/Move.toml`, `package.json`, `app/package.json`, `package-lock.json`.
-- **NO tocar:** `contracts/Move.lock` (un delta es **N-3**: revertir, frenar, reportar; un repin es de #8),
+- **NO tocar:** `contracts/Move.lock` (un delta es **N-3**: revertir, reportar y TASK-1 queda frenado, no en fallback; un repin es de #8),
   `contracts/sources/`, `contracts/tests/`, `contracts/scripts/`, `app/src/`, `.npmrc`, `.nvmrc`, `.github/`, y los worktrees
   de #8, #14 y #15.
 
@@ -178,7 +197,7 @@ licencia Apache-2.0, **para** no tener que inferirla del archivo `LICENSE` o de 
 Contratos, forma canónica de `agents.md` §3 (desde `contracts/`, con la config sin claves y `printf 'n\n' |`):
 ```bash
 cd <repo>/contracts && printf 'n\n' | sui --version
-printf 'n\n' | sui move build -e testnet --warnings-are-errors 2>&1 | tee <scratchpad>/build.log
+printf 'n\n' | sui move build -e testnet --warnings-are-errors > <scratchpad>/build.log 2>&1; echo "exit=$?"; cat <scratchpad>/build.log
 printf 'n\n' | sui move build -e testnet --lint --warnings-are-errors
 printf 'n\n' | sui move test -e testnet --warnings-are-errors
 grep -c "Updating dependencies" <scratchpad>/build.log        # tiene que dar 0 (sin repin)
@@ -210,7 +229,7 @@ No aplica: metadatos sin flujo ejecutable.
 
 ### 7. Criterios de aceptación
 
-- [ ] Gates de contratos con **0 warnings / 0 lints / 83 tests PASS**, `Updating dependencies` = 0, scripts **99 PASS**,
+- [ ] Gates de contratos con `exit=0` del build (log pegado) y **0 warnings / 0 lints / 83 tests PASS**, `Updating dependencies` = 0, scripts **99 PASS**,
       `check` **0 despliegues**, `Move.lock` sin delta.
 - [ ] Gate de app sin delta contra la §0: 0 problemas, 0 errores, **915 tests en 57 archivos**, build verde (el tamaño
       del bundle no cambia: `license` no entra al bundle).
@@ -294,7 +313,8 @@ relativo con el ancla de §R-4, nunca copia de una tabla.
   pasan en la misma transacción;
 - comisión: `fee = ⌊pozo × fee_rate / 10 000⌋`, con `pozo = 2 × apuesta`, redondeada hacia abajo (el resto va al
   ganador); máximo 10 % (1000 bps); la partida copia la comisión vigente al crearse; el ganador recibe `pozo − fee`. En
-  testnet: `valor inicial de 200 bps (2 %), D-20261103-01 (PR #48); la vigente la muestra la app` (§R-5);
+  testnet: `valor inicial de 200 bps (2 %), D-20261103-01 ([PR #48](https://github.com/sdelvalle57/sui_battleship/pull/48)); la vigente la muestra la app`
+  (§R-5, §R-8);
 - cancelar y rechazar: el creador cancela y el invitado rechaza, solo mientras está pendiente; vuelve el 100 % al
   creador, sin comisión; no hay expiración;
 - estados: pendiente → cancelada o resuelta, sin estado intermedio;
@@ -305,7 +325,7 @@ relativo con el ancla de §R-4, nunca copia de una tabla.
 **Jugar en testnet (sección 5):**
 - placeholder 1, un renglón, literal:
   ```markdown
-  **URL pública:** se completa después de #8.
+  - **URL pública:** se completa después de #8.
   ```
 - wallet: Slush (la ofrece la app) o una wallet de navegador compatible con Sui, en la red **testnet**;
 - SUI de testnet: el faucet oficial. La URL se toma de la documentación oficial de Sui (docs.sui.io) al implementar y se
@@ -313,11 +333,11 @@ relativo con el ancla de §R-4, nunca copia de una tabla.
   obtener SUI de testnet. **No se inventa**;
 - recorrido: lobby (partidas abiertas) → crear → aceptar → resultado → "Mis partidas" (`#/my-games`, con las
   invitaciones recibidas) y abrir una partida por su ID; cada transacción enlaza al explorador (Suiscan);
-- límite honesto: en testnet las listas cubren la ventana del fullnode (≈ 14,6 días, D-20261103-03; seguimiento #51); una
+- límite honesto: en testnet las listas cubren la ventana del fullnode (≈ 14,6 días, D-20261103-03; seguimiento [#51](…/issues/51), §R-8); una
   partida más vieja se abre por su enlace o su ID;
 - placeholder 2, un renglón, literal (**sin enlace** todavía: el archivo no existe y el check de enlaces fallaría):
   ```markdown
-  **IDs de testnet** (`packageId`, `houseId`): en `contracts/deployments/testnet.json`; se completa después de #8.
+  - **IDs de testnet** (`packageId`, `houseId`): en `contracts/deployments/testnet.json`; se completa después de #8.
   ```
 
 **Desarrollo local (sección 8):**
@@ -337,7 +357,8 @@ relativo con el ancla de §R-4, nunca copia de una tabla.
   publicación con el script) y `app/README.md#localnet` (`localnet.json`, wallet de desarrollo). Placeholders `<dir>`.
 
 **Prohibido en el README:** direcciones, IDs, hex de 40-64, rutas personales, capturas, contenido del keystore (§R-1);
-conteos de tests, tamaños de bundle, baselines y cifras medidas; tablas copiadas de los READMEs de área; menciones de
+conteos de tests, tamaños de bundle, baselines y cifras medidas, **salvo** las que fija una decisión, con la decisión
+citada al lado (p. ej. "≈ 14,6 días, D-20261103-03"; "200 bps, D-20261103-01"); tablas copiadas de los READMEs de área; menciones de
 GitHub Pages o "hosting por definir".
 
 ### 4. Archivos a tocar / NO tocar
@@ -381,8 +402,14 @@ Reporte TASK-2 en `documents/REPORTES_README.md` (§R-7). Mensaje de commit que 
 ## TASK-3: README, secciones posteriores a #14 y #15 (área: docs) [NO EMPEZAR]
 
 **Precondición:** el orquestador mergeó los PRs de #14 y #15 a `master` y trajo `master` a esta branch con un merge commit
-(no rebase). El DEV lo verifica: `git log --oneline --merges -5` muestra el merge de `master` y
-`git merge-base --is-ancestor origin/master HEAD` da 0. El MID actualiza la §0 de este handoff con el baseline de ese
+(no rebase). El DEV lo verifica (output pegado):
+```bash
+gh pr view 57 --json state --jq .state                                                   # #15: MERGED
+gh pr list --head feature/issue-14-house-admin --state all --json number,state --jq '.[]' # #14: state MERGED
+git fetch origin && git merge-base --is-ancestor origin/master HEAD; echo "exit=$?"     # 0
+git log --oneline --merges -5                                                            # el merge de master
+```
+Si alguno no da lo esperado, no se empieza. El MID actualiza la §0 de este handoff con el baseline de ese
 `master` antes de autorizar el task.
 
 - **HU:** **como** visitante, **quiero** saber cómo se despliega el juego, cómo se administra la House y en qué estado
@@ -448,10 +475,11 @@ orquestador crea `docs/issue-16-testnet` desde ese `master`. Si el cierre de #15
 - **HU:** **como** jugador, **quiero** la URL del juego y saber dónde están los IDs de testnet, **para** empezar a jugar sin
   buscar en el repo.
 - **Qué implementar en `README.md`:**
-  - los dos placeholders pasan a (la URL, la que dio el owner; sin copiar ningún ID, D-20261104-04 (2)):
+  - los dos placeholders pasan a (la URL, la que dio el owner; sin copiar ningún ID, D-20261104-04 (2)), con el mismo
+    marcador de lista que tienen en la sección 5:
     ```markdown
-    **URL pública:** <URL de Railway>
-    **IDs de testnet** (`packageId`, `houseId`): en [`contracts/deployments/testnet.json`](contracts/deployments/testnet.json).
+    - **URL pública:** <URL de Railway>
+    - **IDs de testnet** (`packageId`, `houseId`): en [`contracts/deployments/testnet.json`](contracts/deployments/testnet.json).
     ```
   - comisión: quitar `(PR #48)` si quedó;
   - roadmap: #8 y #15 con su estado real, #16 "Hecho" al mergear este PR, y la fecha del corte;
@@ -471,7 +499,7 @@ orquestador crea `docs/issue-16-testnet` desde ese `master`. Si el cierre de #15
 | # | Riesgo / STOP | Qué hacer |
 |---|---|---|
 | R-1 | `license` en `Move.toml` produce un warning o un error | Fallback de TASK-1 §3.4 (aprobado; se declara) |
-| N-3 | Delta de `Move.lock` en TASK-1 (o `Updating dependencies` ≠ 0) | `git checkout -- contracts/Move.lock contracts/Move.toml`, frenar, reportar. **No delegable** |
+| N-3 | Delta de `Move.lock` en TASK-1 (o `Updating dependencies` ≠ 0) | `git checkout -- contracts/Move.lock contracts/Move.toml`, frenar, reportar. TASK-1 queda **frenado**, no en fallback: el reporte lo dice así y no se pasa a TASK-2 hasta que decida el MID. **No delegable** |
 | R-2 | El lock de npm cambia más que 2 líneas | `git checkout -- package-lock.json`, frenar, reportar; decide el MID |
 | N-2 | El merge del PR principal publica el sitio (watch paths de Railway: `package.json`, `app/package.json`, `package-lock.json`) | Si Railway ya está conectado sin preautorización, el merge espera al owner. **No delegable** |
 | R-3 | Un placeholder partido en dos renglones | §R-2: las dos cuentas iguales |
