@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Game, GameState } from './game';
-import { canCancel, canReject } from './gameActions';
+import { ABORT_MESSAGES } from './errors';
+import { acceptState, canCancel, canReject, NOT_INVITED_HINT } from './gameActions';
 
 const CREATOR = `0x${'a'.repeat(64)}`;
 const INVITEE = `0x${'b'.repeat(64)}`;
@@ -61,5 +62,52 @@ describe('canReject', () => {
   it('lets the creator of an invitation cancel but not reject it', () => {
     expect(canCancel(game(INVITEE), CREATOR)).toBe(true);
     expect(canReject(game(INVITEE), CREATOR)).toBe(false);
+  });
+});
+
+describe('acceptState', () => {
+  const upper = (address: string) => address.toUpperCase().replace('0X', '0x');
+
+  it('is available for another account on an open game', () => {
+    expect(acceptState(game(null), OTHER)).toBe('available');
+  });
+
+  it('is available for the invitee of an invitation, also in another address format', () => {
+    expect(acceptState(game(INVITEE), INVITEE)).toBe('available');
+    expect(acceptState(game(INVITEE), upper(INVITEE))).toBe('available');
+    expect(acceptState(game(`0x${'0'.repeat(62)}0b`), '0xb')).toBe('available');
+  });
+
+  it('is not_invited for a third account on an invitation', () => {
+    expect(acceptState(game(INVITEE), OTHER)).toBe('not_invited');
+  });
+
+  it('is creator for the creator of an open game or an invitation, also in another format', () => {
+    expect(acceptState(game(null), CREATOR)).toBe('creator');
+    expect(acceptState(game(INVITEE), CREATOR)).toBe('creator');
+    expect(acceptState(game(null), upper(CREATOR))).toBe('creator');
+  });
+
+  it('is no_account without account on a pending game, also on an invitation (never not_invited)', () => {
+    expect(acceptState(game(null), null)).toBe('no_account');
+    expect(acceptState(game(INVITEE), null)).toBe('no_account');
+  });
+
+  it.each([
+    ['cancelled', { kind: 'cancelled' }],
+    ['resolved', { kind: 'resolved', acceptor: OTHER, winner: CREATOR }],
+  ] as [string, GameState][])('is not_pending for a %s game, with and without account (M-3)', (_name, state) => {
+    for (const opponent of [null, INVITEE]) {
+      for (const address of [null, CREATOR, INVITEE, OTHER]) {
+        expect(acceptState(game(opponent, state), address)).toBe('not_pending');
+      }
+    }
+  });
+});
+
+describe('NOT_INVITED_HINT', () => {
+  it('is the text of the game/5 abort (D-20261103-02)', () => {
+    expect(NOT_INVITED_HINT).toBe(ABORT_MESSAGES.game[5]);
+    expect(NOT_INVITED_HINT).toBe('Esta invitación es para otra dirección.');
   });
 });

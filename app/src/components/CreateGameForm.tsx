@@ -4,6 +4,7 @@ import { useAppConfig } from '../hooks/useAppConfig';
 import { useCreateGame } from '../hooks/useCreateGame';
 import { useHouse } from '../hooks/useHouse';
 import { useSuiBalance } from '../hooks/useSuiBalance';
+import { useTxTarget } from '../hooks/useTxTarget';
 import { useWalletAccount } from '../hooks/useWalletAccount';
 import {
   CREATE_GAS_RESERVE_MIST,
@@ -19,6 +20,7 @@ import type { House } from '../sui/house';
 import { createdNoticeState } from './createdNotice';
 import { ReadState } from './ReadState';
 import { TransactionStatus } from './TransactionStatus';
+import { IN_FLIGHT_TEXT } from './txNotice';
 
 const sui = (mist: bigint) => `${formatMist(mist)} SUI`;
 
@@ -70,7 +72,8 @@ function DisconnectedForm() {
 function ConnectedForm({ account, house }: { account: string; house: House }) {
   const { network } = useAppConfig();
   const balance = useSuiBalance();
-  const tx = useCreateGame();
+  const target = useTxTarget({ kind: 'create' });
+  const tx = useCreateGame(target.view);
   const [amountText, setAmountText] = useState('');
   const [opponentText, setOpponentText] = useState('');
   const [touched, setTouched] = useState(false);
@@ -81,9 +84,12 @@ function ConnectedForm({ account, house }: { account: string; house: House }) {
   const opponentError = !validation.ok && opponentText.trim() !== '' ? validation.errors.opponent : undefined;
   const estimate = validation.ok ? resolutionAmounts(validation.bet, house.feeRate) : null;
 
-  const outcome = tx.outcome;
-  // Sin confirmar (M-3 (b)): la transacción pudo ejecutarse; no se ofrece crear otra hasta que el usuario lo decida.
-  const pendingReview = outcome?.kind === 'unconfirmed';
+  // Un crear ajeno adoptado (M-2 (b)) se trata igual que el propio; solo existe si es más nuevo que el propio.
+  const adopted = target.notice?.kind === 'adopted' && target.notice.adopted.action === 'create' ? target.notice.adopted.outcome : null;
+  const outcome = adopted ?? tx.outcome;
+  // Sin confirmar (M-3 (b) de #11): la transacción pudo ejecutarse; no se ofrece crear otra hasta que el usuario lo
+  // decida. También bloquea una transacción de la cuenta en curso (DL-7 de #12).
+  const blocked = target.busy || target.unconfirmed !== null;
   if (outcome?.kind === 'success' && outcome.value?.created) {
     const state = createdNoticeState({
       digest: outcome.digest,
@@ -101,7 +107,7 @@ function ConnectedForm({ account, house }: { account: string; house: House }) {
       onSubmit={(event) => {
         event.preventDefault();
         setTouched(true);
-        if (validation.ok && !tx.isBusy && !pendingReview) tx.create({ bet: validation.bet, opponent: validation.opponent, shown });
+        if (validation.ok && !blocked) tx.create({ bet: validation.bet, opponent: validation.opponent, shown });
       }}
     >
       <h3>Crear partida</h3>
@@ -146,9 +152,10 @@ function ConnectedForm({ account, house }: { account: string; house: House }) {
         </p>
       )}
       <p className="hint">{STORAGE_NOTE}</p>
-      <button type="submit" disabled={!validation.ok || tx.isBusy || pendingReview}>
+      <button type="submit" disabled={!validation.ok || blocked}>
         Crear partida
       </button>
+      {target.notice?.kind === 'in_flight' && <p role="status">{IN_FLIGHT_TEXT}</p>}
       <TransactionStatus
         stage={tx.stage}
         outcome={outcome}
@@ -163,10 +170,13 @@ function ConnectedForm({ account, house }: { account: string; house: House }) {
           </p>
         )}
       </TransactionStatus>
-      {pendingReview && (
-        <button type="button" onClick={tx.reset}>
-          Ya la revisé: crear otra partida
-        </button>
+      {target.unconfirmed !== null && (
+        <>
+          <TransactionStatus stage="done" outcome={{ kind: 'unconfirmed', digest: target.unconfirmed.digest }} network={network} successText="" />
+          <button type="button" onClick={target.acknowledge}>
+            Ya la revisé: crear otra partida
+          </button>
+        </>
       )}
     </form>
   );

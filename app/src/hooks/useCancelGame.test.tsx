@@ -12,6 +12,7 @@ import { queryKeys } from './queryKeys';
 import { useAppConfig } from './useAppConfig';
 import { useCancelGame } from './useCancelGame';
 import { useRejectGame } from './useRejectGame';
+import { useTxTarget } from './useTxTarget';
 
 vi.mock('@mysten/dapp-kit-react', () => ({ useCurrentClient: vi.fn(), useCurrentAccount: vi.fn(), useDAppKit: vi.fn() }));
 vi.mock('./useAppConfig', () => ({ useAppConfig: vi.fn() }));
@@ -80,11 +81,20 @@ describe.each([
     signAndExecuteTransaction.mockResolvedValue({ $kind: 'Transaction', Transaction: { digest: tx.digest } });
     vi.mocked(confirmTransaction).mockResolvedValue(resultOf(tx));
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
-    const { result } = renderHook(() => (kind === 'cancel' ? useCancelGame() : useRejectGame()), { wrapper: queryWrapper(queryClient) });
+    // T3-15 (1): la partida sale de la vista, no del argumento de la acción.
+    const { result } = renderHook(
+      () => {
+        const { view } = useTxTarget({ kind: 'game', gameId });
+        const cancel = useCancelGame(view);
+        const reject = useRejectGame(view);
+        return kind === 'cancel' ? cancel : reject;
+      },
+      { wrapper: queryWrapper(queryClient) },
+    );
     act(() => {
       const current = result.current;
-      if ('cancel' in current) current.cancel(gameId);
-      else current.reject(gameId);
+      if ('cancel' in current) current.cancel();
+      else current.reject();
     });
     await waitFor(() => {
       expect(result.current.outcome).not.toBeNull();
@@ -96,6 +106,7 @@ describe.each([
     expect(invalidate.mock.calls.map((c) => c[0]?.queryKey)).toEqual([
       queryKeys.game('localnet', gameId),
       queryKeys.balance('localnet', SENDER),
+      queryKeys.myGames('localnet', CONFIG.originalPackageId, SENDER),
     ]);
   });
 });

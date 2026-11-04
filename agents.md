@@ -29,8 +29,9 @@ se citan como `#N`.
 **Layout objetivo (D-20261030-03)** — `contracts/`, `package.json` y `.nvmrc` existen desde #2;
 `contracts/tests/` y `contracts/README.md` desde #4; `.github/workflows/` desde #3 (`ci.yml`: job
 `contracts`; el job `app` desde #9); `contracts/scripts/` desde #7; `app/`, `.npmrc` y `package-lock.json` desde #9; `contracts/fixtures/` y
-`app/scripts/` desde #10 (D-20261031-01); `contracts/deployments/` y `contracts/Published.toml` (los escribe la primera
-publicación en testnet, #8) llegan con su issue:
+`app/scripts/` desde #10 (D-20261031-01); `Dockerfile`, `.dockerignore`, `app/Caddyfile`, `app/public/` y
+`app/scripts/check-deploy-image.sh` desde #15; `contracts/deployments/` y `contracts/Published.toml` (los escribe la
+primera publicación en testnet, #8) llegan con su issue:
 
 ```
 sui_battleship/
@@ -39,17 +40,27 @@ sui_battleship/
 ├── contracts/                # paquete Move (Move.toml, Move.lock, README.md, sources/, tests/)
 │   ├── scripts/              # (#7) publish.mjs (publish/record/check), deployment.mjs, tests y fixtures/ de la CLI
 │   ├── fixtures/             # (#10) game-reads.localnet.json: lecturas gRPC reales del Game y sus eventos por variante;
-│   │                         # (#11) game-tx.localnet.json: House, simulaciones fallidas y transacciones ejecutadas reales
+│   │                         # (#11, #12) game-tx.localnet.json: House, simulaciones fallidas y transacciones ejecutadas
+│   │                         #   reales de crear, cancelar, rechazar y aceptar (con cada ganador y un fallo ejecutado);
+│   │                         # (#14) house-admin.localnet.json: listado del HouseCap por tipo, aborts de house y las
+│   │                         #   transacciones de admin (comisión, límites, retiro)
 │   ├── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos); lo escribe el script
 │   └── Published.toml        # (#8) lo escribe `sui client publish`: fuente de los datos del paquete
 ├── app/                      # cliente React (Vite + TS + SDK de Sui + wallet kit); guía en app/README.md
+│   ├── Caddyfile             # (#15) servidor de la imagen de Railway: CSP y cabeceras (app/README.md, "Despliegue")
+│   ├── public/               # (#15) estáticos que Vite copia tal cual a la raíz de dist/: favicon.svg
 │   └── scripts/              # recaptura de contracts/fixtures/ en la localnet aislada: capture-read-fixtures.mjs (#10),
-│                             # capture-tx-fixtures.mjs (#11) y su guarda compartida localnet-guard.mjs (#11: sin SDK ni red)
+│                             # capture-tx-fixtures.mjs (#11), capture-house-fixtures.mjs (#14) y su guarda compartida
+│                             # localnet-guard.mjs (#11: sin SDK ni red);
+│                             # check-deploy-image.sh (#15): chequeo de la imagen de Railway (job deploy-image y local)
+├── Dockerfile                # (#15) imagen de Railway: build de testnet + Caddy; sin testnet.json no se construye
+├── .dockerignore             # (#15) contexto en lista blanca (sin localnet.json, .env*, node_modules ni dist)
 ├── package.json              # npm workspaces: ["app"]; engines: Node 26
 ├── package-lock.json         # versiones exactas congeladas (D-20261102-02 (3))
 ├── .npmrc                    # save-exact, engine-strict, min-release-age=7, ignore-scripts
 ├── .nvmrc                    # versión de Node (PROY-17)
-└── .github/workflows/        # ci.yml: jobs contracts (#3) y app (#9), framework-drift informativo
+└── .github/workflows/        # ci.yml: jobs contracts (#3), app (#9) y deploy-image (#15, no requerido); framework-drift
+                              # informativo
 ```
 
 | Área | Carpeta | Stack |
@@ -207,9 +218,17 @@ VITE_SUI_NETWORK=testnet npm run build -w app   # build de testnet
 y al final `git status --porcelain --untracked-files=all` vacío. Desarrollo: `npm run dev -w app` con
 `VITE_SUI_NETWORK` (`app/README.md`). Procedimiento ante un aviso de seguridad: `app/README.md`.
 
+Imagen de Railway (#15):
+- el job `deploy-image` corre `bash app/scripts/check-deploy-image.sh . 8080`. **No es requerido**;
+- en local, el mismo script con un puerto libre: `bash app/scripts/check-deploy-image.sh . 8090`;
+- el camino depende de que exista `contracts/deployments/testnet.json`: sin él, la imagen tiene que negarse a
+  construirse; con él, se construye y se verifican las cabeceras;
+- detalle, actionlint (`-no-color`) y limpieza de Docker por línea base: `app/README.md`, "Despliegue (Railway)".
+
 Gate completo = el del workflow de CI: job `contracts` (build, lint y test con `--warnings-are-errors`,
 `Move.lock` intacto, cero claves, `node --test` y `check` de los scripts) y job `app` (los steps de arriba); ambos
-bloquean el merge (PROY-18). El job `framework-drift` es informativo (H13) y no condiciona el merge.
+bloquean el merge (PROY-18). Los jobs `framework-drift` (informativo, H13) y `deploy-image` (#15) no condicionan el
+merge.
 
 ## 4. Arquitectura de Runtime
 
@@ -225,7 +244,9 @@ Navegador (app React) ──wallet (firma)──▶ Sui fullnode (gRPC-web) ─�
   wallet.
 - **Redes:** `localnet` (smokes), `testnet` (despliegue del MVP). `mainnet` fuera de alcance sin decisión.
 - **Indexado:** las listas (partidas abiertas, mis partidas) salen de **eventos** del paquete; no hay
-  registros globales en objetos compartidos (PROY-6).
+  registros globales en objetos compartidos (PROY-6). "Mis partidas" (#13): la actividad propia con el filtro por
+  remitente del nodo y las invitaciones por escaneo de `GameCreated`, con el estado vigente leído del objeto. En testnet
+  solo cubren la ventana del fullnode (≈ 14,6 días, D-20261103-03; seguimiento en #51).
 
 ## 5. Contrato on-chain ↔ UI
 
@@ -239,8 +260,10 @@ eventos y códigos de abort. La UI los consume desde un único módulo (`app/src
 | Firmas y eventos | `contracts/sources/*.move` | Tabla en `contracts/README.md`; cambios = STOP (§6 de FLUJO) |
 | Abort codes | constantes `E*` de cada módulo | Tabla en `contracts/README.md` + `ABORT_MESSAGES` (módulo + código → mensaje) en `app/src/sui/errors.ts` (#11), con un test por código; un código nuevo entra en los dos en el mismo PR |
 | Layout BCS de `Game` y de sus eventos | `contracts/sources/game.move` | Esquemas en `app/src/sui/game.ts` y `events.ts`; fixtures en `contracts/fixtures/game-reads.localnet.json` (se recapturan si cambia el layout) |
-| Layout BCS de la `House` | `contracts/sources/house.move` | Esquema en `app/src/sui/house.ts` (#11; lo reutiliza #14); fixture en `contracts/fixtures/game-tx.localnet.json` (se recaptura si cambia el layout) |
-| Fórmula de la comisión y del pago | `game.move` (`accept_game`) | `resolutionAmounts` de `app/src/sui/game.ts` = fórmula de la v1 (D-20261030-16 D2/D3). Un upgrade que la cambie conserva la vieja para las partidas resueltas con el código viejo (por versión del `Game` o leyendo `GameResolved`) en el mismo PR. La app no replica `house::MAX_FEE_BPS`; si una vista lo replica (#14), entra en esta tabla |
+| Layout BCS de la `House` | `contracts/sources/house.move` | Esquema en `app/src/sui/house.ts` (#11; lo reutiliza #14); fixtures en `contracts/fixtures/game-tx.localnet.json` y `house-admin.localnet.json` (se recapturan si cambia el layout) |
+| Layout BCS del `HouseCap` y de los eventos de admin (`FeeRateUpdated`, `BetLimitsUpdated`, `FeesWithdrawn`) | `contracts/sources/house.move` | Esquemas en `app/src/sui/houseCap.ts` y `houseAdmin.ts` (#14); fixture en `contracts/fixtures/house-admin.localnet.json` (se recaptura si cambia el layout) |
+| Comisión máxima | `house::MAX_FEE_BPS` (`house.move`) | Espejo `HOUSE_MAX_FEE_BPS` = 1000 en `app/src/sui/houseAdmin.ts` (#14), solo para la validación de cortesía del panel; el contrato aborta igual con `house`/0. **Se revisa en todo upgrade que toque `MAX_FEE_BPS`**, en el mismo PR |
+| Fórmula de la comisión y del pago | `game.move` (`accept_game`) | `resolutionAmounts` de `app/src/sui/game.ts` = fórmula de la v1 (D-20261030-16 D2/D3). Un upgrade que la cambie conserva la vieja para las partidas resueltas con el código viejo (por versión del `Game` o leyendo `GameResolved`) en el mismo PR. El panel de #14 replica `house::MAX_FEE_BPS` (fila "Comisión máxima") |
 
 **Regla:** tras la primera publicación en testnet, un cambio incompatible con upgrade (firma pública,
 layout de struct con `key`/`store`, eliminar función pública) es **STOP**: se decide entre upgrade
@@ -376,11 +399,14 @@ testnet con una wallet real.
   orquestador (los dos archivos sin editar, digests, sí/no de custodia, PV) → borrar los temporales del script con la
   CI del PR en verde. Detalle: `contracts/README.md` → "Uso en testnet".
 - **Dirección publicadora:** recibe el `HouseCap` (`key` sin `store`, PROY-3). Si no es la wallet del
-  navegador del panel admin (#14), el owner le pasa el cap con `transfer_house_cap` (no con "Send" de la
-  wallet).
+  navegador del panel admin (#14, `#/admin`), el owner le pasa el cap con `transfer_house_cap` por CLI (no con "Send"
+  de la wallet; la app no lo transfiere), con el checklist de `contracts/README.md`, "Qué pasa si se pierde el cap".
+  La dirección publicadora también tiene el `UpgradeCap` y el `Publisher`: importarla en una wallet de navegador los
+  expone a la extensión; la alternativa es `transfer_house_cap` a la wallet del panel. Decisión del owner (N-3).
 - **Post-publicación (#8):** la House nace con fee 0 (D-20261030-11); `update_fee_rate` antes de anunciar el
   juego, o las partidas creadas antes quedan con comisión 0 para siempre.
-- **App:** hosting estático (por definir en el backlog).
+- **App:** Railway (D-20261104-01, D-20261104-03): imagen del `Dockerfile` de la raíz (build de testnet + Caddy con
+  CSP); el owner conecta el servicio, activa *Wait for CI* y publica; sin `testnet.json` la imagen no se construye.
 - **Mainnet:** fuera de alcance sin decisión registrada.
 
 ## 13. Checklist pre-entrega
@@ -404,6 +430,6 @@ testnet con una wallet real.
 | `documents/STATUS.md` | Ciclos activos, baselines de gates, hallazgos y pendientes |
 | `documents/FLUJO_AGENTES.md` | Pipeline multi-agente: roles, permisos, plantillas |
 | `documents/agentes/*.md` | Prompts de rol (DEV / MID / MAYOR / ORQUESTADOR) |
-| `README.md` | Visión del producto y roadmap original (2025-03) |
+| `README.md` | Visión del MVP 1 vs 1, reglas, guía de juego y de desarrollo, arquitectura, roadmap real y licencia (#16) |
 | `contracts/README.md` | Contrato on-chain: tablas de funciones, eventos y abort codes, authZ, versionado y operación |
 | `app/README.md` | App web: requisitos, scripts, red del build, localnet/testnet, capas, mapa de `app/src/sui/`, dependencias y avisos de seguridad |

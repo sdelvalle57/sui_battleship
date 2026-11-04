@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useGame, type UseGameResult } from '../hooks/useGame';
 import { useTransactionTime } from '../hooks/useTransactionTime';
+import { useWalletAccount } from '../hooks/useWalletAccount';
 import type { AppConfig } from '../sui/config';
 import type { Game } from '../sui/game';
 import { GameNotFoundError, NotAGameError, ReadDataError } from '../sui/readErrors';
@@ -12,6 +13,7 @@ import { GameDetailPage } from './GameDetailPage';
 vi.mock('../hooks/useAppConfig', () => ({ useAppConfig: vi.fn() }));
 vi.mock('../hooks/useGame', () => ({ useGame: vi.fn() }));
 vi.mock('../hooks/useTransactionTime', () => ({ useTransactionTime: vi.fn() }));
+vi.mock('../hooks/useWalletAccount', () => ({ useWalletAccount: vi.fn() }));
 vi.mock('../components/GameActions', () => ({
   GameActions: ({ game }: { game: Game }) => <div data-testid="game-actions">acciones de {game.id}</div>,
 }));
@@ -53,6 +55,7 @@ function renderAt(path: string, result: UseGameResult, state?: unknown) {
 beforeEach(() => {
   vi.mocked(useAppConfig).mockReturnValue({ network: 'localnet' } as AppConfig);
   vi.mocked(useTransactionTime).mockReturnValue({ timestampMs: null, status: { kind: 'ready', refreshing: false } });
+  vi.mocked(useWalletAccount).mockReturnValue({ address: null, short: null });
 });
 
 describe('GameDetailPage', () => {
@@ -102,7 +105,7 @@ describe('GameDetailPage', () => {
   it('adds the share text for an invitation and the stored fee when it changed', () => {
     renderAt(`/game/${ID}`, ready(), { created: { digest: DIGEST, costMist: '1', invitation: true, feeChanged: { from: 250, to: 300 } } });
     const notice = screen.getByRole('status');
-    expect(notice).toHaveTextContent('Comparte el enlace de esta página con el invitado; guárdalo para volver a esta partida');
+    expect(notice).toHaveTextContent('Comparte el enlace de esta página con el invitado; guárdalo, o encuéntrala en «Mis partidas»');
     expect(notice).toHaveTextContent('La partida se creó con comisión 3 % (el formulario mostraba 2.5 %)');
   });
 
@@ -114,5 +117,13 @@ describe('GameDetailPage', () => {
   it('ignores a router state with an invalid digest', () => {
     renderAt(`/game/${ID}`, ready(), { created: { digest: 'not-a-digest', costMist: '1', invitation: false, feeChanged: null } });
     expect(screen.queryByText('Partida creada')).not.toBeInTheDocument();
+  });
+
+  it('passes the connected account to the detail: "Resultado para ti" for the winner of a resolved game (DL-12)', () => {
+    const acceptor = `0x${'cd'.repeat(32)}`;
+    vi.mocked(useWalletAccount).mockReturnValue({ address: acceptor, short: 'x' });
+    const resolved: Game = { ...GAME, stake: 0n, state: { kind: 'resolved', acceptor, winner: acceptor } };
+    renderAt(`/game/${ID}`, read({ game: resolved, status: { kind: 'ready', refreshing: false }, isFetching: false }));
+    expect(screen.getByText('Resultado para ti').nextElementSibling).toHaveTextContent('ganaste');
   });
 });

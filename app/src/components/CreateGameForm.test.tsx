@@ -4,9 +4,11 @@ import { RouterProvider } from 'react-router/dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useCreateGame, type CreateGameValue } from '../hooks/useCreateGame';
-import type { TxOutcome, UseExecuteTransaction } from '../hooks/useExecuteTransaction';
+import type { UseExecuteTransaction } from '../hooks/useExecuteTransaction';
 import { useHouse } from '../hooks/useHouse';
 import { useSuiBalance } from '../hooks/useSuiBalance';
+import type { TxOutcome, TxView } from '../hooks/txSession';
+import { useTxTarget, type TxTargetState } from '../hooks/useTxTarget';
 import { useWalletAccount } from '../hooks/useWalletAccount';
 import type { AppConfig } from '../sui/config';
 import type { House } from '../sui/house';
@@ -17,6 +19,7 @@ vi.mock('../hooks/useWalletAccount', () => ({ useWalletAccount: vi.fn() }));
 vi.mock('../hooks/useHouse', () => ({ useHouse: vi.fn() }));
 vi.mock('../hooks/useSuiBalance', () => ({ useSuiBalance: vi.fn() }));
 vi.mock('../hooks/useCreateGame', () => ({ useCreateGame: vi.fn() }));
+vi.mock('../hooks/useTxTarget', () => ({ useTxTarget: vi.fn() }));
 
 const ACCOUNT = `0x${'a'.repeat(64)}`;
 const FRIEND = `0x${'0'.repeat(63)}b`;
@@ -26,7 +29,9 @@ const HOUSE: House = { id: `0x${'3'.repeat(64)}`, version: 1n, feeRate: 250, fee
 const READY = { kind: 'ready', refreshing: false } as const;
 
 const create = vi.fn();
+const acknowledge = vi.fn();
 const refetchHouse = vi.fn();
+const VIEW: TxView = { target: { kind: 'create' }, viewId: 1, key: ['tx', 'create'], accountKey: ['tx'], targetHash: '["tx","create"]' };
 type SetupOptions = {
   account?: string | null;
   house?: House | null;
@@ -34,6 +39,7 @@ type SetupOptions = {
   balance?: bigint | null;
   balanceStatus?: ReturnType<typeof useSuiBalance>['status'];
   tx?: Partial<UseExecuteTransaction<CreateGameValue>>;
+  target?: Partial<TxTargetState<TxView['target']>>;
 };
 function setup({
   account = ACCOUNT,
@@ -42,19 +48,13 @@ function setup({
   balance = 10n ** 12n,
   balanceStatus = READY,
   tx = {},
+  target = {},
 }: SetupOptions = {}) {
   vi.mocked(useWalletAccount).mockReturnValue({ address: account, short: account === null ? null : 'x' });
   vi.mocked(useHouse).mockReturnValue({ house, status: houseStatus, isFetching: false, refetch: refetchHouse });
   vi.mocked(useSuiBalance).mockReturnValue({ balance, status: balanceStatus, isFetching: false, refetch: vi.fn() });
-  vi.mocked(useCreateGame).mockReturnValue({
-    stage: 'idle',
-    outcome: null,
-    isBusy: false,
-    execute: vi.fn(),
-    reset: vi.fn(),
-    create,
-    ...tx,
-  });
+  vi.mocked(useCreateGame).mockReturnValue({ stage: 'idle', outcome: null, execute: vi.fn(), create, ...tx });
+  vi.mocked(useTxTarget).mockReturnValue({ view: VIEW, busy: false, notice: null, unconfirmed: null, acknowledge, ...target });
 }
 
 function LocationProbe() {
@@ -192,7 +192,7 @@ describe('CreateGameForm', () => {
   });
 
   it('disables the button and shows the stage while busy', () => {
-    setup({ tx: { isBusy: true, stage: 'confirming' } });
+    setup({ tx: { stage: 'confirming' }, target: { busy: true } });
     renderForm();
     type(amount(), '1');
     expect(submit()).toBeDisabled();
@@ -231,8 +231,7 @@ describe('CreateGameForm', () => {
   });
 
   it('blocks "Crear partida" after an unconfirmed transaction until the user says it was reviewed', () => {
-    const reset = vi.fn();
-    setup({ tx: { stage: 'done', outcome: { kind: 'unconfirmed', digest: DIGEST }, reset } });
+    setup({ tx: { stage: 'done', outcome: null }, target: { unconfirmed: { digest: DIGEST } } });
     renderForm();
     type(amount(), '1');
     expect(screen.getByRole('alert')).toHaveTextContent('La transacción se envió pero la red no la confirmó todavía');
@@ -240,7 +239,7 @@ describe('CreateGameForm', () => {
     fireEvent.submit(submit());
     expect(create).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Ya la revisé: crear otra partida' }));
-    expect(reset).toHaveBeenCalled();
+    expect(acknowledge).toHaveBeenCalled();
   });
 
   it('shows a failure of the transaction', () => {

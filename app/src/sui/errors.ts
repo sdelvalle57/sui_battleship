@@ -159,6 +159,34 @@ function findExecutionError(source: unknown): ExecutionErrorLike | null {
   return null;
 }
 
+/**
+ * Textos de las cancelaciones del runtime (DL-11 de #12): la red no ejecutó la transacción y solo cobró el costo de red.
+ * Neutros respecto de la acción (crear, cancelar, rechazar o aceptar): el botón de la acción sigue siendo el reintento.
+ */
+export const RUNTIME_CANCELLED_MESSAGES = {
+  randomness:
+    'La red canceló la transacción sin ejecutarla (la aleatoriedad de la red todavía no está disponible): no cambió nada salvo el costo de red; intenta de nuevo en unos segundos',
+  congestion:
+    'La red canceló la transacción sin ejecutarla (hay congestión en un objeto compartido): no cambió nada salvo el costo de red; intenta de nuevo en unos segundos',
+} as const;
+
+/** Las dos formas conocidas de la falta de aleatoriedad (V-6): el nombre de la variante (BCS) y el texto Rust. */
+const RANDOMNESS_UNAVAILABLE_RE = /ExecutionCancelledDueToRandomnessUnavailable|randomness could not be generated/i;
+
+/**
+ * Cancelación del runtime en un fallo (DL-11, V-6): sobre el `ExecutionError` que encuentra `findExecutionError`,
+ * `'congestion'` si es `CongestedObjects` (`&mut House` u otro objeto compartido congestionado) y `'randomness'` si es
+ * `Unknown` con el texto de la falta de aleatoriedad (DKG de la época sin terminar). Cualquier otro ⇒ `null`. Llegan como
+ * `effects.status = failure` **sin** `MoveAbort`: nunca son éxito ni error del contrato (SEG-10).
+ */
+export function runtimeCancellation(source: unknown): 'randomness' | 'congestion' | null {
+  const execution = findExecutionError(source);
+  if (execution === null) return null;
+  if (execution.$kind === 'CongestedObjects') return 'congestion';
+  if (execution.$kind === 'Unknown' && RANDOMNESS_UNAVAILABLE_RE.test(execution.message)) return 'randomness';
+  return null;
+}
+
 function isOwnModule(module: string): module is 'house' | 'game' {
   return module === 'house' || module === 'game';
 }
@@ -166,8 +194,9 @@ function isOwnModule(module: string): module is 'house' | 'game' {
 /**
  * Mensaje en español para cualquier fallo de una transacción (DL-4). Un abort solo se traduce si viene de **nuestro**
  * paquete (`packageId` u `originalPackageId`, normalizados: tras un upgrade el abort puede informar cualquiera de los
- * dos); de otro paquete se muestra crudo. Sin abort: un `ExecutionError` (gas, objetos, cancelaciones del runtime) es
- * "la red no ejecutó"; cualquier otro error viene de la wallet o del SDK y se muestra con su mensaje.
+ * dos); de otro paquete se muestra crudo. Sin abort: una cancelación del runtime tiene su texto de "intenta de nuevo"
+ * (DL-11); otro `ExecutionError` (gas, objetos) es "la red no ejecutó"; cualquier otro error viene de la wallet o del
+ * SDK y se muestra con su mensaje.
  */
 export function transactionErrorMessage(source: unknown, ids: { packageId: string; originalPackageId: string }): string {
   const abort = findMoveAbort(source);
@@ -181,6 +210,8 @@ export function transactionErrorMessage(source: unknown, ids: { packageId: strin
       ? `El contrato rechazó la operación ${abortCodeSuffix(abort)}`
       : `${known} ${abortCodeSuffix(abort)}`;
   }
+  const cancellation = runtimeCancellation(source);
+  if (cancellation) return RUNTIME_CANCELLED_MESSAGES[cancellation];
   const execution = findExecutionError(source);
   if (execution) return `La red no ejecutó la transacción: ${execution.message}`;
   const detail = messageOf(source);

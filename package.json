@@ -1,6 +1,7 @@
 {
   "name": "sui-battleship",
   "private": true,
+  "license": "Apache-2.0",
   "workspaces": ["app"],
   "engines": { "node": ">=26 <27" }
 }

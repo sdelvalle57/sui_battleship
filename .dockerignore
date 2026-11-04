@@ -1,0 +1,16 @@
+# Contexto de la imagen de Railway (#15): lista blanca. Todo lo demás queda fuera, incluidos
+# contracts/deployments/localnet.json, .env*, node_modules, dist y .git.
+*
+!package.json
+!package-lock.json
+!.npmrc
+!.nvmrc
+!app/
+!contracts/scripts/publish.mjs
+!contracts/scripts/deployment.mjs
+!contracts/Published.toml
+!contracts/deployments/testnet.json
+app/node_modules
+app/dist
+app/.env*
+app/scripts

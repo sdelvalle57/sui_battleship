@@ -13,6 +13,7 @@ import { queryWrapper } from '../test/queryHarness';
 import { queryKeys } from './queryKeys';
 import { useAppConfig } from './useAppConfig';
 import { useCreateGame } from './useCreateGame';
+import { useTxTarget } from './useTxTarget';
 
 vi.mock('@mysten/dapp-kit-react', () => ({ useCurrentClient: vi.fn(), useCurrentAccount: vi.fn(), useDAppKit: vi.fn() }));
 vi.mock('./useAppConfig', () => ({ useAppConfig: vi.fn() }));
@@ -76,8 +77,10 @@ const getObject = vi.fn();
 const signAndExecuteTransaction = vi.fn();
 let queryClient: QueryClient;
 
+/** El hook con la vista del formulario (T3-15 (1)). */
+const useCreateView = () => useCreateGame(useTxTarget({ kind: 'create' }).view);
 async function create(input: Parameters<ReturnType<typeof useCreateGame>['create']>[0]) {
-  const hook = renderHook(() => useCreateGame(), { wrapper: queryWrapper(queryClient) });
+  const hook = renderHook(useCreateView, { wrapper: queryWrapper(queryClient) });
   act(() => {
     hook.result.current.create(input);
   });

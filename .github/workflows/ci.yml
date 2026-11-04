@@ -180,6 +180,21 @@ jobs:
           git status --porcelain --untracked-files=all
           test -z "$(git status --porcelain --untracked-files=all)"
 
+  deploy-image:
+    # Imagen de Railway (#15): sin testnet.json (#8) exige que el build se niegue con el mensaje esperado; con él,
+    # construye, levanta y comprueba cabeceras. No es requerido; Railway lo espera vía "Wait for CI".
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Imagen de Railway (camino según contracts/deployments/testnet.json)
+        run: bash app/scripts/check-deploy-image.sh . 8080
+
   framework-drift:
     # Informativo (STATUS H13): nunca bloquea ni será check requerido; avisa con ::warning:: y en el resumen.
     # Presupuesto: 3 descargas × (≤15 s por intento, reintentos dentro de 40 s) ≈ 3 min < 4 min del step.

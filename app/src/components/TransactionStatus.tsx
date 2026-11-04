@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import type { TxOutcome, TxStage } from '../hooks/useExecuteTransaction';
+import type { TxOutcome } from '../hooks/txSession';
+import type { TxStage } from '../hooks/useExecuteTransaction';
 import { explorerTxUrl } from '../sui/explorer';
 import { formatMist } from '../sui/format';
 import type { Network } from '../sui/networks';
