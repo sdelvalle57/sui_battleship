@@ -462,3 +462,212 @@ TASK-2 autorizado con `HANDOFF_ACCEPT` v1.3.
 
 ### Snippet para STATUS.md
 El que propone el DEV, sin cambios.
+
+## Task completado: HANDOFF_ACCEPT (v1.3) — TASK-2 (capa pura de aceptar y ajustes de la maquinaria)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-12-accept-resolve` @ `b6177ae`. Sin commits del DEV; los cambios están en el árbol de trabajo.
+
+### Archivos modificados/creados
+- **Código (`app/src/sui/`):**
+  - `transactions/game.ts`: `buildAcceptGameTx`; `moveTarget` admite `'accept_game'`.
+  - `gameTx.ts`: `parseResolvedGame`.
+  - `gameActions.ts`: `AcceptState`, `acceptState` y `NOT_INVITED_HINT`.
+  - `acceptGame.ts` (nuevo): `ACCEPT_GAS_RESERVE_MIST`, `acceptBalanceCheck`, `wonBy` y `playerResult`.
+  - `errors.ts`: `RUNTIME_CANCELLED_MESSAGES`, `runtimeCancellation` y el orden nuevo de `transactionErrorMessage`.
+  - `execution.ts`: `isPreflightNetworkCause` y la regla de DL-10 en `preflightTransaction`.
+- **Tests:**
+  - `transactions/game.test.ts` (T2-1).
+  - `gameTx.test.ts` (T2-2).
+  - `gameActions.test.ts` (T2-3, T2-4).
+  - `acceptGame.test.ts` (nuevo, T2-5).
+  - `errors.test.ts` (T2-6, T2-7, N-1).
+  - `execution.test.ts` (T2-8).
+  - `house.test.ts` (N-2).
+- **Docs:** `documents/STATUS.md` suma la fila de TASK-1, tal cual la propuso el DEV. También esta sección.
+
+### Qué se implementó (3 líneas máx)
+Se agregaron el PTB de aceptar (el `MoveCall` con `Random` va último), el parser del `GameResolved` propio y las reglas de visibilidad (`acceptState`) y de saldo (reserva de 0,01 SUI), con el resultado para el jugador.
+También los textos de las cancelaciones del runtime (DL-11) y la corrección de DL-10: un `SimulationError` sin `executionError` cuyo `cause` es un corte de red pasa a `PreflightNetworkError`.
+No hay red, React ni `any`. Los textos nuevos de `errors.ts` están solo en `RUNTIME_CANCELLED_MESSAGES`.
+
+### Tests y gates (output pegado, por área tocada)
+- **Agregados o modificados (+58 tests; de 630 en 46 archivos a 688 en 47):**
+  - `transactions/game.test.ts`: 15 → 23. T2-1: comandos `[SplitCoins(GasCoin, [Input 0 pure]), MoveCall]` con el `MoveCall` último; argumentos `[Input 1, Input 2, NestedResult [0,0], Input 3]`; `Random` = `UnresolvedObject` `normalizeSuiObjectId(SUI_RANDOM_OBJECT_ID)` con `mutable: false`; Game y House sin resolver; `bet` = `U64_MAX`; lanza con `packageId`, `houseId` o `gameId` inválidos, con `bet` 0 y con `bet` = `U64_MAX + 1`.
+  - `gameTx.test.ts`: 7 → 14. T2-2: `acceptCreatorWins`, `acceptAcceptorWins` y `acceptInvite` reales dan ganador, `pot` 2000002, `fee` 50000 y `payout` 1950002; el aceptante también se reconoce en otro formato. Dan `null`: sin eventos, con dos `GameResolved`, con otra partida, con otro aceptante, con otro tipo de paquete, con otro `originalPackageId`, con BCS truncado y con una transacción de crear.
+  - `gameActions.test.ts`: 11 → 19. T2-3 y T2-4: el orden de M-3, con `not_pending` probado con y sin cuenta, para abierta e invitación y para las 4 cuentas posibles. Además `NOT_INVITED_HINT === ABORT_MESSAGES.game[5]` y su texto.
+  - `acceptGame.test.ts`: 10, archivo nuevo. T2-5.
+  - `errors.test.ts`: 50 → 70.
+    - T2-6: `CASES` suma los 4 de aceptar. El test de la lista vuelve a igualdad exacta y se llama "has the 11 captured cases" (N-1). Los 4 se ubican en `assert_acceptable`. `acceptNotInvited` da `game`/5 con su texto (D-20261103-02). `acceptNotPendingExecuted` da `game`/4 por gRPC y por `extractStatusFromEffectsBcs`.
+    - T2-7: congestión; aleatoriedad por el nombre de la variante y por el texto Rust en mayúsculas; el mismo texto para un fallo de crear y uno de aceptar (resultados reales de la fixture con el estado reemplazado); `InsufficientCoinBalance` de S-6 bis no es una cancelación y da "La red no ejecutó…"; un abort propio en la cadena de `cause` gana sobre todo.
+  - `execution.test.ts`: 20 → 25. T2-8: un `SimulationError` que envuelve un `RpcError` `UNAVAILABLE` da `PreflightNetworkError`, con `cause` = el `SimulationError`. Los dos rechazos medidos (S-2 y S-6 bis, mensajes reales con `INVALID_ARGUMENT`) salen tal cual, igual que el que no tiene `cause` y el que tiene `executionError` aunque traiga un `cause` transitorio. `isPreflightNetworkCause` tiene su prueba unitaria.
+  - `house.test.ts`: 13, igual que antes. N-2: `feesCollected: 150_000n`; se quita el campo `json` del tipo, que había agregado TASK-1 y quedó sin uso.
+- **Fix con test primero (DL-10, corrección de la máquina de #11):** con el `execution.ts` de `HEAD` (y un `isPreflightNetworkCause` vacío para que compile), fallan `turns a SimulationError that wraps a transient RpcError (UNAVAILABLE) into PreflightNetworkError (V-3)` y el de `isPreflightNetworkCause`: 2 failed, 23 passed. Con el cambio pasan 25 de 25.
+- **Contracts:** no aplica (no se tocó `contracts/`).
+- **App** (forma canónica de `agents.md` §3, desde `<repo>`, Node 26):
+
+```text
+v26.13.0
+added 293 packages, and audited 295 packages in 13s
+67 packages are looking for funding
+  run `npm fund` for details
+11 moderate severity vulnerabilities
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+Run `npm audit` for details.
+exit=0
+audited 292 packages in 13s
+292 packages have verified registry signatures
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+exit=0
+found 0 vulnerabilities
+exit=0
+> lint
+> eslint . --max-warnings 0
+exit=0
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+exit=0
+> test
+> vitest run
+ RUN  v5.0.5 <repo>/app
+ Test Files  47 passed (47)
+      Tests  688 passed (688)
+   Start at  21:04:42
+   Duration  16.30s (environment 64%, setup 10%, import 10%, tests 10%, transform 6%, worker 1%)
+exit=0
+> build
+> vite build
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 584 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-Dhz2ta6u.js   878.63 kB │ gzip: 267.72 kB
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 671ms
+exit=0
+--- git status --porcelain --untracked-files=all
+ M app/src/sui/errors.test.ts
+ M app/src/sui/errors.ts
+ M app/src/sui/execution.test.ts
+ M app/src/sui/execution.ts
+ M app/src/sui/gameActions.test.ts
+ M app/src/sui/gameActions.ts
+ M app/src/sui/gameTx.test.ts
+ M app/src/sui/gameTx.ts
+ M app/src/sui/house.test.ts
+ M app/src/sui/transactions/game.test.ts
+ M app/src/sui/transactions/game.ts
+ M documents/STATUS.md
+?? app/src/sui/acceptGame.test.ts
+?? app/src/sui/acceptGame.ts
+```
+
+- **Delta contra el último reporte aprobado (TASK-1):** +58 tests y +1 archivo. El build pasa de 877.90 a 878.63 kB (de 267.47 a 267.72 kB gzip): entran el builder de aceptar y los textos nuevos. Lint, typecheck, `npm ci` y auditorías, sin cambios.
+- **Alcance:** `git diff --exit-code` sobre `package.json`, `app/package.json`, `package-lock.json`, `contracts/`, `app/src/hooks`, `app/src/components`, `app/src/pages`, `config.ts` y `readPolicy.ts` da exit 0.
+- **Greps** (diff completo más los dos archivos nuevos):
+  - Claves (`suiprivkey|mnemonic|BEGIN .*KEY|private.?key|seed phrase`): vacío.
+  - Rutas personales: vacío.
+  - Hex de 40-64: vacío (los IDs de test se arman con `'a'.repeat(64)`).
+  - `any` y `console`: vacío.
+- **Tablas de contrato y `app/src/sui/`:** no aplica (no cambia el contrato; `ABORT_MESSAGES` sin cambios).
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica: es una capa pura (TASK-2 §6). No se levantó ninguna localnet ni se hizo nada contra testnet; los datos reales salen de la fixture de TASK-1.
+
+### Desviaciones del handoff
+1. **Cambió un test existente de `errors.test.ts`.**
+   - Qué cambió: `transactionErrorMessage > reports a failure without abort as the network not executing it` tenía como casos `Unknown` `ExecutionCancelledDueToRandomnessUnavailable` y `CongestedObjects`, con la expectativa "La red no ejecutó…". DL-11 cambia a propósito ese comportamiento, así que esos dos casos pasan a T2-7 con sus textos nuevos. En el `it.each` quedan dos `Unknown` genéricos: `InsufficientCoinBalance in command 0` (el medido en S-6 bis) e `InsufficientGas`. La aserción no cambia.
+   - Por qué: el comportamiento nuevo lo pide el handoff (DL-11 y T2-7). Sin el cambio, el test fallaba con el texto viejo.
+   - Verificación extra: 70 de 70 en `errors.test.ts`.
+2. **`house.test.ts` (N-2, opcional) no figura en la lista de archivos a tocar de TASK-2.** Lo pidió el orquestador como nit del MID. Usa `150_000n` literal con un comentario que lo explica (3 aceptaciones × 50000 de la captura de #12) y quita el campo `json` de `FixtureHouse`, que quedó sin uso. Una recaptura con otro número de aceptaciones exige actualizar ese literal.
+3. **`NOT_INVITED_HINT = ABORT_MESSAGES.game[5] ?? ''`.** Con `noUncheckedIndexedAccess`, el índice tiene tipo `string | undefined`. El `?? ''` evita duplicar el texto, y el test fija el valor exacto ("Esta invitación es para otra dirección."), así que una vacía no pasa.
+4. **`runtimeCancelled`:** no hay caso real en la fixture (S-5 no la observó). T2-7 cubre las dos formas de V-6 con datos armados, como prevé el handoff ("si existe").
+
+### Riesgos / pendientes
+- **`gameActions.ts` ahora importa `errors.ts`** (para `NOT_INVITED_HINT`). No hay ciclo: `errors.ts` solo importa `format.ts`.
+- **El literal de N-2 (`150_000n`)** queda atado a la captura actual.
+- **`runtimeCancellation` reconoce solo errores estructurados** (`findExecutionError`). Si una wallet de extensión serializa el error y solo deja el texto, una cancelación del runtime cae en "La wallet no completó la operación: …". El handoff no pide reconocerla por texto; lo anoto para el smoke (plan B del paso 7).
+- **TASK-3/TASK-4:** consumen `buildAcceptGameTx`, `parseResolvedGame`, `acceptState`, `acceptBalanceCheck` y `playerResult` con las firmas de §4, sin cambios.
+
+### Documentación
+- **READMEs y `agents.md`:** no aplica en este task. El mapa de `app/src/sui/` en `app/README.md` suma `acceptGame.ts` en TASK-5, según el handoff.
+- **`documents/STATUS.md`:** se agregó la fila de TASK-1 tal cual el snippet del reporte de TASK-1, primera fila de "Baselines de gates".
+- **Snippet propuesto para `documents/STATUS.md`** (TASK-2): `| app @ feature/issue-12-accept-resolve (TASK-2 de #12), Node v26.13.0, 2026-11-03 | npm run lint / typecheck / npm test / build (VITE_SUI_NETWORK=testnet) | 🟢 exit 0. 0 problemas / 0 errores / **688 tests PASS en 47 archivos** (+58: transactions/game 23, gameTx 14, gameActions 19, acceptGame 10 nuevo, errors 70, execution 25) / index-*.js 878.63 kB (267.72 kB gzip). Capa pura de aceptar (PTB con Random último, GameResolved propio, acceptState, reserva 0,01 SUI), cancelaciones del runtime (DL-11) y SimulationError de red ⇒ PreflightNetworkError (DL-10) |`
+
+## Revisión TASK-2: PASA
+
+> MID, 2026-11-03. Revisé el diff real sobre `b6177ae`: 11 archivos modificados de `app/src/sui/`, más `acceptGame.ts` y
+> `acceptGame.test.ts` nuevos y `documents/STATUS.md`. No corrí gates (D-20261030-02): verifico el output pegado.
+
+**Checklist (`FLUJO_AGENTES.md` §5):**
+- **Implementa lo pedido (TASK-2 §3, v1.3):**
+  - **`buildAcceptGameTx`:** valida los tres IDs y `bet` en `1..U64_MAX`. El PTB es `splitCoins(gas, [bet])` + `accept_game(game, house, coin, tx.object.random())`, sin comandos después. El JSDoc explica la regla de `Random`.
+  - **`parseResolvedGame`:** se queda con el único `GameResolved` de la partida, con un parser exacto y `sameAddress` para `gameId` y `acceptor`.
+  - **`acceptState`:** sigue el orden de M-3, con `not_pending` antes de `no_account`. `NOT_INVITED_HINT` = `ABORT_MESSAGES.game[5]`.
+  - **`acceptGame.ts`:** la reserva vale `10_000_000n` y su JSDoc cita S-4, el margen, la cortesía y #17. También están `acceptBalanceCheck`, `wonBy` y `playerResult`, con `sameAddress`.
+  - **`runtimeCancellation` y el orden de `transactionErrorMessage`:** abort propio → cancelación → genérico. `RUNTIME_CANCELLED_MESSAGES` tiene los textos exactos de la v1.3.
+  - **DL-10:** `isPreflightNetworkCause = isTransientReadError(cause)`; el envoltorio se aplica solo sin `executionError`.
+- **Capas y tipado (ARQ-1, PROY-12, PROY-13):** sin React, red ni `any`, con montos en `bigint`. `gameActions.ts → errors.ts → format.ts`: sin ciclo (ARQ-5). El diff no toca `hooks/`, `components/`, `pages/`, `config.ts`, `readPolicy.ts`, `contracts/` ni `package*.json` (`git diff --exit-code` pegado).
+- **Tests (LIM-11):** T2-1..T2-8 cubiertos, con datos reales de la fixture.
+  - Builder: el `MoveCall` es el último comando; `Random` va como `UnresolvedObject` `0x8` `mutable: false`; los rechazos y el límite `U64_MAX`.
+  - Parser: los tres reales, y siete casos que dan `null`.
+  - `acceptState`: incluye `not_pending` con y sin cuenta (M-3).
+  - Los 4 `SimulationError` de aceptar se ubican en `assert_acceptable`. El test de la lista vuelve a la igualdad exacta con 11 casos (N-1).
+  - Fallo ejecutado por los dos caminos.
+  - DL-11 con las dos formas, igual para crear y para aceptar, y con `InsufficientCoinBalance` como "no es cancelación".
+  - DL-10 con el envoltorio real `UNAVAILABLE` y con los dos rechazos medidos (`INVALID_ARGUMENT`).
+  - Fix con el test primero: con el `execution.ts` de `HEAD`, 2 tests fallaban. Bien.
+- **Gates:** npm ci y auditorías en 0, lint 0, typecheck 0, **688 tests en 47 archivos** (+58: `transactions/game` 23, `gameTx` 14, `gameActions` 19, `acceptGame` 10, `errors` 70, `execution` 25) y build de 878,63 kB (+0,73 kB). Sin rojos.
+- **Seguridad y limpieza:** sin secretos, rutas personales ni hex largos (los IDs de test salen de `'a'.repeat(64)`), sin `console` y sin código muerto. El campo `json` de `FixtureHouse`, que quedó sin uso, se quitó (N-2).
+
+**Desviaciones:**
+
+| # | Evaluación |
+|---|---|
+| 1 (test existente de `errors.test.ts`) | **Aceptada.** DL-11 cambia a propósito el texto de la aleatoriedad y de la congestión. Esos dos casos pasan a T2-7 con sus textos nuevos, y el `it.each` original sigue con dos `Unknown` genéricos sin cambiar la aserción |
+| 2 (`house.test.ts`, N-2) | **Aceptada.** Era el nit opcional de la revisión de TASK-1. El literal `150_000n` lleva su comentario; al recapturar con otro número de aceptaciones se actualiza junto con la fixture |
+| 3 (`?? ''` en `NOT_INVITED_HINT`) | **Aceptada.** Lo exige `noUncheckedIndexedAccess`. El test fija el texto exacto, así que una cadena vacía no pasa |
+| 4 (sin `runtimeCancelled` real) | **Aceptada.** El handoff lo prevé ("si existe"); R-3 sigue abierto |
+
+**Riesgo declarado (`runtimeCancellation` solo reconoce errores estructurados):** aceptado, sin cambios.
+- Una cancelación del runtime ocurre al ejecutar, así que la transacción tiene efectos y digest. La app confirma con el nodo y clasifica el `status.error` estructurado de esa lectura (DL-2), no el texto de la wallet.
+- Solo una wallet que lanzara **sin** digest ante una cancelación caería en "La wallet no completó…". Esa wallet ocultaría una transacción ejecutada, y eso no es comportamiento del kit.
+- Queda anotado para #17, con una wallet de extensión real.
+
+**Hallazgos:**
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| N-1 | PROY-20 (formato) | `documents/STATUS.md:40` | La fila de TASK-1 no sigue el formato de las otras filas de "Baselines de gates": la ref y el chain id van sin backticks (`feature/issue-12-accept-resolve`, `8e50335e`) y los conteos sin negrita | En TASK-5, al actualizar STATUS con la fila de #12, alinear el formato. No bloquea |
+
+### Siguiente paso
+TASK-3 (máquina global sobre crear, cancelar y rechazar) autorizado con `HANDOFF_ACCEPT` v1.3. Lo que consume de TASK-2 (`isPreflightNetworkCause`, `PREPARE_FAILED_PREFIX` y los mensajes reales de S-6 bis para T3-14) está disponible con las firmas de §4.
+
+### Mensajes de commit propuestos
+1. Código: `app/src/sui/` (11 modificados y 2 nuevos).
+   ```
+   app: add the pure accept layer and runtime cancellation texts (#12)
+
+   buildAcceptGameTx puts the MoveCall with Random last; parseResolvedGame reads
+   the single own GameResolved; acceptState, NOT_INVITED_HINT and acceptGame.ts
+   hold visibility, the 0.01 SUI reserve and the player result. Runtime
+   cancellations get an action-neutral retry text, and a SimulationError that
+   only wraps a transient RpcError becomes PreflightNetworkError (fix of the #11
+   preflight, V-3).
+   ```
+2. Docs: `documents/REPORTES_ACCEPT.md` y `documents/STATUS.md`.
+   ```
+   docs: add #12 TASK-2 report and MID review (#12)
+   ```
+
+### Snippet para STATUS.md
+El que propone el DEV para TASK-2, sin cambios (con el formato de N-1 cuando TASK-5 alinee la tabla).

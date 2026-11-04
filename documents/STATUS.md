@@ -37,6 +37,7 @@ Registrada el 2026-10-30 (#1, H1/H2/H11).
 
 | Área @ ref | Gate | Resultado |
 |---|---|---|
+| localnet aislada @ feature/issue-12-accept-resolve (TASK-1 de #12), CLI 1.83.0, 2026-11-03 | recaptura de contracts/fixtures/game-tx.localnet.json + sondas | 🟢 chain 8e50335e: 11 simulationErrors (+game/9, 5, 4, 10 en assert_acceptable) y 9 executed (+gana creador, gana aceptante, invitación, fallo game/4); determinista. El nodo simula con Random (S-1); confirmación por el camino de la wallet 0,6-1,4 s (S-3); budget 3474748-4474748 MIST ⇒ reserva 0,01 SUI (S-4); sin cancelación por aleatoriedad a 5,8 s del arranque (S-5); rechazos permanentes con INVALID_ARGUMENT o executionError (S-2, S-6). App 630/46 y contracts 83/99 sin delta |
 | contracts/scripts @ `master` (`380bce6`, merge de #39), Node `v26.13.0`, 2026-11-02 | `cd contracts && node --test scripts/*.test.mjs` | 🟢 exit 0. **99 tests PASS** (51 `deployment.test.mjs` + 48 `publish.test.mjs`); step del job `contracts` de la CI |
 | | `node scripts/publish.mjs check` | 🟢 exit 0. **0 despliegues** |
 | contracts/scripts @ `feature/issue-7-deployments` (C1 del addendum v1.3 de #7), Node `v26.13.0`, 2026-11-02 | `cd contracts && node --test scripts/*.test.mjs` | 🟢 exit 0. **94 tests PASS** (51 `deployment.test.mjs` + 43 `publish.test.mjs`); step del job `contracts` de la CI |
