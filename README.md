@@ -1,89 +1,152 @@
-# SUI Battleship MVP
+# Sui Battleship
 
-This repository contains the initial implementation of a 2 vs 2 Battleship game on the SUI blockchain using the Move programming language. In this MVP, the actual battleship mechanics are mocked using a simple coinflip mechanism to simulate gameplay. This version supports players participating in multiple games concurrently.
+Apuestas 1 vs 1 en Sui, resueltas por un coinflip on-chain.
 
-## Overview
+> [!WARNING]
+> Proyecto en **testnet**: los SUI de testnet no tienen valor real. El contrato **no tiene auditoría externa**.
+> Mainnet está fuera de alcance. No uses una wallet con fondos reales.
 
-The MVP consists of three main modules:
-- **House Module:** Manages game definitions, global settings, and fee collection.
-- **Game Module:** Handles game requests, game state transitions, and gameplay logic.
-- **Escrow Module:** Manages the locking and distribution of bet tokens.
+## Qué es
 
-Players can create game requests by staking SUI coins. Another player may accept a game request by matching the bet amount. Players can also directly invite a specific opponent. If a game remains unaccepted, the initiating player can cancel the request and retrieve their tokens.
+Un juego de apuestas entre dos jugadores: uno crea una partida con su apuesta y otro la acepta igualándola. En este MVP
+la batalla naval se simula con un coinflip de `sui::random`, que hace de placeholder. La mecánica real de batalla naval
+se diseña en [#18](https://github.com/sdelvalle57/sui_battleship/issues/18). Cada jugador puede tener varias partidas
+abiertas al mismo tiempo. No hay backend propio: la app habla directamente con la red de Sui y firma con la wallet del
+navegador.
 
-## Features
+## Reglas del MVP
 
-- **House Management:**
-  - **House Resource:** Stores global game rules, fee settings, and may optionally keep a registry of active or historical games.
-  - **House Capability (HouseCap):** Grants exclusive administrative rights (e.g., updating rules, withdrawing fees) and leverages Move's resource model for enforced access control.
+- **Crear:** una partida abierta a cualquiera o una invitación directa a una dirección. Nadie juega contra sí mismo.
+- **Límites:** la apuesta va entre `min_bet` y `max_bet` de la House (por defecto 0,001 y 50 SUI). El admin los cambia
+  y la app muestra los vigentes. Se aplican al crear ([límites de apuesta](contracts/README.md#límites-de-apuesta)).
+- **Aceptar:** se iguala **exactamente** la apuesta del creador. En una invitación solo acepta el invitado. Aceptar y
+  resolver el coinflip pasan en la misma transacción ([flujo de fondos](contracts/README.md#flujo-de-fondos)).
+- **Comisión:** `fee = ⌊pozo × fee_rate / 10 000⌋`, con `pozo = 2 × apuesta`, redondeada hacia abajo (el resto va al
+  ganador). Máximo 10 % (1000 bps). La partida copia la comisión vigente al crearse y el ganador recibe `pozo − fee`
+  ([comisión](contracts/README.md#comisión)). En testnet: valor inicial de 200 bps (2 %),
+  D-20261103-01 ([PR #48](https://github.com/sdelvalle57/sui_battleship/pull/48)); la vigente la muestra la app.
+- **Cancelar y rechazar:** el creador cancela y el invitado rechaza, solo mientras la partida está pendiente. Vuelve el
+  100 % al creador, sin comisión. Las partidas no expiran.
+- **Estados:** pendiente → cancelada o resuelta, sin estado intermedio ([estados](contracts/README.md#estados)).
+- **Costos:** cada transacción paga gas, y crear una partida deja un depósito de storage que no se recupera
+  ([objeto terminal y storage](contracts/README.md#objeto-terminal-y-storage-d-20261030-15-d3)).
 
-- **Game Lifecycle:**
-  - **Game Request Initialization:**  
-    Any player can initiate a game request by locking a bet in an escrow. The request captures bet details, game parameters, and the player's address.
-  - **Game Acceptance & Direct Invitations:**  
-    A second player can accept an open game request by matching the bet, or a player can target a specific opponent.
-  - **Game Cancellation:**  
-    If unaccepted, the initiating player can cancel the game and withdraw their tokens.
-  - **Game Resolution:**  
-    The coinflip mechanism determines the winner. The winner receives the total pot minus a fee (as defined in the House settings), and fees are accumulated for the house.
+## Jugar en testnet
 
-- **Multiple Concurrent Games:**
-  - Each game is an independent resource, allowing players to participate in multiple games at once.
-  - State transitions and escrow management are isolated per game to ensure no interference between concurrent games.
+- **URL pública:** se completa después de #8.
+- **Wallet:** Slush (la ofrece la app) o una wallet de navegador compatible con Sui, en la red **testnet**
+  ([wallet](app/README.md#wallet)).
+- **SUI de testnet:** el faucet oficial, [faucet.sui.io](https://faucet.sui.io/) (cómo obtenerlos en la
+  [documentación de Sui](https://docs.sui.io/guides/developer/getting-started/get-coins)).
+- **Recorrido:** el lobby lista las partidas abiertas; desde ahí se crea una partida, se acepta otra y se ve el
+  resultado. "Mis partidas" (`#/my-games`) reúne las propias y las invitaciones recibidas, y deja abrir una partida por
+  su ID ([mis partidas](app/README.md#mis-partidas-13)). Cada transacción enlaza al explorador (Suiscan).
+- **Límite:** en testnet las listas cubren la ventana del fullnode (≈ 14,6 días, D-20261103-03; seguimiento en
+  [#51](https://github.com/sdelvalle57/sui_battleship/issues/51)). Una partida más vieja se abre por su enlace o su ID
+  ([límite sin indexador](app/README.md#límite-sin-indexador)).
+- **IDs de testnet** (`packageId`, `houseId`): en `contracts/deployments/testnet.json`; se completa después de #8.
 
-- **Escrow & Token Management:**
-  - **Token Locking:**  
-    Bet tokens are securely locked in escrow until game resolution or cancellation.
-  - **Fund Distribution:**  
-    Post-game, funds are transferred based on the outcome, applying fee deductions accordingly.
+## Arquitectura
 
-## Technical Requirements
+```
+Navegador (app React) ──wallet (firma)──▶ Sui fullnode (gRPC-web) ──▶ paquete battleship
+        │                                                           ├─ house::House  (compartido, una)
+        └── lecturas: SuiGrpcClient ◀───────────────────────────────┤─ game::Game    (compartido, uno por partida)
+                                                                    └─ Random        (objeto del sistema)
+```
 
-- **Move Programming Language:**  
-  Utilize Move’s strong resource and capability model to enforce state and access control.
-  
-- **SUI Blockchain Integration:**  
-  - Use SUI coins for bet transactions.
-  - Support SUI's transaction model and ensure proper state transitions.
+- **`battleship::house`:** una única `House` compartida con la comisión, los límites de apuesta y las comisiones
+  cobradas. La administra quien posee el `HouseCap` ([`battleship::house`](contracts/README.md#battleshiphouse)).
+- **`battleship::game`:** cada partida es su propio objeto compartido `Game`, que guarda la apuesta hasta que se
+  cancela, se rechaza o se resuelve. Sin módulo Escrow ([`battleship::game`](contracts/README.md#battleshipgame)).
+- **App:** Vite + React + TypeScript. Lee la red con `SuiGrpcClient` (gRPC-web) y firma con el wallet kit de Mysten; las
+  listas salen de los eventos del paquete ([`app/README.md`](app/README.md)).
 
-- **Modular Design:**  
-  - **House Module:**  
-    Manages global settings and fee operations using a dedicated HouseCap.
-  - **Game Module:**  
-    Manages individual game requests and state changes (pending, active, canceled, completed).
-  - **Escrow Module:**  
-    Manages bet token custody and secure distribution.
+Más detalle en [arquitectura de runtime](agents.md#4-arquitectura-de-runtime).
 
-## Development Roadmap
+## Estructura del repo
 
-1. **Module Design & Resource Definitions:**
-   - ~~Define the House resource (including fee settings) and implement the HouseCap for administrative functions~~.
-   - ~~Design the Game resource with its state transitions and player mappings.~~
-   - ~~Outline the Escrow mechanism to handle bet token locking and fund distribution.~~
+```
+sui_battleship/
+├── contracts/            # paquete Move battleship: fuentes, tests y scripts de despliegue
+├── app/                  # cliente web React (Vite + TypeScript)
+├── documents/            # flujo de trabajo, estándares, decisiones y estado del proyecto
+├── .github/workflows/    # CI: jobs de contratos y de la app
+├── agents.md             # guía técnica del repo: layout, comandos, arquitectura y reglas
+├── LICENSE               # Apache-2.0
+└── package.json          # npm workspaces (+ package-lock.json, .npmrc y .nvmrc)
+```
 
-2. **Implement the House Module:**
-   - ~~Create the House resource and associated HouseCap~~.
-   - ~~Implement functions for updating game rules and withdrawing fees~~.
+Layout completo en [repositorio](agents.md#2-repositorio-monorepo).
 
-3. **Implement the Game Module:**
-   - Develop game request initiation, acceptance, cancellation, and resolution functions.
-   - Create shared pooled objects defining the game transition from initiated, ongoing, canceled and finished, resolution and finished with resolution
-   - Integrate a mock coinflip mechanism as a placeholder for full battleship logic.
-   - Allow support for direct invitations and multiple concurrent games per player.
+## Desarrollo local
 
-4. **Implement the Escrow Module:**
-   - Develop token locking during game initiation.
-   - Implement secure release of tokens on game cancellation or resolution.
+### Requisitos
 
-5. **Testing & Auditing:**
-   - Write comprehensive tests to validate state transitions, fund handling, and access control.
-   - Perform security audits to ensure robust protection against unauthorized actions.
+- **Node 26** (`.nvmrc`, `nvm use`) y npm 11, todo desde la raíz (npm workspaces). Con otra versión `npm ci` falla con
+  `EBADENGINE`.
+- **Sui CLI `1.83.0`**, la misma de la CI: `suiup install sui@testnet-1.83.0`, con
+  [suiup](https://github.com/MystenLabs/suiup).
+- **Aviso de la CLI:** sin `~/.sui/sui_config/client.yaml`, `sui move …` ofrece crear una config y genera una clave
+  cuya frase imprime. Responde `n` o antepón `printf 'n\n' |` a cada comando `sui`.
 
-6. **Documentation & Deployment:**
-   - Update this README and inline documentation with detailed usage instructions.
-   - Prepare deployment scripts and guides for SUI blockchain deployment.
+### Contratos
 
-## Conclusion
+```bash
+cd contracts
+printf 'n\n' | sui move build -e testnet
+printf 'n\n' | sui move test -e testnet
+```
 
-This MVP establishes a clear, modular foundation for our SUI Battleship game. By leveraging Sui’s Move language and resource model, we ensure robust state management and security. The outlined modules support flexibility, allowing for future expansion from a coinflip-based mechanism to a fully featured battleship game.
+El gate completo (lint, `--warnings-are-errors`, tests de los scripts y `Move.lock` intacto) está en
+[comandos](agents.md#3-comandos-por-área-sin-makefile).
 
+### App
+
+```bash
+npm ci
+VITE_SUI_NETWORK=localnet npm run dev -w app
+npm test -w app
+```
+
+El gate completo de la app está en [scripts](app/README.md#scripts) y en [app](agents.md#app-app).
+
+### Localnet + app
+
+**Siempre una localnet aislada** en un directorio propio (`<dir>`), nunca `sui start` a secas: reescribe
+`~/.sui/sui_config/client.yaml`.
+
+1. Génesis y arranque con `SUI_CONFIG_DIR=<dir>/net`, y publicación del paquete con el script, que escribe
+   `contracts/deployments/localnet.json` ([uso en localnet](contracts/README.md#uso-en-localnet)).
+2. `VITE_SUI_NETWORK=localnet npm run dev -w app`, con la wallet de desarrollo de la app
+   ([localnet](app/README.md#localnet)).
+
+El procedimiento de los agentes está en [localnet aislada](agents.md#localnet-aislada-smokes).
+
+## Despliegue
+
+Pendiente de TASK-3 (después de [#14](https://github.com/sdelvalle57/sui_battleship/issues/14) y
+[#15](https://github.com/sdelvalle57/sui_battleship/issues/15)).
+
+## Administración de la House
+
+Pendiente de TASK-3 (después de [#14](https://github.com/sdelvalle57/sui_battleship/issues/14) y
+[#15](https://github.com/sdelvalle57/sui_battleship/issues/15)).
+
+## Roadmap
+
+Pendiente de TASK-3 (después de [#14](https://github.com/sdelvalle57/sui_battleship/issues/14) y
+[#15](https://github.com/sdelvalle57/sui_battleship/issues/15)).
+
+## Documentación
+
+El contrato on-chain (funciones, eventos, abort codes, autorización y despliegues) está en
+[`contracts/README.md`](contracts/README.md), y la app (scripts, redes, capas y dependencias) en
+[`app/README.md`](app/README.md). [`agents.md`](agents.md) es la guía técnica del repo, con el
+[mapa de documentación](agents.md#14-mapa-de-documentación). En `documents/` viven el
+[flujo de trabajo](documents/FLUJO_AGENTES.md), los [estándares](documents/ESTANDARES.md), las
+[decisiones](documents/DECISIONES.md) y el [estado](documents/STATUS.md) del proyecto.
+
+## Licencia
+
+[Apache-2.0](LICENSE). Titular: `sdelvalle57`.
