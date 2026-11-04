@@ -3058,3 +3058,70 @@ what TASK-1 measured.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+## Smoke del ciclo
+
+> `documents/SMOKE_MY_GAMES.md` (handoff v1.4), corrido el 2026-11-04 sobre `7960b66`. El documento se llenó durante la corrida.
+
+### Veredicto: **PASA** (19/19, pasos 0 a 18)
+
+### Entorno
+- **Red:** localnet aislada (`agents.md` §3), chain `996b86aa`, publicación variante B (`2xQnHcPF8WZrbLJzQKUwsRkdy4zE4LFDUMooXewf4Pyx`), `update_fee_rate` 250. `PRE` en todo `suic`, también en las lecturas.
+- **Cuentas:** de la génesis, `ADMIN`, `A` y `C`; las burners son `AW` (`T1`) y `BW` (`T2`), fondeadas con 2 SUI cada una desde `A`.
+- **Navegador:** Chrome headless (Chrome/156.0.8078.73) con la línea literal de arranque, perfil y `HOME`/`XDG_*` en `<SMOKE_DIR>`, y `chrome.pid`. Pestañas `T0`, `T1` y `T2` con `Target.createTarget({ url, newWindow: true })`, todas `visible`, sin `Page.bringToFront`.
+- **Cliente CDP:** propio, en Node 26, con una sesión por pestaña y `Network.enable`.
+
+### Resultados
+- **Sin cuenta (paso 2):** `T0` muestra "Conecta tu wallet para ver tus partidas e invitaciones" y hace 0 `ListEvents`.
+- **Crear, R-7 y secciones (pasos 4 a 7):**
+  - crear desde el formulario muestra el texto R-7;
+  - las secciones y los textos de `AW`/`BW` coinciden con lo esperado;
+  - el lobby no cambió: `G1` sí aparece, `G2` no;
+  - `G3` (una invitación creada por CLI) aparece solo para `AW`.
+- **Aceptar desde una fila (paso 8):**
+  - etapas en orden, 0 tokens durante las tres primeras y "Perdiste: …0.39 SUI (pozo 0.4 SUI − comisión 0.01 SUI)";
+  - **2** `SimulateTransaction` + **1** `ExecuteTransaction`;
+  - la fila sigue en "Invitaciones recibidas", "Resuelta" y sin botones (DL-5, H-3);
+  - on-chain, `GameResolved` con `pot` 400000000, `fee` 10000000 y `payout` 390000000, `winner` = creador; ΔAW +390000000, ΔBW −202474871 (−200000000 − 2474871 de costo, el mismo que muestra la UI).
+- **RM-5 (paso 9):**
+  - 25 invitaciones en un solo PTB; 26 filas con sus acciones en 406 ms;
+  - aceptar `G4` da "¡Ganaste! Recibiste 0.00195 SUI (pozo 0.002 SUI − comisión 0.00005 SUI)";
+  - las otras 25 filas quedan deshabilitadas durante la transacción y el aviso "en curso" aparece una vez;
+  - la fila de `G4` queda sin botones.
+- **Terminadas (pasos 10 y 11):** "Aceptaste" y "Creaste", cada uno con el resultado complementario leído del objeto.
+- **Cancelar y rechazar (pasos 12 y 13):**
+  - cancelar: `refund` 100000000;
+  - rechazar: `refund` 50000000, ΔC +50000000;
+  - las dos filas quedan "Cancelada" y sin botones, y después de "Actualizar" se reagrupan.
+- **Candado (paso 14):** dos clics en el mismo `Runtime.evaluate` dan **1** `ExecuteTransaction`. El candado global síncrono frenó el segundo clic con el botón todavía habilitado. "En curso" aparece una vez; después `G6` se acepta con su propia transacción.
+- **DL-8 y DL-16 (paso 15):**
+  - 120 partidas abiertas exactas (152 `GameCreated` en total);
+  - "Sin invitaciones pendientes en lo revisado" + "Buscar más atrás", con **3** `ListEvents`;
+  - al pulsarlo, **+2** y aparece `G7`.
+- **DL-15 (paso 16):** "xyz" da "ID de partida inválido" sin pedidos; el ID de `G1` lleva al detalle "Cancelada".
+- **H-1 y DL-9 (paso 17):** con la burner nueva, pendientes y terminadas muestran los textos definitivos e invitaciones "en lo revisado"; después de una pulsación, el texto definitivo. No queda ninguna fila de `BW`.
+- **Cierre (paso 18):** limpio. Detalle y observación sobre el Chrome del usuario en el SMOKE.
+
+### Latencias (localnet, referencia)
+| Paso | Firma | Confirmando | Actualizando datos | Resultado |
+|---|---|---|---|---|
+| 8 | +17 ms | +705 ms | +2236 ms | 2377 ms (confirming → done 1672 ms) |
+| 9 (26 filas) | +74 ms | +824 ms | +1497 ms | 2924 ms desde el clic ("Verificando" a los 226 ms) |
+| 12 | +37 ms | +222 ms | +1747 ms | — |
+| 13 | +43 ms | +216 ms | +1737 ms | — |
+| 14 | +12 ms | +837 ms | +2355 ms | — |
+
+### Desviaciones
+1. **Conteo de pedidos y preflight CORS:** Chrome reporta también el preflight `OPTIONS` a `:9000` (otro origen). El conteo de `G1` salió inflado (3 + 2), pero on-chain hubo un solo `GameCreated`. Desde `G2`, el cliente cuenta solo los `POST` y da exactamente 2 + 1 en cada acción. El cliente se reinició (por su PID) y se volvió a adjuntar a las mismas pestañas, sin recargar.
+2. **Dos archivos de entorno en una llamada:** en el paso 1, una llamada cargó `app.env` y después `env.sh`. Node solo leyó `localnet.json`; no se repitió.
+3. **Scripts de página en archivos:** el chequeo de seguridad del harness bloqueó un comando con JS en línea porque leyó mal un `$(…)`; no había ningún `rm`.
+
+### Observaciones
+- **Puerto 4173:** lo ocupaba un `vite preview` de otro proyecto (otra sesión). No se tocó.
+- **Saldo en el paso 3:** el saldo del formulario mostró primero el valor cacheado ("0 SUI") y se actualizó al montar. Es comportamiento de `useSuiBalance`, que #13 no cambió.
+- **Chrome del usuario:** no estaba en ejecución al cerrar. La evidencia (perfil sin `Singleton*`, `Local State` de las 00:36:52) indica que ya estaba cerrado antes de la corrida. El smoke solo mató su propio PID.
+
+### Qué no cubre (sin cambios respecto del runbook)
+- **Con tests:** el cambio de cuenta sin recargar, H-5 y H-6 al remontar, la relectura fallida y los eventos ilegibles.
+- **En #17:** la wallet de extensión, el historial podado de testnet y el enlace al explorador.
+=====
