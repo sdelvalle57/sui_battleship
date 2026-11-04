@@ -565,3 +565,560 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 > `house`/0, 1, 1, 2; S-4 las tres de admin; S-5 `SimulationError` sin `executionError` (`INVALID_ARGUMENT`); S-6 budget
 > 3000282 MIST; S-2 `getObject` delante del índice (0-452 ms, 10 transferencias). Gates sin delta (915/57, 901.45 kB; Move
 > 83; scripts 99). Handoff v1.2. Seguimiento: issue de limpieza de `app/scripts/` (LIM-5).
+
+## Task completado: HANDOFF_HOUSE_ADMIN — TASK-2
+
+### Branch (con SHA corto del HEAD)
+
+`feature/issue-14-house-admin` @ `9067ef8` (handoff v1.2; sin commits del DEV).
+
+### Archivos modificados/creados
+
+- Nuevos:
+  - `app/src/sui/houseCap.ts` y `app/src/sui/houseCap.test.ts`;
+  - `app/src/sui/houseAdmin.ts` y `app/src/sui/houseAdmin.test.ts`;
+  - `app/src/sui/transactions/house.ts` y `app/src/sui/transactions/house.test.ts`.
+- Cambiados:
+  - `app/src/sui/readErrors.ts`: `'incomplete'` y su texto;
+  - `app/src/sui/readErrors.test.ts`: +17 líneas, ninguna borrada;
+  - `app/src/sui/errors.test.ts`: +31 líneas, ninguna borrada.
+- No cambian: `errors.ts`, `house.ts`, `game.ts`, `gameTx.ts`, `readPolicy.ts`, `hooks/`, `components/`, `pages/` ni `contracts/`.
+
+### Qué se implementó (3 líneas máx)
+
+- `houseCap.ts`: detección del cap por tipo con la regla de certeza de H-1 (`null` solo con 0 objetos y fin de páginas;
+  `invariant` con dos o más; `incomplete` con el tope de 3 páginas o un cursor `null`), más el parser exacto del cap y el
+  `precheck` por `getObject` de H-3.
+- `houseAdmin.ts`: validación espejo (comisión, límites, retiro) y los tres parsers de eventos (único evento de esa House).
+- `transactions/house.ts`: tres builders puros; el del retiro tiene exactamente 2 comandos.
+- `readErrors.ts`: `ReadDataError('incomplete')` con su texto propio, no transitorio.
+
+### Tests y gates (output pegado, por área tocada)
+
+- Agregados/modificados (130 tests nuevos; 915 → 1045, 57 → 60 archivos):
+  - `houseCap.test.ts` (33):
+    - T2-3 con `admin`, `nonOwner` y `adminLimit1` reales;
+    - T2-4 con cursor opaco `'c1'`: el primer pedido va **sin** clave `cursor` y el segundo con `cursor: 'c1'`;
+    - T2-5 (3 pedidos, `incomplete`);
+    - T2-6 (dos caps en dos páginas y en una sola, esta sin segundo pedido);
+    - T2-7 (cap y página final vacía ⇒ el cap; cap con más páginas hasta el tope ⇒ `incomplete`; `hasNextPage` con
+      cursor `null` ⇒ `incomplete` con 1 pedido);
+    - T2-8 (9 rechazos: otro paquete, dirección corta mal formada `0xg1`, otro struct, `owner` `null`, `Shared`,
+      `AddressOwner` de otra cuenta, un byte de más, bytes truncados, `id` ≠ `objectId`);
+    - T2-12 (`owned` con el `houseCapObject` real y `include: { content: false }`; `not_owned` con otro dueño, `null`,
+      `Shared`, otro tipo, `ObjectError` `notFound` y `deleted`; se relanzan `ObjectError` `unknown`, `RpcError`
+      `UNAVAILABLE` y el corte de 10 s como `ReadTimeoutError`);
+    - el texto de `HOUSE_CAP_LOST_MESSAGE`;
+    - un caso extra: un objeto listado de otro paquete (el nodo no filtró) ⇒ `wrong_type`.
+  - `houseAdmin.test.ts` (59):
+    - T2-9: los 12 rechazos y los 4 aceptados, entre ellos `'99999999999999999999'` ⇒ `too_high`, `'00250'` ⇒ 250 y `'0'`
+      con la actual en 0 ⇒ `unchanged`;
+    - T2-10: cada motivo por campo, `negative` incluido, `zero_min` también para `'0.000000000'`, los dos campos a la vez,
+      `min == max`, `min > max`, `unchanged` escrito de otra forma (`'0.0010'`/`'50.0'`), `U64_MAX` y `U64_MAX + 1`;
+    - T2-11;
+    - T2-15 con `executed` real (0 → 250; los cuatro montos; 10000000; `houseId` en mayúsculas). Para cada parser, `null`
+      con otra House, sin eventos, con dos eventos, con bytes truncados o con un byte de más, y con el tipo de otro
+      paquete. Además, ningún parser lee el evento de otra acción.
+  - `transactions/house.test.ts` (27):
+    - T2-13: comandos e inputs exactos de `getData()`, `u16`/`u64` decodificados y `sender` `null`. Acepta 0, 1001 y 65535
+      en `feeRate` y 0/`U64_MAX` en los montos. Lanza con IDs inválidos, `feeRate` −1, 1.5, 65536 y `NaN`, y con montos
+      negativos o mayores que `U64_MAX`;
+    - T2-14: exactamente 2 comandos, `MoveCall withdraw_fees [Input 0, Input 1]` y
+      `TransferObjects { objects: [{ Result: 0 }], address: Input 2 (pure) }`; la dirección decodificada es `recipient`
+      normalizado y hay 3 inputs; lanza con `recipient` corto, vacío o no hex.
+  - `readErrors.test.ts` (+3): T2-1, T2-2 y el texto genérico para los demás motivos.
+  - `errors.test.ts` (+8): T2-16. Los 4 `simulationErrors` de `house-admin.localnet.json` se mapean a `house`/0, 1, 1, 2
+    con `ABORT_MESSAGES.house[n]` y el sufijo `(código house/<n>)`, tanto por la vía estructurada como solo por el mensaje.
+    `findMoveAbort` reconoce ese formato, así que no hay STOP sobre `errors.ts`.
+- Verificación extra: probé dos mutaciones temporales sobre `houseCap.ts` y las revertí (`houseCap.test.ts` volvió a 33/33):
+  - cambiar el tope de páginas por `break` deja 2 tests rojos;
+  - tratar todo `ObjectError` como `not_owned` deja 1 test rojo.
+- Grep de capas (§7) sobre `app/src/sui/houseCap.ts app/src/sui/houseAdmin.ts app/src/sui/transactions/house.ts`: vacío.
+- Contracts: no aplica (sin cambios en `contracts/`; `git diff --exit-code -- contracts/` sale con exit 0, ver abajo).
+
+**Gate de la app** (desde `<repo>`, con `export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH`; output completo
+de la corrida final, sobre el árbol entregado):
+
+```text
+$ node --version
+v26.13.0
+$ npm --version
+11.20.0
+$ npm ci
+
+added 293 packages, and audited 295 packages in 8s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[exit=0]
+$ npm audit signatures
+audited 292 packages in 7s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+[exit=0]
+$ npm audit --omit=dev --audit-level=high
+found 0 vulnerabilities
+[exit=0]
+$ npm run lint -w app
+
+> lint
+> eslint . --max-warnings 0
+
+[exit=0]
+$ npm run typecheck -w app
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+[exit=0]
+$ npm test -w app
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  60 passed (60)
+      Tests  1045 passed (1045)
+   Start at  03:34:09
+   Duration  16.45s (environment 61%, tests 14%, import 10%, setup 10%, transform 5%, worker 1%)
+
+Environment  jsdom was created 60 times · 95.61s total, 61% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+[exit=0]
+$ VITE_SUI_NETWORK=testnet npm run build -w app
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 596 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.27 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-s225zLE5.js   901.53 kB │ gzip: 273.65 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 540ms
+[exit=0]
+$ git status --porcelain --untracked-files=all
+ M app/src/sui/errors.test.ts
+ M app/src/sui/readErrors.test.ts
+ M app/src/sui/readErrors.ts
+?? app/src/sui/houseAdmin.test.ts
+?? app/src/sui/houseAdmin.ts
+?? app/src/sui/houseCap.test.ts
+?? app/src/sui/houseCap.ts
+?? app/src/sui/transactions/house.test.ts
+?? app/src/sui/transactions/house.ts
+$ git diff --exit-code -- contracts/ package.json app/package.json package-lock.json
+[exit=0]
+```
+
+- **Build:** `index-*.js` pasa de 901.45 a **901.53 kB** (273.61 → 273.65 kB gzip), por el texto nuevo de `readErrors.ts`, que
+  la app ya importa. Los módulos nuevos de `sui/` todavía no los importa nadie: entran al bundle desde TASK-4/5. El aviso
+  de chunk mayor de 500 kB es el de siempre (#15).
+- **Dependencias:** `package.json`, `app/package.json` y `package-lock.json` sin delta (SEG-8).
+- **Sincronización:** la tabla de contrato de `contracts/README.md` y `app/src/sui/` no aplican (el contrato no cambia).
+  `HOUSE_MAX_FEE_BPS` replica `house::MAX_FEE_BPS` y entra en la tabla de `agents.md` §5 en TASK-6 (ver Documentación).
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+
+No aplica: sin localnet en este task (los datos reales salen de la fixture de TASK-1). No toqué puertos ni procesos del DEV
+de `-issue15`, y no hay procesos propios abiertos.
+
+### Desviaciones del handoff
+
+1. - Qué cambió: el retiro transfiere el resultado entero del `MoveCall` (`const coin = tx.moveCall(…)` ⇒
+     `{ $kind: 'Result', Result: 0 }`). El snippet de §3.4 desestructuraba `const [coin]` (`NestedResult [0, 0]`).
+   - Por qué: con `noUncheckedIndexedAccess`, `const [coin]` de `moveCall` queda `… | undefined` y `transferObjects` no lo
+     acepta (TS2322). `Result 0` es la forma literal de D-4 ("`TransferObjects([Result 0], recipient)`") y T2-14 acepta
+     cualquiera de las dos. `withdraw_fees` devuelve un solo valor.
+   - Verificación extra realizada: T2-14 fija `objects: [{ $kind: 'Result', Result: 0 }]` y exactamente 2 comandos. La PTB
+     que simuló TASK-1 (S-3 `withdrawNoFees`, S-6) usaba `const [fees]`; las dos formas resuelven al mismo valor porque
+     hay un solo retorno.
+2. - Qué cambió: `transactions/house.ts` tiene su propio `assertObjectId` (2 líneas) y su propio `moveTarget`, igual que
+     `transactions/game.ts`.
+   - Por qué: allí son privados, y el task no lista `transactions/game.ts` entre los archivos a cambiar. Es la segunda
+     copia: según LIM-5, "candidata a extraer", no obligatoria.
+   - Verificación extra realizada: el comportamiento es el mismo (`isValidSuiObjectId`; lanza `Error`).
+3. - Qué cambió: los parsers de eventos atrapan el error de parseo dentro del `map`, con la misma semántica que el
+     `parseOrNull` de `gameTx.ts`. No importo ese helper.
+   - Por qué: es privado de `gameTx.ts`, que está en "NO tocar".
+   - Verificación extra realizada: T2-15 con bytes truncados y con un byte de más ⇒ `null`.
+4. - Qué cambió (detalles que §3 dejaba abiertos):
+     - el primer pedido de `fetchHouseCap` va **sin** la clave `cursor` (no `cursor: null`);
+     - en `parseHouseCapObject`, el dueño ausente, no `AddressOwner` o de otra cuenta, y el `id` ≠ `objectId`, dan
+       `ReadDataError('invariant')`;
+     - `parseHouseCapObject` y `checkHouseCapOwnership` aceptan `owner: null` aunque el tipo del SDK diga que no puede
+       serlo (V-5).
+   - Por qué:
+     - el pedido sin cursor es idéntico al de la forma de T2-3;
+     - `invariant` está dentro del conjunto que fija §3.2 (`wrong_type`, `invariant` o `malformed`);
+     - `mapOwner` devuelve `null` en runtime.
+   - Verificación extra realizada: T2-4 (`not.toHaveProperty('cursor')`), T2-8 y T2-12 con `owner` `null`.
+5. - Qué cambió: hay algunos tests más de los listados:
+     - `houseCapType` igual al `type` real del nodo;
+     - objeto listado de otro paquete ⇒ `wrong_type`;
+     - un parser no lee el evento de otra acción;
+     - `'+1'`/`'0x10'` ⇒ `invalid`;
+     - `feeRate` `NaN`.
+   - Por qué: cubren bordes de las mismas reglas.
+   - Verificación extra realizada: no aplica.
+
+### Riesgos / pendientes
+
+- `checkHouseCapOwnership` no compara el `objectId` de la respuesta con `capId`: confía en que `getObject` devuelve lo que
+  se pidió, igual que `fetchHouse`/`fetchGame`.
+- `validateBetLimits` no aplica los límites actuales de la House a los nuevos (no existe esa regla en el contrato); solo
+  pide `0 < min <= max` y que cambien.
+- Para TASK-4: `fetchHouseCap` lanza `ReadDataError` (`invariant`/`incomplete`/`wrong_type`/`malformed`). Ninguno es
+  transitorio, así que `useHouseCap` muestra "Reintentar" con el texto de `readErrorMessage`.
+
+### Documentación
+
+- READMEs / `agents.md` actualizados: no aplica en TASK-2. Según el handoff, TASK-6 suma:
+  - el mapa de `app/src/sui/` en `app/README.md` (`houseCap.ts`, `houseAdmin.ts`, `transactions/house.ts`);
+  - la fila de `HOUSE_MAX_FEE_BPS` (espejo de `house::MAX_FEE_BPS`) en la tabla de `agents.md` §5;
+  - el motivo `incomplete` de `ReadDataError`.
+- Snippet propuesto para `documents/STATUS.md` (fila de #14):
+
+  > #14 TASK-2 ✅ (2026-11-04): capa `sui/` de la House: `houseCap.ts` (detección por tipo con la regla de certeza H-1:
+  > `null` solo con fin de páginas; `invariant`/`incomplete`; `precheck` `checkHouseCapOwnership` por `getObject`, solo
+  > `notFound`/`deleted` ⇒ cap perdido), `houseAdmin.ts` (validación espejo y parsers de `FeeRateUpdated`,
+  > `BetLimitsUpdated`, `FeesWithdrawn`), `transactions/house.ts` (retiro con 2 comandos) y `ReadDataError('incomplete')`.
+  > App 1045 tests en 60 archivos (+130), build 901.53 kB; lint/typecheck 0.
+
+---
+
+## Revisión TASK-2: NO PASA
+
+> MID, 2026-11-04. Revisado contra el diff real (`app/src/sui/houseCap.ts`, `houseAdmin.ts`, `transactions/house.ts`,
+> `readErrors.ts` y sus tests, sin commitear sobre `9067ef8`) y el output pegado. No corrí gates. Un solo hallazgo, de
+> tests: el código es correcto. Con T2-17 (handoff v1.3) en verde, PASA sin otra revisión de código.
+
+**Checklist de §5:**
+
+- **Implementa lo pedido.** H-1 en `fetchHouseCap` (`houseCap.ts:74-108`): `null` solo con 0 objetos y `hasNextPage:
+  false` (`:97`, `:107`); `invariant` al juntar 2 (`:94-96`); `incomplete` con cursor `null` (`:98-100`) o con el tope de 3
+  pedidos (`:101-103`); cada pedido con `withReadTimeout` (`:83`) y el primero sin clave `cursor` (`:89`).
+  `parseHouseCapObject` (`:49-66`): tipo exacto, `AddressOwner` = la cuenta (acepta `owner` `null` en runtime, V-5), BCS
+  exacto e `id` = `objectId`. H-3 en `checkHouseCapOwnership` (`:116-132`): `getObject` con `content: false`, solo
+  `notFound`/`deleted` ⇒ `not_owned` (SUGGESTION-1), el resto se relanza. `readErrors.ts`: `'incomplete'` y su texto (MINOR-1
+  de la ronda corta). `houseAdmin.ts`: espejo de `MAX_FEE_BPS` con comparación en `bigint` (`:32-33`), `validateBetLimits`
+  con los motivos de `parseSuiToMist` (incluido `negative`) y el par; parsers del único evento de esa House con BCS exacto.
+  `transactions/house.ts`: rangos de `u16`/`u64` (no los del contrato, a propósito), retiro con exactamente 2 comandos.
+- **Capas y PROY.** `sui/` sin React ni capas superiores (grep vacío); `@mysten/*` solo `sui`; ningún archivo de la lista
+  "NO tocar" cambia; `errors.ts` sin cambios (T2-16 confirma que `findMoveAbort` reconoce los aborts de `house`).
+- **SEG.** Nada de secretos ni rutas personales en el diff. El retiro no admite otro destino que el `recipient` que le
+  pasa quien llama (N-2 se cierra en TASK-4 con `build(sender)`).
+- **LIM.** Sin debug. LIM-5: `assertObjectId`/`moveTarget` es la **segunda** copia (con `transactions/game.ts`), candidata y
+  no obligatoria: aceptada (desviación 2). `parseOrNull` en línea: aceptado (desviación 3).
+- **Tests y gates.** +130 tests (1045 en 60 archivos), lint 0, typecheck 0, build 901.53 kB (+0,08 kB por el texto de
+  `readErrors.ts`); sin delta en `contracts/` ni en dependencias. Los tests viejos solo suman casos. Las dos mutaciones
+  temporales del reporte muestran que T2-5/T2-7 y T2-12 detectan una regla rota.
+- **Desviaciones 1-5:** aceptadas. La 1 (`Result 0` entero en vez de `const [coin]`) es la forma literal de D-4; Sui acepta
+  `Result(i)` como argumento cuando el comando devuelve un solo valor, y `withdraw_fees` devuelve uno. Como S-3/S-6 de
+  TASK-1 simularon con `NestedResult`, el paso 16 del smoke es la ejecución real de esta forma (ya pide los 2 comandos).
+
+### Hallazgos
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| H-1 | PROY-14 / DL-5 de #10 (política común de lecturas); LIM-11 | `app/src/sui/houseCap.test.ts:99-172` (`describe('fetchHouseCap (H-1)')`) y el reporte de TASK-2, "Riesgos / pendientes", 3.er punto | **El código está bien**: `fetchHouseCap` no atrapa nada, así que un `RpcError` transitorio (`UNAVAILABLE`, …) y el `ReadTimeoutError` del corte de 10 s (`withReadTimeout`, `readPolicy.ts:31-47`) llegan tal cual a TanStack, y `shouldRetryRead` los reintenta (3 intentos, 1 s y 2 s, "Reintentando… (intento n de m)"). Pero (a) **ningún test lo fija**: los de `fetchHouseCap` solo cubren `ReadDataError` y resultados, a diferencia de `checkHouseCapOwnership` (`:211-227`); un cambio futuro que envolviera el error de red en `ReadDataError('incomplete')` (p. ej. al tocar el bucle) pasaría todos los tests y convertiría un corte de red en un "Reintentar" definitivo; (b) la frase del reporte "Ninguno es transitorio, así que `useHouseCap` muestra «Reintentar»" es inexacta: vale **solo** para los `ReadDataError` de `fetchHouseCap`, no para los errores de red | (a) **T2-17** del handoff v1.3 en `houseCap.test.ts`: `RpcError` `UNAVAILABLE` en el primer pedido y en el segundo (tras una página vacía con cursor) ⇒ la misma instancia, `isTransientReadError` y `shouldRetryRead(0, e)` en `true`; nodo colgado ⇒ `ReadTimeoutError`; contraste con `incomplete`/`invariant` no transitorios. (b) Corregir la frase del reporte: "Los `ReadDataError` de `fetchHouseCap` no son transitorios ("Reintentar"); los errores de red se relanzan tal cual y siguen la política común (DL-5)". Gate de la app completo otra vez, pegado |
+
+**Precisión para TASK-4 (ya en el handoff v1.3, T4-16):** con `UNAVAILABLE` en los 3 intentos, `useHouseCap` pasa por
+`retrying` y termina en `error` con `cap` siempre `unknown` (nunca "Sin permisos"); si el tercer intento responde, `known`.
+
+### Siguiente paso: correcciones al DEV (H-1: T2-17 + la frase del reporte + gate). Con eso, TASK-2 PASA y se autoriza TASK-3.
+
+### Mensaje de commit propuesto (para cuando PASE, con T2-17 incluido)
+
+```
+feat(app): add House admin pure layer in sui/ (#14)
+
+TASK-2 of the House admin panel: houseCap.ts (detection by type with
+the certainty rule: null only after the last page, invariant for two
+caps, incomplete at the page cap or with a missing cursor; network
+errors pass through to the shared read policy; ownership precheck by
+getObject where only notFound/deleted means a lost cap), houseAdmin.ts
+(fee and bet-limit validation mirroring the contract, parsers for
+FeeRateUpdated, BetLimitsUpdated and FeesWithdrawn), transactions/
+house.ts (withdraw PTB with exactly two commands) and the
+'incomplete' ReadDataError reason with its own text.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+### Snippet para STATUS.md (para cuando PASE)
+
+> #14 TASK-2 ✅ (2026-11-04): capa `sui/` de la House (`houseCap.ts` con la regla de certeza H-1 y el `precheck` por
+> `getObject`; `houseAdmin.ts`; `transactions/house.ts` con el retiro en 2 comandos; `ReadDataError('incomplete')`). Los
+> errores de red de la detección siguen la política común (T2-17). App <N> tests en 60 archivos, build 901.53 kB.
+
+## TASK-2, corrección H-1 (addendum)
+
+> DEV, 2026-11-04. Responde al hallazgo H-1 de "Revisión TASK-2" (handoff v1.3, T2-17). Branch
+> `feature/issue-14-house-admin` @ `3786ab3`, sin commits del DEV. No cambia el código de producción: solo
+> `app/src/sui/houseCap.test.ts`. El reporte de TASK-2 de arriba queda tal cual; este addendum corrige su frase de riesgos.
+
+### H-1 (a): ✅ corregido. T2-17 en `houseCap.test.ts`
+
+Un `describe` nuevo, `fetchHouseCap network errors (T2-17, shared read policy DL-5)`, con 4 tests. Los 33 tests anteriores
+del archivo no cambian:
+
+- **(a)** `RpcError('down', 'UNAVAILABLE')` en el primer pedido. `fetchHouseCap` rechaza con **la misma instancia**
+  (`toBe`), y tanto `isTransientReadError` como `shouldRetryRead(0, e)` dan `true`. Hace 1 pedido.
+- **(b)** El mismo error en el **segundo** pedido, después de `{ [], hasNextPage: true, cursor: 'c1' }`. Rechaza con la
+  misma instancia, transitoria y reintentable, sin dejar un resultado parcial. Hace 2 pedidos, y el segundo lleva
+  `cursor: 'c1'`.
+- **(c)** Nodo colgado, con timers falsos, igual que el test del corte de `checkHouseCapOwnership`. Tras `READ_TIMEOUT_MS`
+  rechaza con `ReadTimeoutError`, y `isTransientReadError` y `shouldRetryRead(0, e)` dan `true`.
+- **(d)** Contraste: `ReadDataError('incomplete')` (cursor `null` con más páginas) e `invariant` (dos caps) dan
+  `isTransientReadError === false`; `incomplete` también da `shouldRetryRead(0, e) === false`.
+
+Verificación extra: probé una mutación temporal en `houseCap.ts`, envolviendo el error de `listOwnedObjects` en
+`ReadDataError('incomplete')`, justo el cambio futuro que describe el hallazgo. Con ella, (a), (b) y (c) quedan en rojo
+(`3 failed | 34 passed (37)`). Después restauré el archivo: `grep` no encuentra la mutación y el resultado es `37 passed
+(37)`. Lint del archivo: 0.
+
+Diff del test (el único `-` es la línea del import, que suma `isTransientReadError` y `shouldRetryRead`):
+
+```diff
+--- a/app/src/sui/houseCap.test.ts
++++ b/app/src/sui/houseCap.test.ts
+@@ -12,7 +12,7 @@
+   parseHouseCapObject,
+   type HouseCapObjectInput,
+ } from './houseCap';
+-import { READ_TIMEOUT_MS } from './readPolicy';
++import { isTransientReadError, READ_TIMEOUT_MS, shouldRetryRead } from './readPolicy';
+ import { ReadDataError, ReadTimeoutError } from './readErrors';
+ 
+ type FixtureObject = { objectId: string; version: string; digest: string; type: string; owner: SuiClientTypes.ObjectOwner; content: string };
+@@ -171,6 +171,71 @@
+   });
+ });
+ 
++describe('fetchHouseCap network errors (T2-17, shared read policy DL-5)', () => {
++  afterEach(() => {
++    vi.useRealTimers();
++  });
++
++  /** Cliente cuyo `listOwnedObjects` responde, en orden, cada paso: una página o un rechazo. */
++  function stepClient(...steps: (Page | Error)[]) {
++    const listOwnedObjects = vi.fn<(options: unknown) => Promise<Page>>(() => {
++      const step = steps.shift() ?? page([], false);
++      return step instanceof Error ? Promise.reject(step) : Promise.resolve(step);
++    });
++    return { listOwnedObjects, client: { listOwnedObjects } as unknown as Pick<SuiGrpcClient, 'listOwnedObjects'> };
++  }
++
++  it('rethrows the same UNAVAILABLE instance of the first request, transient and retried by the policy', async () => {
++    const down = new RpcError('down', 'UNAVAILABLE');
++    const { client, listOwnedObjects } = stepClient(down);
++    const error = await fetchFor(client);
++    expect(error).toBe(down);
++    expect(isTransientReadError(error)).toBe(true);
++    expect(shouldRetryRead(0, error)).toBe(true);
++    expect(listOwnedObjects).toHaveBeenCalledTimes(1);
++  });
++
++  it('rethrows the same UNAVAILABLE instance of the second request, without a partial result', async () => {
++    const down = new RpcError('down', 'UNAVAILABLE');
++    const { client, listOwnedObjects } = stepClient(page([], true, 'c1'), down);
++    const error = await fetchFor(client);
++    expect(error).toBe(down);
++    expect(isTransientReadError(error)).toBe(true);
++    expect(shouldRetryRead(0, error)).toBe(true);
++    expect(listOwnedObjects).toHaveBeenCalledTimes(2);
++    expect(listOwnedObjects.mock.calls[1]?.[0]).toMatchObject({ cursor: 'c1' });
++  });
++
++  it('turns a hung node into a transient ReadTimeoutError after 10 s', async () => {
++    vi.useFakeTimers();
++    const listOwnedObjects = vi.fn(
++      ({ signal }: { signal?: AbortSignal }) =>
++        new Promise<Page>((_resolve, reject) => {
++          signal?.addEventListener('abort', () => {
++            reject(signal.reason as Error);
++          });
++        }),
++    );
++    const client = { listOwnedObjects } as unknown as Pick<SuiGrpcClient, 'listOwnedObjects'>;
++    const result = fetchFor(client);
++    await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
++    const error = await result;
++    expect(error).toBeInstanceOf(ReadTimeoutError);
++    expect(isTransientReadError(error)).toBe(true);
++    expect(shouldRetryRead(0, error)).toBe(true);
++  });
++
++  it('keeps incomplete and invariant as definitive (not transient), unlike the network errors', async () => {
++    const incomplete = await fetchFor(stepClient(page([], true, null)).client);
++    const invariant = await fetchFor(stepClient(page([realCap(), otherCap()], false)).client);
++    expect(incomplete).toMatchObject({ reason: 'incomplete' });
++    expect(invariant).toMatchObject({ reason: 'invariant' });
++    expect(isTransientReadError(incomplete)).toBe(false);
++    expect(isTransientReadError(invariant)).toBe(false);
++    expect(shouldRetryRead(0, incomplete)).toBe(false);
++  });
++});
++
+ describe('checkHouseCapOwnership (H-3)', () => {
+   afterEach(() => {
+     vi.useRealTimers();
+```
+
+### H-1 (b): ✅ corregida la frase de "Riesgos / pendientes"
+
+Este texto reemplaza el 3.er punto de "Riesgos / pendientes" del reporte de TASK-2. No edito el texto anterior:
+
+- Para TASK-4: solo los `ReadDataError` de `fetchHouseCap` (`invariant`, `incomplete`, `wrong_type`, `malformed`) son
+  definitivos. Con ellos, `useHouseCap` muestra "Reintentar" con el texto de `readErrorMessage`, sin reintento automático.
+  Los errores de red se relanzan tal cual, la misma instancia sin envolver, y siguen la política común (DL-5):
+  - un `RpcError` transitorio (`UNAVAILABLE`, …);
+  - el `ReadTimeoutError` del corte de 10 s.
+
+  `shouldRetryRead` los reintenta hasta 3 intentos (1 s y 2 s). T2-17 lo fija, y T4-16 del handoff v1.3 cubre el lado del
+  hook (`cap` sigue `unknown` mientras dura y nunca pasa a "Sin permisos").
+
+### Gate de la app (completo, otra vez)
+
+Desde `<repo>`, con `export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH`, sobre el árbol entregado:
+
+```text
+$ node --version
+v26.13.0
+$ npm --version
+11.20.0
+$ npm ci
+
+added 293 packages, and audited 295 packages in 8s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[exit=0]
+$ npm audit signatures
+audited 292 packages in 7s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+[exit=0]
+$ npm audit --omit=dev --audit-level=high
+found 0 vulnerabilities
+[exit=0]
+$ npm run lint -w app
+
+> lint
+> eslint . --max-warnings 0
+
+[exit=0]
+$ npm run typecheck -w app
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+[exit=0]
+$ npm test -w app
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  60 passed (60)
+      Tests  1049 passed (1049)
+   Start at  03:40:20
+   Duration  16.42s (environment 61%, tests 14%, import 10%, setup 10%, transform 5%, worker 1%)
+
+Environment  jsdom was created 60 times · 94.66s total, 61% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+[exit=0]
+$ VITE_SUI_NETWORK=testnet npm run build -w app
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 596 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.27 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-s225zLE5.js   901.53 kB │ gzip: 273.65 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 401ms
+[exit=0]
+$ git status --porcelain --untracked-files=all
+ M app/src/sui/errors.test.ts
+ M app/src/sui/readErrors.test.ts
+ M app/src/sui/readErrors.ts
+ M documents/REPORTES_HOUSE_ADMIN.md
+?? app/src/sui/houseAdmin.test.ts
+?? app/src/sui/houseAdmin.ts
+?? app/src/sui/houseCap.test.ts
+?? app/src/sui/houseCap.ts
+?? app/src/sui/transactions/house.test.ts
+?? app/src/sui/transactions/house.ts
+$ git diff --exit-code -- contracts/ package.json app/package.json package-lock.json
+[exit=0]
+```
+
+Resumen del delta frente al reporte de TASK-2:
+
+- tests: 1045 → **1049**, por los 4 de T2-17, en los mismos 60 archivos;
+- lint 0 y typecheck 0;
+- build igual, 901.53 kB (273.65 kB gzip), porque el código de producción no cambió;
+- sin delta en `contracts/` ni en las dependencias.
+
+En `git status` aparecen los mismos archivos de TASK-2 más este reporte.
+
+### Desviaciones del handoff
+
+Ninguna nueva.
+
+### Riesgos / pendientes
+
+Ninguno nuevo. Lo de TASK-4 queda en la frase corregida de arriba.

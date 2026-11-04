@@ -1,8 +1,12 @@
 import { RpcError } from '@mysten/sui/grpc';
 import type { Network } from './networks';
 
-/** Motivo de un dato del nodo que la app no acepta (DL-1): nunca se muestra como si fuera válido (SEG-10). */
-export type ReadDataReason = 'malformed' | 'wrong_type' | 'not_shared' | 'invariant';
+/**
+ * Motivo de un dato del nodo que la app no acepta (DL-1): nunca se muestra como si fuera válido (SEG-10). `incomplete`
+ * (#14, H-1): la búsqueda paginada del `HouseCap` llegó al tope de páginas sin una respuesta cierta; no es transitorio
+ * (no se reintenta solo), pero tiene su propio texto para que el usuario reintente.
+ */
+export type ReadDataReason = 'malformed' | 'wrong_type' | 'not_shared' | 'invariant' | 'incomplete';
 
 /**
  * El nodo devolvió algo que no encaja con el contrato: tipo o dueño inesperado, BCS que no parsea o no es canónico, o un
@@ -85,7 +89,11 @@ export class HistoryPrunedError extends Error {
  * transporte gRPC se muestra con su mensaje; cualquier otro `Error`, con el suyo.
  */
 export function readErrorMessage(error: unknown, network: Network): string {
-  if (error instanceof ReadDataError) return 'El nodo devolvió datos que la app no reconoce';
+  if (error instanceof ReadDataError) {
+    return error.reason === 'incomplete'
+      ? 'El nodo no completó la búsqueda del HouseCap; reintenta'
+      : 'El nodo devolvió datos que la app no reconoce';
+  }
   if (error instanceof GameNotFoundError) return `No existe una partida con ese ID en ${network}`;
   if (error instanceof NotAGameError) return 'Ese objeto no es una partida de Sui Battleship';
   if (error instanceof PaginationStalledError) {
