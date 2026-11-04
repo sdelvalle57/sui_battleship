@@ -10,6 +10,12 @@
 
 ---
 
+### D-20261104-04 — README raíz: cierre, IDs de testnet e idioma (STOPs de producto del plan de #16, tomadas por el orquestador por delegación del usuario, D-20261104-01)
+- **Decisión:** (1) **P-1 = (a):** el PR principal de #16 va con `Refs #16`; `Closes #16` va en el PR de seguimiento que completa lo que depende de #8 (URL pública de Railway, enlace a `testnet.json`), igual que #15. (2) **P-2 = (a):** el README **enlaza** `contracts/deployments/testnet.json` y no copia IDs (se puede republicar hasta #17, D-20261103-01). (3) **P-3 = (a):** el README va en español, coherente con la UI y los docs; el inglés queda fuera de alcance.
+- **Alternativa descartada:** (1) `Closes #16` con un issue nuevo para lo de #8, o esperar a #8 para todo; (2) copiar el package ID con enlace a Suiscan; (3) inglés o bilingüe.
+- **Motivo:** STOPs P-1..P-3 del plan v1 de #16 (MID), aprobado por el MAYOR ("correctas"). Aplicadas por delegación (D-20261104-01, que llega a `master` con #14).
+- **Aprobado por:** orquestador por delegación del usuario (D-20261104-01), pendiente de revisión del owner. **Fecha:** 2026-11-04.
+
 ### D-20261103-03 — Historial de "Mis partidas" en testnet: la ventana del fullnode (STOP P-1 de #13)
 - **Decisión:** las listas de "Mis partidas" (invitaciones recibidas, partidas pendientes propias y terminadas) leen, como el lobby, solo el historial que conserva el fullnode público de testnet (~14,6 días, piso `lowestAvailableCheckpoint`), con un texto honesto que lo dice. Se suman dos ayudas: un campo "Abrir partida por ID" y, solo en testnet, un enlace "Ver tu historial completo en el explorador". Una partida más vieja sigue abriéndose por su enlace o su ID, o por la CLI. Confirma D-20261102-04 (1) para las listas de #13; queda un issue de seguimiento post-MVP con la medición de GraphQL.
 - **Alternativa descartada:** GraphQL de Mysten solo en testnet (dos caminos de lectura, el de testnet sin prueba en localnet, dependencia de otro servicio; reabre D-20261102-02 (1)); recordar las partidas propias en el navegador (no cubre invitaciones recibidas ni otros dispositivos).
