@@ -1,6 +1,15 @@
 # HANDOFF_README
 > Plan: PLAN_README v1 (aprobado por el MAYOR, 2026-11-04) | Issue: #16 | Branch: `feature/issue-16-readme` |
-> Versión: v1.1 | Fecha: 2026-11-04 | Autor: MID
+> Versión: v1.2 | Fecha: 2026-11-04 | Autor: MID
+
+**Changelog v1.2** (se cumple la precondición de TASK-3: PR #59 de #14 y PR #57 de #15 `MERGED`; `master` `5e51356` traído
+a la branch con el merge `7766126`):
+- §0: baseline del `master` nuevo (app **1156 tests en 65 archivos**, `index-*.js` 917.02 kB) y el anterior como
+  referencia de TASK-1/TASK-2;
+- tabla de estado: TASK-1 y TASK-2 en PASA; TASK-3 **autorizado**;
+- TASK-3: insumos verificados en `5e51356` (ruta y textos del panel, anclas, `Dockerfile`/`.dockerignore`, issue nuevo
+  #60) y los hallazgos H-1/H-2 de la revisión de TASK-2;
+- TASK-4: corrige la fila de #15 en STATUS si sigue sin registrar el merge de PR #57.
 
 **Changelog v1.1** (revisión del MAYOR del handoff v1, APPROVE con 2 MINOR y 4 sugerencias, todas tomadas):
 - MINOR-1: el build de TASK-1 §5 escribe a un log con `echo "exit=$?"`, sin `| tee`, para no tapar el exit code; el
@@ -38,9 +47,9 @@ end-to-end (#17).
 
 | Task | Área | Estado de este handoff | Precondición |
 |---|---|---|---|
-| TASK-1 | contracts + app (manifiestos) | **Detallado: implementar ya** | Ninguna |
-| TASK-2 | docs (`README.md`) | **Detallado: implementar ya** | TASK-1 en PASA (orden de revisión, no técnico) |
-| TASK-3 | docs (`README.md`) | Especificado, **no empezar** | `master` con #14 y #15 mergeados y traído a la branch |
+| TASK-1 | contracts + app (manifiestos) | **PASA** (`3776c3d`) | Ninguna |
+| TASK-2 | docs (`README.md`) | **PASA** (revisión en `REPORTES_README.md`) | TASK-1 en PASA |
+| TASK-3 | docs (`README.md`) | **Autorizado** (v1.2) | Cumplida: PR #59 y PR #57 `MERGED`, `master` `5e51356` en la branch (`7766126`) |
 | TASK-4 | docs (`agents.md`, STATUS) | Especificado, **no empezar** | La misma que TASK-3, y TASK-3 en PASA |
 | TASK-5 | docs (PR de seguimiento) | Especificado, **no empezar** | #8 mergeado y la URL de Railway generada por el owner |
 
@@ -48,20 +57,29 @@ El PR principal (TASK-1..TASK-4) se abre después de TASK-4, con `Refs #16`. TAS
 (D-20261104-04 (1)). El housekeeping (borrar plan, handoff y reportes) se hace al mergear el PR de TASK-5, que es el que
 cierra #16. Hasta entonces los artefactos del ciclo viven en `documents/`.
 
-## 0. Baseline de gates verificado (2026-11-04, `master` `deaadbb`; branch en `0e70fbe` = `deaadbb` + plan + D-20261104-04)
+## 0. Baseline de gates verificado (2026-11-04, `master` `5e51356`; branch en `7766126`)
 
-Verificado con `git diff --stat` (sin cambios de código desde cada medición) y con la CI de `master`
-(run 41790496035 sobre `deaadbb`: success).
+`5e51356` es el merge de PR #57 (#15) sobre `612821b` (housekeeping de #14, después del merge de PR #59 en `b35cb2d`).
+`git diff 01d0fbc 5e51356` está vacío, así que el código es el mismo que midió la CI del head de PR #57
+([run 41815198867](https://github.com/sdelvalle57/sui_battleship/actions/runs/41815198867): `contracts`, `app`,
+`deploy-image` y `framework-drift` en success). `git diff 5e51356 7766126` solo toca los archivos de #16: `README.md`, los
+4 manifiestos de TASK-1 y `documents/`. Valores leídos de esa CI (logs de los jobs `app` y `contracts`) y de STATUS de la
+branch; el MID no corre gates.
 
 | Área | Medido en | Valor |
 |---|---|---|
-| Sui CLI | STATUS → Toolchain | `sui 1.83.0-16d2dc1e05ed` (release `testnet`), igual a `SUI_VERSION`/`SUI_COMMIT` de `ci.yml` |
+| Sui CLI | STATUS → Toolchain; `ci.yml` | `sui 1.83.0-16d2dc1e05ed` (release `testnet`) |
 | Node / npm | STATUS → Toolchain | `v26.13.0` / `11.20.0` |
-| contracts: build / `--lint` / test | `8fddbda`; sin cambios en `contracts/sources`, `tests`, `Move.toml` ni `Move.lock` hasta `deaadbb` | **0 warnings / 0 lints / 83 tests PASS** (26 `house_tests` + 57 `game_tests`), `Move.lock` sin delta |
-| contracts/scripts | `380bce6`; sin cambios en `contracts/scripts` hasta `deaadbb` | `node --test scripts/*.test.mjs` **99 PASS**; `publish.mjs check` **0 despliegues** |
-| app | `7a3b7fb` (TASK-5 de #13); hasta `deaadbb` solo cambia `app/README.md` | `npm ci` 293 paquetes; `audit signatures` 292 firmas; 0 vulnerabilidades de producción (11 *moderate* solo dev, #35); lint **0 problemas**; typecheck **0 errores**; **915 tests PASS en 57 archivos**; build de testnet `index-*.js` 901.45 kB (273.61 kB gzip) |
+| contracts: build / `--lint` / test | CI run 41815198867, job `contracts`; sin cambios en `contracts/sources`, `tests` ni `Move.lock` desde `8fddbda` | **0 warnings / 0 lints / 83 tests PASS**, `Move.lock` sin delta |
+| contracts/scripts | La misma CI; sin cambios en `contracts/scripts` desde `380bce6` | `node --test` **99 PASS**; `publish.mjs check` **0 despliegues** |
+| app | La misma CI, job `app`; STATUS, fila de TASK-5b de #14 (`72858b8`) | `npm ci` 293 paquetes; 292 firmas; 0 vulnerabilidades de producción (11 *moderate* solo dev, #35); lint **0 problemas**; typecheck **0 errores**; **1156 tests PASS en 65 archivos**; `index-*.js` **917.02 kB (277.43 kB gzip)** |
+| imagen | La misma CI, job `deploy-image` (no requerido) | Camino **negativo** (sin `testnet.json`, la imagen se niega a construirse) |
 
-Rojos conocidos: ninguno. Criterio de TASK-1: **cero delta** en todo lo anterior.
+Rojos conocidos: ninguno. TASK-3 y TASK-4 solo tocan docs, así que no llevan gates de código. La CI del PR principal
+tiene que dar estos mismos valores más TASK-1 (que no cambia ningún conteo).
+
+**Baseline anterior** (para TASK-1 y TASK-2, `deaadbb`): el mismo de contracts y scripts; app 915 tests en 57 archivos y
+`index-*.js` 901.45 kB. Lo usaron los reportes de TASK-1 y TASK-2 y queda solo como referencia.
 
 ## Decisiones vigentes (no reabrir)
 
@@ -399,36 +417,59 @@ Reporte TASK-2 en `documents/REPORTES_README.md` (§R-7). Mensaje de commit que 
 
 ---
 
-## TASK-3: README, secciones posteriores a #14 y #15 (área: docs) [NO EMPEZAR]
+## TASK-3: README, secciones posteriores a #14 y #15 (área: docs) [AUTORIZADO, v1.2]
 
 **Precondición:** el orquestador mergeó los PRs de #14 y #15 a `master` y trajo `master` a esta branch con un merge commit
 (no rebase). El DEV lo verifica (output pegado):
 ```bash
 gh pr view 57 --json state --jq .state                                                   # #15: MERGED
-gh pr list --head feature/issue-14-house-admin --state all --json number,state --jq '.[]' # #14: state MERGED
+gh pr view 59 --json state --jq .state                                                   # #14: MERGED
 git fetch origin && git merge-base --is-ancestor origin/master HEAD; echo "exit=$?"     # 0
 git log --oneline --merges -5                                                            # el merge de master
 ```
 Si alguno no da lo esperado, no se empieza. El MID actualiza la §0 de este handoff con el baseline de ese
 `master` antes de autorizar el task.
 
+**Insumos verificados por el MID en `5e51356` (v1.2).** El DEV los vuelve a confirmar con su check de enlaces (§R-4).
+
+| Insumo | Valor en `master` | Fuente |
+|---|---|---|
+| Ruta del panel | `#/admin` | `app/src/App.tsx:32` (`path: 'admin'`) |
+| Enlace del encabezado | "Administrar House", visible **solo** cuando se sabe que la cuenta tiene el `HouseCap` | `app/src/components/Header.tsx:20`; título de la página `app/src/pages/HouseAdminPage.tsx:50` |
+| Cuenta sin el cap | "Sin permisos: esta cuenta no tiene el HouseCap de esta House.", con "Volver a comprobar" | `app/src/pages/HouseAdminPage.tsx:7`; D-20261104-02 (1) |
+| Comisión en el panel | bps enteros (0..1000) con el % al lado, sin diálogo de confirmación extra | D-20261104-02 (2) y (3) |
+| Retiro | total, a la cuenta que firma | D-20261104-02 (5) |
+| Solo por CLI | `migrate` y `transfer_house_cap` | `app/README.md`, "Panel de la House (#14)" |
+| Ancla del panel | `app/README.md#panel-de-la-house-14` | `app/README.md:711` |
+| Ancla del despliegue | `app/README.md#despliegue-railway`; el checklist del owner en `#conectar-railway-owner-no-delegable` | `app/README.md`, "Despliegue (Railway)" |
+| Ancla de Docker (requisito opcional) | `app/README.md#verificar-la-imagen-appscriptscheck-deploy-imagesh` (pide `bash`, `docker`, `curl`…) | `app/README.md:172` |
+| Raíz | `Dockerfile` y `.dockerignore` existen | `ls -a` de la raíz |
+| "GitHub Pages" | 0 menciones en `README.md`, `agents.md`, `app/README.md` y `contracts/README.md`. Solo aparece en `documents/` como alternativa descartada (D-20261104-01) y en las reglas de este handoff | `grep -rn "GitHub Pages" --include=*.md` |
+| Issues | #14 **cerrado**; #15 **abierto** (PR #57 mergeado con `Refs #15`, cierre con TASK-6 de #15 después de #8); **#60 nuevo**, post-MVP ("Panel de la House: releer la House antes de firmar para no revertir un cambio concurrente", MINOR-1 de la revisión de #14) | `gh api …/issues` |
+| D-20261103-01 | Sigue fuera de `master` (#8 sin mergear): se mantiene `(PR #48)` | `documents/DECISIONES.md` |
+
+**Además de lo de abajo, TASK-3 corrige los hallazgos de la revisión de TASK-2:**
+- **H-1** (`README.md:88`): "la misma de la CI" pasa a "la de `SUI_VERSION` en
+  [`.github/workflows/ci.yml`](.github/workflows/ci.yml)";
+- **H-2** (`README.md:112`): `[app](agents.md#app-app)` pasa a `[agents.md §3, App](agents.md#app-app)`.
+
 - **HU:** **como** visitante, **quiero** saber cómo se despliega el juego, cómo se administra la House y en qué estado
   está cada parte del proyecto, **para** entender qué funciona hoy y qué falta.
 - **Qué implementar:**
   - sección 9, **Despliegue**: dos líneas. Contratos: solo el owner, con enlace a
     `contracts/README.md#uso-en-testnet-solo-el-owner`. App: Railway, con enlace a `app/README.md` → "Despliegue
-    (Railway)" (el ancla se calcula sobre el `master` nuevo; hoy, en la branch de #15, sería `#despliegue-railway`);
+    (Railway)" (`app/README.md#despliegue-railway`). Sin URL: la URL sigue siendo el placeholder de la sección 5;
   - sección 10, **Administración de la House**: el titular del `HouseCap` administra comisión, límites y retiro desde el
     panel de #14 (ruta, nombre del enlace y textos **tal como queden en `master`**), o por CLI; enlaces a la sección del
     panel en `app/README.md` y a `contracts/README.md#autorización`, `#retiro-de-comisiones`;
   - sección 11, **Roadmap**: tabla `Fase | Issue | Tema | Estado`, con estados en texto ("Hecho", "En curso",
     "Pendiente", "Post-MVP"), la fecha del corte y la línea "el estado vivo está en los issues y en
     `documents/STATUS.md`". Fases: contratos y tooling (#1-#7, #39); app (#9-#14); testnet y cierre (#8, #15, #16, #17);
-    post-MVP (#18, #51, #53, #54, #56, #58, #35). Cada issue enlazado con su URL completa (`#N` no se enlaza solo en un
+    post-MVP (#18, #51, #53, #54, #56, #58, #60, #35). Cada issue enlazado con su URL completa (`#N` no se enlaza solo en un
     README). Estados re-medidos con
     `gh api 'repos/sdelvalle57/sui_battleship/issues?state=all&per_page=100' --jq '.[] | [.number, .state, .title] | @tsv'`
     (output pegado);
-  - sección 7: agregar `Dockerfile` (y `.dockerignore`) si #15 los dejó en la raíz;
+  - sección 7: agregar `Dockerfile` y `.dockerignore` (están en la raíz: imagen de Railway, #15);
   - sección 8, Requisitos: Docker **opcional**, solo para verificar la imagen de Railway, con enlace a la sección de
     `app/README.md` que lo explica;
   - §R-5: si D-20261103-01 ya está en `documents/DECISIONES.md` (#8 mergeado), se quita `(PR #48)`;
@@ -458,6 +499,11 @@ Si alguno no da lo esperado, no se empieza. El MID actualiza la §0 de este hand
       hace el housekeeping);
     - baselines de TASK-1 (contracts y app, sin delta) y de docs (TASK-2/3);
     - "Pendientes del usuario": revisar D-20261104-04 (tomada por delegación) y, después de #8, que TASK-5 cierra #16;
+  - fila de #15 y fila "Siguiente" (v1.2): si al empezar TASK-4 todavía no registran el merge de PR #57 (`5e51356`, con
+    `Refs #15`), se actualizan. #15 queda 🚧 con PR #57 mergeado y pendientes TASK-6 (después de #8) y el checklist del
+    owner. En "Siguiente", se quita "listo para pasar a ready" y se suma #60 a post-MVP. Se declara como desviación
+    acotada: no es de #16, pero TASK-4 ya toca STATUS y deja el archivo coherente. Si el orquestador ya lo corrigió en
+    `master`, no se toca;
   - `documents/DECISIONES.md`: **no se toca**. D-20261104-04 ya está registrada (`0e70fbe`); si el merge de `master` creó
     un conflicto en la cabecera del archivo, lo resuelve el orquestador conservando el orden descendente.
 - **Archivos:** `agents.md`, `documents/STATUS.md`.
