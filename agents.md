@@ -381,8 +381,8 @@ testnet con una wallet real.
 - **Dirección publicadora:** recibe el `HouseCap` (`key` sin `store`, PROY-3). Si no es la wallet del
   navegador del panel admin (#14, `#/admin`), el owner le pasa el cap con `transfer_house_cap` por CLI (no con "Send"
   de la wallet; la app no lo transfiere), con el checklist de `contracts/README.md`, "Qué pasa si se pierde el cap".
-  La dirección publicadora también tiene el `UpgradeCap` (N-3): importar su clave en una wallet de navegador va contra
-  D-20261102-03.
+  La dirección publicadora también tiene el `UpgradeCap` y el `Publisher`: importarla en una wallet de navegador los
+  expone a la extensión; la alternativa es `transfer_house_cap` a la wallet del panel. Decisión del owner (N-3).
 - **Post-publicación (#8):** la House nace con fee 0 (D-20261030-11); `update_fee_rate` antes de anunciar el
   juego, o las partidas creadas antes quedan con comisión 0 para siempre.
 - **App:** hosting estático (por definir en el backlog).
