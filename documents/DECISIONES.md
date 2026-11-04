@@ -10,6 +10,12 @@
 
 ---
 
+### D-20261103-01 — Publicación en testnet: `UpgradeCap`, republicación y comisión (STOPs de #8)
+- **Decisión:** (1) El owner **conserva el `UpgradeCap`** (política de upgrade por defecto, compatible) para upgrades en testnet; se revisa antes de cualquier mainnet. (2) **Hasta cerrar #17** se permite republicar en testnet con IDs nuevos si hace falta un cambio incompatible del contrato (sin usuarios reales), actualizando `contracts/deployments/testnet.json` en el mismo PR; después de #17 rige PROY-10 estricto (solo upgrades compatibles). (3) Inmediatamente después de publicar, y antes de crear partidas o anunciar el juego, el owner ejecuta `update_fee_rate` con su `HouseCap` a **200 bps (2 % del pozo)** y lo verifica leyendo la House (D-20261030-11, consecuencia a vigilar).
+- **Alternativa descartada:** (1) política restringida a cambios aditivos o paquete inmutable; (2) solo upgrades compatibles desde la primera publicación; (3) 100 bps o 0 bps durante testnet.
+- **Motivo:** decisiones abiertas 1 y 2 del issue #8 y el ajuste post-publicación de la comisión (fee por defecto 0, D-20261030-11).
+- **Aprobado por:** usuario ("Conservarla", "Sí, hasta cerrar #17", "2 % (200 bps)", 2026-11-03). La autorización explícita de la publicación misma es del owner al ejecutarla desde su terminal (D-20261030-09, D-20261102-03). **Fecha:** 2026-11-03.
+
 ### D-20261102-05 — "Rechazar invitación" en la app va en #11
 - **Decisión:** el botón "Rechazar invitación" (llamada `reject_game`, D-20261030-06 (4)) se entrega en #11, junto a "Cancelar", en el detalle de la partida: visible solo para el invitado y solo en `Pending`; usa la misma maquinaria de transacciones (preflight, confirmación por el nodo, mapeo de aborts, invalidación).
 - **Alternativa descartada:** dejarlo para #13 (lista de invitaciones recibidas) o sacarlo del MVP.
