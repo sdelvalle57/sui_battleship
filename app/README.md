@@ -71,15 +71,16 @@ src/
 ├── hooks/       # hooks de React sobre el kit y TanStack Query (+ ConfigContext, queryKeys)
 ├── providers/   # QueryClientProvider (política común) > DAppKitProvider > ConfigContext
 ├── components/  # UI sin lógica de negocio (LobbyList, GameDetail, ReadState, Header, CreateGameForm, GameActions,
-│                #   MyGamesSection, HistoryTime…)
+│                #   MyGamesSection, HouseAdminPanel, HistoryTime…)
 ├── pages/       # páginas del router por hash: HomePage (#/), GameDetailPage (#/game/:id), MyGamesPage (#/my-games),
-│                #   NotFoundPage
+│                #   HouseAdminPage (#/admin), NotFoundPage
 ├── test/        # setup de Vitest, arneses de TanStack Query, de la máquina de transacciones y del escaneo de eventos
 └── App.tsx      # rutas (appRoutes) + RouterProvider
 scripts/
 ├── localnet-guard.mjs          # guarda compartida de las capturas: solo http://127.0.0.1:9000 y la génesis del despliegue
 ├── capture-read-fixtures.mjs   # captura de las fixtures reales de lectura (ver "Fixtures de lectura")
-└── capture-tx-fixtures.mjs     # captura de las fixtures reales de transacciones (ver "Fixtures de lectura")
+├── capture-tx-fixtures.mjs     # captura de las fixtures reales de transacciones (ver "Fixtures de lectura")
+└── capture-house-fixtures.mjs  # (#14) captura de la fixture real del panel de la House (ver "Fixtures de lectura")
 ```
 
 La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted-imports` en lista blanca):
@@ -103,7 +104,7 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 | `dappKit.ts` | instancia del kit con `createDAppKit` y `SuiGrpcClient` | #9 |
 | `game.ts` | esquema BCS del `Game`, `gameType`, `parseGameObject` (tipo exacto, dueño compartido, bytes canónicos, invariantes) y `resolutionAmounts` | #10 |
 | `events.ts` | `RawGameEvent`, esquemas BCS y parsers de `GameCreated`/`GameCancelled`/`GameResolved` | #10 |
-| `readErrors.ts` | errores de lectura (`ReadDataError`, `GameNotFoundError`, `NotAGameError`, `PaginationStalledError`, `ReadTimeoutError`, `NotYetCheckpointedError`, `HistoryPrunedError`) y `readErrorMessage` | #10 |
+| `readErrors.ts` | errores de lectura (`ReadDataError`, `GameNotFoundError`, `NotAGameError`, `PaginationStalledError`, `ReadTimeoutError`, `NotYetCheckpointedError`, `HistoryPrunedError`) y `readErrorMessage`. `ReadDataError` suma en #14 el motivo `incomplete` (la búsqueda del `HouseCap` no llegó a una respuesta cierta), con su texto propio "El nodo no completó la búsqueda del HouseCap; reintenta" y no transitorio | #10, #14 |
 | `readPolicy.ts` | `withReadTimeout` (corte de 10 s), `isTransientReadError`, `shouldRetryRead`, `readRetryDelay` | #10 |
 | `readStatus.ts` | `ReadStatus` y `deriveReadStatus` (cargando, reintentando n de m, en pausa, error, lista) | #10 |
 | `ids.ts` | `parseObjectIdInput` y `parseAddressInput` (validan y normalizan en el borde, mismo helper) y `sameAddress` | #10, #11 |
@@ -121,18 +122,23 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 | `createGame.ts` | `validateCreateGame` (motivos tipados), `houseTermsChanges`/`houseChangeMessage` (M-2), `CREATE_GAS_RESERVE_MIST`, `GAME_STORAGE_DEPOSIT_MIST` | #11 |
 | `gameActions.ts` | `canCancel` (creador, `Pending`), `canReject` (invitado, `Pending`), `acceptState` (en orden: `not_pending` → `no_account` → `creator` → `not_invited` → `available`) y `NOT_INVITED_HINT` (= el texto de `game`/5) | #11, #12 |
 | `acceptGame.ts` | `ACCEPT_GAS_RESERVE_MIST` (0,01 SUI; ver "Aceptar y resultado"), `acceptBalanceCheck` (`ok`/`insufficient`/`unknown`), `wonBy` y `playerResult` (`won`/`lost` para el creador o el aceptante de una partida resuelta) | #12 |
+| `houseCap.ts` | detección del `HouseCap` (ver "Panel de la House (#14)"): `houseCapType`, `parseHouseCapObject` (tipo exacto, `AddressOwner` = la cuenta, BCS canónico, `id` = `objectId`), `fetchHouseCap` (regla de certeza, `HOUSE_CAP_MAX_PAGES` = 3), `checkHouseCapOwnership` (`getObject`, el `precheck` de las acciones) y `HOUSE_CAP_LOST_MESSAGE` | #14 |
+| `houseAdmin.ts` | validación espejo del contrato: `HOUSE_MAX_FEE_BPS` (= `house::MAX_FEE_BPS`, `agents.md` §5), `validateFeeRate`, `validateBetLimits` (motivos de `parseSuiToMist` por campo, `zero_min`, `min_above_max`, `unchanged`) y `canWithdraw`; `houseEventType` y los parsers del **único** evento de esa House: `parseFeeRateUpdated`, `parseBetLimitsUpdated`, `parseFeesWithdrawn` | #14 |
+| `transactions/house.ts` | builders puros de admin: `buildUpdateFeeRateTx` (`u16`), `buildUpdateBetLimitsTx` (`u64`, `u64`) y `buildWithdrawFeesTx` (**exactamente 2** comandos: `withdraw_fees(house, cap)` y `TransferObjects([Result 0], recipient)`); rangos del tipo Move, no del contrato (una comisión de 1001 llega a la red y aborta con `house`/0); sin `sender` ni gas | #14 |
 
 ### Hooks (`app/src/hooks/`)
 
 | Hook | Qué devuelve |
 |---|---|
-| `queryKeys.ts` | **únicas** claves de TanStack Query: `['sui', red, recurso, …]` (`nodeInfo`, `lobby`, `game`, `txInfo`, `publishCheckpoint`, `checkpointTime`, `house`, `balance` con la dirección normalizada; #13: `myGames(red, pkg, cuenta)` = `['sui', red, 'myGames', pkg, <cuenta normalizada>]` y sus sub-claves `myActivity` = `[...myGames, 'activity']` y `myInvitations` = `[...myGames, 'invitations']`); los `bigint` como string. Claves de **mutación** (#12): `txAccount(red, cuenta)` = `['sui', red, 'tx', <cuenta normalizada> \| 'none']` y `txTarget(red, cuenta, objetivo)` = `[...txAccount, 'create']` o `[...txAccount, 'game', <id normalizado>]` |
+| `queryKeys.ts` | **únicas** claves de TanStack Query: `['sui', red, recurso, …]` (`nodeInfo`, `lobby`, `game`, `txInfo`, `publishCheckpoint`, `checkpointTime`, `house`, `balance` con la dirección normalizada; #13: `myGames(red, pkg, cuenta)` = `['sui', red, 'myGames', pkg, <cuenta normalizada>]` y sus sub-claves `myActivity` = `[...myGames, 'activity']` y `myInvitations` = `[...myGames, 'invitations']`); los `bigint` como string. Claves de **mutación** (#12): `txAccount(red, cuenta)` = `['sui', red, 'tx', <cuenta normalizada> \| 'none']` y `txTarget(red, cuenta, objetivo)` = `[...txAccount, 'create']`, `[...txAccount, 'game', <id normalizado>]` o (#14) `[...txAccount, 'house']`, con un `case` por objetivo. #14: `houseCap(red, pkg, cuenta)` = `['sui', red, 'houseCap', pkg, <cuenta normalizada>]` |
 | `txInvalidation.ts` | `transactionInvalidations`: la tabla única de qué reiniciar/invalidar tras una transacción propia (DL-6) |
 | `txSession.ts` | lo puro de la máquina (#12, sin React; no importa nada de `hooks/`, DL-12 de #13): los tipos de la máquina (`TxAction`, `TxOutcome`, `TxResult`, `TxPrecheckStop`, `ExecuteInput`, `TxVariables` con `account` y `targetHash`, `TxTarget`, `TxView`, `TxNotice`, `AdoptedTx`), `toTxEntry`, `mountSnapshot` (foto de **todo** el `MutationCache` al montar), `deriveTargetState` (en curso ajena, "sin confirmar" del objetivo, adopción) y, para "Mis partidas", `toTxGameEntry`/`liveTxGameIds` (H-6) |
-| `useTxTarget` | **una** llamada por vista con acciones sobre un objetivo (`{ kind: 'create' }` o `{ kind: 'game', gameId }`): `view` (para los hooks de acción), `busy`, `notice` (`in_flight` / `adopted`), `unconfirmed` y `acknowledge` ("Ya la revisé"). Ver "Transacciones (#11, #12)" |
+| `useTxTarget` | **una** llamada por vista con acciones sobre un objetivo (`{ kind: 'create' }`, `{ kind: 'game', gameId }` o, #14, `{ kind: 'house' }`): `view` (para los hooks de acción), `busy`, `notice` (`in_flight` / `adopted`), `unconfirmed` y `acknowledge` ("Ya la revisé"). Ver "Transacciones (#11, #12)" |
 | `useExecuteTransaction` | máquina común de transacciones: `useExecuteTransaction(view)` → `stage` (ligada al objetivo con que se lanzó; otra cuenta ve `idle`), `outcome` (`success`/`failure` de **su** última ejecución, leído del caché por `runId`; nunca `unconfirmed`, que muestra la vista) y `execute` |
 | `useCreateGame` / `useCancelGame` / `useRejectGame` / `useAcceptGame` | hooks finos sobre la máquina, que reciben la `view` de la vista (la partida sale de `view.target`): builder, relectura de la House (crear), y lo que se lee del resultado (partida creada y `feeChanged`; reembolso; el `GameResolved` de la aceptación) |
 | `useHouse` / `useSuiBalance` | la House de la config (sin intervalo; al montar y al foco) y el saldo de la cuenta conectada (sin cuenta no consulta) |
+| `useHouseCap` | (#14) el `HouseCap` de la cuenta conectada: sin cuenta `{ kind: 'no_account' }` y ninguna consulta; con cuenta, `address` (normalizada), `cap` (`CapKnowledge`: `unknown` hasta la primera lectura exitosa, `known` con el cap o `null` desde entonces), `status`, `isFetching` y `refetch`. Ver "Panel de la House (#14)" |
+| `houseAdminTx.ts` / `useUpdateFeeRate` / `useUpdateBetLimits` / `useWithdrawFees` | (#14) `houseCapPrecheck` (el `precheck` común de las tres acciones, por `getObject`) y los tres hooks finos sobre la máquina, que reciben la `view` del panel (`update` / `update` / `withdraw`); el valor es el evento de la transacción (`null` si no se pudo leer) |
 | `useMyGames` | "Mis partidas" de la cuenta conectada: sin cuenta `{ kind: 'no_account' }` y ninguna consulta; con cuenta, `sections` (las tres, ya fijadas y deduplicadas), `unreadableEvents`, `activity` e `invitations` (`MyGamesSource`: `status` de la primera carga, `hasData`, `refreshRetrying`, `refreshError`, `hasNextPage`, `isFetchingNextPage`, `nextPageError`, `stalled`, `lowerBound`, `end`, `loadMore`, `retry`), `isFetching` y `refresh`. Ver "Mis partidas (#13)" |
 | `useAccountTxBusy` | hay una transacción de la cuenta conectada en curso, de cualquier objetivo (`useIsMutating` con `txAccount`); sin cuenta, `false`. El aviso "en curso" único de "Mis partidas" |
 | `useLobby` (+ `usePublishCheckpoint`) | filas con `isMine`, `ReadStatus` combinado con la publicación, `hasNextPage`, `isFetchingNextPage`, `nextPageError`, `stalled`, `lowerBound`, `end`, `loadMore`, `refresh` |
@@ -151,7 +157,8 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 | `HistoryTime` | `CreatedAt` (hora de la transacción de una fila, "—" si no llega) y `FloorSince` (" (desde <fecha>)" del piso del nodo), comunes al lobby y a "Mis partidas" |
 | `GameDetail` | el detalle de la partida; con la partida resuelta y la cuenta conectada como creador o aceptante, "Resultado para ti: ganaste/perdiste" (DL-12, leído del objeto) |
 | `createdNotice.ts` | escribe y lee el aviso de creación del `state` del router (costo como string: react-router serializa la ubicación con `JSON.stringify`) |
-| `txNotice.ts` | el texto "Hay una transacción en curso desde esta cuenta; espera a que termine", común al formulario, al detalle y a "Mis partidas" (una vez por página) |
+| `txNotice.ts` | el texto "Hay una transacción en curso desde esta cuenta; espera a que termine", común al formulario, al detalle, a "Mis partidas" (una vez por página) y al panel de la House |
+| `HouseAdminPanel` | (#14) el panel de la cuenta con el cap: `.house-config` y los tres bloques `[data-house-action]` (`fee`, `limits`, `withdraw`), cada uno con su `TransactionStatus`; **una** `useTxTarget({ kind: 'house' })`. Ver "Panel de la House (#14)" |
 
 ### Lecturas (#10)
 
@@ -163,7 +170,8 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 - **Montos de una partida resuelta** = `resolutionAmounts` (pozo `2 × bet`, comisión `⌊pozo × fee_rate / 10 000⌋`, pago
   `pozo − comisión`): fórmula de la v1 del contrato (D-20261030-16 D2/D3). Un upgrade que la cambie conserva la vieja para
   las partidas resueltas con el código viejo (por versión del `Game` o leyendo el evento), en el mismo PR (`agents.md`
-  §5). La app no replica `MAX_FEE_BPS`.
+  §5). La lectura de partidas no replica `MAX_FEE_BPS`; solo la validación de cortesía del panel de la House lo hace
+  (`HOUSE_MAX_FEE_BPS`, #14; `agents.md` §5).
 - **Lobby (DL-2, DL-3, M-1, M-2, M-4):**
   - descubre las partidas por `GameCreated` (eventos del paquete original) y lee los objetos en lote; solo muestra las
     abiertas en `Pending`; las más recientes primero;
@@ -219,6 +227,9 @@ el texto de red).
 | `indexing` | "Actualizando datos…" | si la confirmación no trae `checkpoint`, `waitForCheckpoint`; después, las invalidaciones de la acción |
 | `done` | — | queda el `outcome` |
 
+- **`build(sender)` y `precheck(signal, sender)` (#14, D-5):** la máquina pasa la dirección de la cuenta del clic al
+  `precheck` y a las **dos** llamadas a `build` (la preflight y la firma). Las acciones de partidas la ignoran; el retiro
+  de la House la usa como destino (`recipient`) y el `precheck` del `HouseCap` como dueño esperado.
 - **Cuenta capturada (DL-11 de #13, MINOR-1 de #12):** `execute` guarda en las variables de la mutación (`TxVariables`)
   la cuenta del clic (el `UiWalletAccount` de `useCurrentAccount()`) y el `targetHash` del objetivo. `run` usa **esa**
   cuenta para la preflight, para firmar (`signAndExecuteTransaction({ transaction, account })`), para interpretar el
@@ -282,12 +293,15 @@ el texto de red).
   | crear | `lobby` (vuelve a la primera página) | `balance` de la cuenta, `myGames` de la cuenta |
   | cancelar / rechazar | `lobby` | `game` de esa partida, `balance` de la cuenta, `myGames` de la cuenta |
   | aceptar | `lobby` | `game` de esa partida, `balance` de la cuenta, `house` (cobró la comisión), `myGames` de la cuenta |
+  | cambiar comisión / cambiar límites (#14) | — | `house`, `houseCap` de la cuenta |
+  | retirar comisiones (#14) | — | `house`, `balance` de la cuenta (recibió el `Coin`), `houseCap` de la cuenta |
 
   `myGames` (#13, DL-7) es el prefijo de las dos fuentes de "Mis partidas" de la cuenta que firmó, y va **al final**:
   relee en serie todas sus páginas cargadas (ver "Mis partidas (#13)"). Sin cuenta, ni `balance` ni `myGames`. Nunca
   `nodeInfo`, `txInfo`, `publishCheckpoint` ni `checkpointTime`. Se aplica también tras un abort en la preflight, un
   fallo del nodo y un "sin confirmar" (el estado pudo cambiar). `done` llega **después** de la relectura: con el lobby o
-  "Mis partidas" montados, "Actualizando datos…" dura lo que tarde esa lectura. #14 suma aquí las acciones de la House.
+  "Mis partidas" montados, "Actualizando datos…" dura lo que tarde esa lectura. Las acciones de la House (H-5 de #14) no
+  reinician nada ni tocan partidas, `lobby` o `myGames`; sin cuenta, solo `house`.
 - **Mensajes de abort** (`errors.ts`, M-5): por **módulo + código**, solo si el abort viene de nuestro `packageId` u
   `originalPackageId` (normalizados), con el sufijo de diagnóstico fijo `(código <módulo>/<n>)`, p. ej. "Solo quien creó
   la partida puede cancelarla. (código game/3)". Los textos de `game` 0–10 y `house` 0–4 viven solo en
@@ -473,6 +487,88 @@ vista se remonta (DL-9). Todo sale de `sui/myGames.ts` y `hooks/useMyGames.ts`; 
 - **Seguimiento post-MVP:** mostrar en testnet el historial completo, más allá de la ventana, queda en **#51**
   (D-20261103-03: GraphQL u otro índice, con su medición).
 
+### Panel de la House (#14)
+
+`#/admin` ("Administrar House") es para el titular del `HouseCap`: muestra la configuración de la House y permite
+cambiar la comisión, cambiar los límites y retirar las comisiones con la máquina común. El enlace "Administrar House"
+del encabezado aparece **solo** cuando se sabe que la cuenta tiene el cap.
+
+- **Detección por tipo (D-1):** `fetchHouseCap` busca en el índice de dueños del nodo `listOwnedObjects({ owner, type:
+  <originalPackageId>::house::HouseCap, limit: 2, include: { content: true } })`, sin `houseCapId` en la config. La
+  **regla de certeza (H-1)** es la siguiente:
+  - "esta cuenta no tiene el cap" (`null`) **solo** con 0 objetos y la última página con `hasNextPage: false`;
+  - dos o más ⇒ `ReadDataError('invariant')`;
+  - si el tope de 3 pedidos (`HOUSE_CAP_MAX_PAGES`) o un cursor `null` cortan la búsqueda sin esa respuesta ⇒
+    `ReadDataError('incomplete')`, nunca `null`;
+  - los errores de red se relanzan tal cual y siguen la política común (DL-5: 3 intentos, "Reintentando…").
+
+  Medido en la localnet (TASK-1, S-1): el nodo 1.83 filtra por tipo exacto, y una cuenta sin cap recibe `[]` sin error.
+- **`CapKnowledge` (H-2):** `useHouseCap` da `unknown` mientras no hubo una lectura exitosa (cargando, reintentando o con
+  error) y `known` (con el cap o con `null`) desde la primera, aunque una relectura posterior falle. Sin
+  `placeholderData`: otra cuenta es otra clave y arranca `unknown`. La página se monta con `key={address}`, como "Mis
+  partidas". Estados de la página:
+
+  | Estado | Qué se ve |
+  |---|---|
+  | sin cuenta | "Conecta la wallet que tiene el HouseCap para administrar la House" (ninguna consulta) |
+  | `unknown` | solo `ReadState` ("Cargando…", "Reintentando… (intento n de m)" o el error con "Reintentar"); nunca "Sin permisos" |
+  | `known` + `null` | `.house-no-permission`: "Sin permisos: esta cuenta no tiene el HouseCap de esta House." y "Volver a comprobar" (deshabilitado mientras relee), sin datos de la House (P-1); el `ReadState` encima si relee o falla |
+  | `known` + cap | el panel, con el `ReadState` encima si una relectura falla: el panel **no** se desmonta (sus resultados siguen a la vista) |
+
+- **"Volver a comprobar":** el índice de dueños va detrás del store de objetos. En la localnet (TASK-1, S-2, 10
+  transferencias), `getObject` vio al dueño nuevo antes que el índice; el atraso del índice fue de 0 a 452 ms y,
+  respecto del fin de la CLI, ≤ 83 ms. En el smoke hicieron falta **0** "Volver a comprobar" tras recibir el cap. En
+  testnet no está medido: si el panel dice "Sin permisos" justo después de recibir el cap, el botón vuelve a buscar.
+- **Costo:** el encabezado y el panel observan la misma consulta del cap. Cada cuenta conectada cuesta 1
+  `ListOwnedObjects`, más una relectura al montar la página o el panel, "Actualizar", "Volver a comprobar" y las
+  invalidaciones de las acciones.
+- **Configuración (`.house-config`):** "Comisión: <bps> bps (<%>)", mínimo y máximo de apuesta, "Comisiones acumuladas",
+  "Versión de la House" (el campo `version` del objeto; la app no replica `house::VERSION`) y "Actualizar", que relee
+  la House y el cap. Para la House rige lo mismo que H-2: `ReadState` solo sin dato, y con dato el aviso va encima.
+- **Acciones** (`[data-house-action]`), cada una con validación espejo (cortesía: el contrato es la verdad), el resumen
+  "De X a Y" junto al botón (P-3: sin diálogo de confirmación) y su `TransactionStatus`:
+  - **Comisión** (`fee`): bps enteros 0..1000 con el % en vivo (" = 2.5 %"). El aviso fijo recuerda que **cada partida
+    copia la comisión al crearse** (D-20261030-06 §3): las ya creadas conservan la suya. Por eso cambiarla no es del todo
+    reversible.
+  - **Límites** (`limits`): mínimo y máximo en SUI, con errores por campo y del par (`0 < min <= max`). El aviso fijo
+    recuerda que solo se aplican al **crear** partidas: las pendientes no cambian.
+  - **Retiro** (`withdraw`): siempre **total** y siempre a la **cuenta que firma**, por construcción (N-2,
+    D-20261104-02 (5)): `build(sender)` arma `withdraw_fees` + `TransferObjects([Result 0], sender)`, sin campo de destino
+    ni monto parcial. Con 0 acumulado, el botón está deshabilitado y dice "No hay comisiones para retirar.". El monto que
+    se muestra al terminar es el del `FeesWithdrawn`, no lo leído antes.
+  - Los textos de éxito salen **solo** del evento de la transacción que confirmó el nodo (H-6, SEG-10), también en el
+    resultado adoptado de otra vista. Sin evento legible, se muestra un éxito honesto que remite a la configuración o a
+    la transacción.
+- **Campos con borrador (TASK-5b, SM-1 del smoke):** cada campo de comisión y de límites guarda solo lo que el admin
+  escribe y muestra `borrador ?? valor vigente`:
+  - un campo **sin editar** sigue a la House en cada render, así el panel nunca ofrece, con el botón habilitado, revertir
+    un cambio que la House ya tiene (pasaba al remontar el panel con la House en caché);
+  - los errores solo aparecen con un borrador;
+  - al **lanzar** la acción, los borradores se vacían: los campos muestran la House vigente (la de antes mientras corre y
+    la nueva cuando la invalidación la relee);
+  - **si la transacción falla**, el error queda en el bloque y el admin tiene que volver a escribir el valor;
+  - un campo editado conserva su texto aunque la House cambie, y el resumen compara contra la vigente.
+- **`precheck` común (H-3):** antes de la preflight, `checkHouseCapOwnership` lee el cap **por ID** con `getObject` (el
+  store de objetos, no el índice de dueños):
+  - si ya no es de la cuenta que firma, o el nodo dice que no existe (`notFound`/`deleted`), la acción corta **sin abrir
+    la wallet** con "Esta cuenta ya no tiene el HouseCap: no puede administrar la House." e invalida el `houseCap` de esa
+    cuenta;
+  - otro error de lectura se muestra como texto de red o como "No se pudo preparar la transacción: …".
+- **Límite (T4-15, V-11):** si el cap cambia de manos en los milisegundos entre el `precheck` y la preflight, la preflight
+  de una cuenta sin el cap falla con un `SimulationError` **sin** `executionError` (`INVALID_ARGUMENT`).
+  - El panel muestra "No se pudo preparar la transacción: …" con el **texto del nodo**, que incluye las direcciones del
+    dueño y del firmante ("Object … is owned by account address …, but given owner/signer address is …").
+  - No abre la wallet y no invalida nada. El siguiente intento lo corta el `precheck`.
+- **Solo por CLI (D-7, N-1):** `migrate` y `transfer_house_cap` no están en la app. Transferir el cap es irreversible y
+  tiene su checklist en `contracts/README.md`, "Qué pasa si se pierde el cap".
+- **Candado y avisos:** la misma máquina y la misma `useTxTarget` que en el resto de la app. Mientras corre una acción,
+  los tres botones están deshabilitados y el aviso "en curso" aparece solo para una transacción ajena (NIT-3 de #12,
+  cerrado). "Sin confirmar" muestra una sola alerta con "Ya la revisé".
+- **Medido en el smoke (localnet, burner, `sui` 1.83):**
+  - del clic al resultado: **0,86-1,08 s**;
+  - de "Confirmando en la red…" al resultado: **0,34-0,62 s**;
+  - cada acción hace 2 `SimulateTransaction` + 1 `ExecuteTransaction`.
+
 ### Fixtures de lectura
 
 `contracts/fixtures/game-reads.localnet.json` (5 variantes de `Game`, sus eventos y una página cruda de `ListEvents`,
@@ -484,6 +580,17 @@ aislada; solo acepta `http://127.0.0.1:9000`).
 con dos `MoveAbort` reales, entre ellas aceptaciones con cada ganador y sobre una invitación, y el texto Rust del abort)
 la usan los tests de `sui/`, `hooks/` y `components/`; se recaptura con
 `node app/scripts/capture-tx-fixtures.mjs`, con la misma guarda (`app/scripts/localnet-guard.mjs`).
+
+`contracts/fixtures/house-admin.localnet.json` (#14) la usan los tests de `sui/`, `hooks/` y `components/` del panel. Trae:
+- el listado real del `HouseCap` por tipo: `ADMIN`, una cuenta sin cap y `limit: 1`;
+- el `getObject` del cap;
+- 4 `SimulationError` de `house`/0, 1, 1, 2 y la preflight sin el cap (`SimulationError` sin `executionError`, V-11);
+- las tres transacciones de admin ejecutadas;
+- la House después del retiro.
+
+Se recaptura con `node app/scripts/capture-house-fixtures.mjs` (misma guarda), después de las transacciones por CLI que
+lista `contracts/README.md`, "Lectura desde la app". No se toca `game-tx.localnet.json`: el retiro la dejaría con la
+House en 0.
 
 ## Indicador de red
 
@@ -548,8 +655,11 @@ habilita ni se ofrece.
 
 ## Pendientes conocidos
 
-- El build de testnet pesa ≈ 901 kB (≈ 274 kB gzip; desde #11 entra el SDK de transacciones y desde #13 "Mis
-  partidas") y Vite avisa de un chunk mayor de 500 kB: el code-splitting queda para #15 (hosting).
+- El build de testnet pesa ≈ 917 kB (≈ 277 kB gzip; desde #11 entra el SDK de transacciones, desde #13 "Mis
+  partidas" y desde #14 el panel de la House) y Vite avisa de un chunk mayor de 500 kB: el code-splitting queda para #15
+  (hosting).
+- Panel de la House en testnet con la wallet del owner (cap en la wallet, comisión, límites, retiro): checklist en el
+  body de #17 (P-4, D-20261104-02 (4)).
 - `done` espera la relectura del lobby y de "Mis partidas" si están montados (DL-6, DL-7): con una red lenta o con
   muchas páginas cargadas, "Actualizando datos…" puede durar varios segundos (RM-12, H-4). Se mide en los smokes de
   #11, #12 y #13 (localnet) y en testnet en #17.
