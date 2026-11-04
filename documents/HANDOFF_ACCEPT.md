@@ -1,9 +1,31 @@
 # HANDOFF_ACCEPT
 > Plan: PLAN_ACCEPT v2 (MAYOR: APPROVE en la segunda ronda, 2026-11-03, con condición; `b853c51`) | Issue: #12 | Branch:
-> `feature/issue-12-accept-resolve` | Versión: v1.2 | Fecha: 2026-11-03
+> `feature/issue-12-accept-resolve` | Versión: v1.3 | Fecha: 2026-11-03
 
 ## Changelog
 
+- **v1.3 (2026-11-03)**: tras TASK-1 (revisión del MID: PASA; `documents/REPORTES_ACCEPT.md`). Cambian solo TASK-2,
+  TASK-4 (un texto), TASK-5 y el paso 6 del smoke; nada de TASK-3. Lo medido:
+  - **DL-10 sin acotar (S-2, S-6 bis):** ningún rechazo permanente llega con un código transitorio. La regla de
+    comandos tras `Random` y la selección de gas por saldo insuficiente llegan como `SimulationError` sin `executionError` con
+    `cause` `RpcError` **`INVALID_ARGUMENT`**; un saldo que alcanza el budget pero no la apuesta llega **con**
+    `executionError` `Unknown` ("InsufficientCoinBalance in command 0") y sin `cause`. Queda
+    `isPreflightNetworkCause(cause) = isTransientReadError(cause)`. T2-7, T2-8 y T3-14 suman esos casos.
+  - **Reserva (S-4):** budget de la preflight de aceptar **3474748** MIST con una moneda de gas y **4474748** con dos
+    (precio de gas 1000). `ACCEPT_GAS_RESERVE_MIST = 10_000_000n` (2 × 4474748 = 8949496, redondeado hacia arriba a
+    múltiplo de 0,005 SUI). Es cortesía: entre `bet + 4474748` y `bet + 10_000_000` la app marca "insuficiente" un saldo
+    que el nodo aceptaría (ventana ≤ 0,0055 SUI, la misma que asume crear). El texto dice "reserva para el gas", no que
+    el gas no alcance (TASK-4, paso 6 del smoke).
+  - **T2-6:** los aborts de aceptar se ubican en `game::assert_acceptable` (`location.functionName`); el mapeo por módulo
+    y código no cambia. `errors.test.ts` vuelve a la igualdad exacta (11 casos) y se renombra "has the 11 captured
+    cases": TASK-1 la había relajado a `arrayContaining` (Desviación 4).
+  - **R-3 abierto (S-5):** no se observó `ExecutionCancelledDueToRandomnessUnavailable` (aceptaciones a 5,8 s y 8,2 s del
+    arranque); no hay `runtimeCancelled` y DL-11 sigue con las dos formas de texto.
+  - **S-1, S-3:** el nodo simula con `Random`; la confirmación por el camino de la wallet tarda 0,6-1,4 s. Sin cambios.
+  - **TASK-5:** `app/README.md` (sección de fixtures) todavía dice "7 `SimulationError` … 5 transacciones": pasa a 11 y
+    9, con dos fallos ejecutados.
+  - **Nota del MID:** TASK-1 §3.4 (ajustar un test que dependa de la captura vieja) contradecía §4 ("NO tocar `app/src/`");
+    la contradicción era del handoff y la Desviación 4 del DEV se acepta.
 - **v1.2 (2026-11-03)**: MINOR-1 de la segunda revisión del MAYOR (APPROVE de v1.1, sin otra ronda; antes de
   TASK-3). La foto de montaje quedaba atada a la cuenta con la que se montó la vista: con B se crea una partida (`id` 2,
   `success`), se cambia a A y se monta el formulario (`maxId` de A: 0 o 1), se vuelve a B sin desmontar ⇒ se adoptaba la 2
@@ -120,13 +142,13 @@ git diff --exit-code -- Move.lock
 | DL-1 | `buildAcceptGameTx`: `splitCoins(gas, [bet])` + `accept_game(game, house, coin, tx.object.random())`, **último** comando; `bet` del `Game`, `houseId` de config |
 | DL-2 | Resultado = el único `GameResolved` de esa partida en la confirmación del nodo, con `acceptor` = la cuenta; si no, `success` con `value: null` |
 | DL-3 | Sin `precheck` en aceptar: la preflight valida estado, versión y House |
-| DL-4 | `acceptState` + `NOT_INVITED_HINT` en `sui/gameActions.ts`; reserva = budget medido × ≥ 2 (provisional 0,015 SUI) en `sui/acceptGame.ts`; `acceptBalanceCheck` |
+| DL-4 | `acceptState` + `NOT_INVITED_HINT` en `sui/gameActions.ts`; reserva = budget medido × ≥ 2 = **0,01 SUI** (v1.3, S-4) en `sui/acceptGame.ts`; `acceptBalanceCheck` |
 | DL-5 | SEG-10: textos neutros durante las etapas; resultado solo con el `success` del nodo; nota de la vista previa de la wallet; tokens de resultado |
 | DL-6 | Invalidación de aceptar: `reset` `lobby`; `invalidate` `game`, `balance`, `house` |
 | DL-7 | Candado global por cuenta en el `MutationCache` (`isMutating` + `mutateAsync` en el mismo tick); `useIsMutating`; `retry: false`, `gcTime: Infinity`, `networkMode: 'always'` |
 | DL-8 | Una vista, una fuente por objetivo: `useTxTarget` (`busy`, `notice`, `unconfirmed`, `acknowledge`), adopción. Precisado por M-1, M-2, M-4 y M-5 de abajo |
 | DL-9 | NIT-2: error de la wallet sin digest con `MoveAbort` ⇒ invalidar la acción |
-| DL-10 | Preflight: `SimulationError` sin `executionError` con `cause` de red ⇒ `PreflightNetworkError`; sin abort ni `executionError` ⇒ "No se pudo preparar…". Criterio de "red" sujeto a S-2/S-6. Se declara en el PR como corrección de la máquina de #11 |
+| DL-10 | Preflight: `SimulationError` sin `executionError` con `cause` de red ⇒ `PreflightNetworkError`; sin abort ni `executionError` ⇒ "No se pudo preparar…". Criterio de "red" = `isTransientReadError(cause)`, confirmado por S-2/S-6 (v1.3). Se declara en el PR como corrección de la máquina de #11 |
 | DL-11 | Cancelaciones del runtime con un texto neutro respecto de la acción y "intenta de nuevo" |
 | DL-12 | "Resultado para ti: ganaste/perdiste" en el detalle para creador y aceptante |
 | DL-13 | Hooks de acción atados a la vista; `execute` sin objetivo; `gameId` normalizado en la clave |
@@ -193,9 +215,9 @@ Rutas relativas a `<repo>/node_modules/`; `@mysten/sui` 2.37.0, `@mysten/dapp-ki
 | `sui/transactions/game.ts` | suma `buildAcceptGameTx({ packageId, houseId, gameId, bet: bigint }): Transaction`; `moveTarget` acepta `'accept_game'` |
 | `sui/gameTx.ts` | suma `parseResolvedGame(result, { originalPackageId, gameId, acceptor }): GameResolvedEvent \| null` |
 | `sui/gameActions.ts` | suma `type AcceptState = 'not_pending' \| 'no_account' \| 'creator' \| 'not_invited' \| 'available'`; `acceptState(game: Pick<Game, 'creator' \| 'opponent' \| 'state'>, address: string \| null): AcceptState` (orden de M-3); `NOT_INVITED_HINT: string` (= `ABORT_MESSAGES.game[5]`) |
-| `sui/acceptGame.ts` (nuevo) | `ACCEPT_GAS_RESERVE_MIST: bigint` (TASK-1 fija el valor; provisional `15_000_000n`); `acceptBalanceCheck(balance: bigint \| null, bet: bigint): 'ok' \| 'insufficient' \| 'unknown'`; `wonBy(event: Pick<GameResolvedEvent, 'winner'>, address: string): boolean`; `playerResult(game: Pick<Game, 'creator' \| 'state'>, address: string \| null): 'won' \| 'lost' \| null` |
+| `sui/acceptGame.ts` (nuevo) | `ACCEPT_GAS_RESERVE_MIST = 10_000_000n` (v1.3, S-4); `acceptBalanceCheck(balance: bigint \| null, bet: bigint): 'ok' \| 'insufficient' \| 'unknown'`; `wonBy(event: Pick<GameResolvedEvent, 'winner'>, address: string): boolean`; `playerResult(game: Pick<Game, 'creator' \| 'state'>, address: string \| null): 'won' \| 'lost' \| null` |
 | `sui/errors.ts` | suma `runtimeCancellation(source: unknown): 'randomness' \| 'congestion' \| null` y su texto en `transactionErrorMessage` (después del abort, antes del genérico "La red no ejecutó…"); `RUNTIME_CANCELLED_MESSAGES` |
-| `sui/execution.ts` | `preflightTransaction` con DL-10 (misma firma); suma `isPreflightNetworkCause(cause: unknown): boolean` (criterio fijado tras S-2/S-6) |
+| `sui/execution.ts` | `preflightTransaction` con DL-10 (misma firma); suma `isPreflightNetworkCause(cause: unknown): boolean` (= `isTransientReadError(cause)`, v1.3) |
 | `hooks/queryKeys.ts` | suma `txAccount(network, address: string \| null)` = `['sui', red, 'tx', normalizeSuiAddress(address) \| 'none']` y `txTarget(network, address, target: TxTarget)` = `[...txAccount, 'create']` o `[...txAccount, 'game', normalizeSuiObjectId(gameId)]` (claves de **mutación**) |
 | `hooks/txInvalidation.ts` | `TxAction` suma `{ kind: 'accept'; gameId: string }`; fila de aceptar (TASK-4) |
 | `hooks/txSession.ts` (nuevo, puro, sin React) | `type TxTarget = { kind: 'create' } \| { kind: 'game'; gameId: string }`; `type TxView = { target: TxTarget; viewId: number; key: QueryKey; accountKey: QueryKey; targetHash: string }`; `type TxVariables<T> = { input: ExecuteInput<T>; viewId: number; runId: number; action: TxAction }`; `type TxValueByAction = { create: CreateGameValue; cancel: bigint \| null; reject: bigint \| null; accept: GameResolvedEvent \| null }` (con `CreateGameValue` movido aquí y reexportado desde `useCreateGame.ts`); `type AdoptedTx` (unión por acción de `{ action; outcome: TxResult<valor> }`); `type TxEntry = { id: number; status: MutationStatus; viewId: number \| null; runId: number \| null; action: TxAction \| null; sameTarget: boolean; outcome: TxOutcome<unknown> \| null }`; `toTxEntry(view): (m: Mutation) => TxEntry` (la misma proyección para el `select` de `useMutationState` y para la foto de montaje); `type MountSnapshot = { maxId: number; pendingIds: ReadonlySet<number> }`; `mountSnapshot(mutations: readonly Pick<Mutation, 'mutationId' \| 'state'>[]): MountSnapshot` (todo el `MutationCache`, v1.2); `deriveTargetState({ entries, viewId, mount }): { inFlightForeign: boolean; notice: TxNotice \| null; unconfirmed: { digest: string; mutationId: number } \| null }` con `TxNotice = { kind: 'in_flight' } \| { kind: 'adopted'; adopted: AdoptedTx }` |
@@ -324,8 +346,10 @@ que los hooks y componentes no decidan nada y todo esté probado contra la fixtu
    parsea con `parseOrNull(parseGameResolved)`, se queda con los de `gameId` (`sameAddress`); exactamente uno y con
    `sameAddress(event.acceptor, acceptor)` ⇒ el evento; si no, `null`.
 3. **`acceptState`** y **`NOT_INVITED_HINT`** en `sui/gameActions.ts` (orden de M-3; `sameAddress` para creador e invitado).
-4. **`sui/acceptGame.ts`:** `ACCEPT_GAS_RESERVE_MIST` con el valor de TASK-1 y un JSDoc que cite la medición (budget de
-   S-4, margen y que el budget escala con el precio de gas: se revisa en #17); `acceptBalanceCheck` (`null` ⇒ `'unknown'`;
+4. **`sui/acceptGame.ts`:** `ACCEPT_GAS_RESERVE_MIST = 10_000_000n` con un JSDoc que cite la medición (v1.3: budget de
+   la preflight de aceptar 3474748 MIST con una moneda de gas y 4474748 con dos, precio de gas 1000; margen 2×, redondeado
+   hacia arriba a 0,005 SUI; cortesía: el nodo y la wallet deciden; el budget escala con el precio de gas: se revisa en
+   #17); `acceptBalanceCheck` (`null` ⇒ `'unknown'`;
    `balance < bet + reserva` ⇒ `'insufficient'`); `wonBy`; `playerResult` (`null` si no es `resolved` o la cuenta no es
    creador ni aceptante).
 5. **`errors.ts`:** `runtimeCancellation(source)`: sobre el `ExecutionError` que encuentre `findExecutionError`,
@@ -338,8 +362,8 @@ que los hooks y componentes no decidan nada y todo esté probado contra la fixtu
      compartido): no cambió nada salvo el costo de red; intenta de nuevo en unos segundos".
 6. **`execution.ts`** (DL-10): en el `catch` de `preflightTransaction`, antes de relanzar un `SimulationError`: si
    `error.executionError === undefined && isPreflightNetworkCause(error.cause)`, lanzar `new PreflightNetworkError({ cause:
-   error })`. `isPreflightNetworkCause(cause)` = `isTransientReadError(cause)` salvo que TASK-1 obligue a acotarlo (lo
-   fija el handoff v1.1). JSDoc con V-3.
+   error })`. `isPreflightNetworkCause(cause)` = `isTransientReadError(cause)` (v1.3: S-2 y S-6 bis dieron
+   `INVALID_ARGUMENT`, fuera de `TRANSIENT_RPC_CODES`; no se acota). JSDoc con V-3.
 
 ### 4. Archivos a tocar / NO tocar
 - **Tocar:** `app/src/sui/transactions/game.ts`, `gameTx.ts`, `gameActions.ts`, `acceptGame.ts` (nuevo), `errors.ts`,
@@ -354,9 +378,9 @@ que los hooks y componentes no decidan nada y todo esté probado contra la fixtu
 | T2-3 | `gameActions.test.ts` | `acceptState`: abierta y otra cuenta ⇒ `available`; invitación al invitado (también en otro formato de dirección) ⇒ `available`; invitación y tercero ⇒ `not_invited`; creador (abierta e invitación, otro formato) ⇒ `creator`; sin cuenta y `pending` ⇒ `no_account` (también sobre una invitación, nunca `not_invited`) |
 | T2-4 | `gameActions.test.ts` | **M-3:** `cancelled` y `resolved` ⇒ `not_pending` **con y sin cuenta**; `NOT_INVITED_HINT === ABORT_MESSAGES.game[5]` |
 | T2-5 | `acceptGame.test.ts` | `acceptBalanceCheck`: `bet + reserva` justo ⇒ `ok`, uno menos ⇒ `insufficient`, `null` ⇒ `unknown`; `wonBy`; `playerResult`: creador ganó/perdió, aceptante ganó/perdió (direcciones en otro formato), tercero ⇒ `null`, `pending`/`cancelled` ⇒ `null` |
-| T2-6 | `errors.test.ts` | los 4 `SimulationError` reales de aceptar ⇒ mensaje + sufijo (`acceptNotInvited` ⇒ `game`/5, D-20261103-02); `acceptNotPendingExecuted` por gRPC (`status.error`) y por `extractStatusFromEffectsBcs` ⇒ `game`/4 |
-| T2-7 | `errors.test.ts` | `CongestedObjects` ⇒ texto de congestión; `Unknown` con `'ExecutionCancelledDueToRandomnessUnavailable'`, con el texto Rust (otra capitalización) y con `runtimeCancelled` si existe ⇒ texto de aleatoriedad; el mismo texto para un fallo de crear y uno de aceptar (MINOR-7 del plan); otro `Unknown` ⇒ "La red no ejecutó…"; un abort propio gana sobre todo |
-| T2-8 | `execution.test.ts` | `build` rechaza con `new SimulationError(msg, { cause: new RpcError(msg, 'UNAVAILABLE') })` ⇒ `PreflightNetworkError` con `cause`; con los `cause.code` medidos en S-2 y S-6 ⇒ el `SimulationError` tal cual; sin `cause` ⇒ tal cual; con `executionError` ⇒ tal cual |
+| T2-6 | `errors.test.ts` | los 4 `SimulationError` reales de aceptar ⇒ mensaje + sufijo (`acceptNotInvited` ⇒ `game`/5, D-20261103-02; los cuatro con `location.functionName` `assert_acceptable`); `acceptNotPendingExecuted` por gRPC (`status.error`) y por `extractStatusFromEffectsBcs` ⇒ `game`/4. **v1.3:** `CASES` suma los 4 casos y el test de la lista vuelve a `toEqual` exacto con los 11 nombres, renombrado "has the 11 captured cases" (deshace el `arrayContaining` de TASK-1) |
+| T2-7 | `errors.test.ts` | `CongestedObjects` ⇒ texto de congestión; `Unknown` con `'ExecutionCancelledDueToRandomnessUnavailable'`, con el texto Rust (otra capitalización) y con `runtimeCancelled` si existe ⇒ texto de aleatoriedad; el mismo texto para un fallo de crear y uno de aceptar (MINOR-7 del plan); otro `Unknown` ⇒ "La red no ejecutó…" (v1.3: incluido `Unknown` "InsufficientCoinBalance in command 0" de S-6 bis, que **no** es una cancelación del runtime); un abort propio gana sobre todo |
+| T2-8 | `execution.test.ts` | `build` rechaza con `new SimulationError(msg, { cause: new RpcError(msg, 'UNAVAILABLE') })` ⇒ `PreflightNetworkError` con `cause`; con los casos medidos (v1.3): el rechazo de la regla de `Random` y el de selección de gas por saldo insuficiente, ambos con `cause` `RpcError` `INVALID_ARGUMENT` (mensajes reales de S-2 y S-6 bis) ⇒ el `SimulationError` tal cual; sin `cause` ⇒ tal cual; con `executionError` ⇒ tal cual |
 
 ### 6. Smoke
 No aplica (capa pura).
@@ -464,7 +488,7 @@ partidas ni pagar gas de más por error. **No entrega:** aceptar (TASK-4).
 | T3-11 | **M-4:** dos montajes sucesivos en la misma posición del árbol dan `viewId` distintos (la mutación del primero es ajena para el segundo); ningún uso de `crypto.randomUUID` ni `useId` (grep en el reporte) |
 | T3-12 | **`networkMode`:** con `onlineManager.setOnline(false)`, `execute` ⇒ `failure` con `PREFLIGHT_NETWORK_MESSAGE` (preflight mockeada rechazando con `PreflightNetworkError`) y `busy` vuelve a `false`; restaurar `onlineManager` al final |
 | T3-13 | **NIT-2:** la wallet lanza sin digest un `Error` con el texto `MoveAbort` del SDK (de la fixture) ⇒ `failure` mapeado **y** `resetQueries`/`invalidateQueries` de la acción; sin abort ⇒ ninguna invalidación |
-| T3-14 | **DL-10:** `SimulationError` sin `executionError` ⇒ "No se pudo preparar la transacción: …" y la wallet no se llama |
+| T3-14 | **DL-10:** `SimulationError` sin `executionError` ⇒ "No se pudo preparar la transacción: …" y la wallet no se llama (v1.3: con el mensaje real de S-6 bis, "Unable to perform gas selection due to insufficient SUI balance …", y con `cause` `INVALID_ARGUMENT`) |
 | T3-15 | **Regresión de #11 (v1.1, MINOR-1):** los tests existentes de `useExecuteTransaction`, `useCreateGame`, `useCancelGame`, `useRejectGame`, `CreateGameForm` y `GameActions` siguen, con **solo** esta migración permitida: (1) las firmas reciben `view` (helper de test opcional en `app/src/test/txHarness.tsx`); (2) una aserción `outcome` = `{ kind: 'unconfirmed', digest }` del hook (p. ej. `useExecuteTransaction.test.tsx:341-359`) pasa a `useTxTarget().unconfirmed.digest` = ese digest **y** el `outcome` del hook en `null`; (3) `isBusy` (`useExecuteTransaction.test.tsx:173, 184, 220, 240`; mocks de `CreateGameForm.test.tsx:52-54, 195` y `GameActions.test.tsx:27, 93`) pasa a `useTxTarget().busy`; (4) el mock con `outcome` `unconfirmed` y `reset` del formulario (`CreateGameForm.test.tsx:233-243`) pasa a mockear `useTxTarget().unconfirmed` y `acknowledge`. Todo lo demás (etapas, `success`/`failure` con mensaje, digest y costo, invalidaciones exactas, `interpret` que lanza ⇒ `value: null`, preflight, precheck de la House) se conserva **sin cambiar la aserción**. El reporte lista cada aserción migrada con `archivo:línea` antes/después |
 | T3-16 | `txSession.test.ts`: `deriveTargetState` con tablas de `entries` (cada regla de §3.2); `mountSnapshot` con mutaciones de dos cuentas y dos objetivos ⇒ `maxId` y `pendingIds` globales; **v1.2:** foto tomada con una mutación terminada de B (`id` 2) en el caché, derivación con la clave de B ⇒ `notice` `null`; foto con una de B `pending` (`id` 2) que después termina ⇒ `adopted` |
 | T3-17 | `CreateGameForm`: bloqueado por un `unconfirmed` de crear también tras remontar con el mismo `QueryClient` (una alerta, "Ya la revisé: crear otra partida" desbloquea); bloqueado con el texto de `in_flight` por una transacción de cancelar en curso; un crear adoptado `success` con `created` navega (M-2 (b)); **v1.2 (cambio de cuenta sin desmontar):** con la cuenta B se crea una partida (`success`, `created`); cambio a A y montaje del formulario; vuelta a B sin desmontar ⇒ `notice` `null` y **no** navega |
@@ -514,7 +538,7 @@ un resultado antes de tiempo. **No entrega:** docs (TASK-5).
      transacción (50 % cada uno) y pagas su gas." y "Si tu wallet muestra una vista previa con un ganador o un cambio de
      saldo, es una simulación: el sorteo real ocurre cuando la red ejecuta la transacción."; `acceptBalanceCheck`:
      `insufficient` ⇒ botón deshabilitado + "Saldo insuficiente: necesitas `<bet>` SUI de apuesta más ≈ `<reserva>` SUI
-     para el gas"; `unknown` ⇒ habilitado + "No se pudo leer tu saldo: no se verificó si alcanza (la wallet lo hará al
+     de reserva para el gas" (v1.3); `unknown` ⇒ habilitado + "No se pudo leer tu saldo: no se verificó si alcanza (la wallet lo hará al
      firmar)"; botón "Aceptar" deshabilitado también con `busy || unconfirmed !== null`;
    - resultado (`TransactionStatus` de aceptar, `successText`): `value` con `wonBy(value, address)` ⇒ "¡Ganaste!
      Recibiste `<payout>` SUI (pozo `<pot>` SUI − comisión `<fee>` SUI)"; si no ⇒ "Perdiste: ganó quien creó la partida y
@@ -577,7 +601,8 @@ conocidos"), `contracts/README.md` ("Cancelaciones del runtime", "Lectura desde 
   cuenta, `networkMode: 'always'`, "sin confirmar" por objetivo durante la carga de la página, una alerta por vista,
   adopción (y cuándo se descarta), NIT-2, DL-10, cancelaciones del runtime, fila de aceptar en la tabla de invalidación;
   sección "Aceptar y resultado" con los textos de DL-5 y la nota de la vista previa de la wallet; **límite conocido R-5**
-  con el texto de §1; `ACCEPT_GAS_RESERVE_MIST` con su medición.
+  con el texto de §1; `ACCEPT_GAS_RESERVE_MIST` con su medición; en "Fixtures de lectura", `game-tx.localnet.json` pasa a
+  "11 `SimulationError` reales, 9 transacciones ejecutadas con dos `MoveAbort` reales" (#11 y #12; v1.3).
 - **`contracts/README.md`:** "Cancelaciones del runtime" → implementado (texto de la app); la fixture y su recaptura (si
   TASK-1 ya lo hizo, solo se revisa).
 - **`agents.md` §2:** la línea de `contracts/fixtures/` (`game-tx.localnet.json` incluye aceptar).
@@ -660,7 +685,7 @@ completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nu
 | 3 | DEV: `vite` dev (`VITE_SUI_NETWORK=localnet`, `127.0.0.1:5173`, `vite.pid`) y Chrome (`chrome.pid`); 🌐 `T1`, `T2`, `T3` en `http://127.0.0.1:5173/` con `newWindow: true` y `Network.enable` | 200; CDP solo en 127.0.0.1; tres ventanas visibles (`document.visibilityState === 'visible'` en las tres) | | ⏳ |
 | 4 | 🌐 Conectar `X` en `T1` e `Y` en `T2` (`internal-button` del kit ⇒ "Unsafe Burner Wallet"); direcciones del `title` de `.account-badge` a `ids.env`; DEV: `PRE act_as "$A" && suic ptb --split-coins gas "[2000000000]" --assign c --transfer-objects "[c]" @$X` (y `@$Y`); 🌐 `#/nada` → `#/` | saldos 2 SUI en el formulario de `T1` y `T2`; mismas direcciones (sin recarga) | | ⏳ |
 | 5 | 🌐 `T1` crea `G1` abierta de 0,01 (ID a `ids.env`). `T3` **sin conectar**: `location.hash = '#/game/<G1>'`. Salvedad: si el kit conecta `T3` solo a una burner nueva (sesión guardada del mismo origen), se anota y se desconecta antes de comprobar. Después conectar `Z` en `T3` y DEV fondea `Z` con **5000000** MIST | `T3` sin cuenta: "Conecta tu wallet para aceptar la partida, cancelarla si es tuya o rechazarla si te invitaron", sin botones ni "Esta invitación es para otra dirección."; `Z` con 0,005 SUI | | ⏳ |
-| 6 | 🌐 `#/game/<G1>` en las tres; contar pedidos | `T1`: sin "Aceptar" (sí "Cancelar"); `T2`: "Aceptar" habilitado, "Apuestas 0.01 SUI, igual que el creador…" y la nota de la vista previa; `T3`: "Aceptar" **deshabilitado** con "Saldo insuficiente: necesitas 0.01 SUI de apuesta más ≈ `<reserva>` SUI para el gas"; **cero** `SimulateTransaction` | | ⏳ |
+| 6 | 🌐 `#/game/<G1>` en las tres; contar pedidos | `T1`: sin "Aceptar" (sí "Cancelar"); `T2`: "Aceptar" habilitado, "Apuestas 0.01 SUI, igual que el creador…" y la nota de la vista previa; `T3`: "Aceptar" **deshabilitado** con "Saldo insuficiente: necesitas 0.01 SUI de apuesta más ≈ 0.01 SUI de reserva para el gas"; **cero** `SimulateTransaction` | | ⏳ |
 | 7 | 🌐 `T2`: observador; click en "Aceptar". DEV: `suic tx-block <digest> --json`; `suic balance $X` y `$Y` (antes: anotados en el paso 6); `suic object $HOUSE --json` (`fees_collected` antes y después). **Plan B:** si sale el texto de DL-11 de aleatoriedad, se anota (prueba real de DL-11), `G1` sigue "Abierta" y se reintenta con el mismo botón | etapas en orden; **ningún token** de resultado en `.tx-status`/`.game-actions` durante las tres primeras etapas (`window.__txLog`); después "¡Ganaste! Recibiste 0.0195 SUI (pozo 0.02 SUI − comisión 0.0005 SUI)" o "Perdiste: ganó quien creó la partida y recibió 0.0195 SUI (…)" + "Transacción …" + "Costo de red"; 2 `SimulateTransaction` + 1 `ExecuteTransaction`. DEV: `GameResolved` `pot` 20000000, `fee` 500000, `payout` 19500000; Δ`Y` = (ganó ? 19500000 : 0) − 10000000 − costo; Δ`X` = (ganó ? 19500000 : 0); Δ`fees_collected` = 500000; latencias anotadas | | ⏳ |
 | 8 | 🌐 `T1`: `#/nada` → `#/game/<G1>`; `T2` en el detalle; `T2`: `#/` | `T1` y `T2`: "Resuelta", mismo ganador y montos; "Resultado para ti" coherente con el paso 7 en cada una; `G1` fuera del lobby de `T2` sin "Actualizar" | | ⏳ |
 | 9 | 🌐 `T1` crea `G2` de 0,02 invitando a `Y`. `T3`: `#/game/<G2>` por URL. `T2`: `#/game/<G2>` | `T3`: sin "Aceptar", con "Esta invitación es para otra dirección." (D-20261103-02); `T2`: "Aceptar" y "Rechazar" | | ⏳ |
@@ -710,4 +735,4 @@ El MID propone el body del PR con `Closes #12` y:
 - pendientes: #17 para la vista previa de una extensión, R-5, la latencia en testnet y la reserva de gas con el precio
   de testnet.
 
-Mensaje propuesto para esta versión: `docs: bind the mount snapshot to the whole mutation cache, handoff v1.2 (#12)`.
+Mensaje propuesto para esta versión: `docs: update #12 handoff after TASK-1 findings, v1.3 (#12)`.
