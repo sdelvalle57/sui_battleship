@@ -118,9 +118,8 @@ cap (N-1): `transfer_house_cap` sigue siendo solo por CLI, igual que `migrate`. 
 - [ ] Si el destino es una wallet de navegador nueva, primero se conecta en la app y se toma su dirección. Después de
   transferir, `printf 'n\n' | SUI_CONFIG_DIR=<su dir> sui client object <HOUSE_CAP_ID> --json` muestra el dueño nuevo, y en `#/admin` aparece el panel
   (si dice "Sin permisos", "Volver a comprobar": el índice puede ir unos cientos de ms atrás).
-- [ ] La dirección publicadora también tiene el `UpgradeCap`: importar su clave en una wallet de navegador va contra
-  D-20261102-03. Lo recomendado es transferir el `HouseCap` a la wallet del panel y dejar la publicadora fuera del
-  navegador.
+- [ ] La dirección publicadora también tiene el `UpgradeCap` y el `Publisher`: importarla en una wallet de navegador
+  los expone a la extensión; la alternativa es `transfer_house_cap` a la wallet del panel. Decisión del owner (N-3).
 
 ### Fee por defecto 0 (D-20261030-11)
 
