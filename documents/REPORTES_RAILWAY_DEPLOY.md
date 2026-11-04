@@ -898,3 +898,330 @@ Refs #15
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+## TASK-5
+
+## Task completado: HANDOFF_RAILWAY_DEPLOY — TASK-5 (documentación)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-15-pages-deploy` @ `f15d820` (handoff v1.3), sin commits del DEV.
+
+### Archivos modificados/creados
+- `app/README.md` (+170/−2).
+- `agents.md` (+22/−6).
+- `documents/STATUS.md` (+26/−4).
+
+### Qué se implementó (3 líneas máx)
+**`app/README.md`:**
+- Sección nueva "Despliegue (Railway)" después de "Testnet". Cubre la imagen, la guarda de #8 con los mensajes literales, la lista blanca, la tabla de cabeceras y la CSP con el porqué de cada origen, y sin COOP por el popup de Slush.
+- También documenta:
+  - cómo agregar un origen a la CSP, incluido el ícono remoto de Slush, que pasa al smoke B;
+  - el fallback a `Report-Only`;
+  - `check-deploy-image.sh`: N1, N2a/N2b y N3, P1-P13 y la limpieza por línea base;
+  - el job `deploy-image`, que no es requerido;
+  - actionlint con `-no-color`;
+  - el criterio DL-8: cuenta la versión, no el digest;
+  - el favicon;
+  - "URL pública: se completa después de #8".
+- "Origen del build publicado" ahora dice que la imagen excluye `localnet.json` por construcción.
+- En "Pendientes conocidos", "→ #15" pasa a **#58**.
+
+**`agents.md`:**
+- §2: el árbol y la frase del layout suman `Dockerfile`, `.dockerignore`, `app/Caddyfile`, `app/public/` y `check-deploy-image.sh`.
+- §3 (App): el job `deploy-image` y el comando local, y que el job no condiciona el merge.
+- §12: el texto literal del handoff.
+
+**`documents/STATUS.md`:**
+- 4 filas de baseline nuevas: TASK-1, TASK-2, TASK-4 (run 41802734452) y TASK-5.
+- Fila del ciclo #15, con TASK-3 y TASK-6 pendientes.
+- Checklist del owner resumido en 10 pasos, con referencia a la §9 del plan.
+- Las filas históricas que antes eran `:49, :76, :82, :88` (ahora `:53, :80, :86, :92`) quedan anotadas con "(→ #58)", sin reescribirlas.
+- #58 entra en "Siguiente" (post-MVP) y en los abiertos.
+
+### Tests y gates (output pegado, por área tocada)
+- **Agregados/modificados:** ninguno.
+- **Gates:** solo cambian docs, así que no corrí ninguno (indicación del orquestador). `git diff --stat -- contracts/ documents/DECISIONES.md documents/PLAN_RAILWAY_DEPLOY.md | wc -l` da 0.
+- **Tablas de contrato / `app/src/sui/`:** no aplica.
+
+**Verificaciones de §5:**
+
+1. **Rutas personales:** `git diff | grep -cE '/home/|/Users/|/tmp/claude'` da **0**.
+2. **Claves:** el grep de `suiprivkey|PRIVATE KEY|mnemonic|ghp_|github_pat_|RAILWAY_TOKEN=` sobre las líneas añadidas da **0**. El único hex de 40-64 es el digest público de actionlint (`b1934ee5…5667`), en el comando documentado del README.
+3. **Referencias:**
+   - Existen `app/src/sui/networks.ts` (con `fullnode.testnet.sui.io`), `app/src/sui/config.ts`, `app/public/favicon.svg`, `app/Caddyfile`, `app/scripts/check-deploy-image.sh`, `Dockerfile`, `.dockerignore`, `.github/workflows/ci.yml`, `contracts/scripts/publish.mjs` y `documents/PLAN_RAILWAY_DEPLOY.md` (§9 en la línea 582, DL-8 y DL-11).
+   - `.npmrc:3` tiene `min-release-age=7`.
+   - `registerSlushWallet` está en `@mysten/slush-wallet`.
+   - Con `gh`: `#58 OPEN [App] Medir y aplicar code-splitting del bundle de testnet (post-MVP)`, `PR #57 OPEN` y `run success f146097`.
+   - Excepción: D-20261104-01 no está en el `DECISIONES.md` de esta branch, sino en la de #14 (ver Riesgos).
+4. **Mensajes literales:**
+   - El mensaje de la guarda está byte a byte igual en `Dockerfile` (1) y en `app/README.md` (1).
+   - `1 despliegue(s) válidos y coherentes con Published.toml`, `deployments incoherentes:` y `≠ upgrade-capability de Published.toml` coinciden con `publish.mjs` y `deployment.mjs` de #48.
+   - `.nvmrc sin versión válida` está en el `publish.mjs` de #48.
+   - `OK (negativo): …` coincide con el script.
+   - La CSP del README es idéntica a la que extrae `sed` del Caddyfile.
+   - Los valores de `Permissions-Policy`, HSTS, `immutable` y `encode zstd gzip` coinciden con el Caddyfile.
+
+`git diff --check` no encuentra espacios finales.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica: son docs.
+
+### Desviaciones del handoff
+1. **"#N" ahora es #58.**
+   - Qué cambió: en `app/README.md` y `STATUS.md` uso #58 en lugar del `#N` literal.
+   - Por qué: el orquestador avisó que el issue ya existe.
+   - Verificación extra: `gh issue view 58`.
+2. **Las filas anotadas cambiaron de número.**
+   - Qué cambió: las filas de `STATUS.md` que el handoff cita como `:49, :76, :82, :88` ahora son `:53, :80, :86, :92`.
+   - Por qué: las 4 filas de baseline nuevas van arriba en la tabla. Son las mismas 4 filas y solo se les agregó "(→ #58)".
+3. **Corrección propia en la tabla de cabeceras del README.**
+   - Qué cambió: el porqué de `Referrer-Policy` dice "los pedidos a terceros no llevan el origen ni la ruta".
+   - Por qué: un primer borrador mencionaba el `#/game/<id>`, pero el fragmento nunca viaja en el Referer.
+
+### Riesgos / pendientes
+- **D-20261104-01:** el texto de §12 que pide el handoff la cita, pero esa decisión llega a `master` recién con el merge de #14. Si #15 mergea antes, la referencia queda colgada hasta entonces. El handoff ya lo prevé.
+- **TASK-3 sigue pendiente** (espera la localnet de #14). Su fila de baseline se agrega a STATUS cuando se reporte. El README ya la marca como pendiente en `style-src`.
+- **Housekeeping:** el checklist del owner en STATUS remite a la §9 del plan con `git show <merge>:documents/PLAN_RAILWAY_DEPLOY.md`. El orquestador completa el SHA del merge en ese momento.
+
+### Documentación
+- **READMEs y `agents.md` actualizados:** sí. Este task es la documentación de #15 (PROY-20).
+- **Snippet propuesto para `documents/STATUS.md`:** ya está aplicado. Es la fila "docs @ `feature/issue-15-pages-deploy` (TASK-5 de #15)" de Baselines, junto con la fila del ciclo #15.
+=====
+
+## Revisión TASK-5: NO PASA (2 MINOR de docs, corrección corta)
+
+> Revisor: MID | Fecha: 2026-11-04 | Contra: HANDOFF_RAILWAY_DEPLOY v1.3 (`f15d820`), TASK-5 §3-§7, y el diff real sin
+> commitear de `app/README.md`, `agents.md` y `documents/STATUS.md`. Sin gates (docs; D-20261030-02).
+
+### Coherencia con el código (verificada por programa)
+- **CSP:** la del README coincide carácter por carácter con la línea `Content-Security-Policy` de `app/Caddyfile`
+  (`grep -cF` = 1).
+- **Mensaje de la guarda:** el bloque del README es idéntico al literal del `Dockerfile`.
+- **Mensajes de `check` (#48)** (`1 despliegue(s) válidos…`, `deployments incoherentes:`, `.nvmrc sin versión válida`)
+  y **N3** (`OK (negativo): …`): idénticos a los de `publish.mjs` y del script.
+- **Cabeceras:** `nosniff`, `DENY`, `no-referrer`, `Permissions-Policy`, HSTS e `immutable` coinciden con el
+  Caddyfile; también `-Server`, el matcher `file` y que no haya fallback ni COOP.
+- **Script:** N1/N2a/N2b/N3 y P1-P13 coinciden con el script de `f146097` (P5 = 5 cabeceras más `Cache-Control`), y
+  los códigos 0/1/2 también.
+- **Comandos:** el actionlint lleva `-no-color` y el archivo explícito (v1.3). La limpieza de Docker es por línea base
+  y sin `prune`.
+- **DL-8:** se mide por la versión y no por el digest (v1.2), con el ejemplo de Caddy.
+- **`agents.md`:** §2 layout con los 5 archivos nuevos (`app/public/`, `Caddyfile`, `check-deploy-image.sh`,
+  `Dockerfile`, `.dockerignore`); §3, el job `deploy-image` como no requerido, con el comando local `. 8090`; §12,
+  Railway con D-20261104-01/-03. Es coherente con `ci.yml` y con el plan.
+- **STATUS:**
+  - las 4 baselines (TASK-1/2/4/5) están con SHAs y run reales;
+  - la fila del ciclo #15 marca 🚧 y sus pendientes;
+  - "Siguiente" suma #58;
+  - las 4 filas históricas están **anotadas** "(→ #58)", sin reescribirlas (sugerencia 6). "Renumeradas" (desviación
+    2) quiere decir solo que se corrieron de línea porque arriba se agregaron las baselines. Lo confirmé en el diff.
+- **Rutas personales:** ninguna. `grep '/home/|/Users/|/tmp/claude'` sobre los tres archivos solo encuentra el
+  placeholder previo `<SMOKE_DIR>/home/.sui` de `agents.md:144`.
+
+### Desviaciones declaradas
+| # | Desviación | Dictamen |
+|---|---|---|
+| 1 | `#58` en lugar de `#N` | ✅ Es lo que pedía el handoff, "su número reemplaza #N"; el issue existe |
+| 2 | Filas históricas corridas de línea | ✅ Solo cambió el número de línea; el contenido de cada fila tiene solo el "(→ #58)" agregado |
+| 3 | Porqué de `Referrer-Policy` | ⚠️ Ver MINOR-2: la corrección quedó imprecisa |
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| MINOR-1 | PROY-20 (docs que viven con el código) / N-1 (checklist no delegable completo) | `documents/STATUS.md`, "Pendientes del usuario" (el bloque "Railway (#15…)"); `app/README.md`, "Despliegue (Railway)", el párrafo inicial | El checklist del owner vive resumido en STATUS y remite a la **§9 del plan**, que el housekeeping borra. Las watch paths, el paso más fácil de copiar mal, quedan solo en el plan. El resumen además omite partes del plan: "New Project", región y sleep (costos, decisión del owner), el puerto que propone Railway, "Deploy latest commit" y la opción de **pausar** el servicio. El defecto venía del handoff v1.3, no del DEV | **Handoff v1.4 (TASK-5 §3):** subsección permanente "Conectar Railway (owner, no delegable)" en `app/README.md`, con los 10 pasos completos y las watch paths literales (bloque idéntico a la §9 del plan), el aviso de N-2 y, en el paso 1, la precondición "TASK-3 (si no corrió en #15) y TASK-6 en PASA". El README apunta a esa subsección y STATUS deja una línea de remisión, sin pasos |
+| MINOR-2 | Exactitud (LIM-7: el porqué correcto) | `app/README.md`, tabla "Cabeceras y CSP", fila `Referrer-Policy` | Dice "los pedidos a terceros (fullnode, Slush) no llevan el origen ni la ruta de la app". Es falso para el origen: `no-referrer` omite el `Referer`, pero los `fetch` CORS al fullnode y a `api.slush.app` igual llevan `Origin`, que lo pone el navegador y gRPC-web lo necesita | El texto de la v1.4 (TASK-5 §3): "Los pedidos a terceros (fullnode, Slush) y los enlaces al explorador no llevan `Referer`, es decir, ni la URL ni la ruta de la app. El `Origin` de los pedidos CORS sigue yendo: lo pone el navegador y gRPC-web lo necesita" |
+
+### Siguiente paso
+**Correcciones al DEV** con el handoff v1.4 (solo TASK-5, solo docs): MINOR-1 y MINOR-2. Para volver a revisar alcanza
+con el diff corregido de `app/README.md` y `documents/STATUS.md`, sin gate.
+
+### Mensaje de commit propuesto (cuando quede en PASA)
+```
+docs: document the Railway deploy (#15)
+
+app/README.md gains "Despliegue (Railway)": the image and its #8 guard
+(literal messages), the allowlist context, the CSP and headers with the
+reason for each origin (no COOP, for the Slush popup), how to add an
+origin, the Report-Only fallback, check-deploy-image.sh (N1-N3, P1-P13),
+the non-required deploy-image job, actionlint -no-color, DL-8 by version,
+the favicon, and the owner's Railway checklist. agents.md §2/§3/§12 and
+STATUS (baselines, #15 row, historical rows annotated "→ #58").
+
+Refs #15
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+## TASK-5, correcciones (handoff v1.4)
+
+> Base: `71d68e4` (handoff v1.4), sin commits del DEV. Solo docs, sin gate (D-20261030-02).
+
+### Respuesta a los hallazgos
+| # | Estado | Qué se hizo |
+|---|---|---|
+| MINOR-1 | ✅ corregido | Subsección permanente **"Conectar Railway (owner, no delegable)"** en `app/README.md`, entre "Verificar la imagen" y "Versiones de las imágenes (DL-8)". Tiene los 10 pasos de la §9 del plan **completos**, el aviso de N-2 al principio y las precondiciones en el paso 1. El párrafo inicial de "Despliegue (Railway)" remite a la subsección. En `STATUS.md`, el bloque de 14 líneas quedó en **una línea de remisión**, sin pasos |
+| MINOR-2 | ✅ corregido | La fila `Referrer-Policy` de la tabla de cabeceras usa el texto exacto de la v1.4 |
+
+Lo que pide la v1.4 para cada paso de la subsección:
+- paso 1: TASK-3 (si no corrió en #15) y TASK-6 en PASA, y `deploy-image` verde por el camino positivo;
+- paso 2: New Project → Deploy from GitHub repo;
+- paso 5: las watch paths literales;
+- paso 6: región y sleep a elección del owner;
+- paso 7: el puerto que propone Railway;
+- paso 8: "Deploy latest commit" si no arrancó solo;
+- paso 9: rollback **o** pausa del servicio, más el detalle del smoke B (§8 del plan) y el ícono remoto de Slush;
+- paso 10: N-2 y N-4.
+
+### Diff de las correcciones
+
+`app/README.md`, párrafo inicial de "Despliegue (Railway)":
+```diff
+-publicar es del owner: el checklist está en `documents/STATUS.md`, "Pendientes del usuario". **URL pública: se completa
+-después de #8.**
++publicar es del owner: el checklist completo está en "Conectar Railway (owner, no delegable)", más abajo. **URL
++pública: se completa después de #8.**
+```
+
+`app/README.md`, tabla "Cabeceras y CSP":
+```diff
+-| `Referrer-Policy` | `no-referrer` | Los pedidos a terceros (fullnode, Slush) no llevan el origen ni la ruta de la app |
++| `Referrer-Policy` | `no-referrer` | Los pedidos a terceros (fullnode, Slush) y los enlaces al explorador no llevan `Referer`, es decir, ni la URL ni la ruta de la app. El `Origin` de los pedidos CORS sigue yendo: lo pone el navegador y gRPC-web lo necesita |
+```
+
+`app/README.md`, subsección nueva, después de la línea `  - shellcheck del script: la misma imagen con `--entrypoint shellcheck`.`:
+````diff
++### Conectar Railway (owner, no delegable)
++
++Solo el owner, después de #8. **Aviso (N-2):** desde el paso 3, cada merge a `master` que toque las watch paths del
++paso 5 **publica el sitio**.
++
++1. **Precondiciones:**
++   - TASK-3 de #15 (si no corrió en #15) y TASK-6 de #15 en PASA;
++   - `deploy-image` del último run de `master` en verde **por el camino positivo**.
++2. Railway → **New Project** → **Deploy from GitHub repo**. La **GitHub App de Railway** se autoriza solo para
++   `sdelvalle57/sui_battleship`.
++3. Servicio → Settings → Source: rama **`master`**; **Wait for CI: activado**; **entornos de PR: desactivados**.
++4. Build: Railway usa el `Dockerfile` de la raíz ("Using detected Dockerfile!"). **No** definir
++   `RAILWAY_DOCKERFILE_PATH` ni comandos de build o start.
++5. Watch paths, en formato gitignore. Si las negaciones no se respetaran, un cambio de docs o tests solo redespliega
++   un `dist` idéntico.
++   ```
++   app/**
++   !app/README.md
++   !app/src/**/*.test.ts
++   !app/src/**/*.test.tsx
++   !app/src/test/**
++   !app/scripts/**
++   !app/eslint.config.js
++   !app/.env.example
++   contracts/deployments/testnet.json
++   contracts/Published.toml
++   contracts/scripts/publish.mjs
++   contracts/scripts/deployment.mjs
++   package.json
++   package-lock.json
++   .npmrc
++   .nvmrc
++   Dockerfile
++   .dockerignore
++   ```
++6. Deploy:
++   - healthcheck path **`/`**, restart `ON_FAILURE` y 1 réplica;
++   - **región y sleep a elección del owner** (afectan los costos);
++   - **Variables: ninguna.** Railway inyecta `PORT`; no definir `VITE_*`.
++7. Networking → **Generate Domain** (`<servicio>.up.railway.app`), con **el puerto que propone Railway**.
++8. Primer deploy: pasa por `WAITING` (Wait for CI), el build queda verde y el healthcheck da 2xx. Si no arrancó
++   solo, **Deploy latest commit**.
++9. Smoke B con la wallet de extensión del owner, en la URL pública:
++   - `testnet · nodo OK`, conectar la wallet (Slush), el lobby, y recargar `#/my-games` y `#/game/<id>`;
++   - consola sin violaciones de CSP, incluido el ícono remoto de Slush;
++   - `curl -sSI <URL>` con las cabeceras de la tabla de arriba.
++
++   Si la wallet no conecta por la CSP, avisar: fallback a `Report-Only`, solo para la CSP. Si algo falla,
++   **rollback** desde Deployments **o pausar** el servicio.
++10. Dejar registrado (N-2) si los merges a `master` con CI verde quedan preautorizados como publicación del sitio, y
++    opcionalmente (N-4) agregar `deploy-image` a los checks requeridos.
++
+ ### Versiones de las imágenes (DL-8)
+````
+
+`documents/STATUS.md`, "Pendientes del usuario": las 14 líneas del bloque "**Railway (#15, después de #8; no delegable).** El checklist completo está en la §9 de `documents/PLAN_RAILWAY_DEPLOY.md`… Pasos: 1. … 10. …" quedan reemplazadas por una sola línea:
+```diff
++- **Railway (#15, después de #8; no delegable):** conectar el servicio y publicar con el checklist de `app/README.md`, "Conectar Railway (owner, no delegable)".
+```
+
+### Verificaciones
+- **Watch paths:** extraje con `sed` el bloque de código del paso 5 de la §9 del plan y el de la subsección del README. El `diff` sale vacío: son idénticos, 20 líneas con las cercas.
+- **`Referrer-Policy`:** el texto de la v1.4 aparece 1 vez en el handoff (normalizando saltos de línea) y 1 vez en el README.
+- **Rutas personales:** `git diff -- app/README.md documents/STATUS.md agents.md | grep -cE '/home/|/Users/|/tmp/claude'` da **0**.
+- **Claves:** el diff de las correcciones no agrega claves ni hex.
+- **Espacios:** `git diff --check` no encuentra espacios finales.
+- **Alcance:** `agents.md` no cambia respecto de la entrega anterior. No toqué `DECISIONES.md`, el plan ni `REPORTES_RAILWAY_DEPLOY.md`.
+
+### Desviaciones del handoff
+1. **Paso 9 más completo que el plan.**
+   - Qué cambió: el paso 9 del plan dice solo "Smoke B de §8 con su wallet". Como el plan se borra en el housekeeping, el README copia lo que cubre el smoke B según la §8 del plan.
+   - Por qué: para que el checklist sea autosuficiente, como pide el MINOR-1.
+   - Verificación extra: lo copiado son las comprobaciones de la §8 (URL, `testnet · nodo OK`, conectar la wallet, lobby, recargar `#/my-games` y `#/game/<id>`, consola sin violaciones de CSP y `curl -sSI <URL>` con las cabeceras de la tabla del README), más el ícono remoto de Slush que derivó TASK-2. No agregué ningún paso nuevo.
+2. **Pasos con detalle que el plan no tiene.**
+   - Qué cambió: en el paso 8 agregué "Deploy latest commit" si no arrancó solo, y en el paso 6, que región y sleep "afectan los costos". Ninguno de los dos textos está en la §9 del plan v1.1.
+   - Por qué: el handoff v1.4 pide "Deploy latest commit" explícitamente, y el MID cita los costos como razón en el MINOR-1.
+
+### Riesgos / pendientes
+Ninguno nuevo. Los de la entrega anterior siguen igual: D-20261104-01 llega con #14 y TASK-3 sigue pendiente.
+=====
+
+## Re-revisión TASK-5: PASA
+
+> Revisor: MID | Fecha: 2026-11-04 | Contra: HANDOFF_RAILWAY_DEPLOY v1.4 (`71d68e4`), TASK-5 §3, el addendum
+> "TASK-5, correcciones (handoff v1.4)" y el diff real sin commitear de `app/README.md` y `documents/STATUS.md`.
+
+- **MINOR-1: cerrado.** `app/README.md` tiene la subsección permanente **"Conectar Railway (owner, no delegable)"**,
+  con los pasos 1-10 completos:
+  - el paso 1 lleva la precondición "TASK-3 (si no corrió en #15) y TASK-6 en PASA" y `deploy-image` verde por el
+    camino positivo;
+  - el paso 2, New Project → Deploy from GitHub repo, con la GitHub App solo para el repo;
+  - el paso 6, región y sleep a elección del owner y ninguna variable;
+  - el paso 7, el puerto que propone Railway;
+  - el paso 8, "Deploy latest commit";
+  - el paso 9, el smoke B (con el ícono remoto de Slush), el fallback `Report-Only` y el rollback **o** la pausa;
+  - el paso 10, N-2 y N-4.
+
+  Además tiene el aviso de N-2 al principio. Las **watch paths** del paso 5 son **idénticas** al bloque de la §9 del
+  plan (`4e7d1a3`): lo comprobé con `diff`, 18 líneas. El párrafo inicial de "Despliegue (Railway)" remite a la
+  subsección, y `STATUS.md` deja una sola línea de remisión, sin pasos ni referencia al plan.
+- **MINOR-2: cerrado.** La fila `Referrer-Policy` usa el texto exacto de la v1.4: `Referer` omitido, `Origin` de CORS
+  presente.
+- **Sin regresiones:** el resto del diff de TASK-5 no cambió desde la revisión anterior. La CSP, el mensaje de la
+  guarda y las cabeceras siguen idénticos al código. No hay rutas personales.
+- **DECISIONES** (cambio del orquestador, no del DEV): la línea (6) de D-20261104-03 dice que TASK-3 pasa al PR de
+  seguimiento junto con TASK-6, y es coherente con el paso 1 del checklist.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Ninguno | — |
+
+### Siguiente paso
+Commit de TASK-5. El PR #57 pasa a ready **después** del merge de #14 y de que `master` entre en la branch, porque
+D-20261104-01 se cita en `agents.md` §12, el README y el plan. TASK-3 corre en #57 solo si la localnet ya está libre
+para entonces; si no, va al seguimiento con TASK-6, como dice D-20261104-03 (6). **Sin housekeeping** en este PR,
+porque el ciclo sigue activo.
+
+### Mensaje de commit propuesto
+```
+docs: document the Railway deploy (#15)
+
+app/README.md gains "Despliegue (Railway)": the image and its #8 guard
+(literal messages), the allowlist context, the CSP and headers with the
+reason for each origin (no COOP, for the Slush popup), how to add an
+origin, the Report-Only fallback, check-deploy-image.sh (N1-N3, P1-P13),
+the non-required deploy-image job, actionlint -no-color, DL-8 by version,
+the favicon, and the permanent owner checklist "Conectar Railway (owner,
+no delegable)" with literal watch paths. agents.md §2/§3/§12; STATUS
+baselines, #15 row, historical rows annotated "→ #58".
+
+Refs #15
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```

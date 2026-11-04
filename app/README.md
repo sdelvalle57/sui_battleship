@@ -61,7 +61,227 @@ compila pero muestra la pantalla de error de configuración. Explorador: Suiscan
 **Origen del build publicado:** el glob de `config.ts` es `eager` y se resuelve al compilar, así que un
 `contracts/deployments/localnet.json` presente en la máquina entra en **cualquier** build hecho ahí, también en uno de
 testnet. El build de testnet que se publica sale de la CI o de un checkout limpio, nunca de una máquina con
-`localnet.json`.
+`localnet.json`. La imagen de Railway lo excluye por construcción: el `.dockerignore` es una lista blanca y
+`localnet.json` no está en ella, y la imagen comprueba que no haya `localnet` en el bundle (ver "Despliegue (Railway)").
+
+## Despliegue (Railway)
+
+Hosting en Railway (D-20261104-01, D-20261104-03; #15). El repo deja la imagen lista. Crear y conectar el servicio y
+publicar es del owner: el checklist completo está en "Conectar Railway (owner, no delegable)", más abajo. **URL
+pública: se completa después de #8.**
+
+### La imagen
+
+`Dockerfile` en la raíz, sin `railway.json` (Railway detecta el Dockerfile solo). Tiene dos etapas, cada una con su
+imagen base fijada por digest:
+
+- **build** (`node:26.12.1-bookworm-slim`):
+  1. copia `.nvmrc` y `contracts/`;
+  2. corre la guarda de #8 y `publish.mjs check`;
+  3. hace `npm ci` y `npm run build -w app`. La red es fija: `ENV VITE_SUI_NETWORK=testnet`, sin `ARG` y sin
+     variables en Railway;
+  4. al final comprueba tres cosas sobre `app/dist/assets/`:
+     - que estén el `packageId`, el `originalPackageId`, el `houseId` y el `publishTxDigest` de `testnet.json`;
+     - que no haya `network:"localnet"`;
+     - que esté el origen `https://fullnode.testnet.sui.io`.
+- **runtime** (`caddy:2.11.7-alpine`):
+  - sirve `app/dist` desde `/srv` con `app/Caddyfile`, como `nobody` (65534);
+  - corre sin `cap_net_bind_service` (`setcap -r`): por eso `PORT` tiene que ser ≥ 1024, y arranca también con
+    `--cap-drop=ALL`;
+  - escucha en `$PORT` (Railway lo inyecta; el default local es 8080);
+  - sin admin, sin log de acceso y sin TLS: el TLS lo termina Railway en su borde;
+  - antes de `USER nobody`, el build corre `caddy validate`.
+
+**Guarda de #8 (nunca IDs a mano).** Sin `contracts/deployments/testnet.json` la imagen no se construye: el primer
+`RUN`, antes de `npm ci`, falla en segundos con este mensaje.
+
+```text
+ERROR (#15): falta contracts/deployments/testnet.json. Lo commitea #8 tras la publicación del owner en testnet; sin él no se construye la app (nunca IDs a mano).
+```
+
+Con el archivo presente, `node contracts/scripts/publish.mjs check` valida el esquema y la coherencia con
+`contracts/Published.toml` antes de `npm ci`:
+- en verde imprime `1 despliegue(s) válidos y coherentes con Published.toml`;
+- si divergen, falla con `deployments incoherentes:` y una línea por campo, por ejemplo
+  `upgradeCapId (…) ≠ upgrade-capability de Published.toml (…)`;
+- el `check` de #8 corre primero la guarda de Node, que lee `.nvmrc` (`.nvmrc sin versión válida`). Por eso el
+  Dockerfile copia `.nvmrc` antes del `check`.
+
+Si la imagen falla, no se genera y Railway no despliega.
+
+**Contexto en lista blanca (`.dockerignore`).** Solo entran:
+- `package.json`, `package-lock.json`, `.npmrc` y `.nvmrc`;
+- `app/`, sin `app/node_modules`, `app/dist`, `app/.env*` ni `app/scripts`;
+- de `contracts/`: `scripts/publish.mjs`, `scripts/deployment.mjs`, `Published.toml` y `deployments/testnet.json`.
+
+Quedan afuera `localnet.json`, cualquier `.env*`, `node_modules`, `.git` y el resto de `contracts/`. El ensayo de #15
+lo verificó con un `localnet.json` y un `.env.local` presentes.
+
+### Cabeceras y CSP (`app/Caddyfile`)
+
+| Cabecera o regla | Valor | Por qué |
+|---|---|---|
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://fullnode.testnet.sui.io https://api.slush.app; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'` | Derivada del bundle. Ver la lista de abajo |
+| `X-Content-Type-Options` | `nosniff` | Sin *sniffing* de MIME |
+| `X-Frame-Options` | `DENY` | Antiencuadre para navegadores viejos; `frame-ancestors` solo funciona por cabecera |
+| `Referrer-Policy` | `no-referrer` | Los pedidos a terceros (fullnode, Slush) y los enlaces al explorador no llevan `Referer`, es decir, ni la URL ni la ruta de la app. El `Origin` de los pedidos CORS sigue yendo: lo pone el navegador y gRPC-web lo necesita |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=()` | La app no usa ninguna |
+| `Strict-Transport-Security` | `max-age=31536000` | Solo HTTPS (el borde de Railway) |
+| `Server` | se quita (`-Server`) | No anuncia el servidor |
+| `Cache-Control` | `public, max-age=31536000, immutable` solo en `/assets/*` que **existen** (matcher `file`); `no-cache` en `/` y `/index.html` | Los assets llevan hash; `index.html` siempre se revalida |
+| Compresión | `encode zstd gzip` | — |
+| Sin fallback SPA | rutas desconocidas → 404 | El router es por hash; un `/assets/x.js` faltante da 404 sin `immutable`, nunca `index.html` |
+
+La CSP, directiva por directiva:
+- **`connect-src`:**
+  - `https://fullnode.testnet.sui.io` es el gRPC-web del `SuiGrpcClient` (`sui/networks.ts`);
+  - `https://api.slush.app` es el `fetch` de metadata que hace `registerSlushWallet` al arrancar;
+  - `https://my.slush.app` **no** va: es la navegación del popup de Slush, que la CSP no gobierna;
+  - MVR no hace falta, porque la app usa IDs `0x`. El ensayo midió 0 pedidos.
+- **`script-src 'self'`:** el bundle no usa `eval`, `new Function` ni `WebAssembly`.
+- **`img-src 'self' data:`:** los íconos de wallet-standard son `data:`.
+- **`style-src 'self'`:** el kit (Lit) usa `adoptedStyleSheets`. Con el kit montado se confirma en TASK-3 de #15, que
+  está pendiente: espera la localnet de #14.
+
+**Sin COOP (DL-11).** El wallet web de Slush abre un popup (`about:blank` → `https://my.slush.app`) y necesita
+`window.opener`; un `Cross-Origin-Opener-Policy` lo cortaría. El ensayo de #15 abrió el popup con `window.opener`
+presente, y el script verifica que la cabecera no esté.
+
+**Agregar un origen a la CSP:**
+- Se agrega una directiva por vez y solo el origen necesario, como **desviación declarada** en el reporte del task y
+  revisada por el MID.
+- El script compara la CSP servida con la del `Caddyfile` del contexto, así que no hay que tocarlo.
+- Casos previstos:
+  - **Ícono remoto de Slush.**
+    - Qué puede pasar: la metadata de `api.slush.app` puede reemplazar el ícono `data:` por uno `https://…`. Si aparece
+      una violación de `img-src`, ese origen va **solo** a `img-src`.
+    - Qué pasó en el ensayo: `api.slush.app` respondió 403 de Cloudflare al origen `127.0.0.1` (en el navegador, un
+      error de CORS, no de CSP). El kit se quedó con el ícono `data:` por defecto.
+    - Conclusión: el ícono remoto **quedó sin medir** y pasa al **smoke B** del owner, en la URL pública.
+  - `'unsafe-inline'` solo en `style-src`, y solo si TASK-3 mide una violación real.
+
+**Fallback a `Report-Only`** (P-2, D-20261104-03 (2)):
+- Cuándo: si una wallet de extensión real no puede conectar por la CSP (smoke B del owner).
+- Qué cambia: **solo** la CSP pasa a `Content-Security-Policy-Report-Only`; las demás cabeceras quedan igual.
+- Además se abre un issue.
+
+### Verificar la imagen: `app/scripts/check-deploy-image.sh`
+
+`bash app/scripts/check-deploy-image.sh <contexto> <puerto>`
+- Requiere `bash`, `docker`, `curl`, `grep`, `sed` y `mktemp`.
+- Salida: 0 si el modo pasó; 1 con `FALLO: <chequeo>: <qué se esperaba y qué llegó>`; 2 si el uso es inválido (se
+  valida antes de tocar Docker).
+- El puerto, entre 1024 y 65535, tiene que estar libre (`ss -ltn 'sport = :<puerto>'` sin filas).
+- El modo sale del contexto:
+
+- **Negativo**, sin `contracts/deployments/testnet.json` (el caso de `master` hasta #8): en local,
+  `bash app/scripts/check-deploy-image.sh . 8090`.
+  - **N1:** el build tiene que fallar.
+  - **N2a:** el log, sin códigos ANSI, tiene la línea de **salida** de la guarda,
+    `ERROR (#15): falta contracts/deployments/testnet.json…`, con o sin el prefijo `#<n> <segundos> ` de BuildKit. No
+    cuenta la línea `RUN …` que imprime el builder.
+  - **N2b:** el log no llega a `RUN npm ci`, es decir, el build se cortó en la guarda.
+  - **N3:** `OK (negativo): sin contracts/deployments/testnet.json (#8) la imagen se niega a construirse`.
+- **Positivo**, con `testnet.json`. Las cabeceras se leen con GET, porque Caddy 2.11.7 tiene un bug de `encode` con
+  HEAD.
+  - **P1:** build verde. Con `CHECK_KEEP_TAG=<etiqueta>`, la imagen queda además con esa etiqueta, que el script no
+    borra.
+  - **P2:** contenedor con `--cap-drop=ALL` y `PORT=<puerto>`, publicado en `127.0.0.1:<puerto>`; `/` responde 200
+    en ≤ 30 s.
+  - **P3:** `id -u` = 65534.
+  - **P4:** la CSP es idéntica a la del `Caddyfile` del contexto.
+  - **P5:** las 5 cabeceras de seguridad y `Cache-Control: no-cache` en `/`.
+  - **P6:** sin COOP ni `Server`.
+  - **P7:** el JS que referencia `index.html` da 200, `text/javascript` e `immutable`.
+  - **P8:** ese mismo JS llega comprimido (zstd o gzip).
+  - **P9:** `/favicon.svg` da 200 `image/svg+xml`.
+  - **P10-P12:** 404 en `/no-existe`, `/game/0x1` y `/assets/no-existe.js`, este último sin `immutable`.
+  - **P13:** `OK (positivo): …`.
+- **Limpieza:**
+  - un `trap` borra la etiqueta `battleship-app:check-<pid>`, el contenedor `deploy-image-<pid>` y los temporales;
+  - sin `buildx` (builder clásico) el script usa `--force-rm`, pero las imágenes intermedias `<none>` quedan;
+  - esas intermedias se borran a mano y por ID, comparando con una línea base de `docker images -aq` tomada antes.
+    Nunca `docker system prune`, que borra imágenes ajenas.
+- **CI:**
+  - el job `deploy-image` de `.github/workflows/ci.yml` corre el mismo script (`. 8080`) en cada PR y en cada push a
+    `master`: hasta #8 por el camino negativo (PR #57, run 41802734452), y después por el positivo;
+  - **no es check requerido** (N-4 es decisión del owner); Railway lo espera con *Wait for CI*.
+- **Al tocar `ci.yml`:**
+  - actionlint en un contenedor desechable, con el archivo explícito:
+    `docker run --rm -v <repo>:/repo:ro -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -no-color .github/workflows/ci.yml`.
+    En un worktree, `.git` apunta fuera del montaje. La 1.7.12 no acepta `-color=never`;
+  - shellcheck del script: la misma imagen con `--entrypoint shellcheck`.
+
+### Conectar Railway (owner, no delegable)
+
+Solo el owner, después de #8. **Aviso (N-2):** desde el paso 3, cada merge a `master` que toque las watch paths del
+paso 5 **publica el sitio**.
+
+1. **Precondiciones:**
+   - TASK-3 de #15 (si no corrió en #15) y TASK-6 de #15 en PASA;
+   - `deploy-image` del último run de `master` en verde **por el camino positivo**.
+2. Railway → **New Project** → **Deploy from GitHub repo**. La **GitHub App de Railway** se autoriza solo para
+   `sdelvalle57/sui_battleship`.
+3. Servicio → Settings → Source: rama **`master`**; **Wait for CI: activado**; **entornos de PR: desactivados**.
+4. Build: Railway usa el `Dockerfile` de la raíz ("Using detected Dockerfile!"). **No** definir
+   `RAILWAY_DOCKERFILE_PATH` ni comandos de build o start.
+5. Watch paths, en formato gitignore. Si las negaciones no se respetaran, un cambio de docs o tests solo redespliega
+   un `dist` idéntico.
+   ```
+   app/**
+   !app/README.md
+   !app/src/**/*.test.ts
+   !app/src/**/*.test.tsx
+   !app/src/test/**
+   !app/scripts/**
+   !app/eslint.config.js
+   !app/.env.example
+   contracts/deployments/testnet.json
+   contracts/Published.toml
+   contracts/scripts/publish.mjs
+   contracts/scripts/deployment.mjs
+   package.json
+   package-lock.json
+   .npmrc
+   .nvmrc
+   Dockerfile
+   .dockerignore
+   ```
+6. Deploy:
+   - healthcheck path **`/`**, restart `ON_FAILURE` y 1 réplica;
+   - **región y sleep a elección del owner** (afectan los costos);
+   - **Variables: ninguna.** Railway inyecta `PORT`; no definir `VITE_*`.
+7. Networking → **Generate Domain** (`<servicio>.up.railway.app`), con **el puerto que propone Railway**.
+8. Primer deploy: pasa por `WAITING` (Wait for CI), el build queda verde y el healthcheck da 2xx. Si no arrancó
+   solo, **Deploy latest commit**.
+9. Smoke B con la wallet de extensión del owner, en la URL pública:
+   - `testnet · nodo OK`, conectar la wallet (Slush), el lobby, y recargar `#/my-games` y `#/game/<id>`;
+   - consola sin violaciones de CSP, incluido el ícono remoto de Slush;
+   - `curl -sSI <URL>` con las cabeceras de la tabla de arriba.
+
+   Si la wallet no conecta por la CSP, avisar: fallback a `Report-Only`, solo para la CSP. Si algo falla,
+   **rollback** desde Deployments **o pausar** el servicio.
+10. Dejar registrado (N-2) si los merges a `master` con CI verde quedan preautorizados como publicación del sitio, y
+    opcionalmente (N-4) agregar `deploy-image` a los checks requeridos.
+
+### Versiones de las imágenes (DL-8)
+
+Las dos imágenes base van fijadas por el digest del índice multi-arquitectura. La regla de 7 días es la misma de
+`min-release-age=7` de `.npmrc`:
+- **Qué se mide:** la **versión** tiene que tener ≥ 7×24 h desde el `published_at` de su release
+  (`gh api repos/nodejs/node/releases`, `gh api repos/caddyserver/caddy/releases`).
+- **Cuándo:** al commitear el Dockerfile.
+- **Sobre qué:** sobre la versión, **no** sobre el digest. Un *rebuild* de docker-library de la misma versión no
+  reinicia el plazo (por ejemplo, el índice de `caddy:2.11.7-alpine` del 2026-10-30, observación 1 de TASK-2 de #15).
+
+Node 26.12.1 en la imagen por la regla de 7 días; 26.13.0 en TASK-6 (#15). Mientras tanto, el gate de la app sigue en
+26.13.0: es el mismo major que exigen `.nvmrc`, `engines` y la guarda de `publish.mjs`.
+
+### Favicon
+
+`app/public/favicon.svg` es un SVG propio de 32×32, sin recursos externos. `index.html` lo declara con
+`<link rel="icon" type="image/svg+xml" href="/favicon.svg" />` y Vite lo copia a la raíz de `dist/`. El 404 de
+`/favicon.ico` que registraron los smokes de #9 ya no aparece.
 
 ## Estructura y capas (ARQ-1, PROY-13)
 
@@ -549,7 +769,7 @@ habilita ni se ofrece.
 ## Pendientes conocidos
 
 - El build de testnet pesa ≈ 901 kB (≈ 274 kB gzip; desde #11 entra el SDK de transacciones y desde #13 "Mis
-  partidas") y Vite avisa de un chunk mayor de 500 kB: el code-splitting queda para #15 (hosting).
+  partidas") y Vite avisa de un chunk mayor de 500 kB: el code-splitting queda para #58 (issue aparte, P-3 de #15).
 - `done` espera la relectura del lobby y de "Mis partidas" si están montados (DL-6, DL-7): con una red lenta o con
   muchas páginas cargadas, "Actualizando datos…" puede durar varios segundos (RM-12, H-4). Se mide en los smokes de
   #11, #12 y #13 (localnet) y en testnet en #17.
