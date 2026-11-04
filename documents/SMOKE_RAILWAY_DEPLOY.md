@@ -1,5 +1,5 @@
 # SMOKE_RAILWAY_DEPLOY, parte A (local, antes de #8)
-> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: 2026-11-04 | Estado: parte 1 PASA (21/21); parte 2 pendiente (TASK-3)
+> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: 2026-11-04 | Estado: parte 1 PASA (21/21); parte 2 PASA (11/11)
 
 ## Precondiciones
 - **Red:** en la parte 1 no hay red local. Solo descargas de imágenes públicas y, en E-6, lecturas públicas de testnet sin claves.
@@ -229,7 +229,80 @@ segundos=98
 E-1g da el mismo listado sin `/ctx/contracts/Published.toml` ni `/ctx/contracts/deployments/testnet.json` (146 archivos).
 
 ## Parte 2: CSP con el kit en la localnet aislada (TASK-3)
-Pendiente: se corre cuando #14 libere la localnet.
+
+> Corrida del 2026-11-04 (10:14-10:25 UTC) sobre `d131f44` (#14 ya mergeado: localnet libre, D-20261104-03 (6)).
+
+**Precondiciones de la corrida:**
+- **Entornos.** `<SMOKE_DIR>` = `<scratchpad>/smoke-15`, con `net/`, `tmp/`, `home/`, `chrome-profile/` y
+  `chrome-home/`. Hay tres archivos de entorno con rutas literales, y nunca se cargan dos en la misma llamada:
+  - `env.sh`, el de `agents.md` §3, solo para `sui`/`suic`;
+  - `app.env`, con la guarda `[ -z "$SUI_CONFIG_DIR" ] || { echo APPENV-FAIL; return 97; }` en la primera línea y
+    después `SMOKE_DIR`, `REPO`, `NODE` y el `PATH` de Node 26, para npm y Node;
+  - `chrome.env`, con `SMOKE_DIR`, `CHROME` = `/opt/google/chrome/chrome` y `HOME`/`XDG_*` en
+    `<SMOKE_DIR>/chrome-home`.
+- **Regla B4:** todo `suic`, también los de solo lectura, lleva
+  `PRE` = `. <SMOKE_DIR>/env.sh && { . <SMOKE_DIR>/ids.env 2>/dev/null || true; } && smoke_guard &&`.
+- **Prohibiciones:** nada de `new-address`, faucet ni `--force-regenesis`. Ningún proceso de Node lee
+  `<SMOKE_DIR>/net`.
+- **Procesos:** `sui.pid`, `chrome.pid` y `recorder.pid`, todos lanzados con `exec` en segundo plano del harness.
+- **Navegador:** Chrome headless en `127.0.0.1:9230` con el perfil propio. Un grabador CDP en Node, lanzado con
+  `app.env`, se adjunta a cada página e instala un listener de `securitypolicyviolation` con
+  `Page.addScriptToEvaluateOnNewDocument`. La pestaña se abre con `Target.createTarget({ newWindow: true })`.
+
+| # | Acción | Resultado esperado | Resultado obtenido | Estado |
+|---|--------|--------------------|--------------------|--------|
+| L-0 | Precondición; línea base de `~/.sui` y de Docker; `8093`/`9230` libres | Puertos libres; líneas base anotadas | Aviso del orquestador: #14 mergeado y localnet libre. `ss -ltn` sin filas en `9000`, `9123`, `9184`, `5173`, `5003`, `9229`, `9339`, `8093` y `9230`. Ningún `sui start` corriendo y ningún `<SMOKE_DIR>` de #14 (sin `net/` ni `sui.pid` en los scratchpads de Battleship). Sin `contracts/deployments/`, `Published.toml` ni `Pub.*.toml`; `git status` vacío @ `d131f44`. `~/.sui/sui_config/` (`stat`/`ls`): `2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml` y `client.yaml`. Docker en `<scratchpad>/docker-base-15-l/`: **2 contenedores, 3 imágenes** | ✅ |
+| L-1 | Localnet aislada (pasos 2-5) y publicación variante B | `suic chain-identifier` responde; existe `contracts/deployments/localnet.json` (ignorado) | `"$SUI" genesis --working-dir "$SUI_CONFIG_DIR"` exit 0 (`sui 1.83.0-16d2dc1e05ed`). `sui start --network.config "$SUI_CONFIG_DIR"` en segundo plano: `:9000` arriba en ~1 s, y el PID que escucha es el de `sui.pid`. `PRE suic active-env` ⇒ `localnet`; `PRE suic chain-identifier` ⇒ `59804278`. `PRE suic addresses --json` ⇒ 5 cuentas: `ADMIN` (la activa) y `A` a `ids.env`. `PRE act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs publish --network localnet --pubfile-path "$SMOKE_DIR/Pub.localnet.toml"` ⇒ exit 0, `Despliegue escrito en <repo>/contracts/deployments/localnet.json` (chain `59804278`, `publishTxDigest` `7pixigzm5TrGiGFtKJEWL6qVkfVcquk9u8BLP1D65FBe`). `Move.lock` sin delta; `git status` vacío. `PKG` y `HOUSE` a `ids.env` con `sed`, sin Node. `PRE suic object "$HOUSE" --json`: `fee_rate` 0, `min_bet` 1000000, `max_bet` 50000000000, `fees_collected` 0, `version` 1 | ✅ |
+| L-2 | Partida abierta por CLI y `GAME` a `ids.env` | Tx `success`; `GAME=0x…` en `ids.env` | `PRE act_as "$A" && suic ptb --split-coins gas "[10000000]" --assign c --move-call "$PKG::game::create_game" @"$HOUSE" c.0 none --json` ⇒ digest `5mhTu8UJdELX96HwKPs94v9q1jruPAuoLm8yUeEhq7zu`, `status: success`, evento `game::GameCreated` con `bet` 10000000 y `opponent` `None`. `GAME` (`0xa8eb0f84…`) a `ids.env`. Hay dos ajustes respecto del texto del paso, ambos en Desviaciones: `c.0` en lugar de `c`, y firmó `A` en lugar de `ADMIN` | ✅ |
+| L-3 | Build de producción fuera del repo | Exit 0; `<SMOKE_DIR>/dist` con favicon; `<repo>/app/dist` sin cambios | Con `app.env`: `VITE_SUI_NETWORK=localnet npm run build -w app -- --outDir "$SMOKE_DIR/dist" --emptyOutDir` ⇒ exit 0, `index-GeuVE8XQ.js` 917.80 kB (277.96 kB gzip). `dist/` tiene `index.html` (con `rel="icon"`), `favicon.svg` y `assets/`. Los `sha256sum` de los 4 archivos de `<repo>/app/dist` son idénticos antes y después; `git status` vacío. **Observación:** el bundle embebe `network:` + `` `localnet` `` con backticks, y el patrón del Dockerfile `network:"localnet"\|"network":"localnet"` da **0** sobre este bundle de localnet (ver Hallazgos) | ✅ |
+| L-4 | Copia del Caddyfile con `sed` y `diff` | Solo cambia `connect-src` | El `diff` da una sola línea (12c12), la de la CSP; palabra por palabra, solo `https://fullnode.testnet.sui.io` → `http://127.0.0.1:9000`. `git diff --exit-code -- app/Caddyfile` limpio | ✅ |
+| L-5 | Imagen desechable de la etapa runtime en `:8093` | `curl` = 200 | `<SMOKE_DIR>/l5/` con `dist/`, el `Caddyfile` de L-4 y un Dockerfile con las líneas de la etapa runtime: `FROM caddy:2.11.7-alpine@sha256:e70b…4ee5`, los dos `COPY`, `RUN setcap -r … && caddy validate …`, `USER nobody` y el mismo `CMD`. Sin el `grep` del origen de testnet (Desviaciones). `docker build --force-rm -t battleship-app:l5-15` ⇒ `Valid configuration`, `Successfully tagged`. `docker run -d --name deploy-image-l5 --cap-drop=ALL -e PORT=8093 -p 127.0.0.1:8093:8093` ⇒ `/` **200**; `id -u` = 65534; `connect-src 'self' http://127.0.0.1:9000 https://api.slush.app` | ✅ |
+| L-6 | Chrome headless con listener; `http://127.0.0.1:8093/` | `localnet · nodo OK`; el lobby muestra la partida de L-2; los `POST http://127.0.0.1:9000/sui.rpc.v2.*` dan 200 | Chrome 156.0.8078.73 con `chrome.pid` = el PID que escucha en `127.0.0.1:9230`. Pestaña `visible`. `.network-badge` = **`localnet · nodo OK`**. "Partidas abiertas": `0.01 SUI · comisión 0 % · creada por 0x3cc1…3a5d · … · Ver partida`, con enlace a `#/game/<GAME>`. Red: `/`, JS, CSS y `favicon.svg` dan 200; `POST` a `:9000` `GetServiceInfo` ×2, `ListEvents` ×1, `BatchGetObjects` ×1 y `GetTransaction` ×2, **todos 200**, con sus `OPTIONS` 200. `__cspv` = `[]`; consola sin errores | ✅ |
+| L-7 | Modal de `ConnectButton`; `adoptedStyleSheets` del shadow root | Modal visible ("No wallets installed"); `adoptedStyleSheets.length > 0` | `dialog.open = true`, `display: block`, `position: fixed`, fondo `oklch(1 0 0)`, radio 12px; título **"No wallets installed"** (localnet de producción: sin Slush ni burner). `adoptedStyleSheets.length`: `connect-button` **2**, `connect-modal` 4, `internal-button` 3, `wallet-list` 3. **0** `<style>` en los shadow roots. El botón "Conectar wallet" tiene fondo `oklch(0.216 0.006 56.043)` y radio 10px: los estilos del kit se aplican. 0 violaciones | ✅ |
+| L-8 | `#/my-games`; después `#/game/$GAME`; recargar (`Page.reload`) | Las dos rutas cargan después de recargar; el detalle muestra la partida (`Pending`, monto) | `#/my-games`, antes y después de `Page.reload`: "Mis partidas · Conecta tu wallet para ver tus partidas e invitaciones" con `localnet · nodo OK`. `#/game/<GAME>`, antes y después de recargar (`pathname` `/`): "Estado **Abierta**" (`Pending`), "Apuesta **0.01 SUI**", "Comisión 0 %", "Pozo 0.02 SUI · comisión 0 SUI · al ganador 0.02 SUI". Cada recarga trae `/`, JS, CSS y favicon con 200 y relee por gRPC (`BatchGetObjects`, `GetTransaction`, `GetServiceInfo`, todos 200) | ✅ |
+| L-9 | Total de la sesión | **0** `securitypolicyviolation` | 34 pedidos en 2 páginas (la `about:blank` inicial y la de la app): 13 `POST` gRPC a `:9000`, todos 200; **0** pedidos fuera de `127.0.0.1` (más allá de `data:`); 0 a MVR. `window.__cspv` = `[]`; listener **0**; logs "Refused to"/CSP **0**; `loadingFailed` con `blockedReason` **0**. No hizo falta `'unsafe-inline'` | ✅ |
+| C-2 | Cierre de la parte 2 | Todo limpio; el exit 144 de `sui start` es esperado | Detalle abajo | ✅ |
+
+**Detalle de C-2:**
+1. **Procesos:**
+   - `kill <chrome.pid>`: `kill -0` sale con 1. `pgrep -af <SMOKE_DIR>/chrome-profile` queda vacío;
+   - el grabador salió al cerrarse el websocket y `kill -0` sale con 1.
+2. **Contenedor e imagen:** `docker rm -f deploy-image-l5` y `docker rmi battleship-app:l5-15` (`Untagged` + 2
+   `Deleted`).
+3. **Docker contra la línea base de L-0:**
+   - contenedores nuevos: 0;
+   - imagen nueva: 1, `caddy:2.11.7-alpine@…4ee5`, que se bajó de nuevo y se borró por ID;
+   - al repetir: contenedores nuevos 0, imágenes nuevas 0, faltantes `ps=0 img=0`;
+   - quedan `postgres:17`, `postgres:16-alpine` y `busybox` con sus 2 contenedores ajenos, intactos;
+   - `<scratchpad>/docker-base-15-l` borrado. Sin `prune`.
+4. **Puertos:** `:8093` y `:9230` sin filas.
+5. **Paso 7 de `agents.md` §3:**
+   - `kill <sui.pid>`; en otra llamada, `kill -0` sale con 1 y `:9000` sin filas. `sui start` terminó con **144**,
+     el esperado;
+   - `rm -rf <SMOKE_DIR>` (comprobado: ya no existe);
+   - `rm -f contracts/deployments/localnet.json` y `rmdir contracts/deployments` (comprobado: no existe);
+   - `stat`/`ls` de `~/.sui/sui_config/`, sin `env.sh`, **idénticos** a L-0;
+   - `git status --porcelain` vacío, salvo este SMOKE; `git diff --exit-code -- contracts/Move.lock` limpio;
+   - sin `contracts/Pub.*.toml`, `contracts/Published.toml` ni `contracts/deployments/`.
+
+**Hallazgos de la parte 2:**
+- **H-1, defensa en profundidad del Dockerfile inefectiva** (no hace fallar ningún paso).
+  - Qué pasa: el minificador (Vite 8 / rolldown) emite el json embebido como objeto con template literals, así:
+    ``var _R={schemaVersion:1,network:`localnet`,chainId:`59804278`,…}``. La comprobación (b) del `RUN` de bundle del
+    `Dockerfile` (`grep -rqE 'network:"localnet"|"network":"localnet"' app/dist/assets`) no detecta esa forma: sobre
+    el bundle real de localnet de L-3 da **0** coincidencias.
+  - Mitigación actual: `localnet.json` no puede entrar al contexto, por la lista blanca de `.dockerignore`, verificada
+    en E-1f/E-1g. Además, (a) exige los 4 IDs de `testnet.json` en el bundle.
+  - Riesgo: (b) no aporta nada como segunda barrera.
+  - Corrección propuesta (fuera del alcance de TASK-3; el Dockerfile está aprobado en TASK-2): que el patrón acepte
+    también la forma con backticks, ``network:`localnet` ``, además de las dos con comillas dobles. Lo decide el MID o
+    el MAYOR.
+
+## Reporte final (parte 2)
+- **Pasos PASA/TOTAL:** 11/11 (L-0..L-9 y C-2).
+- **Hallazgos:** H-1 (patrón de localnet del Dockerfile inefectivo; mitigado por la lista blanca). 0 violaciones de
+  CSP con el kit montado: `style-src 'self'` alcanza sin `'unsafe-inline'`.
+- **Veredicto (parte 2):** PASA.
 
 ## Reporte final (parte 1)
 - **Pasos PASA/TOTAL:** 21/21.
@@ -238,4 +311,3 @@ Pendiente: se corre cuando #14 libere la localnet.
   - E-6a: no aparecieron los errores de lectura esperados;
   - E-6b/E-6c: 403 de Slush, ícono remoto al smoke B.
 - **Veredicto (parte 1):** PASA.
-=====

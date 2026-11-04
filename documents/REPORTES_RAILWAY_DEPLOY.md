@@ -1225,3 +1225,177 @@ Refs #15
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+## TASK-3
+
+## Task completado: HANDOFF_RAILWAY_DEPLOY — TASK-3 (CSP con el kit montado, localnet aislada)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-15-pages-deploy` @ `d131f44` (merge de `master` con #14). No hice commits.
+
+### Archivos modificados/creados
+`documents/SMOKE_RAILWAY_DEPLOY.md`: la parte 2 llena y el estado del encabezado. No cambia código ni config. `contracts/deployments/localnet.json` se creó y se borró en el cierre.
+
+### Qué se implementó (3 líneas máx)
+Corrí la localnet aislada (variante B, B4 con `PRE` en todo `suic`, `app.env` con la guarda y separado de `env.sh`) y una partida abierta por CLI. Hice el build de producción de localnet fuera del repo y lo serví con una imagen Caddy desechable en `:8093`, con la CSP real (solo cambia `connect-src` a `:9000`).
+En Chrome headless (`:9230`, perfil propio): `localnet · nodo OK`, el lobby con la partida, gRPC 200, los estilos de Lit aplicados por `adoptedStyleSheets` y la recarga de `#/my-games` y `#/game/<id>` funcionando. **0** `securitypolicyviolation`; `style-src 'self'` alcanza sin `'unsafe-inline'`.
+El cierre del paso 7 quedó completo, y Docker volvió a la línea base sin `prune`.
+
+### Tests y gates (output pegado, por área tocada)
+- **Agregados/modificados:** ninguno.
+- **Gates:** no se corrieron, porque el task no cambia código. `Move.lock` sin delta (`git diff --exit-code`).
+- **Tablas de contrato / `app/src/sui/`:** no aplica.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+Detalle completo en `documents/SMOKE_RAILWAY_DEPLOY.md`, parte 2. Resumen:
+- **L-0:**
+  - puertos de #14 y de #15 libres, y ningún `sui start` ni `<SMOKE_DIR>` de #14;
+  - línea base de `~/.sui` con `stat`/`ls`, y de Docker (2 contenedores, 3 imágenes).
+- **L-1:** red levantada (chain `59804278`) y publicación variante B con exit 0 (`publishTxDigest` `7pixigzm5TrGiGFtKJEWL6qVkfVcquk9u8BLP1D65FBe`). House con fee 0 y límites 1000000 / 50000000000.
+- **L-2:** `create_game` (tx `5mhTu8UJdELX96HwKPs94v9q1jruPAuoLm8yUeEhq7zu`, `success`, `GameCreated` de 0.01 SUI, abierta).
+- **L-3:** `index-GeuVE8XQ.js` 917.80 kB en `<SMOKE_DIR>/dist`, y `<repo>/app/dist` idéntico por `sha256`.
+- **L-4/L-5:**
+  - el `diff` del Caddyfile cambia solo `connect-src`;
+  - la imagen da `Valid configuration`, `/` responde 200 y `id -u` = 65534 con `--cap-drop=ALL`.
+- **L-6:**
+  - `localnet · nodo OK`, y la partida aparece en "Partidas abiertas";
+  - gRPC: `GetServiceInfo`, `ListEvents`, `BatchGetObjects` y `GetTransaction`, todos con `POST` 200.
+- **L-7:**
+  - modal visible con "No wallets installed";
+  - `adoptedStyleSheets`: 2 en el botón, 4 en el modal, 3 en `internal-button` y 3 en `wallet-list`;
+  - 0 `<style>` inline, y estilos `oklch` aplicados.
+- **L-8:**
+  - las dos rutas cargan después de `Page.reload`;
+  - el detalle muestra "Abierta", 0.01 SUI y comisión 0 %.
+- **L-9:**
+  - 34 pedidos, de los cuales 13 son `POST` gRPC, todos 200;
+  - 0 pedidos fuera de `127.0.0.1` y 0 a MVR;
+  - **0** violaciones (listener, logs y `blockedReason`).
+- **C-2:**
+  - **Procesos:** Chrome, el grabador y la red cerrados por PID; `kill -0` falla en los tres; `sui start` salió con 144, lo esperado.
+  - **Docker:** `deploy-image-l5` y `battleship-app:l5-15` borrados, y la `caddy` que se volvió a descargar, borrada por ID. Las diferencias contra la base dan 0/0, y los postgres ajenos siguen intactos.
+  - **Archivos:** borré `<SMOKE_DIR>` y `contracts/deployments/`.
+  - **`~/.sui`:** idéntico a L-0.
+  - **Puertos:** `:9000`, `:8093` y `:9230` libres.
+
+### Desviaciones del handoff
+1. **L-2: `c.0` en lugar de `c` en `--move-call`.**
+   - Qué cambió: el argumento de la moneda en el comando del handoff.
+   - Por qué: `--split-coins` devuelve una lista y `create_game` recibe un `Coin<SUI>`. El handoff ya preveía ajustar la sintaxis y declararlo.
+   - Verificación: la tx salió `success`, con `GameCreated`.
+2. **L-2: firmó `A` en lugar de `ADMIN`.**
+   - Qué cambió: la cuenta que crea la partida. `A` es otra cuenta de la génesis, anotada en `ids.env` y nunca pegada; `ADMIN` publicó y conserva el cap.
+   - Por qué: no cambia lo que se mide (una partida abierta en el lobby y en el detalle).
+3. **L-5: el `RUN` de la imagen desechable no tiene el `grep -qF 'https://fullnode.testnet.sui.io'`.**
+   - Por qué: la copia del Caddyfile de L-4 usa a propósito `http://127.0.0.1:9000`, y ese `grep` fallaría por diseño.
+   - Lo demás es idéntico a la etapa runtime, con `setcap -r`, `caddy validate`, `USER nobody` y el mismo `CMD`. El `diff` contra el `Dockerfile` está en la corrida.
+4. **Grabador CDP propio en segundo plano.** Lo lancé con `app.env` y `recorder.pid`, y en lugar de `:9339` habla solo con el `:9230` de Chrome. Es el mismo patrón que E-6 de TASK-2: se adjunta a cada página e instala el listener antes de navegar.
+
+### Riesgos / pendientes
+- **H-1 (hallazgo para el MID/MAYOR; no hace fallar ningún paso).**
+  - Qué falla: la comprobación (b) del `RUN` de bundle del `Dockerfile` (`grep -rqE 'network:"localnet"|"network":"localnet"' app/dist/assets`) **no detecta** un `localnet.json` embebido. El minificador de Vite 8 emite el json como objeto con template literals, ``var _R={schemaVersion:1,network:`localnet`,chainId:`59804278`,…}``. Sobre el bundle real de localnet de L-3, ese patrón da **0** coincidencias.
+  - Por qué no es grave hoy: la lista blanca del `.dockerignore` (E-1f/E-1g) impide que `localnet.json` entre al contexto, y la comprobación (a) exige los 4 IDs de `testnet.json`.
+  - Qué queda mal: (b) no funciona como segunda barrera. La corrección que propongo es que el patrón acepte también la forma con backticks.
+  - Por qué no lo corregí: el Dockerfile está aprobado en TASK-2 y queda fuera del alcance de TASK-3, así que la decisión es del MID o del MAYOR (se puede cambiar en este PR o en TASK-6).
+- El ícono remoto de Slush y una wallet real siguen en el smoke B del owner. En localnet Slush está desactivado.
+
+### Documentación
+- **READMEs y `agents.md`:** no aplica, porque el task no cambia comandos ni arquitectura. El README de TASK-5 ya dice que `style-src 'self'` "se confirma en TASK-3", y ahora está confirmado. Si el MID quiere, esa línea pasa de "pendiente" a "confirmado (TASK-3, 0 violaciones)" en el commit.
+- **Snippet propuesto para `documents/STATUS.md`** (fila de baseline):
+  > localnet aislada @ `feature/issue-15-pages-deploy` (TASK-3 de #15, `d131f44`), CLI `1.83.0`, 2026-11-04 | parte 2 de `SMOKE_RAILWAY_DEPLOY.md` (L-0..L-9, C-2) | 🟢 **11/11**. Chain `59804278`; build de producción de localnet servido por Caddy (imagen de la etapa runtime, `--cap-drop=ALL`, 65534) con la CSP real (solo `connect-src` → `:9000`): `localnet · nodo OK`, partida en el lobby, gRPC 13 `POST` 200, `adoptedStyleSheets` > 0 sin `<style>` inline, recarga de `#/my-games` y `#/game/<id>` OK, **0** violaciones (`style-src 'self'` alcanza). Cierre limpio (`~/.sui` y Docker en la línea base). H-1: el patrón de `localnet` del Dockerfile no detecta template literals (mitigado por la lista blanca).
+- **Fila del ciclo #15:** TASK-3 pasa de pendiente a ✅.
+=====
+
+## Revisión TASK-3: PASA (11/11), con H-1 a TASK-2b en este PR
+
+> Revisor: MID | Fecha: 2026-11-04 | Contra: HANDOFF_RAILWAY_DEPLOY v1.4, TASK-3 §2-§7, y el Anexo A parte 2
+> (L-0..L-9, C-2) en `documents/SMOKE_RAILWAY_DEPLOY.md`. Branch @ `d131f44` (con `master` y #14). Sin gates propios.
+
+### Verificación
+- **Precondición:** se cumplió. #14 ya está mergeado y su localnet se cerró. L-0 midió los puertos libres, sin
+  `sui start` ni `<SMOKE_DIR>` de #14, y la línea base de `~/.sui` (solo `stat`/`ls`) y de Docker.
+- **Localnet aislada (`agents.md` §3):** chain `59804278`, publicación variante B, y `suic` siempre con el prefijo
+  `PRE` (B4). La partida se creó por CLI (`success`, `GameCreated` de 0.01 SUI). Los digests son de una localnet
+  desechable; no hay claves ni direcciones pegadas.
+- **Build fuera del repo (L-3):** `<SMOKE_DIR>/dist`, y `<repo>/app/dist` quedó idéntico por `sha256` (sugerencia 2
+  de la v1.1, cumplida).
+- **CSP real con el kit montado (L-4..L-9):**
+  - la copia del Caddyfile cambia **solo** `connect-src` (con `diff`);
+  - la imagen desechable equivale a la etapa runtime: `setcap -r`, `validate`, `nobody` 65534, `--cap-drop=ALL`;
+  - Chrome con depuración en `:9230`, perfil propio, `localnet · nodo OK`, y la partida en el lobby;
+  - 13 `POST` gRPC, todos 200;
+  - `adoptedStyleSheets` en los 4 componentes del kit, 0 `<style>` inline;
+  - recarga de `#/my-games` y `#/game/<id>` con el detalle correcto;
+  - **0** `securitypolicyviolation`, 0 pedidos fuera de `127.0.0.1` y 0 a MVR.
+  - **`style-src 'self'` alcanza.** No hace falta el remedio `'unsafe-inline'`.
+- **Cierre (C-2):** el paso 7 completo.
+  - Procesos por PID, con `kill -0` fallando en los tres.
+  - `contracts/deployments/` borrado.
+  - `~/.sui` idéntico a L-0.
+  - Docker de nuevo en la línea base, sin `prune`.
+  - Puertos libres.
+  - Lo confirmé por mi cuenta: `docker ps -a` y `docker images -a` muestran solo los objetos ajenos (2 postgres y
+    `busybox`), no existe `contracts/deployments/`, y `:9000`, `:8093` y `:9230` están sin listeners.
+- **Higiene del diff:** `SMOKE` y `REPORTES` sin rutas personales ni claves, y sin IDs `0x` de 40-64 nuevos en el
+  diff del SMOKE.
+
+### Desviaciones declaradas
+| # | Desviación | Dictamen |
+|---|---|---|
+| 1 | `c.0` en `--move-call` | ✅ El handoff lo preveía ("ajustar la sintaxis y declararlo"): `--split-coins` devuelve un vector |
+| 2 | Firmó `A` en lugar de `ADMIN` | ✅ No cambia lo que se mide; es una cuenta de la génesis aislada, nunca pegada |
+| 3 | L-5 sin el `grep` del origen del fullnode | ✅ Por diseño: la copia usa `:9000`. El resto de la etapa es idéntico (`diff` en la corrida) |
+| 4 | Grabador CDP propio | ✅ Mismo patrón que E-6; solo `:9230`, PID propio, cerrado en C-2 |
+
+### H-1 (encontrado por el DEV): se corrige en este PR
+- **Se confirma.** El patrón (b) del `Dockerfile:22` solo acepta comillas dobles, y Vite 8 emite el registro como
+  ``network:`localnet` ``. Lo comprobé con muestras: el patrón viejo da 0 coincidencias con la forma de backticks.
+- **Gravedad: MINOR.** La primera barrera (lista blanca, E-1f/E-1g) y la comprobación (a) siguen firmes, y nada está
+  publicado. Pero (b) es justamente la segunda barrera de "Origen del build publicado" que documenta el README, y hoy
+  no cumple lo que promete.
+- **Decisión: corregirlo en este PR, antes del ready.** Coincido con el orquestador: es una línea, y el PR siguiente
+  existe para lo que depende de #8, no para deudas propias. Va como **TASK-2b** en el **handoff v1.5**:
+  - el patrón nuevo es `network"?:[^[:alnum:]]localnet[^[:alnum:]]`;
+  - el literal de §3.2 queda actualizado;
+  - la parte 3 del Anexo prueba **rojo con el patrón viejo y verde con el nuevo**, con un `localnet.json` forzado en
+    una copia del scratchpad (solo esa copia agrega `!contracts/deployments/localnet.json` a su `.dockerignore`);
+  - después, el positivo sin falsos positivos y el negativo;
+  - limpieza por línea base.
+- **Comprobaciones del MID sobre el patrón nuevo:**
+  - toma las 4 formas (comillas dobles, simples, sin comillas en la clave y backticks);
+  - no toma ``r===`localnet` ``, ``e.network===`localnet` ``, `localnet:{grpcUrl` ni `` `sui:localnet` ``;
+  - da **0** coincidencias en el bundle de testnet actual.
+  - **Ojo:** mi grep es `ugrep`, y ahí `[[:punct:]]` no tomó el backtick. Por eso el patrón usa `[^[:alnum:]]` y la
+    prueba definitiva es dentro de la imagen, con GNU grep (H-2, H-3 y H-4).
+- **Docs que dependen del cambio**, también en TASK-2b:
+  - la línea (b) de "La imagen" del README;
+  - `style-src 'self'` pasa de "pendiente" a "confirmado en TASK-3";
+  - las filas de TASK-3 y TASK-2b en STATUS.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| MINOR-1 (H-1) | DL-3 (b) / LIM-11 | `Dockerfile:22` (aprobado en TASK-2; origen del defecto: el plan v1.1) | La comprobación (b) no detecta el registro `localnet` con template literals, que es la forma real del bundle de Vite 8 | TASK-2b (handoff v1.5): patrón `network"?:[^[:alnum:]]localnet[^[:alnum:]]`, con rojo viejo y verde nuevo en la parte 3 del Anexo |
+
+TASK-3 en sí no tiene hallazgos: H-1 es de TASK-2 y lo encontró TASK-3.
+
+### Siguiente paso
+**TASK-2b autorizado** (handoff v1.5). Después, la revisión del MID, el commit y el PR #57 a ready.
+D-20261104-03 (6) **no aplicó**: TASK-3 corrió en #57. Conviene agregar a la línea (6) "(no aplicó: la localnet se
+liberó y TASK-3 corrió en #57, `<sha>`)".
+
+### Mensaje de commit propuesto (TASK-3: SMOKE parte 2 y reportes)
+```
+docs: record TASK-3, the CSP with the wallet kit mounted (#15)
+
+Run the production localnet build behind the runtime-stage Caddy image
+with the real CSP (only connect-src pointed at the isolated localnet):
+localnet · nodo OK, lobby with a CLI-created game, 13 gRPC POSTs 200,
+Lit styles via adoptedStyleSheets, deep-route reloads, and 0 CSP
+violations, so style-src 'self' holds. SMOKE part 2 11/11; isolated
+localnet closed per agents.md §3 step 7, Docker back to baseline.
+
+Refs #15
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
