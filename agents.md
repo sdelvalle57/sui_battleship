@@ -150,7 +150,7 @@ borradas al cerrar. Nada en `~/.sui/`.
      el prefijo del paso 3 y desde `contracts/`. Un `--pubfile-path` nuevo por génesis (uno viejo hace fallar a la CLI):
      - (A) smoke del script, salida dentro de `<SMOKE_DIR>`: `act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs publish --network localnet --pubfile-path "$SMOKE_DIR/Pub.localnet.toml" --out "$SMOKE_DIR/localnet.json"`;
      - (B) cuando la app necesita la ruta por defecto: lo mismo **sin `--out`**, que escribe
-       `contracts/deployments/localnet.json` (ignorado por git; el script crea la carpeta y el cierre la borra).
+       `contracts/deployments/localnet.json` (ignorado por git; el script crea la carpeta si falta y el cierre lo borra).
      Si modifica `Move.lock`: `git checkout -- contracts/Move.lock` y declararlo.
 5. **Cuentas:** `suic addresses --json` (solo alias y direcciones); las que se usen se anotan en
    `<SMOKE_DIR>/ids.env` (`export ADMIN=0x…`), que también acumula los IDs (`PKG`, `HOUSE`, …). **Nunca**
@@ -173,8 +173,11 @@ borradas al cerrar. Nada en `~/.sui/`.
 7. **Cierre:** `kill "$(cat <SMOKE_DIR>/sui.pid)"` (nunca `pkill`); en otra llamada, confirmar que terminó (`kill -0 "$(cat <SMOKE_DIR>/sui.pid)"` falla) y solo entonces `rm -rf <SMOKE_DIR>` (comprobar que ya no existe);
    `rm -f contracts/deployments/localnet.json` y `rmdir contracts/deployments 2>/dev/null || true` (pertenece a la
    génesis que se borra); sin cargar `env.sh`, `stat`/`ls` de `~/.sui/sui_config/` idénticos a la línea base;
-   `git status --porcelain`; `git diff --exit-code -- contracts/Move.lock`; ni `contracts/Pub.*.toml` ni
-   `contracts/Published.toml` ni `contracts/deployments/`.
+   `git status --porcelain --untracked-files=all` sin entradas de la corrida; `git diff --exit-code -- contracts/Move.lock
+   contracts/Published.toml` (desde #8, `Published.toml` y `deployments/testnet.json` están commiteados y no cambian;
+   antes no existen); y, como los ignora `.gitignore`, cada uno por separado: `test ! -e contracts/deployments/localnet.json`
+   y `! compgen -G 'contracts/Pub.*.toml'` (bash), los dos con estado 0. Nunca con un único `ls` de las dos rutas: `ls`
+   sale ≠ 0 si falta **cualquiera** de ellas, así que un `Pub.*.toml` sobrante pasaría por limpio (m-1 de #8).
    `sui start` 1.83 sale con código 144 ante SIGTERM; el harness marca el comando como fallido: es esperado, lo que
    vale es que `kill -0` falle.
 
@@ -365,11 +368,13 @@ testnet con una wallet real.
   terminal y con su `SUI_CONFIG_DIR` propio (fuera de `~/.sui/`, D-20261102-03); ningún agente corre el camino testnet.
   Publicar, upgradear y custodiar el `UpgradeCap`/`HouseCap` es del owner. Detalle y recuperación:
   `contracts/README.md` → "Despliegues".
-- **Orden de #8:** pre-vuelo H13 (repin si hace falta, gates re-medidos y commiteados) →
-  `SUI_CONFIG_DIR=<su dir> node scripts/publish.mjs publish --network testnet --dry-run` → lo mismo sin `--dry-run`
-  (dry run interno + confirmación escribiendo `testnet`; escribe `deployments/testnet.json` y la CLI,
-  `Published.toml`) → `update_fee_rate` con el comando que imprime el script → entrega de `testnet.json` +
-  `Published.toml` + digest (sin direcciones) en el mismo PR → borrar el directorio temporal del script.
+- **Orden de #8** (el del runbook del owner): pre-vuelo H13 (repin, gates re-medidos y commiteados) → config propia
+  y shell de publicación con `export SUI_CONFIG_DIR=<su dir>` y Node 26 (`nvm use`) → PV de testnet justo antes de
+  publicar → dry run → publicación (confirmación escribiendo `testnet`; escribe `deployments/testnet.json` y la CLI,
+  `Published.toml`) → archivos esperados (`git status`, `check`) → `update_fee_rate` a 200 (D-20261103-01) → House →
+  custodia de `HouseCap`/`UpgradeCap`/`Publisher` sin pegar la dirección → smoke crear/cancelar → entrega al
+  orquestador (los dos archivos sin editar, digests, sí/no de custodia, PV) → borrar los temporales del script con la
+  CI del PR en verde. Detalle: `contracts/README.md` → "Uso en testnet".
 - **Dirección publicadora:** recibe el `HouseCap` (`key` sin `store`, PROY-3). Si no es la wallet del
   navegador del panel admin (#14), el owner le pasa el cap con `transfer_house_cap` (no con "Send" de la
   wallet).

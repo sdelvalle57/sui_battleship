@@ -879,3 +879,266 @@ line (M-2, m-2). Script tests 99 -> 104.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+---
+
+## TASK-3
+
+## Task completado: HANDOFF_TESTNET_PUBLISH — TASK-3
+
+### Branch (con SHA corto del HEAD)
+
+`feature/issue-8-testnet-publish` @ `34aabbe`, con el diff de TASK-3 sin commitear encima. Handoff v1.1.
+
+### Archivos modificados/creados
+
+- `contracts/README.md`, en tres sitios:
+  - la intro de "Despliegues", con (a);
+  - "Uso en testnet (solo el owner)", reemplazada entera, con (b);
+  - "Versionado", con un bullet nuevo al final, (c).
+- `agents.md`: §3 paso 4 (B) en `:153`, §3 paso 7 en `:176-180` (M-7 con m-1) y §12 "Orden de #8", todo (d).
+- `documents/STATUS.md`: nota de TASK-3 en la fila "#8 🚧" y SHA de TASK-2, con (e). La fila "Gates" de Toolchain no
+  cambia.
+- `documents/REPORTES_TESTNET_PUBLISH.md`: esta sección.
+
+No toqué código, `DECISIONES.md`, "Recuperación" del README ni el cuerpo del issue.
+
+### Qué se implementó (3 líneas máx)
+
+**Runbook del owner** (pasos 0-12) con m-3 (`localnet.json` viejo en los pasos 1 y 5) y s-1 (`case` de `realpath` en el
+paso 1). Todo `sui client` pasa por `suio`. Los pasos 4, 6 y 7 remiten al bloque que imprime ahora el script (pedido del
+MID).
+**Versionado:** modelo de confianza del `UpgradeCap` (M-6).
+**`agents.md`:** cierre de smoke M-7 con un chequeo por ruta (m-1) y el "Orden de #8" según el runbook.
+
+### Tests y gates (output pegado, por área tocada)
+
+- **Agregados/modificados:** ninguno. Busqué tests que lean `contracts/README.md` o `agents.md` (grep en
+  `contracts/scripts`, `app/src`, `app/scripts` y `.github`) y no hay ninguno. `app/src/sui/config.test.ts:13` solo
+  menciona en un comentario los IDs ficticios del ejemplo del README, que no cambió en este task.
+
+**contracts/scripts** (Node, con `export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH`, desde `contracts/`):
+
+```text
+$ node --version
+v26.13.0
+$ node --test scripts/*.test.mjs; echo "exit=$?"
+… (104 líneas ✔, idénticas en nombre y orden a las de TASK-2)
+ℹ tests 104
+ℹ suites 0
+ℹ pass 104
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 177.018754
+exit=0
+$ node scripts/publish.mjs check; echo "exit=$?"
+0 despliegues
+exit=0
+$ git diff --exit-code -- Move.lock; echo "lock=$?"
+lock=0
+```
+
+Por archivo: `deployment.test.mjs` 51 pass / 0 fail y `publish.test.mjs` 53 pass / 0 fail. Total **104**, sin delta
+respecto de TASK-2, como corresponde a un task solo de docs.
+
+**Gates del handoff (§5: solo docs):**
+
+```text
+$ git diff --stat
+ agents.md           |  21 ++++--
+ contracts/README.md | 212 ++++++++++++++++++++++++++++++++++++++++++++++------
+ documents/STATUS.md |   2 +-
+ 3 files changed, 202 insertions(+), 33 deletions(-)
+```
+
+Higiene sobre las líneas agregadas del diff:
+- 0 claves (`suiprivkey`, `mnemonic`, `privkey`);
+- 0 rutas personales (`/home/`, usuario, nvm, scratchpad);
+- 0 hex de 40-64 caracteres;
+- 0 `0x…`.
+
+- **Tablas de contrato y app/src/sui/ sincronizados:** no aplica. **App:** no aplica.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+
+Ningún `sui client`, ninguna red. Comprobaciones locales sobre los comandos nuevos. Las que crean archivos corrieron en
+directorios desechables del `<scratchpad>`, nunca en `~/.sui`, y los borré al terminar.
+
+1. **Todos los bloques `bash` del runbook parsean:** los 11, del paso 1 al 10, dan `bash -n` = 0. Antes sustituí los
+   placeholders `<repo>`, `<branch>`, `<su dir>` y `<directorio temporal…>`.
+2. **Ningún `sui client` fuera de `suio`:** el script de comprobación encontró `[]` líneas de código del runbook con
+   `sui client` fuera de la definición de `suio()`. La única línea de código que nombra `~/.sui` es el `case` de s-1,
+   que solo hace `realpath` (lectura).
+3. **Línea `case` del paso 1 (s-1).** La corrí con bash y un `HOME` falso en `<scratchpad>`. zsh no está instalado en
+   esta máquina, así que no pude probarla ahí.
+
+   | `SUI_CONFIG_DIR` | Salida |
+   |---|---|
+   | dir propio | `config fuera de ~/.sui` |
+   | `~/.sui/sui_config` | `ABORTA: config dentro de ~/.sui` |
+   | symlink propio que apunta a `~/.sui/sui_config` | `ABORTA` (realpath resuelve el symlink) |
+   | `~/.sui` mismo | `ABORTA` |
+   | `~/.suix` (prefijo parecido) | `config fuera de ~/.sui` (la `/` final evita el falso positivo) |
+
+4. **Regla de cierre M-7, por ruta (m-1).**
+   - En el repo, hoy (antes de publicar): `git diff --exit-code -- contracts/Move.lock contracts/Published.toml` da 0,
+     `test ! -e contracts/deployments/localnet.json` da 0 y `! compgen -G 'contracts/Pub.*.toml'` da 0. La regla vale
+     antes de publicar: el `git diff` de una ruta inexistente da 0.
+   - En un árbol desechable:
+
+     | Estado | `localnet` | `pub` | `ls` único de las dos rutas |
+     |---|---|---|---|
+     | limpio | 0 | 0 | 2 |
+     | sobra `Pub.localnet.toml` | 0 | **1** | 2 (parece limpio: el falso negativo de m-1) |
+     | sobra `localnet.json` | **1** | 0 | 2 (parece limpio) |
+     | sobran los dos | 1 | 1 | 0 |
+
+     Los chequeos por ruta detectan cada sobrante; el `ls` único solo detecta el caso en que sobran los dos.
+5. **Coherencia del runbook con el código:**
+   - el script guarda la salida en `$D/publish-output.json` (`${prefix}-output.json`, `publish.mjs:631`), que es lo que
+     lee el paso 8;
+   - `create_game(house, stake: Coin<SUI>, opponent: Option<address>, ctx)` cuadra con el `ptb` del paso 9;
+   - los campos de `FeeRateUpdated` (`old_fee_rate`, `new_fee_rate`), `GameCreated` (`bet`, `fee_rate`, `opponent`),
+     `GameCancelled` (`creator`, `cancelled_by`, `refund`) y `House` (`version`, `fee_rate`, `fees_collected`,
+     `min_bet`, `max_bet`) coinciden con los filtros `jq`.
+
+   La forma JSON real de la CLI (por ejemplo `.owner.AddressOwner`, `u16` como `200.0`, `fees_collected`, `state`) la
+   confirma TASK-4.
+
+### Desviaciones del handoff (o "ninguna")
+
+- **Qué cambió:** el texto (b) del runbook va tal cual, salvo redacción en cuatro puntos. Ningún comando ni valor
+  esperado cambió. El diff contra el bloque `~~~markdown` del handoff:
+  1. Paso 1: "lo ignora git" → "git lo ignora".
+  2. **Paso 4:** "y el siguiente paso" → "y el bloque 'Siguiente paso obligatorio' con dos comandos: el
+     `update_fee_rate` con 200 (paso 6) y la lectura de la House (paso 7), los dos con el mismo prefijo que `suio`".
+  3. **Paso 6:** "Es el mismo comando que imprime el script" → "Es el primer comando del bloque 'Siguiente paso
+     obligatorio' que imprimió el script en el paso 4: el mismo `call`, con el prefijo de `suio` escrito entero, los
+     IDs ya puestos y `200`. Aquí va con `suio`, las variables del paso 4 y `--json`, para guardar la salida en `$D` y
+     leer el evento. Se corre **una sola vez**, este o el impreso: una segunda corrida emitiría otro `FeeRateUpdated`
+     (200 → 200) y el `old_fee_rate` esperado ya no sería 0."
+  4. **Paso 7:** se agrega "Es la misma lectura que la línea 'Verificación' del bloque del script."
+  - En `agents.md:176-180` (M-7), el texto del handoff va con la nota de m-1 integrada: "Nunca con un único `ls` de las
+    dos rutas…".
+  - El "Orden de #8" de §12 agrega, entre paréntesis, qué se entrega y "`nvm use`".
+- **Por qué:**
+  - Los puntos 2 a 4 responden al pedido del MID de que el paso 6 remita al comando que el script imprime desde TASK-2.
+  - Además, el comando impreso y el del runbook no son idénticos: el del runbook lleva `--json` y variables. Sin la
+    aclaración de "una sola vez", un owner que corra los dos vería `old_fee_rate` 200 en el segundo y podría tomar el
+    paso por fallido.
+- **Verificación extra realizada:** `bash -n` de los 11 bloques; la línea `case` en 5 casos; la regla M-7 en 4 estados
+  frente al `ls` único; el cotejo de nombres de archivo, firma y eventos con el código.
+
+### Riesgos / pendientes (o "ninguno")
+
+- **`realpath -m` es de GNU coreutils.** Funciona en Linux, que es la terminal del owner en esta máquina. En macOS, con
+  el `realpath` de BSD, `-m` no existe: la línea fallaría con un error de uso y no imprimiría `config fuera de ~/.sui`,
+  así que el criterio del paso falla cerrado. No cambio el comando sin evidencia de TASK-4; lo dejo anotado.
+- **El comportamiento en zsh no está probado** (no está instalado aquí). El `case` con `"$(…)"/*` y `${VAR:?…}` son
+  POSIX, así que se espera que funcione igual.
+- **Las formas JSON de la CLI 1.83 en los filtros de los pasos 6-10** las confirma TASK-4. Si alguna difiere, se corrige
+  ahí con evidencia, como prevé el handoff.
+
+### Documentación
+
+- **READMEs / agents.md actualizados:** sí, este task es de docs (`contracts/README.md`, `agents.md`).
+- **Snippet para documents/STATUS.md (ya aplicado):** fila "#8 🚧" con lo siguiente.
+  - TASK-2 (`34aabbe`).
+  - TASK-3: el runbook del owner en `contracts/README.md` → "Uso en testnet" (pasos 0-12, todo `sui client` vía
+    `suio`), el modelo de confianza del `UpgradeCap` en "Versionado" (M-6), la regla de cierre M-7 en `agents.md` §3
+    paso 7 (chequeo por ruta, m-1) y el "Orden de #8" de §12.
+  - Siguen TASK-4, la publicación del owner y TASK-5/6.
+
+**Mensaje de commit sugerido:** `docs: owner testnet runbook, UpgradeCap trust model and smoke close rule (#8)`. No hice
+commit ni push.
+
+## Revisión TASK-3: PASA
+
+> MID · 2026-11-03 · Contra `documents/HANDOFF_TESTNET_PUBLISH.md` v1.1 (TASK-3 (a)-(e), m-1 y m-3), `documents/ESTANDARES.md`
+> y el diff real sobre `34aabbe`, sin commitear: `agents.md` +13/−8, `contracts/README.md` +194/−18, `STATUS.md` 1 fila y
+> este archivo. Solo docs; sin gates de código (D-20261030-02). Contexto del orquestador: el owner publica desde esta
+> misma máquina Linux con bash.
+
+**1. Seguridad de cada comando del runbook (`contracts/README.md:584-764`): ✅**
+- **Ninguna llamada puede caer en `~/.sui/`.**
+  - Todo `sui client` pasa por `suio` (`:619`), que aborta antes de invocar `sui` si `SUI_CONFIG_DIR` no está definida (`:?`), y en una shell nueva `suio` no existe.
+  - En las líneas agregadas, grep no encontró ningún `sui client` ni `sui keytool` desnudo; las menciones que quedan son prosa.
+  - La línea `case` (`:618`, s-1) cubre el caso que `suio` no detecta (variable definida pero dentro de `~/.sui`). Revisé los bordes:
+    - igual a `~/.sui` → `ABORTA`, porque el `/` final hace que `*` matchee vacío;
+    - `~/.sui` como symlink → resuelto por `realpath`;
+    - `~/.sui` inexistente → sin error, por `-m`.
+  - `printf 'n\n' | sui --version` no lee la config.
+  - Los placeholders (`<su dir>`, `D=<…>`, `<branch>`) no se ejecutan: el shell los toma como redirección.
+  - `node scripts/publish.mjs` va sin `printf` y con la guarda del script; la confirmación necesita la TTY.
+- **Ninguna salida pegable trae direcciones.**
+  - Paso 6: `FeeRateUpdated` = `house_id` + `old_fee_rate`/`new_fee_rate` (`house.move:48-52`).
+  - Paso 7: House compartida, sin campos de dirección.
+  - Paso 8: la dirección queda en `A` y solo salen tipo + `true`/`false`.
+  - Paso 9: proyección `{bet, fee_rate, opponent}`, que deja fuera el `creator` (`game.move:57-61`).
+  - Paso 10: `{refund, by_creator}` en lugar de `creator`/`cancelled_by` (`game.move:66-70`), y `state` `Cancelled` sin dirección.
+  - Lo único que imprime la dirección (`suio active-address`, `suio gas`) lleva "no se pega", y el paso 11 prohíbe entregar `$D`.
+- **Orden y rutas:**
+  - Paso 1 en `<repo>` (rutas `contracts/…`); `cd contracts` en el paso 3.
+  - Pasos 4-5 con rutas relativas a `contracts/`.
+  - `git status --porcelain` da rutas relativas a la raíz, que es lo que espera el paso 5.
+  - La comisión (paso 6) va antes del smoke (paso 9), que comprueba `fee_rate` 200.
+- **m-3:** ✅.
+  - `:615` borra un `localnet.json` viejo antes de publicar. Como git lo ignora, el `git status` previo no lo ve, y el orden es correcto.
+  - `:686-688` cubre el caso residual sin STOP falso.
+
+**2. Coincidencia con el texto aprobado: ✅**
+- Comandos y valores esperados idénticos al bloque (b) del handoff v1.1, con m-3 y s-1 incluidos.
+- Los ajustes declarados son de redacción y todos mejoran la claridad:
+  - **Paso 4:** describe el bloque impreso por TASK-2.
+  - **Paso 6:** remite al comando impreso y agrega "**una sola vez**, este o el impreso". Es un acierto: correr los dos daría un segundo `FeeRateUpdated` 200 → 200 y el owner podría tomar el paso por fallido.
+  - **Paso 7:** dice que es la misma lectura que la línea "Verificación" del script.
+  - **Paso 1:** "git lo ignora", orden de palabras.
+- Los otros dos ajustes también están declarados: §12 agrega qué se entrega y `nvm use`, y M-7 integra la nota de m-1.
+- `Versionado` (`:152-159`, M-6) y la línea de Node en "Despliegues" (`:488-489`) son textuales.
+- El encabezado "Uso en testnet (solo el owner)" no cambió, así que el ancla `#uso-en-testnet-solo-el-owner` del comentario de #8 sigue siendo válida.
+
+**3. Regla M-7 (`agents.md:173-180`): ✅**
+- Hay `git status --porcelain --untracked-files=all` y `git diff --exit-code -- contracts/Move.lock contracts/Published.toml`.
+  - Antes de #8 da 0, porque las rutas no existen.
+  - Después, `Published.toml` y `testnet.json` están commiteados y sin cambios.
+- Cada ignorado se chequea por separado (m-1):
+  - `test ! -e contracts/deployments/localnet.json` corre después del `rm -f` del mismo paso, así que confirma que se borró;
+  - `! compgen -G 'contracts/Pub.*.toml'` da 0 sin coincidencias y 1 con un sobrante.
+- La nota explica por qué no sirve un `ls` único.
+- `:153`, variante (B), ajustado. Ninguna otra parte del paso 7 cambió.
+
+**4. Resto de la checklist: ✅**
+- **PROY-20:** STATUS, fila "#8 🚧" con TASK-2 `34aabbe` y lo hecho en TASK-3.
+- **SEG-3:** grep sobre las líneas agregadas: 0 rutas personales, 0 claves, 0 hex de 40-64, 0 `0x…` largos.
+- **Riesgos declarados:** `realpath -m` es de GNU y zsh no está probado. Según el orquestador, no afectan al owner (Linux con bash), y en macOS la línea fallaría cerrada.
+- **Formas JSON de la CLI:** las confirma TASK-4, como prevé el handoff.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Sin hallazgos que bloqueen | — |
+| n-1 | 🔵 ARQ-4 (opcional) | `contracts/README.md`, "Recuperación" (fuera del diff) | El owner obtiene el `tx-block` con `printf 'n\n' \| SUI_CONFIG_DIR=<su dir> sui client --json tx-block …`. Es seguro (`<su dir>` no se ejecuta) y está vigente, pero no usa el mismo patrón que `suio`. | Nada en este task: el handoff dejaba "Recuperación" fuera de alcance. Si se toca en TASK-6, cambiarlo por `suio --json tx-block <digest> > "$D/tx-block.json"` en la misma shell. |
+
+### Siguiente paso
+- Commitear TASK-3: `agents.md`, `contracts/README.md`, `documents/STATUS.md` y este archivo.
+- **TASK-4 autorizado** con el handoff v1.1 (incluido m-5): ensayo en la localnet aislada, variante A, Parte A A0-A12 en `documents/SMOKE_TESTNET_PUBLISH.md`. Cada filtro `jq` de los pasos 6-10 se corre contra la salida real; si uno difiere, se corrige en el README y se declara.
+- El comentario de #8 se publica en G1, con el permalink al `<head>` (s-3).
+
+### Mensaje de commit propuesto
+```
+docs: owner testnet runbook, UpgradeCap trust model and smoke close rule (#8)
+
+Rewrites contracts/README "Uso en testnet" as a 0-12 owner runbook: own
+SUI_CONFIG_DIR exported and checked outside ~/.sui, Node 26, PV re-check
+right before publishing, dry run with an explicit success line, expected
+files, fee to 200 bps (D-20261103-01) run once, House read, custody of
+HouseCap/UpgradeCap/Publisher without pasting the address, create/cancel
+smoke, hand-off and cleanup. Every sui client call goes through a guarded
+suio function. Adds the UpgradeCap trust model to "Versionado" (M-6), the
+per-path smoke close rule to agents.md §3 (M-7, m-1) and the #8 order to
+§12.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
