@@ -1464,3 +1464,313 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 > #14 TASK-3 ✅ (2026-11-04, revisión MID PASA): máquina con el objetivo `house` y las acciones `updateFeeRate`,
 > `updateBetLimits`, `withdrawFees` (NIT-3 de #12 cerrado); `satisfies` + `TxValueMap` y `switch` exhaustivos sin `default`;
 > `build(sender)`/`precheck(signal, sender)`; invalidación H-5. App 1068 tests en 60 archivos (+19), build 902.36 kB.
+
+## Task completado: HANDOFF_HOUSE_ADMIN — TASK-4
+
+### Branch (con SHA corto del HEAD)
+
+`feature/issue-14-house-admin` @ `68514ec` (handoff v1.3; sin commits del DEV).
+
+### Archivos modificados/creados
+
+- Nuevos:
+  - `app/src/hooks/useHouseCap.ts`;
+  - `app/src/hooks/houseAdminTx.ts`;
+  - `app/src/hooks/useUpdateFeeRate.ts`, `app/src/hooks/useUpdateBetLimits.ts` y `app/src/hooks/useWithdrawFees.ts`;
+  - `app/src/hooks/useHouseCap.test.tsx`;
+  - `app/src/hooks/useHouseAdminActions.test.tsx`, con las tres acciones en un solo archivo.
+- Cambiado: `app/src/test/txHarness.tsx` (+ `useHouseView()`).
+- No cambian (`git diff --exit-code` sale con exit 0, abajo):
+  - lo de TASK-3 (`txSession.ts`, `queryKeys.ts`, `txInvalidation.ts`, `useTxTarget.ts`, `useExecuteTransaction.ts`);
+  - `sui/`, `components/` y `pages/`;
+  - `contracts/` y las dependencias.
+
+### Qué se implementó (3 líneas máx)
+
+- `useHouseCap` lee el `HouseCap` de la cuenta conectada con la política común. `cap` vale `unknown` hasta la primera
+  lectura exitosa y `known` desde entonces, también si una relectura falla. Sin `placeholderData`, y sin cuenta usa
+  `skipToken`.
+- `houseCapPrecheck` es el `precheck` común: `getObject` y `HOUSE_CAP_LOST_MESSAGE` invalidando el `houseCap` de la
+  cuenta que firma.
+- Los tres hooks finos de acción usan la máquina común. El retiro arma la transacción con `recipient: sender`, la cuenta
+  del clic.
+
+### Tests y gates (output pegado, por área tocada)
+
+- Agregados (33 tests; 1068 → 1101, 60 → 62 archivos).
+- `useHouseCap.test.tsx` (8), con timers falsos y la política real (`createPolicyQueryClient`):
+  - T4-1: sin cuenta da `no_account` y ningún `listOwnedObjects`.
+  - T4-2:
+    - con la cuenta en mayúsculas y el listado real de `ADMIN` ⇒ `known` con el cap. El dato queda bajo
+      `queryKeys.houseCap(…, ADMIN)` normalizada, y el pedido lleva `owner` normalizado, `limit: 2` y `content`;
+    - con el listado vacío real ⇒ `known` con `null`.
+  - T4-16:
+    - `UNAVAILABLE` en los tres intentos da `retrying` 2/3 y luego 3/3, y después `error`, con 3 pedidos. `cap` sigue
+      `{ kind: 'unknown' }` en cada paso, nunca `known` con `null`;
+    - si el tercer intento responde ⇒ `known` con el cap y `ready`.
+  - T4-3: dos caps (`invariant`, no transitorio) ⇒ `error` con un solo pedido y `cap` `unknown`.
+  - T4-4: con el cap leído, un `refetch` que falla pasa por `retrying 2/3` y luego `error`, y `cap` sigue `known` con el cap.
+  - T4-5: con otra cuenta en el mismo hook, `address` nueva y `cap` `unknown` hasta su lectura (`known` `null`). El pedido
+    va con el dueño nuevo.
+- `useHouseAdminActions.test.tsx` (25). Las tres acciones van sobre `useHouseView()`, con la cuenta del clic igual al
+  dueño real del cap de la fixture. El cliente mock tiene `getObject` del cap y un `listOwnedObjects` que **lanza** si se
+  lo llama:
+  - T4-6 (por acción): `getObject` con otro dueño ⇒ `failure` `HOUSE_CAP_LOST_MESSAGE`. No hay preflight
+    (`SimulateTransaction`) ni wallet. Solo se invalida `houseCap` de la cuenta, y el pedido es `getObject` con
+    `content: false`.
+  - T4-7: `owner` `null`, otro tipo, `ObjectError` `notFound` y `deleted` ⇒ el mismo corte.
+  - T4-8 (por acción): camino de éxito con un solo `getObject` y `listOwnedObjects` sin llamar.
+  - T4-9:
+    - `ObjectError` `unknown` ⇒ "No se pudo preparar la transacción: fallo del nodo", sin preflight ni invalidaciones;
+    - `RpcError` `UNAVAILABLE` ⇒ `PREFLIGHT_NETWORK_MESSAGE`;
+    - ninguno de los dos da el texto del cap perdido.
+  - T4-10: los `SimulationError` reales `feeTooHigh` (`house`/0), `limitsZeroMin` (`house`/1) y `withdrawNoFees`
+    (`house`/2) en la preflight ⇒ `ABORT_MESSAGES.house[n]` con el sufijo `(código house/n)`, wallet sin abrir, sin
+    reset, y las invalidaciones exactas de H-5 por acción.
+  - T4-11 (por acción): éxito con `executed` real. Los valores son `{ houseId, 0, 250 }`, los cuatro montos de límites y
+    `10000000n`. Las invalidaciones de H-5 salen en orden y antes de `done`: se registra la etapa en cada
+    `invalidateQueries`, hay una entrada por clave y ninguna es `done`.
+  - T4-12: `updateFeeRate` "sin confirmar" ⇒ `target.unconfirmed` = `{ digest }`. Después, `limits` y `withdraw` no hacen
+    nada: siguen 1 `getObject`, 1 preflight y 1 wallet, y sus `outcome` siguen `null`.
+  - T4-13:
+    - el `recipient` del `TransferObjects` es la cuenta del clic, tanto en la copia de la preflight como en la
+      transacción que va a la wallet, que tiene 2 comandos;
+    - si la cuenta conectada pasa a otra durante la preflight, el `recipient` de la wallet sigue siendo la del clic, y el
+      `precheck` y las invalidaciones también son de esa cuenta.
+  - T4-14 (por acción): éxito sin eventos ⇒ `success` con `value: null`.
+  - T4-15:
+    - el `precheck` da `'owned'` y la preflight lanza el `SimulationError` real de `nonOwnerPreflight`, sin
+      `executionError` y con `cause` `RpcError` `INVALID_ARGUMENT` ⇒ `failure` "No se pudo preparar la transacción:
+      <texto real del nodo>". No llama a `confirmTransaction` ni a la wallet ni invalida nada;
+    - un segundo intento, con `getObject` ya en el dueño nuevo ⇒ corte `HOUSE_CAP_LOST_MESSAGE`, sin otra preflight y con
+      el `houseCap` invalidado;
+    - el test fija además que `isPreflightNetworkCause` de ese `INVALID_ARGUMENT` es `false`: la preflight real lo
+      relanza tal cual y no como error de red (DL-10).
+- Verificación extra: probé una mutación temporal, `recipient` fijo en otra dirección en `useWithdrawFees.ts`, y los dos
+  tests de T4-13 dieron rojo. Restauré el archivo y volvió a 25/25.
+- Tests viejos: sin cambios. `txHarness.tsx` solo suma `useHouseView` e imports.
+- Contracts: no aplica.
+
+**Gate de la app** (desde `<repo>`, con `export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH`; output completo
+de la corrida final, sobre el árbol entregado):
+
+```text
+$ node --version
+v26.13.0
+$ npm --version
+11.20.0
+$ npm ci
+
+added 293 packages, and audited 295 packages in 8s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[exit=0]
+$ npm audit signatures
+audited 292 packages in 8s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+[exit=0]
+$ npm audit --omit=dev --audit-level=high
+found 0 vulnerabilities
+[exit=0]
+$ npm run lint -w app
+
+> lint
+> eslint . --max-warnings 0
+
+[exit=0]
+$ npm run typecheck -w app
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+[exit=0]
+$ npm test -w app
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  62 passed (62)
+      Tests  1101 passed (1101)
+   Start at  04:00:24
+   Duration  16.98s (environment 61%, tests 14%, import 10%, setup 9%, transform 5%)
+
+Environment  jsdom was created 62 times · 97.70s total, 61% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+[exit=0]
+$ VITE_SUI_NETWORK=testnet npm run build -w app
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 596 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-Dw47nO8e.js   902.36 kB │ gzip: 273.84 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 402ms
+[exit=0]
+$ git status --porcelain --untracked-files=all
+ M app/src/test/txHarness.tsx
+?? app/src/hooks/houseAdminTx.ts
+?? app/src/hooks/useHouseAdminActions.test.tsx
+?? app/src/hooks/useHouseCap.test.tsx
+?? app/src/hooks/useHouseCap.ts
+?? app/src/hooks/useUpdateBetLimits.ts
+?? app/src/hooks/useUpdateFeeRate.ts
+?? app/src/hooks/useWithdrawFees.ts
+$ git diff --exit-code -- contracts/ app/src/sui/ app/src/components/ app/src/pages/ app/src/hooks/txSession.ts app/src/hooks/queryKeys.ts app/src/hooks/txInvalidation.ts app/src/hooks/useTxTarget.ts app/src/hooks/useExecuteTransaction.ts package.json app/package.json package-lock.json
+[exit=0]
+```
+
+- **Build:** igual que en TASK-3, 902.36 kB (273.84 kB gzip). Los hooks nuevos todavía no los importa ninguna página;
+  entran al bundle con TASK-5.
+- **Lint:** 0, sin `eslint-disable`, `useRef` ni `useEffect`. Una corrida previa del gate dio 1 error de lint en el test
+  nuevo (`no-unnecessary-condition`, un `?.` de más). Lo corregí y el output pegado es el de la corrida final.
+- **Dependencias:** sin delta.
+- **Sincronización:** la tabla de contrato y `app/src/sui/` no aplican.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+
+No aplica: sin localnet. No toqué procesos ni puertos de `-issue15`.
+
+### Desviaciones del handoff
+
+1. - Qué cambió:
+     - `useHouseCap` devuelve `address` **normalizada**;
+     - sin cuenta, la clave usa `'0x0'` como dueño de relleno, el mismo patrón que `useSuiBalance` (la query no corre
+       por `skipToken`);
+     - los datos de `useUpdateBetLimits().update` tienen un tipo exportado, `UpdateBetLimitsInput`, con la misma forma
+       que fija §4.
+   - Por qué: la clave y el `precheck` normalizan, y la `key={address}` de TASK-5 tiene que ser estable ante
+     mayúsculas.
+   - Verificación extra realizada: T4-2 con la cuenta en mayúsculas ⇒ `address` normalizada.
+2. - Qué cambió: los tests de las tres acciones están en un solo archivo, `useHouseAdminActions.test.tsx`, como permite
+     §4, con `describe`/`it.each` por acción.
+   - Por qué: comparten fixture, mocks y helpers.
+   - Verificación extra realizada: no aplica.
+
+### Riesgos / pendientes
+
+- `useHouseCap` no fija intervalo, igual que `useHouse`: el panel relee al montar y al volver el foco, y con "Volver a
+  comprobar" (TASK-5). El atraso del índice tras recibir el cap (V-12, ≤ 0,5 s en localnet) lo cubre ese botón.
+- El texto de `HOUSE_CAP_LOST_MESSAGE` y el de V-11 (`PREPARE_FAILED_PREFIX` + el texto del nodo, con direcciones) son los
+  que va a mostrar el panel. TASK-6 documenta el límite de T4-15.
+
+### Documentación
+
+- READMEs / `agents.md` actualizados: no aplica en TASK-4. TASK-6 suma a `app/README.md` `useHouseCap`/`CapKnowledge`,
+  el `precheck` común y los tres hooks de acción.
+- Snippet propuesto para `documents/STATUS.md` (fila de #14):
+
+  > #14 TASK-4 ✅ (2026-11-04): hooks de la House: `useHouseCap` (`CapKnowledge` `unknown`/`known`, sin
+  > `placeholderData`; con `UNAVAILABLE` reintenta y nunca da "Sin permisos"), `houseCapPrecheck` (`getObject`, nunca
+  > `listOwnedObjects`; cap perdido ⇒ corte sin wallet e invalidación del `houseCap`) y `useUpdateFeeRate`,
+  > `useUpdateBetLimits`, `useWithdrawFees` (retiro a la cuenta del clic por construcción). App 1101 tests en 62 archivos
+  > (+33), build 902.36 kB; lint 0.
+
+---
+
+## Revisión TASK-4: PASA
+
+> MID, 2026-11-04. Revisado contra el diff real (`app/src/hooks/useHouseCap.ts`, `houseAdminTx.ts`, `useUpdateFeeRate.ts`,
+> `useUpdateBetLimits.ts`, `useWithdrawFees.ts`, `useHouseCap.test.tsx`, `useHouseAdminActions.test.tsx` y
+> `app/src/test/txHarness.tsx`, sin commitear sobre `68514ec`) y el output pegado. No corrí gates.
+
+**Checklist de §5, con los focos pedidos:**
+
+- **Implementa lo pedido (D-1 hook, D-6, H-2, H-3).** `useHouseCap` (`useHouseCap.ts:26-49`): sin cuenta, `skipToken` y
+  `no_account`; con cuenta, clave `houseCap(red, pkg, cuenta normalizada)`, sin opciones propias (política común) y sin
+  `placeholderData`; `cap` = `unknown` ⇔ `query.data === undefined`. Las tres acciones son hooks finos sobre la máquina, con
+  el `precheck` común y el `interpret` del evento; `useHouseView` en el arnés.
+- **T4-16, un error de red nunca da "Sin permisos": cumplido.** `UNAVAILABLE` en los 3 intentos ⇒ `retrying` 2/3 y 3/3 y
+  después `error`, con `cap` **siempre** `{ kind: 'unknown' }` y 3 pedidos (`useHouseCap.test.tsx:108-122`); si el tercer
+  intento responde ⇒ `known` + `ready` (`:124-134`). T4-3 (no transitorio ⇒ `unknown` + `error`, 1 pedido) y T4-4 (con el cap
+  leído, una relectura que falla deja `known` con el cap) completan H-2. Como `known` con `null` solo sale de un `null` de
+  `fetchHouseCap`, y este solo lo da con la regla de certeza (T2-4..T2-7, T2-17), no hay camino de un error a "Sin permisos".
+- **`precheck` = solo `getObject`: cumplido.** `houseAdminTx.ts:23-29` llama únicamente a `checkHouseCapOwnership`
+  (`getObject` con `content: false`, T4-6 lo verifica). T4-8 monta un `listOwnedObjects` que lanza si se lo llama y las tres
+  acciones terminan en `success` con 1 `getObject`. T4-6/T4-7: otro dueño, `owner` `null`, otro tipo, `notFound` y `deleted`
+  ⇒ corte con `HOUSE_CAP_LOST_MESSAGE`, sin preflight ni wallet, invalidando **solo** `houseCap` de la cuenta. T4-9:
+  `ObjectError` `unknown` ⇒ "No se pudo preparar la transacción: …" y `UNAVAILABLE` ⇒ el texto de red, nunca el de cap
+  perdido (SUGGESTION-1 de la ronda corta).
+- **T4-13, `recipient` = la cuenta del clic: cumplido.** `useWithdrawFees.ts:22` usa `build: (sender) => … recipient:
+  sender` (N-2 por construcción). El test decodifica el input puro del `TransferObjects` en la transacción de la preflight y
+  en la de la wallet (2 comandos) y da la cuenta del clic; con la cuenta conectada cambiada a otra durante la preflight, el
+  `recipient` y las invalidaciones siguen siendo de la cuenta del clic.
+- **T4-15, el error real de S-5: cumplido.** Usa el `message` real de `nonOwnerPreflight` (sin `executionError`, `cause`
+  `INVALID_ARGUMENT`, que `isPreflightNetworkCause` no toma como red): `failure` con `PREPARE_FAILED_PREFIX` + el texto del
+  nodo, sin wallet, sin `confirmTransaction` y **sin** invalidación (DL-10 de #12); el segundo intento, con `getObject` ya en
+  otro dueño, corta en el `precheck` con `HOUSE_CAP_LOST_MESSAGE` e invalida `houseCap`. Es el comportamiento que fija la
+  v1.2.
+- **Invalidaciones exactas (H-5): cumplido.** T4-11 con los tres `executed` reales: `[house, houseCap]` para comisión y
+  límites y `[house, balance, houseCap]` para el retiro, **en orden** y todas antes de `done` (la etapa registrada en cada
+  invalidación nunca es `done`); T4-10: con un abort real de la preflight (`house`/0, 1, 2) el mensaje mapeado, wallet sin
+  abrir, `resetQueries` nunca llamado y las mismas listas de H-5. T4-12: un "sin confirmar" de la comisión bloquea las otras
+  dos (ni `getObject` ni preflight ni wallet de más).
+- **Lint sin `useRef`/`useEffect`: cumplido.** `grep` de `useRef|useEffect|eslint-disable` en los cinco hooks: vacío; lint 0.
+- **Capas y LIM.** `hooks/` importa de `@mysten/*` solo la raíz del kit, `@mysten/sui*` y TanStack; el `precheck` común
+  evita la triple copia (LIM-5). Sin debug.
+- **Tests y gates.** +33 (1101 en 62 archivos); lint 0, typecheck 0; build 902.36 kB sin cambio (los hooks todavía no los
+  importa ninguna vista); `contracts/`, `sui/` y dependencias sin delta.
+- **Desviaciones 1-2: aceptadas.** La 1 (`address` normalizada en el resultado y `0x0` en la clave de una consulta
+  deshabilitada sin cuenta) es el patrón de `useSuiBalance` y da una `key={address}` estable para TASK-5; la 2 (un solo
+  archivo para las tres acciones) comparte fixture y mocks.
+
+### Hallazgos
+
+Ninguno.
+
+**Nota para TASK-5 (no es hallazgo):** el texto de T4-15 trae las direcciones del nodo (aceptado en la v1.2). El panel lo
+muestra tal cual en el `TransactionStatus` de la acción; TASK-6 lo documenta como límite.
+
+### Siguiente paso: TASK-5 autorizado (handoff v1.3)
+
+### Mensaje de commit propuesto
+
+```
+feat(app): add House admin hooks (#14)
+
+TASK-4 of the House admin panel: useHouseCap (unknown until a first
+successful read, kept known on a failing refetch, network errors go
+through the shared retry policy and never read as "no permission"),
+a shared HouseCap precheck by getObject only, and useUpdateFeeRate,
+useUpdateBetLimits and useWithdrawFees on the shared machine. The
+withdraw recipient is the click account by construction; values come
+from the confirmed events and invalidations follow H-5.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+### Snippet para STATUS.md
+
+> #14 TASK-4 ✅ (2026-11-04, revisión MID PASA): `useHouseCap` (`CapKnowledge`, política común: un error de red nunca da
+> "Sin permisos"), `precheck` común por `getObject` y los tres hooks de acción (retiro a la cuenta del clic; H-5). App 1101
+> tests en 62 archivos (+33), build 902.36 kB.
