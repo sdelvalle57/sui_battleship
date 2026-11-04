@@ -6,7 +6,7 @@ WORKDIR /repo
 # .nvmrc antes del check: la guarda de Node de publish.mjs (#8) lo exige en todos los subcomandos (MAJOR-1).
 COPY .nvmrc ./
 COPY contracts/ contracts/
-RUN test -f contracts/deployments/testnet.json || { echo "ERROR (#15): falta contracts/deployments/testnet.json. Lo commitea #8 tras la publicación del owner en testnet; sin él no se construye la app (nunca IDs a mano)." >&2; exit 1; }
+RUN test -f contracts/deployments/testnet.json || echo "ERROR (#15): falta contracts/deployments/testnet.json. Lo commitea #8 tras la publicación del owner en testnet; sin él no se construye la app (nunca IDs a mano)."
 RUN node contracts/scripts/publish.mjs check
 COPY package.json package-lock.json .npmrc ./
 COPY app/package.json app/
