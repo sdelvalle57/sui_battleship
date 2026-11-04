@@ -73,6 +73,8 @@ sui_battleship/
 ├── documents/            # flujo de trabajo, estándares, decisiones y estado del proyecto
 ├── .github/workflows/    # CI: jobs de contratos y de la app
 ├── agents.md             # guía técnica del repo: layout, comandos, arquitectura y reglas
+├── Dockerfile            # imagen de la app para Railway: build estático de testnet + Caddy
+├── .dockerignore         # contexto de esa imagen, como lista blanca
 ├── LICENSE               # Apache-2.0
 └── package.json          # npm workspaces (+ package-lock.json, .npmrc y .nvmrc)
 ```
@@ -85,8 +87,10 @@ Layout completo en [repositorio](agents.md#2-repositorio-monorepo).
 
 - **Node 26** (`.nvmrc`, `nvm use`) y npm 11, todo desde la raíz (npm workspaces). Con otra versión `npm ci` falla con
   `EBADENGINE`.
-- **Sui CLI `1.83.0`**, la misma de la CI: `suiup install sui@testnet-1.83.0`, con
-  [suiup](https://github.com/MystenLabs/suiup).
+- **Sui CLI `1.83.0`**, la de `SUI_VERSION` en [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+  `suiup install sui@testnet-1.83.0`, con [suiup](https://github.com/MystenLabs/suiup).
+- **Docker (opcional):** solo para verificar en local la imagen de Railway
+  ([verificar la imagen](app/README.md#verificar-la-imagen-appscriptscheck-deploy-imagesh)).
 - **Aviso de la CLI:** sin `~/.sui/sui_config/client.yaml`, `sui move …` ofrece crear una config y genera una clave
   cuya frase imprime. Responde `n` o antepón `printf 'n\n' |` a cada comando `sui`.
 
@@ -109,7 +113,7 @@ VITE_SUI_NETWORK=localnet npm run dev -w app
 npm test -w app
 ```
 
-El gate completo de la app está en [scripts](app/README.md#scripts) y en [app](agents.md#app-app).
+El gate completo de la app está en [scripts](app/README.md#scripts) y en [agents.md §3, App](agents.md#app-app).
 
 ### Localnet + app
 
@@ -125,18 +129,63 @@ El procedimiento de los agentes está en [localnet aislada](agents.md#localnet-a
 
 ## Despliegue
 
-Pendiente de TASK-3 (después de [#14](https://github.com/sdelvalle57/sui_battleship/issues/14) y
-[#15](https://github.com/sdelvalle57/sui_battleship/issues/15)).
+- **Contratos:** la publicación en testnet la hace solo el owner, con su propia config de la CLI
+  ([#8](https://github.com/sdelvalle57/sui_battleship/issues/8);
+  [uso en testnet](contracts/README.md#uso-en-testnet-solo-el-owner)).
+- **App:** sitio estático en Railway, construido con el `Dockerfile` de la raíz. Conectar el servicio y publicar es del
+  owner ([despliegue (Railway)](app/README.md#despliegue-railway), con el checklist en
+  [conectar Railway](app/README.md#conectar-railway-owner-no-delegable)). La URL pública está en "Jugar en testnet".
 
 ## Administración de la House
 
-Pendiente de TASK-3 (después de [#14](https://github.com/sdelvalle57/sui_battleship/issues/14) y
-[#15](https://github.com/sdelvalle57/sui_battleship/issues/15)).
+Quien tiene el `HouseCap` administra la House desde el panel de la app, en `#/admin`. El enlace "Administrar House" del
+encabezado aparece solo cuando se sabe que la cuenta conectada tiene el cap. Con otra cuenta, la página dice "Sin
+permisos: esta cuenta no tiene el HouseCap de esta House." y ofrece "Volver a comprobar".
+
+- **Comisión:** en bps enteros (0 a 1000), con el % al lado. Cada partida copia la comisión al crearse, así que las ya
+  creadas conservan la suya.
+- **Límites de apuesta:** mínimo y máximo en SUI. Solo se aplican a las partidas que se crean después.
+- **Retiro:** siempre el total de las comisiones acumuladas, a la cuenta que firma.
+- **Confirmación:** sin diálogo extra. Junto a cada botón va el resumen del cambio ("de X a Y") y después la ventana de
+  la wallet.
+- **Solo por CLI:** `migrate` y `transfer_house_cap`. Transferir el cap es irreversible
+  ([qué pasa si se pierde el cap](contracts/README.md#qué-pasa-si-se-pierde-el-cap)).
+
+Detalle en [panel de la House](app/README.md#panel-de-la-house-14), [autorización](contracts/README.md#autorización)
+y [retiro de comisiones](contracts/README.md#retiro-de-comisiones).
 
 ## Roadmap
 
-Pendiente de TASK-3 (después de [#14](https://github.com/sdelvalle57/sui_battleship/issues/14) y
-[#15](https://github.com/sdelvalle57/sui_battleship/issues/15)).
+Estado al 2026-11-04. El estado vivo está en los issues y en [`documents/STATUS.md`](documents/STATUS.md).
+
+| Fase | Issue | Tema | Estado |
+|---|---|---|---|
+| Contratos y tooling | [#1](https://github.com/sdelvalle57/sui_battleship/issues/1) | Sui CLI con `suiup`, framework fijado y primer baseline de gates | Hecho |
+| Contratos y tooling | [#2](https://github.com/sdelvalle57/sui_battleship/issues/2) | Monorepo: paquete Move en `contracts/` y código legado retirado | Hecho |
+| Contratos y tooling | [#3](https://github.com/sdelvalle57/sui_battleship/issues/3) | CI de GitHub Actions: build, lint y test del paquete Move | Hecho |
+| Contratos y tooling | [#4](https://github.com/sdelvalle57/sui_battleship/issues/4) | House: `HouseCap`, límites, comisiones, eventos y tests | Hecho |
+| Contratos y tooling | [#5](https://github.com/sdelvalle57/sui_battleship/issues/5) | Game: un objeto compartido por partida; crear, cancelar y rechazar | Hecho |
+| Contratos y tooling | [#6](https://github.com/sdelvalle57/sui_battleship/issues/6) | Aceptar y resolver con `sui::random`: pago al ganador y comisión | Hecho |
+| Contratos y tooling | [#7](https://github.com/sdelvalle57/sui_battleship/issues/7) | Formato de `contracts/deployments/<red>.json` y script de publicación | Hecho |
+| Contratos y tooling | [#39](https://github.com/sdelvalle57/sui_battleship/issues/39) | Guardas del script de publicación antes de testnet | Hecho |
+| App | [#9](https://github.com/sdelvalle57/sui_battleship/issues/9) | Base de `app/`: Vite, React, TypeScript estricto, SDK de Sui y wallet kit | Hecho |
+| App | [#10](https://github.com/sdelvalle57/sui_battleship/issues/10) | Lobby de partidas abiertas y detalle de una partida | Hecho |
+| App | [#11](https://github.com/sdelvalle57/sui_battleship/issues/11) | Crear partidas abiertas o por invitación; cancelar y rechazar | Hecho |
+| App | [#12](https://github.com/sdelvalle57/sui_battleship/issues/12) | Aceptar, coinflip y resultado | Hecho |
+| App | [#13](https://github.com/sdelvalle57/sui_battleship/issues/13) | Mis partidas e invitaciones recibidas | Hecho |
+| App | [#14](https://github.com/sdelvalle57/sui_battleship/issues/14) | Panel de administración de la House | Hecho |
+| Testnet y cierre | [#8](https://github.com/sdelvalle57/sui_battleship/issues/8) | Publicación del paquete en testnet (owner) y `testnet.json` | Pendiente |
+| Testnet y cierre | [#15](https://github.com/sdelvalle57/sui_battleship/issues/15) | App en Railway: la imagen está lista; falta conectar y publicar | En curso |
+| Testnet y cierre | [#16](https://github.com/sdelvalle57/sui_battleship/issues/16) | Este README | En curso |
+| Testnet y cierre | [#17](https://github.com/sdelvalle57/sui_battleship/issues/17) | Smoke de punta a punta en testnet con wallets reales | Pendiente |
+| Post-MVP | [#18](https://github.com/sdelvalle57/sui_battleship/issues/18) | Mecánica real de batalla naval en lugar del coinflip | Post-MVP |
+| Post-MVP | [#51](https://github.com/sdelvalle57/sui_battleship/issues/51) | Historial completo en las listas de testnet, más allá de la ventana del fullnode | Post-MVP |
+| Post-MVP | [#53](https://github.com/sdelvalle57/sui_battleship/issues/53) | Un solo bucle de páginas de eventos para el lobby y Mis partidas | Post-MVP |
+| Post-MVP | [#54](https://github.com/sdelvalle57/sui_battleship/issues/54) | "Actualizar" de Mis partidas con una transacción de la cuenta en curso | Post-MVP |
+| Post-MVP | [#56](https://github.com/sdelvalle57/sui_battleship/issues/56) | Módulo compartido para los scripts de captura de fixtures | Post-MVP |
+| Post-MVP | [#58](https://github.com/sdelvalle57/sui_battleship/issues/58) | Code-splitting del bundle de testnet | Post-MVP |
+| Post-MVP | [#60](https://github.com/sdelvalle57/sui_battleship/issues/60) | Panel de la House: releer la House antes de firmar | Post-MVP |
+| Post-MVP | [#35](https://github.com/sdelvalle57/sui_battleship/issues/35) | Actualizar ESLint por el aviso de `minimatch` (solo desarrollo) | Post-MVP |
 
 ## Documentación
 

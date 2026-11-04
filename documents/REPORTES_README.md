@@ -623,3 +623,491 @@ Includes the TASK-2 report and the MID review.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+---
+
+## TASK-3
+
+## Task completado: HANDOFF_README — TASK-3
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-16-readme` @ `764bf06` (handoff v1.2). `README.md` sin commitear.
+
+### Archivos modificados/creados
+- `README.md`: +58 / −9. No toqué nada más.
+- El script del check de enlaces sigue en `<scratchpad>/linkcheck/check-links.mjs`, el mismo de TASK-2, y no se commitea.
+
+### Qué se implementó (3 líneas máx)
+- **Secciones nuevas:** 9 (Despliegue: contratos por el owner, app en Railway), 10 (Administración de la House con los textos de `master`) y 11 (Roadmap: tabla `Fase | Issue | Tema | Estado` con corte al 2026-11-04 y #60 en post-MVP).
+- **Secciones 7 y 8:** `Dockerfile` y `.dockerignore` en el árbol; Docker como requisito opcional.
+- **Revisión de TASK-2:** H-1 y H-2 corregidos. Las 3 líneas "Pendiente de TASK-3" quedaron borradas.
+
+### Precondición (output pegado)
+```
+$ gh pr view 57 --json state --jq .state
+MERGED
+$ gh pr view 59 --json state --jq .state
+MERGED
+$ timeout 60 git -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch -q https://github.com/sdelvalle57/sui_battleship.git master:refs/remotes/origin/master; echo "fetch-exit=$?"
+fetch-exit=0
+$ git rev-parse --short origin/master
+5e51356
+$ git merge-base --is-ancestor origin/master HEAD; echo "exit=$?"
+exit=0
+$ git log --oneline --merges -5
+7766126 Merge master into feature/issue-16-readme (#14, #15)
+5e51356 Merge pull request #57 from sdelvalle57/feature/issue-15-pages-deploy
+d131f44 Merge remote-tracking branch 'origin/master' into feature/issue-15-pages-deploy
+612821b Merge pull request #61 from sdelvalle57/chore/housekeeping-issue-14
+b35cb2d Merge pull request #59 from sdelvalle57/feature/issue-14-house-admin
+```
+El `git fetch origin` por SSH lo reemplacé por el fetch HTTPS con `gh`, como indicó el orquestador.
+
+### Insumos re-confirmados en `master` `5e51356`
+| Insumo | Confirmado en |
+|---|---|
+| Ruta `#/admin` | `app/src/App.tsx:32` (`{ path: 'admin', element: <HouseAdminPage /> }`) |
+| Enlace "Administrar House", solo si se sabe que la cuenta tiene el cap | `app/src/components/Header.tsx:20` (`{isAdmin && <Link to="/admin">Administrar House</Link>}`), `:9-10`; título en `app/src/pages/HouseAdminPage.tsx:50` |
+| "Sin permisos: esta cuenta no tiene el HouseCap de esta House." + "Volver a comprobar" | `app/src/pages/HouseAdminPage.tsx:7, :28`; D-20261104-02 (1) |
+| Comisión en bps enteros 0..1000 con %, sin diálogo extra, resumen "De X a Y" | D-20261104-02 (2) y (3); `app/README.md`, "Panel de la House (#14)" → Acciones |
+| Cada partida copia la comisión; los límites solo se aplican al crear | `app/README.md`, "Panel de la House (#14)", avisos fijos; D-20261030-06 §3 |
+| Retiro total, a la cuenta que firma | D-20261104-02 (5); `app/README.md`, "Panel de la House (#14)" → Retiro |
+| `migrate` y `transfer_house_cap` solo por CLI, transferir es irreversible | `app/README.md`, "Panel de la House (#14)" → "Solo por CLI"; `contracts/README.md`, "Qué pasa si se pierde el cap" |
+| Railway con `Dockerfile` en la raíz; conectar y publicar es del owner | `app/README.md:67-71`; D-20261104-03 (1); `Dockerfile:1` |
+| `.dockerignore` como lista blanca | `.dockerignore:1-3` |
+| Docker opcional para verificar la imagen | `app/README.md:169-172` ("Requiere `bash`, `docker`, `curl`…") |
+| Contratos: publicación solo del owner | `contracts/README.md`, "Uso en testnet (solo el owner)"; issue #8 |
+| D-20261103-01 sigue fuera de `master` | `grep "^### D-20261103-01" documents/DECISIONES.md` → exit 1, así que se mantiene `(PR #48)` |
+
+**Estados del roadmap**, re-medidos con `gh api` (output completo):
+```
+$ gh api 'repos/sdelvalle57/sui_battleship/issues?state=all&per_page=100' --jq '.[] | [.number, .state, .title] | @tsv'
+61	closed	docs: housekeeping after #14 merge
+60	open	[App] Panel de la House: releer la House antes de firmar para no revertir un cambio concurrente
+59	closed	Add the House admin panel for the HouseCap holder: fee, bet limits and fee withdrawal (#14)
+58	open	[App] Medir y aplicar code-splitting del bundle de testnet (post-MVP)
+57	closed	#15: Railway deploy of the testnet app (Dockerfile, Caddy, image check job)
+56	open	[App] Extraer sdkVersion() y plain() de los scripts de captura a un módulo compartido
+55	closed	docs: housekeeping after #13 merge
+54	open	[App] "Actualizar" de Mis partidas deshabilitado con una transacción de la cuenta en curso
+53	open	[App] Unificar en `eventScan.ts` el bucle de página de eventos duplicado entre el lobby y "Mis partidas"
+52	closed	Show my games and received invitations with per-row actions; sign with the captured account (#13)
+51	open	[App] Mostrar en las listas de testnet el historial completo, más allá de la ventana de ~14,6 días del fullnode
+50	closed	docs: housekeeping after #12 merge
+49	closed	Accept games with the on-chain coinflip and a verified result; global transaction lock (#12)
+48	open	#8: first testnet publication (owner) — prerequisites, runbook and verification
+47	closed	docs: housekeeping after #11 merge
+46	closed	Create, cancel and reject games from the app: shared transaction machinery (#11)
+45	closed	docs: housekeeping after #10 merge
+44	closed	Lobby and game detail: exact BCS reads, bounded paging and shared retry policy (#10)
+43	closed	docs: housekeeping after #39 merge
+42	closed	#39: publish script guards before #8 (--out on testnet, config path in errors)
+41	closed	docs: housekeeping after #9 merge
+40	closed	docs: housekeeping after #7 merge
+39	closed	contracts: rechazar --out en testnet y ocultar la ruta en errores de fs del script de publicación (seguimiento #7)
+38	closed	#7: deployments json, guarded publish script and CI check
+37	closed	[no merge] app CI red check (#9)
+36	closed	App scaffolding: Vite + React + TS strict, Sui SDK, wallet kit and CI job (#9)
+35	open	app: subir eslint/typescript-eslint cuando dependan de minimatch ≥ 11.0.1 (GHSA-g3hv-75wg-m249)
+34	closed	docs: register decisions for #7 and #9
+33	closed	docs: housekeeping after #6
+32	closed	Game: accept with on-chain coinflip, fee and payout (#6)
+31	closed	docs: housekeeping after #5
+30	closed	Game: create, cancel and reject with refund invariant (#5)
+29	closed	docs: housekeeping after #3
+28	closed	[no merge] CI red check (#3)
+27	closed	ci: contracts workflow with build, lint and test gates (#3)
+26	closed	chore: license the repo under Apache-2.0 (D-20261030-14)
+25	closed	docs: housekeeping after #4 (D-20261030-12)
+24	closed	House: HouseCap authZ, bet limits, add_fees, events, versioning and tests (#4)
+23	closed	docs: housekeeping after #2
+22	closed	Monorepo: Move package in contracts/, legacy retired, npm root with Node 26 (#2)
+21	closed	docs: housekeeping after #1 and orchestrator merges (D-20261030-09)
+20	closed	Toolchain: Sui CLI 1.83, manifest pinned and first gate baseline (#1)
+19	closed	docs: adopt multi-agent workflow docs for Sui Battleship
+18	open	[Contracts] Diseñar la mecánica real de batalla naval que reemplace al coinflip
+17	open	[Docs] Ejecutar el smoke end-to-end del MVP en testnet con wallets reales y cerrar el MVP
+16	open	[Docs] Actualizar el README con la visión 1 vs 1, la arquitectura del monorepo y la guía de uso
+15	open	[CI] Desplegar la app como sitio estático apuntando a testnet
+14	closed	[App] Agregar el panel de administración de la House para la cuenta que posee el HouseCap
+13	closed	[App] Listar mis partidas y las invitaciones recibidas para la cuenta conectada
+12	closed	[App] Aceptar partidas, disparar el coinflip y mostrar el resultado
+11	closed	[App] Crear partidas abiertas o por invitación y cancelarlas, con UX de transacción y mapeo de abort codes
+10	closed	[App] Mostrar el lobby de partidas abiertas y el detalle de una partida a partir de eventos y objetos
+9	closed	[App] Crear el scaffolding de app/ con Vite, React, TS estricto, SDK de Sui, wallet kit y la capa app/src/sui/
+8	open	[Contracts] Publicar el paquete en testnet y registrar contracts/deployments/testnet.json
+7	closed	[Contracts] Definir el formato de contracts/deployments/<red>.json y un script de publicación que lo genere
+6	closed	[Contracts] Implementar la aceptación y la resolución por coinflip con sui::random, con pago al ganador y comisión
+5	closed	[Contracts] Rediseñar battleship::game como un objeto compartido por partida con crear y cancelar
+4	closed	[Contracts] Autorizar la administración de la House con HouseCap y completar límites, add_fees, eventos y tests
+3	closed	[CI] Agregar el workflow de GitHub Actions con build y test del paquete Move
+2	closed	[Tooling] Reestructurar el repo a monorepo con el paquete Move en contracts/ y retirar el código legado
+1	closed	[Tooling] Instalar la Sui CLI con suiup, fijar el framework en Move.toml y registrar el primer baseline de gates
+```
+
+El listado de `issues` incluye PRs, así que confirmé el tipo de cada número del roadmap:
+```
+$ for n in 1 … 60; do gh api repos/sdelvalle57/sui_battleship/issues/$n --jq '"\(.number) \(.state) \(if .pull_request then "PR" else "issue" end) \(.state_reason // "-")"'; done
+1 closed issue completed      2 closed issue completed      3 closed issue completed      4 closed issue completed
+5 closed issue completed      6 closed issue completed      7 closed issue completed      8 open issue -
+9 closed issue completed      10 closed issue completed     11 closed issue completed     12 closed issue completed
+13 closed issue completed     14 closed issue completed     15 open issue -               16 open issue -
+17 open issue -               18 open issue -               35 open issue -               39 closed issue completed
+51 open issue -               53 open issue -               54 open issue -               56 open issue -
+58 open issue -               60 open issue -
+```
+Los 26 números son issues (ninguno es PR).
+
+Cómo asigné los estados:
+- `closed` + `completed` da "Hecho".
+- #8 y #17 están abiertos y esperan al owner o a #8, así que van como "Pendiente".
+- #15 va como "En curso": PR #57 mergeado con `Refs #15`, y el cierre llega con TASK-6 de #15 después de #8.
+- #16 va como "En curso".
+- #18, #51, #53, #54, #56, #58, #60 y #35 son "Post-MVP".
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados: ninguno. Sin cambios de código, así que no corrí gates de contracts ni de app (handoff §0: "TASK-3 y TASK-4 solo tocan docs").
+- Tablas de contrato y `app/src/sui/`: no aplica.
+
+**Diff:**
+```
+$ git diff --stat
+ README.md | 67 ++++++++++++++++++++++++++++++++++++++++++++++++++++++---------
+ 1 file changed, 58 insertions(+), 9 deletions(-)
+```
+```diff
+@@ -73,6 +73,8 @@ sui_battleship/
+ ├── agents.md             # guía técnica del repo: layout, comandos, arquitectura y reglas
++├── Dockerfile            # imagen de la app para Railway: build estático de testnet + Caddy
++├── .dockerignore         # contexto de esa imagen, como lista blanca
+ ├── LICENSE               # Apache-2.0
+@@ -85,8 +87,10 @@
+-- **Sui CLI `1.83.0`**, la misma de la CI: `suiup install sui@testnet-1.83.0`, con
+-  [suiup](https://github.com/MystenLabs/suiup).
++- **Sui CLI `1.83.0`**, la de `SUI_VERSION` en [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
++  `suiup install sui@testnet-1.83.0`, con [suiup](https://github.com/MystenLabs/suiup).
++- **Docker (opcional):** solo para verificar en local la imagen de Railway
++  ([verificar la imagen](app/README.md#verificar-la-imagen-appscriptscheck-deploy-imagesh)).
+@@ -109,7 +113,7 @@
+-El gate completo de la app está en [scripts](app/README.md#scripts) y en [app](agents.md#app-app).
++El gate completo de la app está en [scripts](app/README.md#scripts) y en [agents.md §3, App](agents.md#app-app).
+@@ -125,18 +129,63 @@
+ ## Despliegue
+-Pendiente de TASK-3 (después de [#14](…/issues/14) y
+-[#15](…/issues/15)).
++- **Contratos:** la publicación en testnet la hace solo el owner, con su propia config de la CLI
++  ([#8](https://github.com/sdelvalle57/sui_battleship/issues/8);
++  [uso en testnet](contracts/README.md#uso-en-testnet-solo-el-owner)).
++- **App:** sitio estático en Railway, construido con el `Dockerfile` de la raíz. Conectar el servicio y publicar es del
++  owner ([despliegue (Railway)](app/README.md#despliegue-railway), con el checklist en
++  [conectar Railway](app/README.md#conectar-railway-owner-no-delegable)). La URL pública está en "Jugar en testnet".
+
+ ## Administración de la House
+-Pendiente de TASK-3 (…)
++Quien tiene el `HouseCap` administra la House desde el panel de la app, en `#/admin`. El enlace "Administrar House" del
++encabezado aparece solo cuando se sabe que la cuenta conectada tiene el cap. Con otra cuenta, la página dice "Sin
++permisos: esta cuenta no tiene el HouseCap de esta House." y ofrece "Volver a comprobar".
++
++- **Comisión:** en bps enteros (0 a 1000), con el % al lado. Cada partida copia la comisión al crearse, así que las ya
++  creadas conservan la suya.
++- **Límites de apuesta:** mínimo y máximo en SUI. Solo se aplican a las partidas que se crean después.
++- **Retiro:** siempre el total de las comisiones acumuladas, a la cuenta que firma.
++- **Confirmación:** sin diálogo extra. Junto a cada botón va el resumen del cambio ("de X a Y") y después la ventana de
++  la wallet.
++- **Solo por CLI:** `migrate` y `transfer_house_cap`. Transferir el cap es irreversible
++  ([qué pasa si se pierde el cap](contracts/README.md#qué-pasa-si-se-pierde-el-cap)).
++
++Detalle en [panel de la House](app/README.md#panel-de-la-house-14), [autorización](contracts/README.md#autorización)
++y [retiro de comisiones](contracts/README.md#retiro-de-comisiones).
+
+ ## Roadmap
+-Pendiente de TASK-3 (…)
++Estado al 2026-11-04. El estado vivo está en los issues y en [`documents/STATUS.md`](documents/STATUS.md).
++
++| Fase | Issue | Tema | Estado |
++|---|---|---|---|
++| Contratos y tooling | [#1](https://github.com/sdelvalle57/sui_battleship/issues/1) | Sui CLI con `suiup`, framework fijado y primer baseline de gates | Hecho |
++| Contratos y tooling | [#2](…/issues/2) | Monorepo: paquete Move en `contracts/` y código legado retirado | Hecho |
++| Contratos y tooling | [#3](…/issues/3) | CI de GitHub Actions: build, lint y test del paquete Move | Hecho |
++| Contratos y tooling | [#4](…/issues/4) | House: `HouseCap`, límites, comisiones, eventos y tests | Hecho |
++| Contratos y tooling | [#5](…/issues/5) | Game: un objeto compartido por partida; crear, cancelar y rechazar | Hecho |
++| Contratos y tooling | [#6](…/issues/6) | Aceptar y resolver con `sui::random`: pago al ganador y comisión | Hecho |
++| Contratos y tooling | [#7](…/issues/7) | Formato de `contracts/deployments/<red>.json` y script de publicación | Hecho |
++| Contratos y tooling | [#39](…/issues/39) | Guardas del script de publicación antes de testnet | Hecho |
++| App | [#9](…/issues/9) | Base de `app/`: Vite, React, TypeScript estricto, SDK de Sui y wallet kit | Hecho |
++| App | [#10](…/issues/10) | Lobby de partidas abiertas y detalle de una partida | Hecho |
++| App | [#11](…/issues/11) | Crear partidas abiertas o por invitación; cancelar y rechazar | Hecho |
++| App | [#12](…/issues/12) | Aceptar, coinflip y resultado | Hecho |
++| App | [#13](…/issues/13) | Mis partidas e invitaciones recibidas | Hecho |
++| App | [#14](…/issues/14) | Panel de administración de la House | Hecho |
++| Testnet y cierre | [#8](…/issues/8) | Publicación del paquete en testnet (owner) y `testnet.json` | Pendiente |
++| Testnet y cierre | [#15](…/issues/15) | App en Railway: la imagen está lista; falta conectar y publicar | En curso |
++| Testnet y cierre | [#16](…/issues/16) | Este README | En curso |
++| Testnet y cierre | [#17](…/issues/17) | Smoke de punta a punta en testnet con wallets reales | Pendiente |
++| Post-MVP | [#18](…/issues/18) | Mecánica real de batalla naval en lugar del coinflip | Post-MVP |
++| Post-MVP | [#51](…/issues/51) | Historial completo en las listas de testnet, más allá de la ventana del fullnode | Post-MVP |
++| Post-MVP | [#53](…/issues/53) | Un solo bucle de páginas de eventos para el lobby y Mis partidas | Post-MVP |
++| Post-MVP | [#54](…/issues/54) | "Actualizar" de Mis partidas con una transacción de la cuenta en curso | Post-MVP |
++| Post-MVP | [#56](…/issues/56) | Módulo compartido para los scripts de captura de fixtures | Post-MVP |
++| Post-MVP | [#58](…/issues/58) | Code-splitting del bundle de testnet | Post-MVP |
++| Post-MVP | [#60](…/issues/60) | Panel de la House: releer la House antes de firmar | Post-MVP |
++| Post-MVP | [#35](…/issues/35) | Actualizar ESLint por el aviso de `minimatch` (solo desarrollo) | Post-MVP |
+```
+En este diff pegado acorté `…/issues/N` y las líneas borradas para que se lea mejor. En el archivo, cada URL está completa (`https://github.com/sdelvalle57/sui_battleship/issues/N`), como muestra el check de enlaces.
+
+**§R-2:**
+```
+$ /usr/bin/grep -c "se completa después de #8" README.md
+2
+$ tr -s '\n' ' ' < README.md | /usr/bin/grep -o "se completa después de #8" | wc -l
+2
+$ /usr/bin/grep -n "se completa después de #8" README.md
+36:- **URL pública:** se completa después de #8.
+47:- **IDs de testnet** (`packageId`, `houseId`): en `contracts/deployments/testnet.json`; se completa después de #8.
+```
+
+**§R-3 sobre `README.md`:**
+```
+$ /usr/bin/grep -nE '[0-9a-fA-F]{40,64}' README.md; echo "e1=$?"
+e1=1
+$ /usr/bin/grep -niE 'suiprivkey|mnemonic|seed phrase|/home/|/Users/' README.md; echo "e2=$?"
+e2=1
+$ /usr/bin/grep -nE '0x[0-9a-fA-F]{8,}' README.md; echo "e3=$?"
+e3=1
+```
+
+**§R-5:**
+```
+$ for d in $(/usr/bin/grep -oE 'D-[0-9]{8}-[0-9]+' README.md | sort -u); do /usr/bin/grep -q "^### $d " documents/DECISIONES.md && echo "OK $d" || echo "AUSENTE $d"; done
+AUSENTE D-20261103-01
+OK D-20261103-03
+$ /usr/bin/grep -n 'D-20261103-01 (\[PR #48\]' README.md
+27:  D-20261103-01 ([PR #48](https://github.com/sdelvalle57/sui_battleship/pull/48)); la vigente la muestra la app.
+```
+#8 no mergeó, así que D-20261103-01 conserva `(PR #48)`.
+
+**Criterios de aceptación:**
+```
+$ /usr/bin/grep -c "Pendiente de TASK-3" README.md
+0
+$ /usr/bin/grep -niE 'GitHub Pages|hosting por definir' README.md; echo "exit=$?"
+exit=1
+$ /usr/bin/grep -niE '2 vs 2|escrow|pooled' README.md
+61:  cancela, se rechaza o se resuelve. Sin módulo Escrow ([`battleship::game`](contracts/README.md#battleshipgame)).
+$ /usr/bin/grep -niE 'tests? PASS|[0-9] kB|[0-9]+ tests' README.md; echo "exit=$?"
+exit=1
+$ git status --porcelain --untracked-files=all
+ M README.md
+```
+
+**§R-4 completo, contra el `master` nuevo** (la branch ya contiene `5e51356`), con el prefijo §R-6 (`v26.13.0`):
+```
+$ node <scratchpad>/linkcheck/check-links.mjs <repo>; echo "exit=$?"
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/18 (texto nombra #18)
+OK   contracts/README.md#límites-de-apuesta (ancla encontrada)
+OK   contracts/README.md#flujo-de-fondos (ancla encontrada)
+OK   contracts/README.md#comisión (ancla encontrada)
+OK   200 https://github.com/sdelvalle57/sui_battleship/pull/48 (texto nombra #48)
+OK   contracts/README.md#estados (ancla encontrada)
+OK   contracts/README.md#objeto-terminal-y-storage-d-20261030-15-d3 (ancla encontrada)
+OK   app/README.md#wallet (ancla encontrada)
+OK   200 https://faucet.sui.io/
+OK   200 https://docs.sui.io/guides/developer/getting-started/get-coins
+OK   app/README.md#mis-partidas-13 (ancla encontrada)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/51 (texto nombra #51)
+OK   app/README.md#límite-sin-indexador (ancla encontrada)
+OK   contracts/README.md#battleshiphouse (ancla encontrada)
+OK   contracts/README.md#battleshipgame (ancla encontrada)
+OK   app/README.md (archivo)
+OK   agents.md#4-arquitectura-de-runtime (ancla encontrada)
+OK   agents.md#2-repositorio-monorepo (ancla encontrada)
+OK   .github/workflows/ci.yml (archivo)
+OK   200 https://github.com/MystenLabs/suiup
+OK   app/README.md#verificar-la-imagen-appscriptscheck-deploy-imagesh (ancla encontrada)
+OK   agents.md#3-comandos-por-área-sin-makefile (ancla encontrada)
+OK   app/README.md#scripts (ancla encontrada)
+OK   agents.md#app-app (ancla encontrada)
+OK   contracts/README.md#uso-en-localnet (ancla encontrada)
+OK   app/README.md#localnet (ancla encontrada)
+OK   agents.md#localnet-aislada-smokes (ancla encontrada)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/8 (texto nombra #8)
+OK   contracts/README.md#uso-en-testnet-solo-el-owner (ancla encontrada)
+OK   app/README.md#despliegue-railway (ancla encontrada)
+OK   app/README.md#conectar-railway-owner-no-delegable (ancla encontrada)
+OK   contracts/README.md#qué-pasa-si-se-pierde-el-cap (ancla encontrada)
+OK   app/README.md#panel-de-la-house-14 (ancla encontrada)
+OK   contracts/README.md#autorización (ancla encontrada)
+OK   contracts/README.md#retiro-de-comisiones (ancla encontrada)
+OK   documents/STATUS.md (archivo)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/1 (texto nombra #1)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/2 (texto nombra #2)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/3 (texto nombra #3)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/4 (texto nombra #4)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/5 (texto nombra #5)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/6 (texto nombra #6)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/7 (texto nombra #7)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/39 (texto nombra #39)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/9 (texto nombra #9)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/10 (texto nombra #10)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/11 (texto nombra #11)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/12 (texto nombra #12)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/13 (texto nombra #13)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/14 (texto nombra #14)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/8 (texto nombra #8)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/15 (texto nombra #15)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/16 (texto nombra #16)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/17 (texto nombra #17)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/18 (texto nombra #18)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/51 (texto nombra #51)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/53 (texto nombra #53)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/54 (texto nombra #54)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/56 (texto nombra #56)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/58 (texto nombra #58)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/60 (texto nombra #60)
+OK   200 https://github.com/sdelvalle57/sui_battleship/issues/35 (texto nombra #35)
+OK   contracts/README.md (archivo)
+OK   app/README.md (archivo)
+OK   agents.md (archivo)
+OK   agents.md#14-mapa-de-documentación (ancla encontrada)
+OK   documents/FLUJO_AGENTES.md (archivo)
+OK   documents/ESTANDARES.md (archivo)
+OK   documents/DECISIONES.md (archivo)
+OK   documents/STATUS.md (archivo)
+OK   LICENSE (archivo)
+OK   §R-8: #N sueltos fuera de enlaces y del placeholder = 0
+RESULTADO: todos OK
+exit=0
+```
+
+**Re-verificación de anclas contra el `master` nuevo:** armé un README sintético con las 25 anclas de §R-4, más las 6 que agregan TASK-3 y el handoff v1.2:
+- `contracts/README.md#qué-pasa-si-se-pierde-el-cap`;
+- `app/README.md#panel-de-la-house-14`, `#despliegue-railway`, `#conectar-railway-owner-no-delegable` y `#verificar-la-imagen-appscriptscheck-deploy-imagesh`;
+- `app/README.md#testnet`, que el README no usa.
+
+Las 31 dan `OK` y el resultado es `RESULTADO: todos OK`, `exit=0`. El merge de #14 y #15 no rompió ninguna ancla (R-4 del ciclo).
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica: son docs y el smoke va en #17. No corrí localnet, ni navegador, ni ningún `sui`, ni nada contra testnet. Solo hice lecturas: `gh pr view`, `gh api`, el fetch HTTPS y los `curl` del check de enlaces.
+
+### Desviaciones del handoff
+1. **Qué cambió:** las 26 filas de la tabla del roadmap (líneas 163-188) pasan de 120 columnas: miden entre 127 y 171 caracteres. El resto del archivo queda en ≤ 120.
+ - **Por qué:** una fila de tabla en Markdown no se puede partir en renglones, y §R-8 exige la URL completa en cada `#N`. No usé enlaces de estilo referencia (`[#1][i1]`) porque §R-8 y el paso 5 de §R-4 definen el enlace como `[…](https://…/issues/N)` inline.
+ - **Verificación extra realizada:** §R-4 da `OK` en las 26 URLs, y el paso 5 da 0 `#N` sueltos.
+2. **Qué cambió:** la sección 10 suma un enlace que el handoff no pide: `contracts/README.md#qué-pasa-si-se-pierde-el-cap`, junto a "Transferir el cap es irreversible".
+ - **Por qué:** el aviso de irreversibilidad viene de `app/README.md` → "Solo por CLI", y ese texto remite justamente a esa sección. Es el único lugar con el checklist de transferencia.
+ - **Verificación extra realizada:** el ancla da `OK`.
+3. **Qué cambió:** en la sección 9 la URL no se repite ni se enlaza. Dice "La URL pública está en 'Jugar en testnet'", sin enlace interno.
+ - **Por qué:** el handoff pide que la URL siga siendo el placeholder de la sección 5, y repetir el literal subiría §R-2 a 3. Un ancla interna del propio README (`#jugar-en-testnet`) no está en el alcance de §R-4.2, que verifica archivos destino.
+ - **Verificación extra realizada:** §R-2 sigue en 2 y 2.
+4. **Qué cambió:** el fetch de la precondición usa HTTPS con `gh auth git-credential` en vez de `git fetch origin`.
+ - **Por qué:** el fetch por SSH cuelga en este entorno; así lo indicó el orquestador.
+ - **Verificación extra realizada:** `origin/master` = `5e51356`, el mismo SHA que la §0 v1.2, y `merge-base --is-ancestor` da `exit=0`.
+
+No hay desviaciones de alcance: #14 y #15 mergearon con la ruta (`#/admin`) y el hosting (Railway) que dice el handoff.
+
+### Riesgos / pendientes
+- **Roadmap:** los estados son una foto del 2026-11-04. Cuando cierren #8, #15, #16 y #17, el README queda viejo hasta que alguien lo actualice; el README remite a los issues y a `documents/STATUS.md` como estado vivo. TASK-5 podría actualizar la fila de #8 y la de #15.
+- **TASK-5:** los dos placeholders siguen pendientes de #8 y de TASK-6 de #15, y D-20261103-01 conserva `(PR #48)` hasta que #8 mergee (§R-5).
+- **N-2 (no delegable):** sigue vigente para el merge del PR principal, por las watch paths de Railway que tocó TASK-1.
+
+### Documentación
+- **READMEs / `agents.md` actualizados:** este task es el README raíz. `agents.md` §14 y STATUS quedan para TASK-4.
+- **Snippet propuesto para `documents/STATUS.md`:**
+`| docs @ feature/issue-16-readme (TASK-3 de #16), 2026-11-04 | README.md raíz | 🟢 Despliegue (contratos por el owner, app en Railway), Administración de la House (#/admin, "Administrar House", textos de master 5e51356) y Roadmap (corte 2026-11-04, estados por gh api, #60 post-MVP); Dockerfile/.dockerignore en el árbol; Docker opcional; H-1/H-2 de TASK-2 corregidos. §R-2 2/2, §R-3 vacío, §R-4 68 OK (31 anclas re-verificadas contra master), §R-5 solo D-20261103-01 (PR #48). Sin cambios de código |`
+
+**Commit propuesto (handoff):** `docs: add deploy, House admin and roadmap to the root README (#16)`.
+
+---
+
+## Revisión TASK-3: PASA
+
+Revisión del MID (2026-11-04) contra `documents/ESTANDARES.md` y el handoff v1.2, TASK-3. Leí el diff real con
+`git diff -- README.md` (+58/−9; el árbol tiene solo `README.md` y este archivo) y lo contrasté con `master` `5e51356`.
+
+### Checklist
+- [x] **Lo pedido, ni más ni menos:**
+      - sección 9: contratos por el owner y app en Railway, sin URL;
+      - sección 10: panel `#/admin` con los textos literales de `master`
+        (`HouseAdminPage.tsx:7`, `Header.tsx:20`) y las reglas de D-20261104-02 (1), (2), (3) y (5);
+      - sección 11: roadmap con fecha de corte y puntero a STATUS;
+      - `Dockerfile` y `.dockerignore` en el árbol;
+      - Docker opcional;
+      - H-1 y H-2 corregidos (`README.md:90`, `:116`);
+      - 0 "Pendiente de TASK-3".
+- [x] **Hechos:**
+      - "cada partida copia la comisión" y "los límites solo se aplican al crear" coinciden con `agents.md` §6 y con
+        D-20261030-06 §3;
+      - "retiro total a la cuenta que firma" coincide con D-20261104-02 (5);
+      - `migrate` y `transfer_house_cap` solo por CLI, y "es irreversible", coinciden con `contracts/README.md`, "Qué pasa
+        si se pierde el cap" (desviación 2, abajo);
+      - estados del roadmap: re-medidos con `gh api`, con el tipo de cada número verificado (26 issues, ningún PR).
+- [x] **SEG-3 y fondos:** el retiro y la comisión se describen sin cambiar nada; la nota de irreversibilidad sirve para
+      no perder fondos de la House. §R-3 vacío.
+- [x] **LIM-5:** sin copiar el checklist de Railway ni la tabla del panel; las dos se enlazan.
+- [x] **§R-2:** 2 y 2. **§R-4:** 68 `OK` y 31 anclas re-verificadas contra el `master` nuevo. **§R-8:** 0 sueltos.
+      **§R-5:** solo D-20261103-01, con `(PR #48)`. Tampoco hay "GitHub Pages", "hosting por definir" ni cifras de
+      tests o bundle.
+- [x] **Desviaciones declaradas** (decisiones abajo).
+
+### Decisión sobre las desviaciones
+> Decisión (2026-11-04, MID): **desviación 1 aceptada.** Las filas de la tabla del roadmap pasan de 120 columnas. El
+> corte a ~120 es una convención de estilo de los docs, no una regla de `ESTANDARES.md`, y una fila de tabla Markdown
+> no se puede partir. Los enlaces de estilo referencia (`[#1][i1]`) acortarían las filas, pero agregarían 26
+> definiciones al final y un segundo formato que §R-4 y §R-8 no cubren. Lo verifiqué: fuera de la tabla, ningún renglón
+> pasa de 120 **caracteres**. `awk length` marca 5 porque cuenta bytes (`⌊`, `─`, `á`).
+
+Las desviaciones 2-4 también quedan **aceptadas**:
+- **2:** el enlace a "qué pasa si se pierde el cap" respalda la advertencia de irreversibilidad con su checklist.
+- **3:** la URL no se repite en la sección 9, así que §R-2 queda en 2 y TASK-5 tiene un solo lugar que completar.
+- **4:** el fetch por HTTPS con `gh` da el mismo `origin/master` (`5e51356`).
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Ninguno | — |
+
+**Observación para TASK-5, sin acción ahora:** #8 figura como "Pendiente" aunque el PR #48 tiene el runbook y el
+ensayo listos y solo espera la publicación del owner; el plan lo daba como "en curso". El criterio del DEV ("abierto y
+esperando al owner") es coherente para #8 y #17, y TASK-5 lo pasa a "Hecho" de todos modos. TASK-5 también actualiza
+la fila de #15.
+
+### Siguiente paso: **TASK-4 autorizado**
+Precondición cumplida: `master` con #14 y #15 en la branch y TASK-3 en PASA. Además de lo que ya está en TASK-4 del
+handoff v1.2:
+1. **Fila de #15 y fila "Siguiente" de STATUS:** en la branch (`764bf06`, con el STATUS de `5e51356`) **siguen sin
+   registrar el merge de PR #57**: `STATUS.md:153` dice "PR #57 (`Refs #15`)" sin el merge, y `:154` dice "listo para
+   pasar a ready" y no tiene #60. Se aplica la corrección condicional de v1.2:
+   - #15 queda en 🚧 con "PR #57 mergeado (`5e51356`, `Refs #15`)" y pendientes TASK-6 (después de #8) y el
+     checklist del owner;
+   - "Siguiente": #8 (PR #48); #15 (TASK-6 después de #8); #16 (PR principal con `Refs #16`; TASK-5 después de #8);
+     post-MVP con #60.
+   Se declara como desviación acotada. Si el orquestador ya lo corrigió en `master` antes de que empiece TASK-4, no se
+   toca.
+2. **Baselines:** tres filas nuevas con los snippets de los reportes de TASK-1, TASK-2 y TASK-3.
+   - La de TASK-1 dice "medido sobre `deaadbb` + TASK-1" (915 tests en 57 archivos), porque se midió antes de los
+     merges.
+   - Las de TASK-2 y TASK-3 dicen "Sin cambios de código".
+   - No se inventa una medición sobre `5e51356`: la CI del PR principal es la que la da.
+3. **Pendientes del usuario:**
+   - revisar D-20261104-04 (tomada por delegación, D-20261104-01);
+   - **N-2**: el merge del PR principal toca las watch paths de Railway, así que si Railway ya está conectado espera al
+     owner;
+   - después de #8, TASK-5 cierra #16.
+4. **`agents.md`:** solo la fila de §14 (`agents.md:428`). Nada más, aunque §1 ("Foco actual (oct-2026)") esté viejo:
+   eso queda fuera del alcance de #16.
+5. Greps §R-3 sobre lo agregado a `agents.md` y STATUS, con el output pegado.
+
+### Mensaje de commit propuesto
+```
+docs: add deploy, House admin and roadmap to the root README (#16)
+
+Fill the three sections that waited for #14 and #15: deploy (contracts by the
+owner, the app on Railway from the root Dockerfile), House administration
+(#/admin panel with the texts on master and the D-20261104-02 rules; migrate
+and transfer_house_cap stay CLI-only) and a dated roadmap with every issue
+linked (#60 added as post-MVP). Add Dockerfile/.dockerignore to the tree and
+Docker as an optional requirement, and fix H-1/H-2 from the TASK-2 review.
+Includes the TASK-3 report and the MID review.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
