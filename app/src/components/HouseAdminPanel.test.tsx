@@ -35,13 +35,21 @@ const refetchCap = vi.fn();
 function txHook<T>(): UseExecuteTransaction<T> {
   return { stage: 'idle', outcome: null, execute: vi.fn() };
 }
-function setup(house: House | null = HOUSE, target: Partial<TxTargetState<TxView['target']>> = {}) {
+type Hooks = {
+  fee?: Partial<UseExecuteTransaction<FeeRateUpdatedEvent | null>>;
+  limits?: Partial<UseExecuteTransaction<BetLimitsUpdatedEvent | null>>;
+};
+/** La House que devuelve `useHouse` (también para cambiarla entre renders). */
+function mockHouse(house: House | null) {
   vi.mocked(useHouse).mockReturnValue({
     house,
     status: house === null ? { kind: 'loading' } : { kind: 'ready', refreshing: false },
     isFetching: false,
     refetch: refetchHouse,
   });
+}
+function setup(house: House | null = HOUSE, target: Partial<TxTargetState<TxView['target']>> = {}, hooks: Hooks = {}) {
+  mockHouse(house);
   vi.mocked(useHouseCap).mockReturnValue({
     kind: 'account',
     address: `0x${'a'.repeat(64)}`,
@@ -51,8 +59,8 @@ function setup(house: House | null = HOUSE, target: Partial<TxTargetState<TxView
     refetch: refetchCap,
   });
   vi.mocked(useTxTarget).mockReturnValue({ view: VIEW, busy: false, notice: null, unconfirmed: null, acknowledge: vi.fn(), ...target });
-  vi.mocked(useUpdateFeeRate).mockReturnValue({ ...txHook<FeeRateUpdatedEvent | null>(), update: updateFee });
-  vi.mocked(useUpdateBetLimits).mockReturnValue({ ...txHook<BetLimitsUpdatedEvent | null>(), update: updateLimits });
+  vi.mocked(useUpdateFeeRate).mockReturnValue({ ...txHook<FeeRateUpdatedEvent | null>(), ...hooks.fee, update: updateFee });
+  vi.mocked(useUpdateBetLimits).mockReturnValue({ ...txHook<BetLimitsUpdatedEvent | null>(), ...hooks.limits, update: updateLimits });
   vi.mocked(useWithdrawFees).mockReturnValue({ ...txHook<bigint | null>(), withdraw });
   return render(<HouseAdminPanel capId={CAP_ID} />);
 }
@@ -217,5 +225,101 @@ describe('HouseAdminPanel: lock and notices', () => {
     expect(button('Retirar 0.01 SUI a tu cuenta')).toBeDisabled();
     fireEvent.click(button('Ya la revisé'));
     expect(acknowledge).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('HouseAdminPanel: fields follow the current House (TASK-5b, SM-1 of the smoke)', () => {
+  const OLD: House = { ...HOUSE, feeRate: 0, minBet: 1_000_000n, maxBet: 50_000_000_000n };
+  const NEW: House = { ...HOUSE, feeRate: 250, minBet: 2_000_000n, maxBet: 10_000_000_000n };
+  /** La House cambia (relectura, otra pestaña, adoptado) sin remontar el panel. */
+  function houseChanges(view: ReturnType<typeof setup>, house: House) {
+    mockHouse(house);
+    view.rerender(<HouseAdminPanel capId={CAP_ID} />);
+  }
+  const summary = (container: HTMLElement, action: string) => block(container, action).querySelector('.house-summary');
+  const errors = (container: HTMLElement, action: string) => block(container, action).querySelectorAll('.field-error');
+
+  it('T5-16: untouched fields show the new House after a rerender, without summary or error, buttons disabled', () => {
+    const view = setup(OLD);
+    houseChanges(view, NEW);
+    expect(feeInput()).toHaveValue('250');
+    expect(minInput()).toHaveValue('0.002');
+    expect(maxInput()).toHaveValue('10');
+    for (const action of ['fee', 'limits']) {
+      expect(summary(view.container, action)).toBeNull();
+      expect(errors(view.container, action)).toHaveLength(0);
+    }
+    expect(button('Actualizar comisión')).toBeDisabled();
+    expect(button('Actualizar límites')).toBeDisabled();
+  });
+
+  it('T5-17 (SM-1): mounted with the stale 0.001–50 SUI, the House moves to 0.002–10 SUI and the panel never offers to revert it', () => {
+    const view = setup(OLD);
+    houseChanges(view, NEW);
+    expect(view.container).not.toHaveTextContent('De 0.002–10 SUI a 0.001–50 SUI');
+    expect(summary(view.container, 'limits')).toBeNull();
+    expect(button('Actualizar límites')).toBeDisabled();
+    expect(view.container).not.toHaveTextContent('De 250 bps (2.5 %) a 0 bps (0 %)');
+    expect(button('Actualizar comisión')).toBeDisabled();
+  });
+
+  it('T5-18: an edited field keeps its text when the House changes; the untouched one follows the House', () => {
+    const view = setup(OLD);
+    type(minInput(), '0.005');
+    houseChanges(view, NEW);
+    expect(minInput()).toHaveValue('0.005');
+    expect(maxInput()).toHaveValue('10');
+    expect(summary(view.container, 'limits')).toHaveTextContent('De 0.002–10 SUI a 0.005–10 SUI');
+    expect(button('Actualizar límites')).toBeEnabled();
+  });
+
+  it('T5-18: an edited text equal to the new current value is unchanged and the button is disabled', () => {
+    const view = setup(OLD);
+    type(feeInput(), '250');
+    houseChanges(view, NEW);
+    expect(feeInput()).toHaveValue('250');
+    expect(errors(view.container, 'fee')[0]).toHaveTextContent('Es la comisión actual');
+    expect(button('Actualizar comisión')).toBeDisabled();
+  });
+
+  it('T5-19: launching the fee update sends 260 and clears the draft; with the reread House the field shows 260', () => {
+    const view = setup({ ...HOUSE, feeRate: 0 });
+    type(feeInput(), '260');
+    fireEvent.click(button('Actualizar comisión'));
+    expect(updateFee).toHaveBeenCalledWith({ capId: CAP_ID, feeRate: 260 });
+    expect(feeInput()).toHaveValue('0');
+    expect(errors(view.container, 'fee')).toHaveLength(0);
+    houseChanges(view, { ...HOUSE, feeRate: 260 });
+    expect(feeInput()).toHaveValue('260');
+    expect(summary(view.container, 'fee')).toBeNull();
+    expect(errors(view.container, 'fee')).toHaveLength(0);
+  });
+
+  it('T5-19: launching the limits update sends the amounts and clears both drafts; with the reread House the fields follow it', () => {
+    const view = setup();
+    type(minInput(), '0.003');
+    type(maxInput(), '20');
+    fireEvent.click(button('Actualizar límites'));
+    expect(updateLimits).toHaveBeenCalledWith({ capId: CAP_ID, minBet: 3_000_000n, maxBet: 20_000_000_000n });
+    expect(minInput()).toHaveValue('0.002');
+    expect(maxInput()).toHaveValue('10');
+    houseChanges(view, { ...HOUSE, minBet: 3_000_000n, maxBet: 20_000_000_000n });
+    expect(minInput()).toHaveValue('0.003');
+    expect(maxInput()).toHaveValue('20');
+    expect(summary(view.container, 'limits')).toBeNull();
+    expect(errors(view.container, 'limits')).toHaveLength(0);
+  });
+
+  it('T5-20: after a failed action the fields show the current value and the block keeps the error message', () => {
+    const failure = { kind: 'failure', message: 'La comisión supera el máximo que permite el contrato. (código house/0)', digest: null, cost: null } as const;
+    const view = setup({ ...HOUSE, feeRate: 0 }, {}, { fee: { stage: 'done', outcome: failure }, limits: { stage: 'done', outcome: failure } });
+    type(feeInput(), '260');
+    fireEvent.click(button('Actualizar comisión'));
+    type(minInput(), '0.003');
+    fireEvent.click(button('Actualizar límites'));
+    expect(feeInput()).toHaveValue('0');
+    expect(minInput()).toHaveValue('0.002');
+    expect(block(view.container, 'fee').querySelector('.tx-failure')).toHaveTextContent(failure.message);
+    expect(block(view.container, 'limits').querySelector('.tx-failure')).toHaveTextContent(failure.message);
   });
 });

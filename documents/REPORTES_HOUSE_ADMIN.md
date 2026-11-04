@@ -2299,3 +2299,277 @@ Si el handoff v1.5 va en otro commit: `docs: house admin handoff v1.5, TASK-5b f
 > #14 smoke ✅ (2026-11-04): localnet aislada, PASA 21/21 (cap a la burner por `transfer_house_cap`; comisión, límites con
 > adopción y retiro total con 2 comandos y saldo conciliado; candado sin aviso propio; custodia; cierre limpio). SM-1
 > (campos precargados que no siguen a la House tras un remontaje) → TASK-5b antes de TASK-6 (handoff v1.5).
+
+## Task completado: HANDOFF_HOUSE_ADMIN — TASK-5b
+
+### Branch (con SHA corto del HEAD)
+
+`feature/issue-14-house-admin` @ `c7243ce` (handoff v1.5; sin commits del DEV).
+
+### Archivos modificados/creados
+
+- `app/src/components/HouseAdminPanel.tsx`: `FeeBlock` y `LimitsBlock`.
+- `app/src/components/HouseAdminPanel.test.tsx`: T5-16..T5-20, más un parámetro opcional `hooks` en `setup` y el helper
+  `mockHouse`.
+- No cambian:
+  - `hooks/`, `sui/`, `HouseAdminPage.tsx`, `Header.tsx` y `App.tsx`;
+  - los textos de §1;
+  - `HouseAdminPanel.machine.test.tsx` (sus 6 tests pasan sin tocarlos);
+  - `contracts/` y las dependencias (`git diff --exit-code`, abajo).
+
+### Qué se implementó (3 líneas máx)
+
+- Cada campo de comisión y de límites tiene un borrador `string | null` y muestra `borrador ?? valor vigente`. Así un campo
+  sin editar sigue a la House en cada render, sin `useEffect`, `key` ni `setState` en el render.
+- Los errores solo aparecen si algún campo del bloque tiene borrador; esto reemplaza a `touched`.
+- Al lanzar la acción, los borradores vuelven a `null` en el mismo handler. Esto corrige SM-1: el panel ya no ofrece
+  revertir un cambio que la House ya tiene.
+
+### Tests y gates (output pegado, por área tocada)
+
+- Agregados: 7 tests (1149 → 1156, mismos 65 archivos), en el `describe` "fields follow the current House (TASK-5b, SM-1 of the smoke)".
+  - **T5-16:** montado con 0 bps / 0.001–50 y re-renderizado con 250 / 0.002–10 sin tocar nada. Resultado: `250`, `0.002` y
+    `10`, sin resumen ni error, y los dos botones deshabilitados.
+  - **T5-17 (SM-1):** la misma secuencia. Nunca aparece "De 0.002–10 SUI a 0.001–50 SUI" ni "De 250 bps (2.5 %) a 0 bps
+    (0 %)", y los dos botones quedan deshabilitados.
+  - **T5-18 (dos casos):**
+    - el mínimo editado a `0.005` se conserva y el máximo sigue a la House (`10`), con el resumen "De 0.002–10 SUI a
+      0.005–10 SUI";
+    - una comisión escrita igual a la nueva vigente da "Es la comisión actual" y el botón queda deshabilitado.
+  - **T5-19 (comisión y límites):**
+    - el envío lleva los valores validados (`{ capId, feeRate: 260 }`; `{ capId, minBet: 3000000n, maxBet: 20000000000n }`);
+    - en el mismo render, los campos vuelven al valor vigente (`0`; `0.002`/`10`);
+    - con la House releída, muestran lo nuevo (`260`; `0.003`/`20`) sin resumen ni error.
+  - **T5-20:** con la acción en `failure`, los campos muestran el valor vigente y `.tx-failure` del bloque conserva el
+    mensaje (comisión y límites).
+- **T5-17 en rojo antes del cambio.** Corrí los tests nuevos con el `HouseAdminPanel.tsx` de `c7243ce`: 6 de los 7 dieron
+  rojo, entre ellos T5-17 (el segundo T5-18 ya pasaba con el código viejo). Salida de `npx vitest run
+  src/components/HouseAdminPanel.test.tsx -t "T5-17"`, sin los códigos de color (el contexto del test va tal cual):
+
+```text
+ FAIL  src/components/HouseAdminPanel.test.tsx > HouseAdminPanel: fields follow the current House (TASK-5b, SM-1 of the smoke) > T5-17 (SM-1): mounted with the stale 0.001–50 SUI, the House moves to 0.002–10 SUI and the panel never offers to revert it
+Error: expect(element).not.toHaveTextContent()
+Expected element not to have text content:
+  De 0.002–10 SUI a 0.001–50 SUI
+Received:
+  ConfiguraciónComisión: 250 bps (2.5 %)Apuesta mínima: 0.002 SUIApuesta máxima: 10 SUIComisiones acumuladas: 0.01 SUIVersión de la House: 1ActualizarComisiónNueva comisión (bps) = 0 %Las partidas ya creadas conservan la comisión con que se crearon; la nueva se aplica a las que se creen desde ahora.De 250 bps (2.5 %) a 0 bps (0 %)Actualizar comisiónLímites de apuestaMínimo (SUI) Máximo (SUI) Los límites solo se aplican al crear partidas: las pendientes no cambian.De 0.002–10 SUI a 0.001–50 SUIActualizar límitesComisionesRetirar 0.01 SUI a tu cuentaSe retira todo lo acumulado al momento de ejecutarse; el monto real sale de la transacción.
+ ❯ src/components/HouseAdminPanel.test.tsx:259:32
+    257|     const view = setup(OLD);
+    258|     houseChanges(view, NEW);
+    259|     expect(view.container).not.toHaveTextContent('De 0.002–10 SUI a 0.…
+    260|     expect(summary(view.container, 'limits')).toBeNull();
+    261|     expect(button('Actualizar límites')).toBeDisabled();
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+ Test Files  1 failed (1)
+```
+
+  Es exactamente SM-1. Después del cambio, el mismo test pasa.
+- **T5-6/T5-7 y el resto de los tests viejos:** sin cambios en sus aserciones ni en su preparación. Ya escribían en el
+  campo antes de mirar errores, que ahora es lo que crea el borrador. El diff del archivo solo quita las tres líneas de
+  `setup` que suman el parámetro `hooks` y el helper `mockHouse` (desviación 1).
+- **Machine test:** los 6 tests pasan sin cambios (T5-5, T5-9..T5-12).
+- **Lint:** 0. En `HouseAdminPanel.tsx` no quedan `touched`, `useEffect`, `useRef` ni `key`.
+- **Contracts:** no aplica.
+
+**Gate de la app** (desde `<repo>`, con `export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH`; output completo
+de la corrida final sobre el árbol entregado):
+
+```text
+$ node --version
+v26.13.0
+$ npm --version
+11.20.0
+$ npm ci
+
+added 293 packages, and audited 295 packages in 8s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[exit=0]
+$ npm audit signatures
+audited 292 packages in 9s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+[exit=0]
+$ npm audit --omit=dev --audit-level=high
+found 0 vulnerabilities
+[exit=0]
+$ npm run lint -w app
+
+> lint
+> eslint . --max-warnings 0
+
+[exit=0]
+$ npm run typecheck -w app
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+[exit=0]
+$ npm test -w app
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  65 passed (65)
+      Tests  1156 passed (1156)
+   Start at  04:44:18
+   Duration  18.81s (environment 59%, tests 15%, import 10%, setup 9%, transform 6%)
+
+Environment  jsdom was created 65 times · 105.80s total, 59% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+[exit=0]
+$ VITE_SUI_NETWORK=testnet npm run build -w app
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 606 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-zbeW7Adv.js   917.02 kB │ gzip: 277.43 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 409ms
+[exit=0]
+$ git status --porcelain --untracked-files=all
+ M app/src/components/HouseAdminPanel.test.tsx
+ M app/src/components/HouseAdminPanel.tsx
+$ git diff --exit-code -- contracts/ app/src/sui/ app/src/hooks/ app/src/pages/ app/src/App.tsx app/src/components/Header.tsx package.json app/package.json package-lock.json
+[exit=0]
+```
+
+- **Build:** 917.01 → 917.02 kB (277.41 → 277.43 kB gzip). El aviso de chunk mayor de 500 kB es el de siempre (#15).
+- **Dependencias:** sin delta.
+- **Sincronización:** la tabla de contrato y `app/src/sui/` no aplican.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+
+No aplica. Según §6 no se repite el smoke: T5-17 reproduce el caso de forma determinista. No usé localnet.
+
+### Desviaciones del handoff
+
+1. - Qué cambió: el helper `setup` de `HouseAdminPanel.test.tsx` suma un tercer parámetro opcional `hooks` (estado inicial
+     de `useUpdateFeeRate`/`useUpdateBetLimits`, para T5-20). La lectura de la House pasa a un helper `mockHouse`, que
+     T5-16..T5-20 usan para cambiarla entre renders.
+   - Por qué: T5-20 necesita la acción en `failure`, y T5-16..T5-19 necesitan que la House cambie sin remontar el panel.
+   - Verificación extra realizada: los 27 tests anteriores del archivo pasan sin cambiar ninguna aserción ni su
+     preparación. El diff quita solo las 3 líneas reemplazadas de `setup`.
+2. - Qué cambió: un submit con la validación en rojo, por ejemplo con Enter, ya no "toca" el campo. Si no hay borrador,
+     no muestra errores y no hace nada.
+   - Por qué: §3.3 de v1.5 dice que los errores aparecen solo con borrador, en reemplazo de `touched`. Sin borrador el
+     estado es siempre `unchanged`, con el botón deshabilitado.
+   - Verificación extra realizada: T5-16 (sin borrador, sin errores) y T5-6/T5-7 (con borrador, cada texto).
+
+### Riesgos / pendientes
+
+- Si la transacción falla, el admin vuelve a escribir el valor: los campos ya muestran la House vigente. §3.4 lo prevé y
+  TASK-6 lo declara en `app/README.md`.
+- Mientras corre la transacción, los campos muestran la House anterior hasta que la invalidación de H-5 la relee. Los
+  botones están deshabilitados por `busy` durante ese tiempo.
+
+### Documentación
+
+- READMEs / `agents.md` actualizados: no aplica en TASK-5b. TASK-6 documenta el comportamiento de los campos (borrador y
+  vuelta a lo vigente al lanzar o fallar).
+- Snippet propuesto para `documents/STATUS.md` (fila de #14):
+
+  > #14 TASK-5b ✅ (2026-11-04): SM-1 del smoke corregido. Los campos de comisión y límites tienen borrador
+  > (`draft ?? vigente`): sin editar siguen a la House en cada render, y al lanzar vuelven a lo vigente (sin `useEffect`
+  > ni `key`). T5-17 reproduce el caso (rojo antes del cambio). App 1156 tests en 65 archivos (+7), build 917.02 kB;
+  > lint 0.
+
+---
+
+## Revisión TASK-5b: PASA
+
+> MID, 2026-11-04. Revisado contra el diff real (`app/src/components/HouseAdminPanel.tsx` y `HouseAdminPanel.test.tsx`, sin
+> commitear sobre `c7243ce`) y el output pegado. No corrí gates.
+
+**Checklist de §5, con los focos pedidos:**
+
+- **Sin `setState` en el render, ni `useEffect`, ni `key`: cumplido.** `FeeBlock` y `LimitsBlock` guardan solo
+  `draft: string | null` (uno por campo) y derivan el texto en el render (`draft ?? String(house.feeRate)`,
+  `minDraft ?? formatMist(house.minBet)`, `maxDraft ?? formatMist(house.maxBet)`). Los únicos `setDraft` están en
+  `onChange` y en `onSubmit`. `grep` de `useEffect|useRef|key=` en el archivo: vacío. Lint 0.
+- **Un campo editado nunca se pierde cuando la House cambia: cumplido.** El borrador solo vuelve a `null` en el `onSubmit`
+  que **lanza** la acción (después de `tx.update`, con la validación `ok` y sin `busy`); un cambio de la House (relectura,
+  otra pestaña, adoptado) solo cambia el valor de los campos **sin** borrador. T5-18: con el mínimo en `0.005` y la House
+  que pasa a 0.002–10, el mínimo sigue en `0.005`, el máximo muestra `10` y el resumen es "De 0.002–10 SUI a 0.005–10 SUI".
+  (Un remontaje del panel sí pierde lo escrito, como cualquier estado local; no es el caso de SM-1 y no ofrece revertir
+  nada, porque el campo remontado arranca en el valor vigente.)
+- **El botón no puede revertir un cambio sin que el admin lo vea: cumplido.** Un campo sin borrador siempre es igual a la
+  House vigente, así que sin borradores la validación da `unchanged` y el botón queda deshabilitado, sin resumen: el caso
+  de SM-1 desaparece (**T5-17**, en rojo antes del cambio, pegado). El botón solo se habilita con un borrador que difiere
+  de lo vigente, y en ese caso el resumen "De <vigente> a <lo escrito>" está junto al botón, calculado contra la House
+  **actual** (T5-18). Si lo escrito coincide con un valor vigente nuevo, `unchanged` y deshabilitado (segundo caso de T5-18).
+- **La desviación 2 (Enter sin borrador no muestra errores) no oculta errores reales.** Sin borrador, el texto evaluado es el
+  valor on-chain formateado, no algo que escribió el admin: lo único que la validación puede decir es `unchanged` (o, en una
+  House con más de 1000 bps tras un upgrade, `too_high` sobre el valor vigente). En los dos casos el botón está
+  deshabilitado y no hay nada que enviar; mostrar "Es la comisión actual" por un Enter sin escribir era ruido. Todo error
+  sobre un texto escrito se sigue mostrando apenas existe el borrador (T5-6, T5-7 y el paso 8 del smoke sin cambios de
+  aserciones).
+- **Tests y gates.** +7 (1156 en 65 archivos): T5-16..T5-20. 6 de 7 en rojo con el código viejo; el segundo de T5-18 ya
+  pasaba (un texto escrito igual al vigente nuevo ya daba `unchanged`), declarado. Las aserciones de T5-6/T5-7 no cambian;
+  solo el helper `setup` suma `mockHouse` y los hooks opcionales (desviación 1, aceptada). Build 917.02 kB.
+- **Alcance.** Solo `HouseAdminPanel.tsx` y su test; `hooks/`, `sui/`, la página, el encabezado y los textos de §1 sin
+  cambios.
+
+**Nota (no es hallazgo):** al lanzar la acción el borrador se vacía en el mismo handler, así que si `execute` no llegara a
+correr (el candado en el mismo tick de otra vista, que `busy` ya cubre en la práctica) el admin perdería lo escrito sin
+efecto en la red. No ofrece revertir nada; se acepta, y TASK-6 ya documenta que tras un fallo se vuelve a escribir.
+
+### Hallazgos
+
+Ninguno.
+
+### Siguiente paso: TASK-6 autorizado (handoff v1.5)
+
+TASK-6 suma la línea de TASK-5b y puede citar lo medido en el smoke (ver "Revisión del smoke").
+
+### Mensaje de commit propuesto
+
+```
+fix(app): keep untouched House admin fields on the current House (#14)
+
+TASK-5b, SM-1 of the smoke: after a remount with a stale cache, the
+fee and bet-limit fields kept the values from mount and the block
+offered, with the button enabled, to revert the change the admin had
+just made. Each field now stores only a draft and shows draft ??
+current value, so an untouched field follows the House on every
+render (no effect, key or setState in render); an edited field keeps
+its text, errors show only with a draft, and launching the action
+clears the drafts.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+### Snippet para STATUS.md
+
+> #14 TASK-5b ✅ (2026-11-04, revisión MID PASA): SM-1 del smoke corregido (campos sin editar siguen a la House vigente;
+> borradores por campo; T5-17 reproduce el caso). App 1156 tests en 65 archivos (+7), build 917.02 kB.

@@ -111,7 +111,11 @@ function AdoptedStatus({ adopted, action }: { adopted: Adopted; action: HouseAct
   return <TransactionStatus stage="done" outcome={adopted.outcome} network={network} successText={adopted.text} />;
 }
 
-/** Comisión en bps enteros con el % al lado en vivo (D-20261104-02 (2)) y el resumen "de X a Y" junto al botón (P-3). */
+/**
+ * Comisión en bps enteros con el % al lado en vivo (D-20261104-02 (2)) y el resumen "de X a Y" junto al botón (P-3). El
+ * campo guarda solo un **borrador** (`null` = sin editar) y muestra `borrador ?? comisión vigente` (TASK-5b, SM-1): sin
+ * editar, sigue a la House en cada render, así nunca ofrece revertir un cambio que la House ya tiene.
+ */
 function FeeBlock({
   house,
   capId,
@@ -126,18 +130,20 @@ function FeeBlock({
   adopted: Adopted;
 }) {
   const { network } = useAppConfig();
-  const [text, setText] = useState(String(house.feeRate));
-  const [touched, setTouched] = useState(false);
+  const [draft, setDraft] = useState<string | null>(null);
+  const text = draft ?? String(house.feeRate);
   const validation = validateFeeRate(text, house.feeRate);
   const live = validation.ok ? validation.bps : validation.error === 'unchanged' ? house.feeRate : null;
-  const error = !validation.ok && touched ? validation.error : undefined;
+  const error = !validation.ok && draft !== null ? validation.error : undefined;
   return (
     <form
       data-house-action="fee"
       onSubmit={(event) => {
         event.preventDefault();
-        setTouched(true);
-        if (validation.ok && !busy) tx.update({ capId, feeRate: validation.bps });
+        if (!validation.ok || busy) return;
+        tx.update({ capId, feeRate: validation.bps });
+        // Lanzada la acción, el campo vuelve a la House vigente (la nueva llega con la invalidación de H-5).
+        setDraft(null);
       }}
     >
       <h3>Comisión</h3>
@@ -148,8 +154,7 @@ function FeeBlock({
           value={text}
           aria-invalid={error !== undefined}
           onChange={(event) => {
-            setText(event.target.value);
-            setTouched(true);
+            setDraft(event.target.value);
           }}
         />
       </label>
@@ -173,7 +178,11 @@ function FeeBlock({
   );
 }
 
-/** Límites de apuesta en SUI con errores por campo y del par, y el resumen "de X a Y" junto al botón. */
+/**
+ * Límites de apuesta en SUI con errores por campo y del par, y el resumen "de X a Y" junto al botón. Cada campo con su
+ * borrador, como `FeeBlock` (TASK-5b, SM-1): el que no se editó muestra el límite vigente; los errores solo con algún
+ * borrador.
+ */
 function LimitsBlock({
   house,
   capId,
@@ -188,18 +197,23 @@ function LimitsBlock({
   adopted: Adopted;
 }) {
   const { network } = useAppConfig();
-  const [minText, setMinText] = useState(formatMist(house.minBet));
-  const [maxText, setMaxText] = useState(formatMist(house.maxBet));
-  const [touched, setTouched] = useState(false);
+  const [minDraft, setMinDraft] = useState<string | null>(null);
+  const [maxDraft, setMaxDraft] = useState<string | null>(null);
+  const minText = minDraft ?? formatMist(house.minBet);
+  const maxText = maxDraft ?? formatMist(house.maxBet);
+  const edited = minDraft !== null || maxDraft !== null;
   const validation = validateBetLimits(minText, maxText, { minBet: house.minBet, maxBet: house.maxBet });
-  const errors = !validation.ok && touched ? validation.errors : {};
+  const errors = !validation.ok && edited ? validation.errors : {};
   return (
     <form
       data-house-action="limits"
       onSubmit={(event) => {
         event.preventDefault();
-        setTouched(true);
-        if (validation.ok && !busy) tx.update({ capId, minBet: validation.minBet, maxBet: validation.maxBet });
+        if (!validation.ok || busy) return;
+        tx.update({ capId, minBet: validation.minBet, maxBet: validation.maxBet });
+        // Lanzada la acción, los dos campos vuelven a la House vigente (la nueva llega con la invalidación de H-5).
+        setMinDraft(null);
+        setMaxDraft(null);
       }}
     >
       <h3>Límites de apuesta</h3>
@@ -210,8 +224,7 @@ function LimitsBlock({
           value={minText}
           aria-invalid={errors.min !== undefined}
           onChange={(event) => {
-            setMinText(event.target.value);
-            setTouched(true);
+            setMinDraft(event.target.value);
           }}
         />
       </label>
@@ -223,8 +236,7 @@ function LimitsBlock({
           value={maxText}
           aria-invalid={errors.max !== undefined}
           onChange={(event) => {
-            setMaxText(event.target.value);
-            setTouched(true);
+            setMaxDraft(event.target.value);
           }}
         />
       </label>
