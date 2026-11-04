@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { TxOutcome, TxStage } from '../hooks/useExecuteTransaction';
+import type { TxOutcome } from '../hooks/txSession';
+import type { TxStage } from '../hooks/useExecuteTransaction';
 import { TransactionStatus } from './TransactionStatus';
 
 const DIGEST = '7VXtB8Pc47Jss33zYQRMXJDfLsY7XvdWFX78gzj7q7YH';

@@ -1,13 +1,7 @@
 import type { QueryKey } from '@tanstack/react-query';
 import type { Network } from '../sui/networks';
 import { queryKeys } from './queryKeys';
-
-/** Acción de una transacción propia: decide qué datos quedaron viejos (DL-6). */
-export type TxAction =
-  | { kind: 'create' }
-  | { kind: 'cancel'; gameId: string }
-  | { kind: 'reject'; gameId: string }
-  | { kind: 'accept'; gameId: string };
+import type { TxAction } from './txSession';
 
 /** Claves a reiniciar (`resetQueries`: el lobby vuelve a su primera página) y a invalidar (`invalidateQueries`). */
 export type TxInvalidations = { reset: QueryKey[]; invalidate: QueryKey[] };

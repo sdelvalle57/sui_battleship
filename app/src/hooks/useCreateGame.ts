@@ -1,4 +1,4 @@
-import { useCurrentAccount, useCurrentClient } from '@mysten/dapp-kit-react';
+import { useCurrentClient } from '@mysten/dapp-kit-react';
 import { houseChangeMessage, houseTermsChanges, type HouseTerms } from '../sui/createGame';
 import { parseCreatedGame } from '../sui/gameTx';
 import { fetchHouse } from '../sui/house';
@@ -23,9 +23,7 @@ export function useCreateGame(
 ): UseExecuteTransaction<CreateGameValue> & { create: (input: CreateGameInput) => void } {
   const config = useAppConfig();
   const client = useCurrentClient();
-  const account = useCurrentAccount();
   const tx = useExecuteTransaction<CreateGameValue>(view);
-  const sender = account?.address ?? null;
 
   const create = ({ bet, opponent, shown }: CreateGameInput) => {
     tx.execute({
@@ -38,9 +36,9 @@ export function useCreateGame(
           ? null
           : { stop: houseChangeMessage(change), invalidate: [queryKeys.house(config.network, config.houseId)] };
       },
-      interpret: (result) => {
-        const created =
-          sender === null ? null : parseCreatedGame(result, { originalPackageId: config.originalPackageId, sender });
+      // El creador es la cuenta que firmó (DL-11 de #13), no la que esté conectada al terminar.
+      interpret: (result, signer) => {
+        const created = parseCreatedGame(result, { originalPackageId: config.originalPackageId, sender: signer });
         return {
           created,
           feeChanged: created !== null && created.feeRate !== shown.feeRate ? { from: shown.feeRate, to: created.feeRate } : null,

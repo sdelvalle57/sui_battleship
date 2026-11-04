@@ -1,14 +1,57 @@
+import type { UiWalletAccount } from '@mysten/dapp-kit-react';
+import type { Transaction } from '@mysten/sui/transactions';
 import type { Mutation, MutationStatus, QueryKey } from '@tanstack/react-query';
 import { hashKey } from '@tanstack/react-query';
 import type { GameCreatedEvent, GameResolvedEvent } from '../sui/events';
-import type { TxAction } from './txInvalidation';
-import type { ExecuteInput, TxOutcome, TxResult } from './useExecuteTransaction';
+import type { NodeTransactionResult } from '../sui/execution';
 
 /**
  * Sesión de transacciones de la pestaña (DL-7/DL-8 de #12), en funciones puras sin React: qué ve una vista de las
  * mutaciones del `MutationCache` de su cuenta. El caché (un `QueryClient` por carga de página) es la única fuente: así
  * salir de la pantalla y volver no permite un segundo envío ni pierde el resultado de la que estaba en curso.
  */
+
+// Tipos de la máquina de transacciones (DL-12 de #13, NIT-1 de #12): viven aquí para que `txSession.ts` no importe nada de
+// `hooks/` y no haya ciclos de imports de tipos (`txSession` ↔ `useExecuteTransaction`, `queryKeys` → `txSession` →
+// `txInvalidation` → `queryKeys`).
+
+/** Acción de una transacción propia: decide qué datos quedaron viejos (DL-6 de #11). */
+export type TxAction =
+  | { kind: 'create' }
+  | { kind: 'cancel'; gameId: string }
+  | { kind: 'reject'; gameId: string }
+  | { kind: 'accept'; gameId: string };
+
+/**
+ * Resultado honesto de una transacción (DL-2, M-3). `success` y `failure` con `cost` los decide la lectura del nodo;
+ * `failure` sin digest es un fallo antes de ejecutar; `unconfirmed` = hay digest pero el nodo no respondió a tiempo.
+ * `value: null` en un éxito = el nodo confirmó pero no se pudo interpretar el resultado (NIT-1 de v1.1).
+ */
+export type TxOutcome<T> =
+  | { kind: 'success'; digest: string; value: T | null; indexed: boolean; cost: bigint }
+  | { kind: 'failure'; message: string; digest: string | null; cost: bigint | null }
+  | { kind: 'unconfirmed'; digest: string };
+
+/**
+ * Resultado que muestra el hook de una acción (M-1 (b) de #12): nunca `unconfirmed`. La alerta "sin confirmar" la dibuja
+ * la vista, desde `useTxTarget().unconfirmed`, una sola vez por objetivo.
+ */
+export type TxResult<T> = Exclude<TxOutcome<T>, { kind: 'unconfirmed' }>;
+
+/** Corte previo a la preflight (M-2): un texto para el usuario y las claves a invalidar. */
+export type TxPrecheckStop = { stop: string; invalidate?: QueryKey[] };
+
+/**
+ * Lo que cada acción aporta a la máquina común: la acción, el builder, el chequeo previo y la lectura del resultado.
+ * `interpret` recibe la dirección que firmó (DL-11 de #13): la de la cuenta capturada al lanzar, no la que esté
+ * conectada cuando la transacción termina.
+ */
+export type ExecuteInput<T> = {
+  action: TxAction;
+  build: () => Transaction;
+  precheck?: (signal: AbortSignal) => Promise<TxPrecheckStop | null>;
+  interpret: (nodeResult: NodeTransactionResult, signer: string) => T;
+};
 
 /** Objetivo de una transacción: el formulario de creación o una partida. */
 export type TxTarget = { kind: 'create' } | { kind: 'game'; gameId: string };
@@ -28,8 +71,19 @@ export type TxView<T extends TxTarget = TxTarget> = {
   targetHash: string;
 };
 
-/** Variables de cada mutación: la entrada de la acción y quién la lanzó (vista y ejecución). */
-export type TxVariables<T> = { input: ExecuteInput<T>; viewId: number; runId: number; action: TxAction };
+/**
+ * Variables de cada mutación: la entrada de la acción, quién la lanzó (vista y ejecución) y, capturados en el clic
+ * (DL-11 de #13), la cuenta que firma y el `targetHash` del objetivo: preflight, firma, `interpret` e invalidación usan
+ * esa cuenta por construcción, y la etapa queda ligada a ese objetivo aunque la vista pase a otra cuenta.
+ */
+export type TxVariables<T> = {
+  input: ExecuteInput<T>;
+  viewId: number;
+  runId: number;
+  action: TxAction;
+  account: UiWalletAccount | null;
+  targetHash: string;
+};
 
 /**
  * Lo que se lee de una creación exitosa: la partida creada (DL-9 de #11; `null` si no se pudo identificar) y si la

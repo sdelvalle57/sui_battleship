@@ -1,8 +1,7 @@
-import type { AdoptedTx } from '../hooks/txSession';
+import type { AdoptedTx, TxOutcome } from '../hooks/txSession';
 import { useAcceptGame } from '../hooks/useAcceptGame';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useCancelGame } from '../hooks/useCancelGame';
-import type { TxOutcome } from '../hooks/useExecuteTransaction';
 import { useRejectGame } from '../hooks/useRejectGame';
 import { useSuiBalance } from '../hooks/useSuiBalance';
 import { useTxTarget } from '../hooks/useTxTarget';

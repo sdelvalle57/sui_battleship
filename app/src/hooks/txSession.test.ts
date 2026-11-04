@@ -1,8 +1,7 @@
 import { hashKey, type MutationStatus } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 import { queryKeys } from './queryKeys';
-import { deriveTargetState, mountSnapshot, toTxEntry, txOutcomeOf, txVariablesOf, type MountSnapshot, type TxEntry } from './txSession';
-import type { TxOutcome } from './useExecuteTransaction';
+import { deriveTargetState, mountSnapshot, toTxEntry, txOutcomeOf, txVariablesOf, type MountSnapshot, type TxEntry, type TxOutcome } from './txSession';
 
 const A = `0x${'a'.repeat(64)}`;
 const B = `0x${'b'.repeat(64)}`;
@@ -146,6 +145,25 @@ describe('toTxEntry', () => {
     for (const action of [{ kind: 'create' }, { kind: 'cancel', gameId: GAME }, { kind: 'reject', gameId: GAME }, { kind: 'accept', gameId: GAME }]) {
       expect(txVariablesOf({ viewId: 1, runId: 2, action })).toEqual({ viewId: 1, runId: 2, action });
     }
+  });
+
+  it('ignores the captured account and targetHash of the variables, for every action, and keeps the projection (T3-8)', () => {
+    const account = { address: A };
+    for (const action of [{ kind: 'create' }, { kind: 'cancel', gameId: GAME }, { kind: 'reject', gameId: GAME }, { kind: 'accept', gameId: GAME }]) {
+      const variables = { input: {}, viewId: 1, runId: 2, action, account, targetHash: hashKey(key) };
+      expect(txVariablesOf(variables)).toEqual({ viewId: 1, runId: 2, action });
+      expect(txVariablesOf({ ...variables, account: null })).toEqual({ viewId: 1, runId: 2, action });
+    }
+    const variables = { input: {}, viewId: 9, runId: 12, action: { kind: 'cancel', gameId: GAME }, account, targetHash: hashKey(key) };
+    expect(toTxEntry({ targetHash: hashKey(key) })(mutation(3, 'success', key, failure, variables))).toEqual({
+      id: 3,
+      status: 'success',
+      viewId: 9,
+      runId: 12,
+      action: { kind: 'cancel', gameId: GAME },
+      sameTarget: true,
+      outcome: failure,
+    });
   });
 
   it('reads only the known shapes of variables and outcome', () => {

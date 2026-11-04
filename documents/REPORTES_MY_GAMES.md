@@ -1006,3 +1006,332 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ### Snippet para STATUS.md
 
 El del reporte del DEV, sin cambios.
+
+## TASK-3
+
+## Task completado: HANDOFF_MY_GAMES v1.2 — TASK-3 (máquina: cambio de cuenta (MINOR-1 de #12) y tipos (NIT-1))
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-13-my-games` @ `8d19872`. Sin commits: los cambios están en el árbol de trabajo.
+
+### Archivos modificados/creados
+- **`app/src/hooks/txSession.ts`:**
+  - recibe `TxAction`, `TxOutcome`, `TxResult`, `TxPrecheckStop` y `ExecuteInput`;
+  - `ExecuteInput.interpret(nodeResult, signer)`;
+  - `TxVariables` suma `account: UiWalletAccount | null` y `targetHash`.
+- **`app/src/hooks/useExecuteTransaction.ts`:**
+  - la etapa queda ligada a una clave (el `targetHash` del objetivo);
+  - `run` recibe las variables y usa la cuenta capturada en el clic para la preflight, la firma con `{ transaction, account }`, `interpret` y la invalidación;
+  - `execute` captura la cuenta y el `targetHash`.
+- **`app/src/hooks/txInvalidation.ts`:** importa `TxAction` de `txSession` (el tipo sale de acá).
+- **`app/src/hooks/useAcceptGame.ts` y `useCreateGame.ts`:** `interpret(result, signer)`. Les borré `useCurrentAccount` y su `sender`, que quedaban sin uso.
+- **`app/src/components/GameActions.tsx` y `TransactionStatus.tsx`:** solo imports.
+- **Tests:**
+  - `hooks/useExecuteTransaction.test.tsx`: imports y 6 tests nuevos;
+  - `hooks/txSession.test.ts`: imports y 1 test nuevo;
+  - `components/CreateGameForm.test.tsx`, `GameActions.test.tsx` y `TransactionStatus.test.tsx`: solo imports.
+- **Sin cambios, porque no hizo falta:**
+  - `useCancelGame.ts` y `useRejectGame.ts` (su `interpret` ignora el segundo argumento);
+  - `queryKeys.ts` y `useTxTarget.ts`;
+  - `useAcceptGame.test.tsx`, `useCreateGame.test.tsx`, `GameActions.machine.test.tsx` y `CreateGameForm.machine.test.tsx`.
+
+### Qué se implementó (3 líneas máx)
+- **NIT-1:** los cinco tipos de la máquina viven en `txSession.ts`, que no importa nada de `./`. Ya no hay ciclos de imports de tipos y no hay re-exports.
+- **MINOR-1 de #12 (DL-11):**
+  - `execute` captura la cuenta y el `targetHash` en las variables de la mutación;
+  - `run` firma con `signAndExecuteTransaction({ transaction, account })`, y `interpret` recibe la dirección que firmó;
+  - la etapa se guarda como `{ key: targetHash, stage }`, y una vista de otra cuenta ve `idle`;
+  - no usé `useRef` ni `useEffect`.
+
+### Tests y gates (output pegado, por área tocada)
+
+**Tests nuevos (T3-1..T3-9):**
+
+| Test | Dónde | Qué verifica |
+|---|---|---|
+| T3-1 | todo el suite | Los 834 de antes siguen en verde, sin cambiar ninguna aserción |
+| T3-2 + T3-3 | `useExecuteTransaction.test.tsx` | A en `confirming` → `switchTo(B)` ⇒ `stage: 'idle'`, `outcome: null`, `target.busy: false`, `target.notice: null`. La transacción termina mientras se ve B (sigue `idle`/`null`); al volver a A ⇒ `done` y el `success` de A |
+| T3-4 | `useExecuteTransaction.test.tsx` | Cambio a B con la preflight diferida ⇒ preflight con la dirección de A; la wallet recibe `account` **=== el objeto de A**; `interpret` recibe la dirección de A; se invalida el saldo de A |
+| T3-5 | `useExecuteTransaction.test.tsx` | "Sin confirmar" de A: B no lo ve y su `execute` llega a la wallet con `account` = B. Al volver a A, `unconfirmed` reaparece y un `execute` de A no hace pedidos |
+| T3-6 (SUGGESTION-5) | `useExecuteTransaction.test.tsx` | A en curso → B lanza desde la **misma** instancia y termina → A queda "sin confirmar" → al volver a A, `outcome: null` y el objetivo de A sigue bloqueado (0 pedidos nuevos) |
+| T3-7 | `useExecuteTransaction.test.tsx` | Sin cuenta ⇒ "Conecta tu wallet" sin pedidos, con `account: null` y el `targetHash` en las variables de la mutación |
+| T3-8 | `txSession.test.ts` | `txVariablesOf` ignora `account`/`targetHash` (también con `account: null`) en las cuatro acciones; `toTxEntry` da la misma proyección |
+| T3-9 | `useExecuteTransaction.test.tsx` | La wallet recibe `account` = A y la transacción sigue **sin** `sender`. El test viejo "builds the transaction for the wallet without constructing it" (ex-`:212-216`) sigue en verde sin tocarlo |
+
+En T3-6, la etapa de A al volver es `done`, no `idle`: el `finally` de A corrió después que el de B. Con `outcome: null`, `TransactionStatus` no dibuja texto para `done` (`STAGE_TEXT` no tiene esa clave). Queda documentado en el test.
+
+**Conteo por archivo:**
+
+| Archivo | Antes → después |
+|---|---|
+| `useExecuteTransaction.test.tsx` | 28 → 34 |
+| `txSession.test.ts` | 16 → 17 |
+| Resto | Sin delta |
+| **Total** | **834 → 841** (54 archivos) |
+
+**Aserciones migradas (T3-1):** ninguna. En los cinco archivos de test modificados, las únicas líneas borradas son imports (`git diff -U0 | grep '^-'`):
+- `CreateGameForm.test.tsx`: `TxOutcome`, de `../hooks/useExecuteTransaction` a `../hooks/txSession`.
+- `GameActions.test.tsx`: `TxResult`, de `../hooks/useExecuteTransaction` a `../hooks/txSession`.
+- `TransactionStatus.test.tsx`: `TxOutcome`, de `../hooks/useExecuteTransaction` a `../hooks/txSession` (`TxStage` se queda).
+- `txSession.test.ts`: `TxOutcome` pasa al import de `./txSession`.
+- `useExecuteTransaction.test.tsx`: `TxAction` (antes de `./txInvalidation`) y `ExecuteInput` (antes de `./useExecuteTransaction`) pasan a `./txSession`.
+
+No hizo falta tocar ninguna expectativa de la wallet: las de antes no comparaban los argumentos completos, y `account` se verifica en los tests nuevos.
+
+**Verificación extra (mutaciones sobre `useExecuteTransaction.ts`, restaurado con `cmp` igual):**
+
+| Mutación | Resultado |
+|---|---|
+| Etapa sin clave (`stage = staged.stage`) | Falla T3-2/T3-3 |
+| Firma sin `account` | Fallan T3-4, T3-5 y T3-9 |
+| `run` con la cuenta del cierre del render, o `interpret` con `currentAccount` | 34/34 en verde: mutantes **equivalentes** |
+
+Los dos últimos son equivalentes porque TanStack arma la mutación con la `mutationFn` del render del clic (`MutationObserver.mutate` usa `this.options` en ese momento). El cierre ya apuntaba a A. El fallo real de MINOR-1 era firmar sin `account` (la wallet usaba su cuenta seleccionada) y compartir la etapa. Capturar la cuenta en las variables hace explícito lo que antes dependía del cierre.
+
+**Criterios de §7:**
+```text
+--- grep -n "from './" app/src/hooks/{txSession,queryKeys,txInvalidation,useExecuteTransaction}.ts
+app/src/hooks/txInvalidation.ts:3:import { queryKeys } from './queryKeys';
+app/src/hooks/txInvalidation.ts:4:import type { TxAction } from './txSession';
+app/src/hooks/queryKeys.ts:3:import type { TxTarget } from './txSession';
+app/src/hooks/useExecuteTransaction.ts:18:import { transactionInvalidations } from './txInvalidation';
+app/src/hooks/useExecuteTransaction.ts:28:} from './txSession';
+app/src/hooks/useExecuteTransaction.ts:29:import { useAppConfig } from './useAppConfig';
+--- grep -rnE "\b(TxOutcome|TxResult|TxPrecheckStop|ExecuteInput|TxAction)\b.*from '.*(useExecuteTransaction|txInvalidation)'" app/src
+(vacío, exit=1)
+--- grep -rn "eslint-disable" app/src ; grep -n "useRef\|useEffect" app/src/hooks/useExecuteTransaction.ts
+(vacío)
+```
+- `txSession.ts` no tiene ninguna línea en el primer grep.
+- El resto forma un DAG: `queryKeys → txSession`; `txInvalidation → queryKeys, txSession`; `useExecuteTransaction → txInvalidation, txSession, useAppConfig`.
+- `txSession.ts` importa solo de `@mysten/dapp-kit-react` (tipo `UiWalletAccount`, V-5), `@mysten/sui/transactions` (tipo), `@tanstack/react-query`, `../sui/events` y `../sui/execution` (tipos).
+- La API pública del hook no cambia: `useExecuteTransaction<T>(view)` devuelve `{ stage, outcome, execute }` y sigue exportando `TxStage`, `UseExecuteTransaction`, `CONNECT_WALLET_MESSAGE` y `PREPARE_FAILED_PREFIX`.
+
+**Gates:**
+- **Contracts:** no aplica. `git diff --exit-code -- contracts/` da 0.
+- **App:** gate completo en forma canónica.
+```text
+v26.13.0
+8d19872
+
+added 293 packages, and audited 295 packages in 12s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit=0
+audited 292 packages in 14s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+exit=0
+found 0 vulnerabilities
+exit=0
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  54 passed (54)
+      Tests  841 passed (841)
+   Start at  00:08:07
+   Duration  28.87s (environment 63%, import 11%, setup 10%, tests 9%, transform 8%, worker 1%)
+
+Environment  jsdom was created 54 times · 172.29s total, 63% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 590 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-D1kEuIdj.js   887.24 kB │ gzip: 270.17 kB
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 572ms
+exit=0
+--- git status --porcelain --untracked-files=all
+ M app/src/components/CreateGameForm.test.tsx
+ M app/src/components/GameActions.test.tsx
+ M app/src/components/GameActions.tsx
+ M app/src/components/TransactionStatus.test.tsx
+ M app/src/components/TransactionStatus.tsx
+ M app/src/hooks/txInvalidation.ts
+ M app/src/hooks/txSession.test.ts
+ M app/src/hooks/txSession.ts
+ M app/src/hooks/useAcceptGame.ts
+ M app/src/hooks/useCreateGame.ts
+ M app/src/hooks/useExecuteTransaction.test.tsx
+ M app/src/hooks/useExecuteTransaction.ts
+--- git diff --exit-code -- contracts/
+exit=0
+--- git diff --exit-code -- package.json app/package.json package-lock.json
+exit=0
+```
+
+**Delta contra el baseline (TASK-2):**
+- Tests: +7, en los mismos 54 archivos.
+- Build: 887.14 → 887.24 kB (270.12 → 270.17 kB gzip).
+- Lint, typecheck y auditorías: sin delta.
+- `package*.json`, `contracts/` y `sui/`: sin cambios.
+
+**Greps sobre `git diff`:** vacíos para claves (`suiprivkey|mnemonic|BEGIN .*KEY|private.?key`), rutas personales, `console.`, `eslint-disable` y hex de 40-64 en líneas agregadas. Las direcciones de test se arman con `'e'.repeat(64)`.
+
+**Tablas de contrato y `app/src/sui/`:** no aplica.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica. El handoff lo excluye: la burner no cambia de cuenta sin recargar. El cambio de cuenta con una wallet de extensión queda para #17 (RM-8, RM-9).
+
+### Desviaciones del handoff
+1. **Chequeo de cuenta en `run`.** Es `if (account === null) return failure(CONNECT_WALLET_MESSAGE)`, y después `const sender = account.address`.
+   - **Qué cambió:** para eso pasé la definición de `invalidateAction` y `progress.invalidate` a **después** de ese chequeo.
+   - **Por qué:** con la cuenta en las variables, `sender` deja de ser anulable desde ahí y no hace falta un segundo chequeo.
+   - **Verificación extra:** el camino sin cuenta no invalida nada ni tiene digest, igual que antes (T3-7 y el test viejo de "Conecta tu wallet" en verde).
+2. **Renombre interno:** la cuenta del render en `useExecuteTransaction` pasó a llamarse `currentAccount`, para no taparla con la `account` de las variables dentro de `run`.
+3. **Archivos de §4 sin tocar:** `useCancelGame.ts`, `useRejectGame.ts`, `useAcceptGame.test.tsx`, `useCreateGame.test.tsx`, `GameActions.machine.test.tsx` y `CreateGameForm.machine.test.tsx`. No necesitaban cambios para compilar ni para pasar, y los tests nuevos cubren T3-1..T3-9 desde `useExecuteTransaction.test.tsx` y `txSession.test.ts`.
+4. **T3-6 afirma además `stage: 'done'`**, la etapa de la ejecución de A, que terminó última. El handoff solo pide `outcome: null` y el objetivo bloqueado. Es el límite (b) de DL-11.
+
+### Riesgos / pendientes
+1. **Wallet que ya no expone la cuenta capturada (V-4).** El kit lanza antes de abrir la wallet, sin digest, y el resultado es `failure` con el texto de `transactionErrorMessage`. No le agregué un test propio, porque el camino es el mismo del test existente "fails with the wallet message when it rejects without digest". Se verifica con una wallet de extensión en #17 (RM-9).
+2. **TASK-4:** la tabla de invalidación no cambió (`myGames` llega en TASK-4). La invalidación ya usa la cuenta capturada.
+
+### Documentación
+- **READMEs / `agents.md`:** no aplica en este task. La tabla de hooks y la máquina de `app/README.md` son de TASK-6 (tipos en `txSession.ts`, `interpret(result, signer)`, etapa por clave).
+- **Snippet propuesto para `documents/STATUS.md`:** `| feature/issue-13-my-games (TASK-3 de #13), 2026-11-04 | máquina de transacciones | 🟢 NIT-1: TxAction/TxOutcome/TxResult/TxPrecheckStop/ExecuteInput en txSession.ts (sin imports de ./, sin ciclos); MINOR-1 de #12: cuenta y targetHash capturados en TxVariables, firma con { transaction, account }, interpret(result, signer), etapa por clave (otra cuenta ve idle; al volver, la etapa y el resultado). App 841/54 (+7), lint/typecheck 0, build 887.24 kB |`
+=====
+
+---
+
+## Revisión TASK-3: PASA
+
+Revisé el reporte contra el diff real partiendo de `8d19872`: 12 archivos de `app/src/hooks/` y `app/src/components/`,
++362/−86 sin contar este archivo. Lo contrasté con `HANDOFF_MY_GAMES` v1.2, TASK-3, y con `documents/ESTANDARES.md`.
+
+**Foco 1: regresión de #11/#12 intacta.** `git diff -U0` de los cinco tests modificados: las **únicas** líneas borradas
+son imports (`TxOutcome`/`TxResult`/`TxAction`/`ExecuteInput` pasan de `useExecuteTransaction`/`txInvalidation` a
+`txSession`). No se migró, relajó ni borró ninguna aserción. Los 834 de TASK-2 siguen en verde dentro de los 841. En la
+máquina, el diff solo cambia:
+- de dónde sale la cuenta: las variables, en lugar del cierre del render;
+- `account` en la firma;
+- `interpret(nodeResult, sender)`;
+- la etapa con clave;
+- el chequeo de cuenta, que va antes de definir `invalidateAction` (Desviación 1).
+
+Siguen sin tocar la preflight, DL-10, NIT-2, la confirmación, la indexación, la red de seguridad del `catch`, las
+opciones de la mutación (`retry: false`, `gcTime: Infinity`, `networkMode: 'always'`) y el resultado por `runId`.
+
+**Foco 2: SEG-10.** El resultado sigue saliendo solo de la confirmación del nodo y de `classifyExecution`. Ahora es más
+estricto:
+- `interpret` recibe la dirección de la cuenta que **firmó**, porque la firma va con `account` explícito y el kit hace
+  `setSenderIfNotSet(account.address)` (V-4);
+- `parseResolvedGame`/`parseCreatedGame` buscan el evento de esa cuenta, no de la conectada al terminar;
+- la wallet sigue recibiendo la transacción sin `sender` (T3-9 y el test viejo, en verde sin tocar);
+- con una cuenta que la wallet ya no expone, el rechazo llega sin digest ⇒ `failure` "La wallet no completó…", nunca un
+  éxito.
+
+**Foco 3: candado V-8 atómico.** `execute` sigue con la misma secuencia síncrona:
+1. `isMutating({ mutationKey: view.accountKey })`;
+2. el chequeo de "sin confirmar" del objetivo (`findAll({ mutationKey: view.key })`);
+3. `nextRunId`/`setRunId`;
+4. `mutateAsync`.
+
+No hay ningún `await` en el medio, y las variables nuevas (`account`, `targetHash`) se arman en el mismo tick. El candado
+sigue siendo **por cuenta**: una B que lanza mientras A está en curso no lo rompe (monedas de gas distintas; validado por
+el MAYOR en la revisión del plan v2).
+
+**Foco 4: la etapa por clave no oculta un "sin confirmar" ni permite doble envío.**
+- **Lo que cambia:** la etapa solo afecta el texto de progreso del hook (`stage`). Una clave distinta muestra `idle`.
+- **"Sin confirmar":** se deriva del `MutationCache` en `useTxTarget` (alerta y bloqueo de la vista) y en el chequeo de
+  `execute`. No depende de `stage`: T3-5 lo prueba al volver a A (`unconfirmed` reaparece y `execute` no hace pedidos).
+- **Doble envío:** los botones se deshabilitan con `useTxTarget().busy`/`unconfirmed`, no con `stage`, y el candado de
+  `execute` es independiente de la etapa. Una misma cuenta no puede enviar dos veces, con o sin cambio de clave.
+- **Mejora lateral:** si la misma instancia pasa a otro objetivo de la misma cuenta (otro `targetHash`, p. ej. el detalle
+  de otra partida sin remontar), ya no arrastra la etapa del anterior.
+
+| Revisión | Resultado |
+|---|---|
+| Implementa lo pedido (§3.1-§3.5) | ✅ Tipos movidos a `txSession.ts` sin re-exports; `interpret(nodeResult, signer)`; `TxVariables` con `account` y `targetHash`; `run(variables, …)` usa la cuenta capturada en `sender`, preflight, firma, `interpret` e invalidación; etapa `{ key, stage }` escrita con el `targetHash` de las variables, también en el `finally`; sin `useRef` ni `useEffect` |
+| NIT-1 / ARQ-5 | ✅ `txSession.ts` sin imports de `./`; grep de tipos movidos vacío; DAG `queryKeys → txSession`, `txInvalidation → queryKeys, txSession`, `useExecuteTransaction → txInvalidation, txSession, useAppConfig`. `UiWalletAccount` como tipo desde la raíz de `@mysten/dapp-kit-react` (V-5) |
+| API pública | ✅ `useExecuteTransaction<T>(view)` → `{ stage, outcome, execute }`; exporta `TxStage`, `UseExecuteTransaction`, `CONNECT_WALLET_MESSAGE` y `PREPARE_FAILED_PREFIX` |
+| Tests T3-1..T3-9 | ✅ Seis nuevos en `useExecuteTransaction.test.tsx` y uno en `txSession.test.ts`, que cubren los nueve casos de §5. La mutación "etapa sin clave" rompe T3-2/T3-3 y "firma sin `account`" rompe T3-4/5/9. Los dos mutantes equivalentes están bien argumentados: `MutationObserver.mutate` usa las opciones del render del clic, así que el cierre ya apuntaba a A. El fallo real de MINOR-1 era la firma sin `account` y la etapa compartida, y los dos tienen test que muerde |
+| LIM | ✅ Comentarios con el porqué (DL-11, V-4); sin código muerto (`useCurrentAccount` y `sender` quitados de `useAcceptGame`/`useCreateGame`); sin `eslint-disable` |
+| Gates | ✅ Completos en forma canónica: 841 en 54 archivos (+7), lint y typecheck 0, build 887.24 kB (270.17 kB gzip); `contracts/` y `package*.json` sin delta |
+| Docs | ✅ No aplica (TASK-6) |
+
+### Hallazgos
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Ninguno | — |
+
+**Desviaciones 1-4:** aceptadas.
+1. **Chequeo de cuenta antes de `invalidateAction`:** sin cuenta no hay nada que invalidar ni digest. El camino es el
+   mismo de antes y lo fijan T3-7 y el test viejo de "Conecta tu wallet".
+2. **`currentAccount`:** nombre interno para no tapar la `account` de las variables.
+3. **Archivos de §4 sin tocar** (`useCancelGame`, `useRejectGame`, `useAcceptGame.test`, `useCreateGame.test` y los dos
+   `.machine.test`): la lista del handoff era el máximo permitido, no una obligación. Siguen en verde sin cambios, que es
+   la mejor señal de que la regresión está intacta.
+4. **T3-6 con `stage: 'done'`:** la etapa es la de A, que terminó última; con `outcome: null`, `TransactionStatus` no
+   dibuja nada. Es el límite (b) de DL-11 y queda documentado en el test.
+
+**Riesgos del DEV:** el 1 (wallet que ya no expone la cuenta) sigue en RM-9 para #17. El camino es el del test existente
+de rechazo sin digest. El 2 (`myGames` en la tabla de invalidación) es TASK-4.
+
+### Siguiente paso: TASK-4 autorizado, con `HANDOFF_MY_GAMES` v1.2
+
+Incluye MINOR-1 de la v1.1 (`extendPins` sobre `mergeMyGames`; `useState(() => new Map())`). El gate de la app parte de
+841 tests en 54 archivos y build de 887.24 kB.
+
+### Mensaje de commit propuesto
+
+```
+app: sign with the captured account and key the stage by target (#13)
+
+Fixes MINOR-1 of the #12 integration review: execute captures the account and
+the target hash in the mutation variables, so preflight, wallet signing (with
+an explicit account), interpret(result, signer) and invalidation all use the
+clicking account. The stage is keyed by target, so another account sees idle
+and the original sees its stage and result again. NIT-1: TxAction, TxOutcome,
+TxResult, TxPrecheckStop and ExecuteInput move to txSession.ts, breaking the
+type import cycles. No existing assertion changed; app 841 tests in 54 files.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+### Snippet para STATUS.md
+
+El del reporte del DEV, sin cambios.
