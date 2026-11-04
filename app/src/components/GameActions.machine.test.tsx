@@ -2,6 +2,7 @@ import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppConfig } from '../hooks/useAppConfig';
+import { useSuiBalance } from '../hooks/useSuiBalance';
 import { useWalletAccount } from '../hooks/useWalletAccount';
 import type { AppConfig } from '../sui/config';
 import { confirmTransaction, preflightTransaction, waitForCheckpoint } from '../sui/execution';
@@ -19,6 +20,7 @@ vi.mock('@mysten/dapp-kit-react', () => ({
 }));
 vi.mock('../hooks/useAppConfig', () => ({ useAppConfig: vi.fn() }));
 vi.mock('../hooks/useWalletAccount', () => ({ useWalletAccount: vi.fn() }));
+vi.mock('../hooks/useSuiBalance', () => ({ useSuiBalance: vi.fn() }));
 vi.mock('../sui/execution', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../sui/execution')>()),
   preflightTransaction: vi.fn(),
@@ -34,6 +36,7 @@ const fixture = import.meta.glob<Fixture>('../../../contracts/fixtures/game-tx.l
 })[FIXTURE_PATH] as Fixture;
 
 const CREATOR = `0x${'a'.repeat(64)}`;
+const ACCEPTOR = `0x${'c'.repeat(64)}`;
 const DIGEST = '7VXtB8Pc47Jss33zYQRMXJDfLsY7XvdWFX78gzj7q7YH';
 const CONFIG: AppConfig = {
   network: 'localnet',
@@ -64,6 +67,7 @@ beforeEach(() => {
   queryClient = createPolicyQueryClient();
   vi.mocked(useAppConfig).mockReturnValue(CONFIG);
   vi.mocked(useWalletAccount).mockReturnValue({ address: CREATOR, short: 'x' });
+  vi.mocked(useSuiBalance).mockReturnValue({ balance: 10n ** 12n, status: { kind: 'ready', refreshing: false }, isFetching: false, refetch: vi.fn() });
   kit.address = CREATOR;
   vi.mocked(preflightTransaction).mockResolvedValue(new Uint8Array());
   vi.mocked(waitForCheckpoint).mockResolvedValue(true);
@@ -97,5 +101,24 @@ describe('GameActions with the global machine (T3-18)', () => {
     });
     expect(screen.queryByRole('button', { name: 'Ya la revisé' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeEnabled();
+  });
+
+  it('T4-11: an unconfirmed acceptance shows one alert and one "Ya la revisé", with Aceptar disabled', async () => {
+    kit.address = ACCEPTOR;
+    vi.mocked(useWalletAccount).mockReturnValue({ address: ACCEPTOR, short: 'x' });
+    vi.mocked(confirmTransaction).mockRejectedValue(new DOMException('timeout', 'TimeoutError'));
+    render(
+      <QueryClientProvider client={queryClient}>
+        <GameActions game={GAME} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Aceptar' }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('La transacción se envió pero la red no la confirmó todavía');
+    });
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Ya la revisé' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Aceptar' })).toBeDisabled();
+    expect(preflightTransaction).toHaveBeenCalledTimes(1);
   });
 });

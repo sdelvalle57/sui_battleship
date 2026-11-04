@@ -1,6 +1,6 @@
 import type { Mutation, MutationStatus, QueryKey } from '@tanstack/react-query';
 import { hashKey } from '@tanstack/react-query';
-import type { GameCreatedEvent } from '../sui/events';
+import type { GameCreatedEvent, GameResolvedEvent } from '../sui/events';
 import type { TxAction } from './txInvalidation';
 import type { ExecuteInput, TxOutcome, TxResult } from './useExecuteTransaction';
 
@@ -41,7 +41,12 @@ export type CreateGameValue = {
 };
 
 /** Valor del resultado de cada acción (lo que devuelve su `interpret`). */
-export type TxValueByAction = { create: CreateGameValue; cancel: bigint | null; reject: bigint | null };
+export type TxValueByAction = {
+  create: CreateGameValue;
+  cancel: bigint | null;
+  reject: bigint | null;
+  accept: GameResolvedEvent | null;
+};
 
 /** Una mutación ajena adoptada (M-2): su acción y su resultado, con el tipo de valor de esa acción. */
 export type AdoptedTx = {
@@ -65,7 +70,8 @@ export type TxEntry = {
 /** Lo mínimo de una `Mutation` que se lee (una `Mutation` real cumple este tipo). */
 export type MutationLike = Pick<Mutation, 'mutationId' | 'state'> & { options: { mutationKey?: QueryKey } };
 
-const ACTION_KINDS = new Set(['create', 'cancel', 'reject']);
+// Toda acción de `TxAction`: una que falte haría que la mutación propia se viera como ajena (sin `viewId`/`runId`).
+const ACTION_KINDS = new Set(['create', 'cancel', 'reject', 'accept']);
 const OUTCOME_KINDS = new Set(['success', 'failure', 'unconfirmed']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -142,8 +142,14 @@ describe('toTxEntry', () => {
     expect(toTxEntry({ targetHash: hashKey(key) })(mutation(1, 'pending', sameGameUpper)).sameTarget).toBe(true);
   });
 
+  it('recognizes every action of TxAction, accept included (v1.4: an own acceptance is not foreign)', () => {
+    for (const action of [{ kind: 'create' }, { kind: 'cancel', gameId: GAME }, { kind: 'reject', gameId: GAME }, { kind: 'accept', gameId: GAME }]) {
+      expect(txVariablesOf({ viewId: 1, runId: 2, action })).toEqual({ viewId: 1, runId: 2, action });
+    }
+  });
+
   it('reads only the known shapes of variables and outcome', () => {
-    expect(txVariablesOf({ viewId: 1, runId: 2, action: { kind: 'accept' } })).toBeNull();
+    expect(txVariablesOf({ viewId: 1, runId: 2, action: { kind: 'resolve' } })).toBeNull();
     expect(txVariablesOf(null)).toBeNull();
     expect(txOutcomeOf({ kind: 'other' })).toBeNull();
     expect(txOutcomeOf(undefined)).toBeNull();
