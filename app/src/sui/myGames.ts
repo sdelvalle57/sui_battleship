@@ -253,7 +253,7 @@ export type MyGamesPins = ReadonlyMap<string, MyGamesSection>;
 export type MyGamesSections = Record<MyGamesSection, MyGameItem[]>;
 
 /** Clave de deduplicación y de fijado: el `gameId` normalizado, o `null` si la fila no lo tiene. */
-function gameKey(item: MyGameItem): string | null {
+export function myGameKey(item: MyGameItem): string | null {
   const id = item.kind === 'game' ? item.game.id : item.gameId;
   return id === null ? null : normalizeSuiAddress(id);
 }
@@ -311,7 +311,7 @@ export function mergeMyGames(activity: readonly MyGameItem[], invitations: reado
   const merged: MyGameItem[] = [];
   const indexByKey = new Map<string, number>();
   for (const item of [...activity, ...invitations]) {
-    const key = gameKey(item);
+    const key = myGameKey(item);
     const index = key === null ? undefined : indexByKey.get(key);
     if (index === undefined) {
       if (key !== null) indexByKey.set(key, merged.length);
@@ -333,7 +333,7 @@ export function mergeMyGames(activity: readonly MyGameItem[], invitations: reado
 export function extendPins(pins: MyGamesPins, items: readonly MyGameItem[], address: string): MyGamesPins {
   const added = new Map<string, MyGamesSection>();
   for (const item of items) {
-    const key = gameKey(item);
+    const key = myGameKey(item);
     if (key === null || pins.has(key) || added.has(key)) continue;
     const section = naturalSection(item, address);
     if (section !== null) added.set(key, section);
@@ -360,7 +360,7 @@ export function groupMyGames({
 }): MyGamesSections {
   const sections: MyGamesSections = { invitations: [], pending: [], finished: [] };
   for (const item of mergeMyGames(activity, invitations)) {
-    const key = gameKey(item);
+    const key = myGameKey(item);
     const section = (key === null ? undefined : pins.get(key)) ?? naturalSection(item, address);
     if (section !== null) sections[section].push(item);
   }

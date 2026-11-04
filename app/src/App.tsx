@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router/dom';
 import { Header } from './components/Header';
 import { GameDetailPage } from './pages/GameDetailPage';
 import { HomePage } from './pages/HomePage';
+import { MyGamesPage } from './pages/MyGamesPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 function Layout() {
@@ -16,13 +17,17 @@ function Layout() {
   );
 }
 
-/** Rutas de la app: un layout con el encabezado común, la home en `/`, el detalle en `/game/:id` y una página para cualquier otra ruta. */
+/**
+ * Rutas de la app: un layout con el encabezado común, la home en `/`, el detalle en `/game/:id`, "Mis partidas" en
+ * `/my-games` (DL-10 de #13) y una página para cualquier otra ruta.
+ */
 export const appRoutes: RouteObject[] = [
   {
     element: <Layout />,
     children: [
       { index: true, element: <HomePage /> },
       { path: 'game/:id', element: <GameDetailPage /> },
+      { path: 'my-games', element: <MyGamesPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

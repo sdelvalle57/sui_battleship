@@ -306,3 +306,58 @@ describe('GameActions: Aceptar', () => {
     expect(screen.getByRole('status')).toHaveTextContent(text);
   });
 });
+
+describe("GameActions variant='row' (DL-6, H-3 of #13)", () => {
+  it('shows neither the connect hint nor the in_flight text in a row, and keeps both in the detail', () => {
+    setup(null);
+    const { unmount } = render(<GameActions game={game(INVITEE)} variant="row" />);
+    expect(screen.queryByText(/Conecta tu wallet/)).not.toBeInTheDocument();
+    unmount();
+    setup(INVITEE, { target: { busy: true, notice: { kind: 'in_flight' } } });
+    const row = render(<GameActions game={game(INVITEE)} variant="row" />);
+    expect(screen.queryByText(IN_FLIGHT_TEXT)).not.toBeInTheDocument();
+    expect(acceptButton()).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Rechazar' })).toBeDisabled();
+    row.unmount();
+    render(<GameActions game={game(INVITEE)} />);
+    expect(screen.getByText(IN_FLIGHT_TEXT)).toBeInTheDocument();
+  });
+
+  it('T5-10: hides Aceptar and Rechazar after an own accept success while the read game is still pending; the detail keeps them', () => {
+    setup(INVITEE, { accept: { stage: 'done', outcome: accepted(resolved(INVITEE)) } });
+    const row = render(<GameActions game={game(INVITEE)} variant="row" />);
+    expect(acceptButton()).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rechazar' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('¡Ganaste! Recibiste 0.0039 SUI (pozo 0.004 SUI − comisión 0.0001 SUI)');
+    row.unmount();
+    render(<GameActions game={game(INVITEE)} />);
+    expect(acceptButton()).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rechazar' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('¡Ganaste!');
+  });
+
+  it('hides Cancelar in a row after an own cancel success, and every action after an adopted success', () => {
+    setup(CREATOR, { cancel: { stage: 'done', outcome: success(2_000_000n) } });
+    const own = render(<GameActions game={game(INVITEE)} variant="row" />);
+    expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Partida cancelada: se devolvieron 0.002 SUI a tu cuenta');
+    own.unmount();
+    setup(INVITEE, { target: { notice: { kind: 'adopted', adopted: { action: 'reject', outcome: success(2_000_000n) } } } });
+    render(<GameActions game={game(INVITEE)} variant="row" />);
+    expect(acceptButton()).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rechazar' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Invitación rechazada: se devolvieron 0.002 SUI a quien te invitó');
+  });
+
+  it('keeps the actions in a row after a failure, and the unconfirmed alert with "Ya la revisé"', () => {
+    setup(INVITEE, { accept: { stage: 'done', outcome: { kind: 'failure', message: 'boom', digest: null, cost: null } } });
+    const failed = render(<GameActions game={game(INVITEE)} variant="row" />);
+    expect(acceptButton()).toBeEnabled();
+    failed.unmount();
+    setup(INVITEE, { target: { unconfirmed: { digest: DIGEST } } });
+    render(<GameActions game={game(INVITEE)} variant="row" />);
+    expect(screen.getByRole('alert')).toHaveTextContent('La transacción se envió pero la red no la confirmó todavía');
+    expect(acceptButton()).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ya la revisé' })).toBeInTheDocument();
+  });
+});

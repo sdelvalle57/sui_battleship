@@ -1,5 +1,6 @@
 import type { UiWalletAccount } from '@mysten/dapp-kit-react';
 import type { Transaction } from '@mysten/sui/transactions';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 import type { Mutation, MutationStatus, QueryKey } from '@tanstack/react-query';
 import { hashKey } from '@tanstack/react-query';
 import type { GameCreatedEvent, GameResolvedEvent } from '../sui/events';
@@ -181,6 +182,34 @@ export function mountSnapshot(mutations: readonly Pick<Mutation, 'mutationId' | 
     if (m.state.status === 'pending') pendingIds.add(m.mutationId);
   }
   return { maxId, pendingIds };
+}
+
+/** Proyección de una mutación para el fijado de "Mis partidas" (H-6 de #13): su id, su estado y la partida que toca. */
+export type TxGameEntry = { id: number; status: MutationStatus; gameId: string | null };
+
+/**
+ * Proyección de una mutación del caché para H-6: el `gameId` normalizado de su acción (como la clave de `myGameKey`), o
+ * `null` para una creación o para variables sin la forma de la app.
+ */
+export function toTxGameEntry(m: MutationLike): TxGameEntry {
+  const action = txVariablesOf(m.state.variables)?.action;
+  const gameId = action === undefined || action.kind === 'create' ? null : normalizeSuiAddress(action.gameId);
+  return { id: m.mutationId, status: m.state.status, gameId };
+}
+
+/**
+ * Partidas con una transacción "viva" para la vista (H-6 de #13), con el criterio de adopción de #12: en curso, en curso
+ * al montar, o empezada después de montar. "Mis partidas" las fija en seguida con los datos que haya, para que la fila no
+ * cambie de sección (y pierda su resultado) con la relectura que trae el estado ya ejecutado. Las terminadas antes de
+ * montar no cuentan: esas se reagrupan con datos frescos (H-5).
+ */
+export function liveTxGameIds(entries: readonly TxGameEntry[], mount: MountSnapshot): ReadonlySet<string> {
+  const live = new Set<string>();
+  for (const entry of entries) {
+    if (entry.gameId === null) continue;
+    if (entry.status === 'pending' || mount.pendingIds.has(entry.id) || entry.id > mount.maxId) live.add(entry.gameId);
+  }
+  return live;
 }
 
 /** Estado derivado de una vista sobre su objetivo. */

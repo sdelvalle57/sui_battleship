@@ -1,5 +1,5 @@
 import { useCurrentClient } from '@mysten/dapp-kit-react';
-import { useInfiniteQuery, useQueryClient, type InfiniteData, type UseInfiniteQueryResult } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutationState, useQueryClient, type InfiniteData, type UseInfiniteQueryResult } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { HistoryLowerBound } from '../sui/eventScan';
 import { sameAddress } from '../sui/ids';
@@ -9,6 +9,7 @@ import {
   fetchMyActivityPage,
   groupMyGames,
   mergeMyGames,
+  myGameKey,
   type MyGamesPage,
   type MyGamesPins,
   type MyGamesSections,
@@ -17,6 +18,7 @@ import { PaginationStalledError } from '../sui/readErrors';
 import { READ_MAX_RETRIES } from '../sui/readPolicy';
 import { deriveReadStatus, type ReadStatus } from '../sui/readStatus';
 import { queryKeys } from './queryKeys';
+import { liveTxGameIds, mountSnapshot, toTxGameEntry } from './txSession';
 import { useAppConfig } from './useAppConfig';
 import { usePublishCheckpoint } from './useLobby';
 import { useWalletAccount } from './useWalletAccount';
@@ -111,7 +113,9 @@ function toSource(query: UseInfiniteQueryResult<InfiniteData<MyGamesPage>>, publ
  * "Mis partidas" de la cuenta conectada (DL-1, DL-5, DL-8, DL-13, DL-16, DL-17): dos `useInfiniteQuery` (la actividad
  * propia y el escaneo de invitaciones) con la cota de la publicación, sin refresco automático ni al foco. Sin cuenta no
  * hay consultas. Las filas se deduplican y agrupan con las reglas puras de `sui/myGames.ts`; cada partida queda fijada en
- * la sección donde apareció (DL-5) hasta "Actualizar" (`refresh`) o hasta que cambia la cuenta: los pins guardan su
+ * la sección donde apareció con las dos fuentes quietas (DL-5, H-5), o en seguida si tiene una transacción viva de la
+ * cuenta (H-6), hasta "Actualizar" (`refresh`), hasta que la página se remonta o hasta que cambia la cuenta: los pins
+ * guardan su
  * cuenta y los de otra se descartan, aunque la vista no se remonte (DL-9; C-2 de la revisión de TASK-4). El fijado se
  * ajusta durante el render (V-7), sin `useEffect` (PROY-14).
  */
@@ -122,6 +126,12 @@ export function useMyGames(): UseMyGamesResult {
   const { address } = useWalletAccount();
   const publish = usePublishCheckpoint();
   const [pinState, setPinState] = useState<PinState>(() => ({ address, pins: new Map() }));
+  // H-6: foto del caché de mutaciones al montar, para saber qué transacciones de la cuenta siguen "vivas" para la vista.
+  const [mount] = useState(() => mountSnapshot(queryClient.getMutationCache().getAll()));
+  const live = liveTxGameIds(
+    useMutationState({ filters: { mutationKey: queryKeys.txAccount(config.network, address) }, select: toTxGameEntry }),
+    mount,
+  );
 
   const keyAddress = address ?? NO_ACCOUNT_KEY_ADDRESS;
   const publishCheckpoint = publish.data ?? null;
@@ -155,12 +165,24 @@ export function useMyGames(): UseMyGamesResult {
   const activityItems = activityQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const invitationItems = invitationsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   // MINOR-1 del handoff v1: el pin sale de la lectura ganadora de H-2 (las mismas listas que deduplica `groupMyGames`).
+  // H-5 (v1.3): solo se fija con las dos fuentes quietas. Al remontar, la caché puede traer datos que la invalidación de
+  // DL-7 marcó viejos y que TanStack relee recién ahora; fijar con ellos dejaría la fila en la sección vieja. Mientras
+  // alguna fuente pide, las filas sin pin van a su sección natural y las fijadas no se mueven.
+  // H-6 (v1.4): salvo las partidas con una transacción viva de la cuenta, que se fijan en seguida con los datos que haya:
+  // la transacción ya se ejecutó, y la relectura traería el estado nuevo y sacaría la fila (con su resultado) de su sección.
   // Un solo `setState` condicional (V-7) que converge: guardado `{ address, pins: next }`, el render siguiente ve la misma
   // cuenta y `extendPins` devuelve la misma instancia (sin IDs nuevos).
   const merged = mergeMyGames(activityItems, invitationItems);
   const sameAccount = isSameAccount(pinState.address, address);
   const pins = sameAccount ? pinState.pins : NO_PINS;
-  const next = address === null ? pins : extendPins(pins, merged, address);
+  const settled = !activityQuery.isFetching && !invitationsQuery.isFetching;
+  const pinnable = settled
+    ? merged
+    : merged.filter((item) => {
+        const key = myGameKey(item);
+        return key !== null && live.has(key);
+      });
+  const next = address === null ? pins : extendPins(pins, pinnable, address);
   if (!sameAccount || next !== pinState.pins) setPinState({ address, pins: next });
 
   if (address === null) return { kind: 'no_account' };

@@ -1,7 +1,18 @@
 import { hashKey, type MutationStatus } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 import { queryKeys } from './queryKeys';
-import { deriveTargetState, mountSnapshot, toTxEntry, txOutcomeOf, txVariablesOf, type MountSnapshot, type TxEntry, type TxOutcome } from './txSession';
+import {
+  deriveTargetState,
+  liveTxGameIds,
+  mountSnapshot,
+  toTxEntry,
+  toTxGameEntry,
+  txOutcomeOf,
+  txVariablesOf,
+  type MountSnapshot,
+  type TxEntry,
+  type TxOutcome,
+} from './txSession';
 
 const A = `0x${'a'.repeat(64)}`;
 const B = `0x${'b'.repeat(64)}`;
@@ -171,6 +182,36 @@ describe('toTxEntry', () => {
     expect(txVariablesOf(null)).toBeNull();
     expect(txOutcomeOf({ kind: 'other' })).toBeNull();
     expect(txOutcomeOf(undefined)).toBeNull();
+  });
+});
+
+describe('liveTxGameIds (T4-16, H-6 of #13)', () => {
+  const key = queryKeys.txAccount('localnet', A);
+  const vars = (action: unknown, runId: number) => ({ input: {}, viewId: 1, runId, action, account: null, targetHash: '' });
+  const at = (n: number) => `0x${n.toString(16).padStart(64, '0')}`;
+
+  it('includes in-flight, pending-at-mount and started-after-mount games; excludes finished-before-mount, create and foreign shapes', () => {
+    const mount: MountSnapshot = { maxId: 5, pendingIds: new Set([4]) };
+    const entries = [
+      mutation(6, 'pending', key, undefined, vars({ kind: 'cancel', gameId: at(1) }, 6)),
+      mutation(4, 'success', key, success, vars({ kind: 'reject', gameId: at(2) }, 4)),
+      mutation(7, 'success', key, success, vars({ kind: 'accept', gameId: at(3) }, 7)),
+      mutation(3, 'success', key, success, vars({ kind: 'cancel', gameId: at(4) }, 3)),
+      mutation(8, 'pending', key, undefined, vars({ kind: 'create' }, 8)),
+      mutation(9, 'pending', key, undefined, { foo: 1 }),
+    ].map(toTxGameEntry);
+    expect([...liveTxGameIds(entries, mount)].sort()).toEqual([at(1), at(2), at(3)]);
+  });
+
+  it('projects id, status and the normalized game id, null for create and foreign variables', () => {
+    expect(toTxGameEntry(mutation(10, 'pending', key, undefined, vars({ kind: 'cancel', gameId: '0x5' }, 10)))).toEqual({
+      id: 10,
+      status: 'pending',
+      gameId: at(5),
+    });
+    expect(toTxGameEntry(mutation(11, 'pending', key, undefined, vars({ kind: 'create' }, 11))).gameId).toBeNull();
+    expect(toTxGameEntry(mutation(12, 'pending', key, undefined, { foo: 1 })).gameId).toBeNull();
+    expect([...liveTxGameIds([toTxGameEntry(mutation(10, 'pending', key, undefined, vars({ kind: 'cancel', gameId: '0X5' }, 10)))], EMPTY)]).toEqual([at(5)]);
   });
 });
 

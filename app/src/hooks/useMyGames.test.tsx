@@ -420,6 +420,111 @@ describe('useMyGames: pins (DL-5)', () => {
     expect(ready(hook).sections.invitations).toEqual([]);
   });
 
+  it('pins with the fresh refetch, not with a stale cache, when a new instance mounts (T4-14, H-5)', async () => {
+    const open = game(8);
+    const cancelled = game(8, { state: { kind: 'cancelled' } });
+    activityMock.mockResolvedValue(page([item(open, 'creator')]));
+    invitationsMock.mockResolvedValue(page([]));
+    const first = render();
+    await advance(0);
+    expect(ids(ready(first).sections.pending)).toEqual([gid(8)]);
+    first.unmount();
+    // Con el hook desmontado: la invalidación de una acción marca la caché vieja sin releerla.
+    activityMock.mockResolvedValue(page([item(cancelled, 'creator')]));
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: MY_GAMES });
+    });
+    const second = render();
+    // Primer render: la caché vieja, con G en su sección natural de entonces y sin pin.
+    expect(ids(ready(second).sections.pending)).toEqual([gid(8)]);
+    await advance(0);
+    expect(ids(ready(second).sections.finished)).toEqual([gid(8)]);
+    expect(ready(second).sections.pending).toEqual([]);
+    const before = renders;
+    await advance(0);
+    expect(renders - before).toBe(0);
+    // Fijada en `finished`: una lectura posterior que la trajera `Pending` no la devuelve a "pendientes".
+    activityMock.mockResolvedValue(page([item(open, 'creator')]));
+    act(() => {
+      void queryClient.invalidateQueries({ queryKey: MY_GAMES });
+    });
+    await advance(0);
+    expect(ids(ready(second).sections.finished)).toEqual([gid(8)]);
+  });
+
+  it('pins at once a game with a live transaction of the account, with the stale cache (T4-17, H-6)', async () => {
+    const open = game(8);
+    activityMock.mockResolvedValue(page([item(open, 'creator')]));
+    invitationsMock.mockResolvedValue(page([]));
+    const first = render();
+    await advance(0);
+    first.unmount();
+    // Un `cancel` de G en curso (la variable con la forma de la app) y la caché marcada vieja por su invalidación.
+    const pending = deferred<null>();
+    const tx = renderHook(
+      () => useMutation({ mutationKey: [...queryKeys.txAccount('testnet', ME), 'game', gid(8)], mutationFn: (variables: unknown) => pending.promise.then(() => variables) }),
+      { wrapper: queryWrapper(queryClient) },
+    );
+    act(() => {
+      tx.result.current.mutate({ input: {}, viewId: 1, runId: 1, action: { kind: 'cancel', gameId: gid(8) }, account: null, targetHash: '' });
+    });
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: MY_GAMES });
+    });
+    const slow = deferred<MyGamesPage>();
+    activityMock.mockReturnValueOnce(slow.promise);
+    const second = render();
+    expect(ids(ready(second).sections.pending)).toEqual([gid(8)]);
+    await advance(0);
+    await act(async () => {
+      slow.resolve(page([item(game(8, { state: { kind: 'cancelled' } }), 'creator')]));
+      await Promise.resolve();
+    });
+    await advance(0);
+    expect(ids(ready(second).sections.pending)).toEqual([gid(8)]);
+    expect(ready(second).sections.pending[0]).toMatchObject({ kind: 'game', game: { state: { kind: 'cancelled' } } });
+    expect(ready(second).sections.finished).toEqual([]);
+  });
+
+  it('does not pin a new row while a source is fetching, and keeps the pinned ones (T4-15, H-5)', async () => {
+    const invite = item(game(7, { creator: OTHER, opponent: ME }), 'invitee');
+    activityMock.mockResolvedValueOnce(page([]));
+    invitationsMock.mockResolvedValueOnce(page([invite]));
+    const hook = render();
+    await advance(0);
+    expect(ids(ready(hook).sections.invitations)).toEqual([gid(7)]);
+    const slowInvitations = deferred<MyGamesPage>();
+    const accepted = item(game(7, { creator: OTHER, opponent: ME, state: { kind: 'resolved', acceptor: ME, winner: ME } }), 'acceptor', { version: 415n, cp: 1001n });
+    const fresh = item(game(9), 'creator', { cp: 900n });
+    activityMock.mockResolvedValueOnce(page([accepted, fresh]));
+    invitationsMock.mockReturnValueOnce(slowInvitations.promise);
+    act(() => {
+      void queryClient.invalidateQueries({ queryKey: MY_GAMES });
+    });
+    await advance(0);
+    // La actividad ya llegó y las invitaciones siguen pidiendo: H sin pin en su sección natural; G sigue fijada.
+    expect(ready(hook).invitations.status).toEqual({ kind: 'ready', refreshing: true });
+    expect(ids(ready(hook).sections.pending)).toEqual([gid(9)]);
+    expect(ids(ready(hook).sections.invitations)).toEqual([gid(7)]);
+    await act(async () => {
+      slowInvitations.resolve(page([item(game(7, { creator: OTHER, opponent: ME, state: { kind: 'resolved', acceptor: ME, winner: ME } }), 'invitee', { version: 415n })]));
+      await Promise.resolve();
+    });
+    await advance(0);
+    expect(ids(ready(hook).sections.pending)).toEqual([gid(9)]);
+    expect(ids(ready(hook).sections.invitations)).toEqual([gid(7)]);
+    // H quedó fijada en `pending`: cancelada después, no pasa a "Terminadas".
+    activityMock.mockResolvedValue(page([accepted, item(game(9, { state: { kind: 'cancelled' } }), 'creator', { cp: 900n })]));
+    invitationsMock.mockResolvedValue(page([]));
+    act(() => {
+      void queryClient.invalidateQueries({ queryKey: MY_GAMES });
+    });
+    await advance(0);
+    expect(ids(ready(hook).sections.pending)).toEqual([gid(9)]);
+    expect(ready(hook).sections.pending[0]).toMatchObject({ kind: 'game', game: { state: { kind: 'cancelled' } } });
+    expect(ready(hook).sections.finished).toEqual([]);
+  });
+
   it('settles in at most 2 extra renders when new rows get pinned, without a render loop (T4-9)', async () => {
     activityMock.mockResolvedValue(page([ownPending(1)]));
     invitationsMock.mockResolvedValue(page([]));

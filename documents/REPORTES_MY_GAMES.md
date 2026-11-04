@@ -1900,3 +1900,951 @@ in-flight notice of the page. App 871 tests in 55 files.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+## TASK-5
+
+## Task completado: HANDOFF_MY_GAMES v1.2 — TASK-5 (página "Mis partidas"), con un STOP al MID en T5-13
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-13-my-games` @ `fcda3f6`. Sin commits: los cambios están en el árbol de trabajo.
+
+### Archivos modificados/creados
+- **Nuevos:**
+  - `app/src/pages/MyGamesPage.tsx`, `app/src/pages/MyGamesPage.test.tsx`
+  - `app/src/components/MyGamesSection.tsx` (incluye `MyGameRow`), `app/src/components/MyGamesSection.test.tsx`
+  - `app/src/components/HistoryTime.tsx`: `CreatedAt` y `FloorSince` sacados de `LobbyList`.
+- **Modificados:**
+  - `app/src/App.tsx`, `App.test.tsx`
+  - `components/Header.tsx`, `Header.test.tsx`
+  - `components/GameActions.tsx`, `GameActions.test.tsx`
+  - `components/LobbyList.tsx`: solo los imports de `HistoryTime`.
+  - `pages/GameDetailPage.tsx`, `GameDetailPage.test.tsx`: texto R-7.
+- **Sin tocar:** `sui/`, `hooks/`, `index.css` (no hizo falta CSS), `LobbyList.test.tsx`, `GameDetail*.test.tsx` y `GameActions.machine.test.tsx`.
+
+### Qué se implementó (3 líneas máx)
+- **Página:** `#/my-games`, con el enlace "Mis partidas" en el `Header`. Sin cuenta muestra el texto fijo; con cuenta, `<MyGamesView key={address} />`. Arriba van "Actualizar", `IN_FLIGHT_TEXT` una sola vez (`useAccountTxBusy`), "Abrir partida por ID", el enlace al explorador (solo en testnet) y la nota de eventos ilegibles.
+- **Secciones:** las tres `MyGamesSection`, con el pie por `sectionFooter` (H-1), las notas de relectura (DL-17) que no desmontan filas y `ReadState` en la primera carga. Las filas muestran contraparte, apuesta, estado, hora, "Ver partida", y rol y resultado en "Terminadas".
+- **Acciones:** `GameActions variant="row"`, sin "Conecta tu wallet…" ni aviso `in_flight`, y sin acciones tras un `success` propio o adoptado (H-3). R-7 queda en el detalle.
+
+### Tests y gates (output pegado, por área tocada)
+
+**Tests nuevos, por archivo** (871 → 907, +36):
+
+| Archivo | + | Tests |
+|---|---|---|
+| `components/MyGamesSection.test.tsx` (nuevo) | 14 | T5-2 (filas de las tres secciones, ilegibles con y sin `data-game-id`), T5-5 sin integración (vacío "en lo revisado" o definitivo con su botón por sección, "Cargar más invitaciones" con filas, sufijo y nota del piso), T5-6 (error sin `stalled`: botón y alert; `stalled`: sin botón y con alert), "Cargando más…", notas DL-17 (`ReadState` sin datos; reintento y error de la relectura con las filas montadas) |
+| `pages/MyGamesPage.test.tsx` (nuevo) | 16 | T5-1, T5-3, T5-4 (×2), T5-5 V-9, T5-7 (×2), T5-8 (×2), T5-9, T5-11, T5-12, T5-13 (parcial, ver STOP), T5-15 (×2). Máquina real (`useMyGames`, `useTxTarget`, las acciones, `useExecuteTransaction`); kit, fetchers, publicación y `sui/execution` mockeados |
+| `components/GameActions.test.tsx` | 4 | `variant='row'`: sin hint ni `in_flight` (el detalle los conserva); T5-10 (H-3) en fila y en detalle; cancel propio y `reject` adoptado sin acciones; tras un fallo y con "sin confirmar", las acciones siguen |
+| `components/Header.test.tsx` | 1 | T5-1: enlace "Mis partidas" → `/my-games` |
+| `App.test.tsx` | 1 | T5-1: ruta `/my-games` sin cuenta, con el texto fijo y sin `useLobby`/`useGame` |
+
+**Cobertura de T5-1..T5-16:**
+- **T5-1:** en `App.test.tsx` y `Header.test.tsx`, y en la página sin cuenta: 0 llamadas a la publicación y a los fetchers.
+- **T5-2:** en las secciones.
+- **T5-3:**
+  - aceptar desde la fila de la invitación `acceptInvite` de la fixture;
+  - sin tokens en `.tx-status`/`.game-actions` en "Confirmando en la red…";
+  - "¡Ganaste! Recibiste 0.001950002 SUI (pozo 0.002000002 SUI − comisión 0.00005 SUI)", leído del `GameResolved` real;
+  - la fila sigue en "Invitaciones recibidas" con "Resuelta", sin "Aceptar" ni "Rechazar", y nada en "Terminadas".
+- **T5-4:**
+  - "Partida cancelada: se devolvieron 0.003000003 SUI a tu cuenta", con la fila en "Tus partidas pendientes";
+  - "Invitación rechazada: se devolvieron 0.004000004 SUI a quien te invitó".
+- **T5-5:** en la página, "Cargar más actividad" está en las secciones 2 y 3. Una página siguiente vacía da los dos textos definitivos, sin botón, sin alert y sin filas.
+- **T5-6:** en las secciones.
+- **T5-7:**
+  - relectura fallida: la fila, su `.game-actions` y el digest siguen montados, con la nota "No se pudo actualizar la lista…"; "Reintentar" la quita;
+  - relectura que reintenta: "Reintentando… (intento 2 de 3)" con la fila montada, que al final queda "Resuelta".
+- **T5-8:** "1 evento ilegible…" / "3 eventos ilegibles…", sin filas por ellos.
+- **T5-9:**
+  - dos `click()` en el mismo tick dan 1 `signAndExecuteTransaction` y 1 preflight;
+  - todos los botones de todas las filas quedan deshabilitados;
+  - `IN_FLIGHT_TEXT` aparece 1 vez en `section.my-games` (0 al terminar).
+- **T5-10:** en `GameActions.test.tsx`.
+- **T5-11:** el "sin confirmar" bloquea solo su fila; "Ya la revisé" la desbloquea.
+- **T5-12:** A en curso → B (sin filas ni texto de A) → A todavía en curso ⇒ el resultado adoptado aparece en la fila.
+- **T5-13:** parcial, ver STOP.
+- **T5-14:** `GameActions.machine.test.tsx` sin cambios y en verde; los tests existentes de `GameActions.test.tsx` en verde (solo sumé 4).
+- **T5-15:**
+  - "xyz" ⇒ "ID de partida inválido", sin navegar ni pedir;
+  - " 0x6 " ⇒ `/game/0x00…06`;
+  - en testnet, enlace `https://suiscan.xyz/testnet/account/<cuenta>` con `target="_blank"` y `rel="noreferrer"`; en localnet no aparece.
+- **T5-16:** `GameDetailPage.test.tsx` con el texto R-7.
+
+**Aserciones existentes que cambian:**
+- `GameDetailPage.test.tsx:108`: el texto R-7 esperado ("…guárdalo, o encuéntrala en «Mis partidas»").
+- `Header.test.tsx`: los dos `render(<Header />)` pasan a `renderHeader()`, que envuelve en `<MemoryRouter>` (Desviación 2). Ninguna expectativa cambia.
+- Nada más.
+
+**Verificación extra (mutaciones, cada una restaurada):**
+
+| Mutación | Resultado |
+|---|---|
+| `in_flight` también en filas | Falla el test de la variante y T5-9 |
+| Sin H-3 | Fallan T5-10 y el de cancel/adoptado |
+| Sin el aviso de la página | Falla T5-9 |
+| Vacío siempre "definitivo" | Fallan 6 tests (T5-5/T5-6) |
+| `ReadState` por `status` en vez de `hasData` | No falla nada: es equivalente, porque `useMyGames` con datos siempre da `status: ready` (DL-17, T4-6) |
+
+**Gates:**
+- **Contracts:** no aplica. `git diff --exit-code -- contracts/` da 0.
+- **App, gate completo en forma canónica:**
+```text
+v26.13.0
+fcda3f6
+
+added 293 packages, and audited 295 packages in 20s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit=0
+audited 292 packages in 21s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+exit=0
+found 0 vulnerabilities
+exit=0
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  57 passed (57)
+      Tests  907 passed (907)
+   Start at  00:55:59
+   Duration  33.64s (environment 59%, tests 12%, import 11%, setup 10%, transform 7%)
+
+Environment  jsdom was created 57 times · 185.83s total, 59% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 596 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-BWWierZp.js   900.93 kB │ gzip: 273.44 kB
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 797ms
+exit=0
+--- git status --porcelain --untracked-files=all
+ M app/src/App.test.tsx
+ M app/src/App.tsx
+ M app/src/components/GameActions.test.tsx
+ M app/src/components/GameActions.tsx
+ M app/src/components/Header.test.tsx
+ M app/src/components/Header.tsx
+ M app/src/components/LobbyList.tsx
+ M app/src/pages/GameDetailPage.test.tsx
+ M app/src/pages/GameDetailPage.tsx
+?? app/src/components/HistoryTime.tsx
+?? app/src/components/MyGamesSection.test.tsx
+?? app/src/components/MyGamesSection.tsx
+?? app/src/pages/MyGamesPage.test.tsx
+?? app/src/pages/MyGamesPage.tsx
+--- git diff --exit-code -- contracts/
+exit=0
+--- git diff --exit-code -- package.json app/package.json package-lock.json
+exit=0
+```
+
+**Delta contra el baseline (TASK-4 + C-1/C-2):**
+- Tests: +36 tests y +2 archivos.
+- Build: 887.49 → **900.93 kB** (270.24 → 273.44 kB gzip). Ahora la app importa la página, `useMyGames` y la capa `sui/myGames`. El aviso de chunk es el mismo de #15.
+- Lint, typecheck y auditorías: sin delta.
+- Sin cambios: `contracts/`, `package*.json`, `sui/` y `hooks/`.
+
+**Capas:** `components/` y `pages/` no importan `@mysten/*`; los tests mockean el kit sin importarlo. Las reglas viven en `sui/` (`sectionFooter`, `groupMyGames`, `playerResult`, `resolutionAmounts`, `parseObjectIdInput`, `explorerAccountUrl`) y en `hooks/` (ARQ-2).
+
+**Greps sobre `git diff -- app` y los 5 archivos nuevos:** claves, rutas personales, `console.`, `eslint-disable` y hex de 40-64: vacíos.
+
+**Tablas de contrato y `app/src/sui/`:** no aplica.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica en este task: el smoke del ciclo va después de TASK-6. No hay captura.
+
+### STOP al MID: T5-13, la sección al volver a la cuenta A
+- **Qué pide T5-13:** "A en curso → B → A ya terminada ⇒ sin resultado; la partida con su estado leído del nodo **en su sección natural**" (DL-9, MINOR-6: "porque `pins` se reinició").
+- **Qué pasa:** en el test, G es la partida abierta de A, cancelada mientras se veía B.
+  1. La invalidación de DL-7 corre con la clave de A mientras sus queries están inactivas; TanStack las marca como viejas y no las relee.
+  2. Al volver a A, la vista se remonta y los pins arrancan vacíos.
+  3. El **primer render usa los datos de A en caché**, con G todavía `Pending`, y `extendPins` fija G en `pending`.
+  4. La relectura al montar trae G `Cancelada`, pero G **ya está fijada** y se queda en "Tus partidas pendientes".
+- **Evidencia (sonda temporal en el test, restaurada):** la fila queda en `where: ['pending']` con el texto "Abierta · 0.003000003 SUI · Cancelada · — · Ver partida". Los fetchers de actividad se llaman en el orden A, B, A.
+- **Qué afirma hoy T5-13** (verde): sin resultado ("Partida cancelada: se devolvieron…" ausente), la fila con "Cancelada" (estado del nodo), sin "Cancelar" y sin etapas. **No afirma la sección.**
+- **Por qué es STOP:** la causa es el fijado de `hooks/useMyGames.ts` (TASK-4), y TASK-5 no toca `hooks/`.
+
+| Opción | Cambio | Trade-off |
+|---|---|---|
+| **(a)** Aceptar el comportamiento | Ninguno en el código; T5-13 afirma `pending` + "Cancelada" + sin acciones; el texto de DL-9/MINOR-6 se ajusta ("en la sección donde estaba en la caché; 'Actualizar' la reagrupa") | Cero riesgo. La fila terminada queda en "pendientes" hasta "Actualizar" |
+| **(b) (recomendada)** No fijar desde una lectura que se está refrescando | En `useMyGames`, `extendPins` solo recibe ítems de una fuente que no está releyendo (`!(isFetching && !isFetchingNextPage)`). Mientras tanto, esas filas van a su sección natural sin pin. ~3 líneas, un test en `useMyGames.test.tsx` y T5-13 con la sección | Cumple DL-9 tal como está escrito. Las filas ya fijadas no cambian, así que DL-5 tras una acción propia sigue igual. Una fila nueva que aparece durante una relectura se fija al terminarla. Hay que re-correr T4-8/T4-8 bis/T4-9 |
+| (c) Reiniciar las queries al remontar | `resetQueries(myGames)` al montar la vista | Pierde las páginas de "cargar más" y obliga a un efecto (PROY-14). No lo recomiendo |
+
+### Desviaciones del handoff
+1. **`components/HistoryTime.tsx` nuevo.**
+   - **Qué:** `CreatedAt` y `FloorSince` salieron de `LobbyList.tsx`, que solo cambia sus imports. `CreatedAt` suma `className` opcional, con `lobby-time` por defecto; las filas nuevas usan `my-game-time`.
+   - **Por qué:** §3.3 lo permite ("extraerlos a un componente común").
+   - **Verificación:** `LobbyList.test.tsx` y `App.test.tsx` en verde sin cambios en `LobbyList.test.tsx`.
+2. **`Header.test.tsx` renderiza dentro de `MemoryRouter`.** El `Link` del encabezado necesita un router. Solo cambia el render (un helper `renderHeader`); ninguna expectativa cambia.
+3. **Detalles de la UI que el handoff no fijaba:**
+   - el rol "Creaste"/"Aceptaste" y la contraparte se deciden con el objeto (`creator`/`acceptor` = cuenta), no con el rol del evento, porque una invitación aceptada puede llegar solo por las invitaciones;
+   - el texto de una cancelada va dentro de `.my-game-result`;
+   - "Cargando más…" es un `role="status"` aparte del botón, como en el lobby.
+4. **T5-3:** los tokens se verifican en la etapa "Confirmando en la red…". La preflight y la firma pasan sin dar tiempo a medirlas, porque sus mocks resuelven enseguida. El smoke (paso 8) mide las tres etapas.
+5. **T5-13 sin la sección:** ver STOP.
+
+### Riesgos / pendientes
+1. **El STOP de T5-13**, arriba.
+2. **Bundle:** +13.4 kB, ahora que la página entra en la app (RM-10, #15).
+3. **Sin CSS nuevo.** Las clases nuevas (`my-games`, `my-games-section`, `my-game-row`, `my-game-result`, `my-games-note`, `my-game-time`, `open-game-by-id`) usan los estilos por defecto. Si el smoke muestra algo ilegible, se suman estilos mínimos en TASK-6.
+
+### Documentación
+- READMEs / `agents.md`: no aplica en este task. El mapa de `components/`/`pages/` y la ruta `#/my-games` de `app/README.md` son de TASK-6.
+- **Snippet propuesto para `documents/STATUS.md`:** `| feature/issue-13-my-games (TASK-5 de #13), 2026-11-04 | página "Mis partidas" | 🟡 #/my-games + enlace en el Header; tres secciones con sectionFooter (H-1), notas DL-17 sin desmontar filas, nota de ilegibles; GameActions variant='row' (sin hint ni in_flight; sin acciones tras success, H-3); IN_FLIGHT_TEXT una vez por página; "Abrir partida por ID" y enlace al explorador (testnet); R-7; key={address}. STOP T5-13 (sección al volver a la cuenta con datos en caché) pendiente del MID. App 907/57 (+36), lint/typecheck 0, build 900.93 kB |`
+=====
+
+---
+
+## Revisión TASK-5: NO PASA, por el STOP de T5-13 (decidido: opción (b), handoff v1.3)
+
+Revisé el reporte contra el diff real partiendo de `fcda3f6`: 9 archivos modificados y 5 nuevos en `app/src/`. Lo
+contrasté con `HANDOFF_MY_GAMES` v1.2, TASK-5, y con `documents/ESTANDARES.md`. La UI está bien. Lo único que falta es el
+criterio de T5-13, que depende de un cambio en `hooks/useMyGames.ts` (el STOP). Ese cambio se especifica abajo y en la
+v1.3 del handoff.
+
+| Revisión | Resultado |
+|---|---|
+| Implementa lo pedido (§3.1-§3.6) | ✅ Ruta `my-games` y `<Link>` "Mis partidas" en el `Header`; página sin cuenta con el texto fijo y sin consultas; `<MyGamesView key={address} />` con "Actualizar", `IN_FLIGHT_TEXT` una vez (`useAccountTxBusy`), "Abrir partida por ID" (`parseObjectIdInput`, inválido sin navegar), enlace al explorador solo si `explorerAccountUrl` no es `null` (`target="_blank"`, `rel="noreferrer"`) y la nota de ilegibles; tres `MyGamesSection` con `ReadState` solo sin datos, notas DL-17 sin desmontar filas, pie por `sectionFooter` (H-1) y "Cargar más actividad" en las secciones 2 y 3; `MyGameRow` con los textos fijos de §1 y `.my-game-result` solo en "Terminadas"; texto R-7 |
+| `GameActions` | ✅ `variant='row'` quita solo el hint de "Conecta tu wallet…" y el `in_flight`; `settled` (H-3) solo en filas y con `success` propio o adoptado (un fallo o un "sin confirmar" dejan las acciones); `variant='detail'` idéntico, con `GameActions.machine.test.tsx` en verde sin tocar |
+| ARQ-1/ARQ-2, capas | ✅ Sin `@mysten/*` en `components/`/`pages/`. Las reglas (secciones, pie, resultado, montos, IDs, explorador) salen de `sui/` y `hooks/`; los componentes solo eligen textos |
+| SEG-9 / SEG-10 | ✅ ID validado y normalizado antes de navegar. El resultado de la fila solo sale de la confirmación del nodo (T5-3, sin tokens en "Confirmando en la red…"). "Terminadas" lee el resultado del objeto (`playerResult`, `resolutionAmounts` etiquetado) |
+| Tests | ✅ 871 → 907 (+36), 55 → 57 archivos. T5-1..T5-16 cubiertos, salvo la sección en T5-13. Las únicas aserciones viejas que cambian son el texto R-7 (`GameDetailPage.test.tsx:108`) y el render del `Header` dentro de `MemoryRouter`, sin cambiar expectativas. Las mutaciones dirigidas muerden, y la equivalente (`ReadState` por `status` o por `hasData`) está bien argumentada |
+| Gates | ✅ Completos en forma canónica: lint y typecheck 0 sin `eslint-disable`, 907/57, build 900.93 kB (273.44 kB gzip; +13.4 kB porque la página entra en la app, RM-10/#15); `contracts/` y `package*.json` sin delta |
+
+**Desviaciones 1-4:** aceptadas.
+1. **`HistoryTime.tsx`:** §3.3 lo permitía. `LobbyList` solo cambia sus imports y `LobbyList.test.tsx` no se tocó. Se
+   suma a §4 en la v1.3.
+2. **`Header.test.tsx` con `MemoryRouter`:** el `Link` necesita un router; ninguna expectativa cambia.
+3. **Detalles de UI:**
+   - rol y contraparte desde el objeto: es lo correcto, porque una invitación aceptada puede llegar solo por las
+     invitaciones;
+   - la cancelada dentro de `.my-game-result`;
+   - "Cargando más…" aparte, como en el lobby.
+4. **T5-3 mide tokens solo en "Confirmando en la red…":** con mocks que resuelven al instante es lo medible. El paso 8 del
+   smoke mide las tres etapas.
+
+**NIT (sin corrección):** con un error de "cargar más" de la actividad, el `role="alert"` y el botón salen en las
+secciones 2 y 3. Es lo que fija H-1 por sección, y se acepta.
+
+### Decisión del STOP de T5-13: opción (b), refinada (H-5 del handoff v1.3)
+
+> Decisión (2026-11-04): se optó por (b), no fijar mientras alguna fuente está pidiendo, sobre (a) aceptar el
+> comportamiento y (c) `resetQueries` al montar. El motivo: el caso del STOP no es solo el cambio de cuenta. Pasa
+> también al volver a la página después de actuar en el detalle (la invalidación marca la caché vieja sin releerla), y
+> con (a) la fila terminada quedaría en "pendientes" en el uso común, contra DL-5/DL-9. La decisión es interna de diseño,
+> sin impacto de producto; la tomó el MID.
+
+**Qué implementa el DEV** (en `hooks/useMyGames.ts`, como corrección de TASK-4 dentro de esta vuelta de TASK-5):
+- **Condición:** `const settled = !activityQuery.isFetching && !invitationsQuery.isFetching;` y
+  `const next = address === null || !settled ? pins : extendPins(pins, merged, address);`. Es más simple que la
+  propuesta del DEV (no excluye "cargar más"): esperar a que las **dos** fuentes estén quietas conserva MINOR-1 (el pin
+  sale de la deduplicación de las dos), y durante "cargar más" no hay nada nuevo que fijar hasta que la página llega.
+- **No cambian:** C-2 (pins por cuenta, un solo `setState` condicional) ni `groupMyGames` con `pins: next`. Las filas sin
+  pin van a su sección natural y las ya fijadas no se mueven.
+
+**Tests:**
+- **Nuevos en `useMyGames.test.tsx`:**
+  - **T4-14:** caché vieja al montar. G fijada en `pending`, desmontar, invalidar y responder `Cancelled`, montar otra
+    instancia ⇒ el primer render la muestra en `pending` sin pin; al terminar la relectura, `finished` fijada; un render
+    más no la mueve.
+  - **T4-15:** sin pins mientras una fuente pide. G fijada en `invitations` no se mueve, y H, nueva durante la relectura,
+    se ve en `pending` sin pin y queda fijada al terminar.
+- **Re-correr sin cambiar lo que afirman:** T4-8, T4-8 bis, T4-9, T4-12 y T4-13. En T4-9 el conteo de renders puede
+  moverse ±1: si cambia, se ajusta con la medición pegada, manteniendo "≤ 2 extra" y "0 en el siguiente `advance`".
+- **En la página:**
+  - **T5-13:** afirma la **sección**: tras la relectura del montaje, G en `section[data-section="finished"]` con
+    "Cancelada: la apuesta volvió a quien la creó", fuera de "Tus partidas pendientes", sin "Cancelar" y sin
+    "Partida cancelada: se devolvieron…".
+  - **T5-17 (nuevo):** volver a la página tras una acción fuera de ella ⇒ G, la invitación aceptada, en "Terminadas" con
+    "Aceptaste".
+  - **T5-12** sigue verde. Con mocks que resuelven al instante, la relectura del montaje termina antes que la transacción,
+    y la fila queda fijada en "Invitaciones recibidas" antes del resultado.
+
+**Límite que se acepta (RM-14):** si se actúa sobre una fila sin pin mientras la relectura del montaje dura más que toda
+la transacción (nodo lento), la fila puede pasar a "Terminadas" al terminar y se pierde su `TransactionStatus`. El
+resultado sigue leído del objeto (SEG-10). En el caso normal, la relectura (≈ 0,1-0,5 s) termina antes que la
+confirmación (≈ 1 s). Se documenta en TASK-6.
+
+### Hallazgos
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| C-1 | DL-5, DL-9 (H-5 del handoff v1.3) | `app/src/hooks/useMyGames.ts` (cálculo de `next` antes del `setPinState`) | Al remontar con datos viejos en la caché, el fijado usa el estado viejo y la relectura ya no reagrupa (STOP de T5-13) | La condición `settled` de arriba, más T4-14, T4-15, T5-13 con la sección y T5-17 |
+
+### Siguiente paso: correcciones al DEV (C-1), con `HANDOFF_MY_GAMES` v1.3
+
+- **Archivos permitidos:** `hooks/useMyGames.ts`, `hooks/useMyGames.test.tsx` y `pages/MyGamesPage.test.tsx`, más
+  `MyGamesSection.test.tsx` solo si hace falta.
+- **Reporte:** addendum con el diff, los tests nuevos o rehechos, la mutación (sin `settled` ⇒ fallan T4-14 y T5-13) y
+  el gate completo.
+- Al pasar, TASK-4 y TASK-5 van en commits separados o en uno solo. Lo decide el orquestador; abajo va el mensaje del de
+  TASK-5 con la corrección.
+
+### Mensaje de commit propuesto (para cuando pase)
+
+```
+app: add the my-games page with per-row actions (#13)
+
+#/my-games, linked from the header, shows received invitations, own pending
+games and finished games for the connected account. Each actionable row runs
+GameActions in a row variant (one useTxTarget per row, no repeated in-flight
+notice, actions hidden after an own success). The page shows the in-flight
+notice once, plus an open-by-ID box and, on testnet, the explorer account
+link (D-20261103-03). Section footers never claim "none" while history is
+left to review, and a failed refetch keeps the rows. Pins now form only when
+both sources are idle, so returning to the page regroups with fresh data.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+## TASK-5, corrección C-1 (H-5)
+
+> Addendum a la entrega de TASK-5, tras la "Revisión TASK-5" y el handoff v1.3. HEAD `ea0a713`, sin commits.
+> Archivos tocados: `app/src/hooks/useMyGames.ts`, `app/src/hooks/useMyGames.test.tsx` y `app/src/pages/MyGamesPage.test.tsx`.
+> `MyGamesSection.test.tsx` no hizo falta.
+
+### Diff de `app/src/hooks/useMyGames.ts`
+```diff
+@@ JSDoc de useMyGames
+- * la sección donde apareció (DL-5) hasta "Actualizar" (`refresh`) o hasta que cambia la cuenta: los pins guardan su
++ * la sección donde apareció con las dos fuentes quietas (DL-5, H-5) hasta "Actualizar" (`refresh`), hasta que la página
++ * se remonta o hasta que cambia la cuenta: los pins guardan su
+@@
+   // MINOR-1 del handoff v1: el pin sale de la lectura ganadora de H-2 (las mismas listas que deduplica `groupMyGames`).
++  // H-5 (v1.3): solo se fija con las dos fuentes quietas. Al remontar, la caché puede traer datos que la invalidación de
++  // DL-7 marcó viejos y que TanStack relee recién ahora; fijar con ellos dejaría la fila en la sección vieja. Mientras
++  // alguna fuente pide, las filas sin pin van a su sección natural y las fijadas no se mueven.
+   // Un solo `setState` condicional (V-7) que converge: guardado `{ address, pins: next }`, el render siguiente ve la misma
+   // cuenta y `extendPins` devuelve la misma instancia (sin IDs nuevos).
+   const merged = mergeMyGames(activityItems, invitationItems);
+   const sameAccount = isSameAccount(pinState.address, address);
+   const pins = sameAccount ? pinState.pins : NO_PINS;
+-  const next = address === null ? pins : extendPins(pins, merged, address);
++  const settled = !activityQuery.isFetching && !invitationsQuery.isFetching;
++  const next = address === null || !settled ? pins : extendPins(pins, merged, address);
+   if (!sameAccount || next !== pinState.pins) setPinState({ address, pins: next });
+```
+C-2 (pins por cuenta, un solo `setState` condicional) y `groupMyGames` (`pins: next`) no cambian.
+
+### Tests nuevos y modificados (907 → 910)
+
+**`useMyGames.test.tsx`: 2 nuevos (21 → 23).**
+- **T4-14**, "pins with the fresh refetch, not with a stale cache, when a new instance mounts":
+  - con una primera instancia, G (`Pending`, como creador) queda en `pending`, y la instancia se desmonta;
+  - con el hook desmontado, `invalidateQueries(myGames)` y la respuesta siguiente trae G `Cancelled`;
+  - en el **primer render** de la instancia nueva, G está en `pending` desde la caché, sin pin;
+  - al terminar la relectura, G pasa a `finished` y `pending` queda vacía;
+  - un `advance` más hace **0** renders;
+  - una relectura posterior que la trae `Pending` no la saca de `finished` (está fijada ahí).
+- **T4-15**, "does not pin a new row while a source is fetching, and keeps the pinned ones":
+  - G, una invitación, está fijada en `invitations`;
+  - una invalidación trae la actividad (G aceptada y H nueva `Pending` como creador) mientras las invitaciones siguen pidiendo (`refreshing: true`, con un `deferred`);
+  - en ese momento H se ve en `pending` sin pin y G sigue en `invitations`;
+  - cuando las invitaciones responden, nada se mueve y H queda fijada en `pending`;
+  - una lectura posterior con H `Cancelled` la deja en `pending` con el estado `cancelled`, y `finished` sigue vacía.
+
+**`MyGamesPage.test.tsx`: 1 nuevo y 2 modificados (16 → 17).**
+- **T5-13 ahora afirma la sección:**
+  - G está en `section[data-section="finished"]`, con `.my-game-result` "Cancelada: la apuesta volvió a quien la creó";
+  - "Tus partidas pendientes" no tiene filas;
+  - no hay "Cancelar" ni "Partida cancelada: se devolvieron…".
+  - El título vuelve a "…the game with its read state in its natural section".
+- **T5-17 (nuevo)**, "regroups an invitation accepted outside the page":
+  1. con B, G está en "Invitaciones recibidas";
+  2. "Abrir partida por ID" lleva a `/game/G` y la página se desmonta;
+  3. la respuesta nueva es G `Resolved` (aceptada por B) y se hace `invalidateQueries(['sui', 'localnet', 'myGames'])`;
+  4. se vuelve con un `Link` del probe a `#/my-games`;
+  5. G termina en "Terminadas" con "Aceptaste" y `.my-game-result` "Ganaste", y "Invitaciones recibidas" queda sin filas.
+- **T5-12, solo la preparación** (Desviación 1). Antes de cambiar la respuesta del nodo, el test espera `queryClient.isFetching() === 0`, es decir, que termine la relectura del montaje. Lo que afirma no cambia.
+
+### Prueba de que quitar `settled` rompe los tests
+Revertí la línea a `const next = address === null ? pins : extendPins(pins, merged, address);` y borré `settled`. Después restauré el archivo (`cmp` igual).
+```text
+     × pins with the fresh refetch, not with a stale cache, when a new instance mounts (T4-14, H-5)
+     × T5-13: A in flight → B → finished while on B → A ⇒ no result; the game with its read state in its natural section
+     × regroups an invitation accepted outside the page: back on #/my-games it ends in "Terminadas" with "Aceptaste"
+      Tests  3 failed | 37 passed (40)
+```
+T4-15 no falla con esa reversión: la sección natural de H al aparecer ya es `pending`, así que fijarla durante la relectura da lo mismo. Lo que T4-15 fija es lo que la regla nueva no puede romper: H se ve durante la relectura, G no se mueve y H queda fijada al final.
+
+### Re-corridas sin cambiar lo que afirman
+- **T4-8, T4-8 bis, T4-12 y T4-13:** verdes sin cambios.
+- **T4-9:** verde sin cambios. Mido otra vez: **1** render sin IDs nuevos y **2** con IDs nuevos, sin delta (forcé la aserción, leí `[1, 2]` y la restauré). Sigue "≤ 2 extra" y "0 renders en el siguiente `advance`".
+- **T5-12:** verde, con el cambio de preparación de la Desviación 1.
+
+### Gate completo, job `app` (forma canónica)
+```text
+v26.13.0
+ea0a713
+
+added 293 packages, and audited 295 packages in 1m
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit=0
+audited 292 packages in 85s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+exit=0
+found 0 vulnerabilities
+exit=0
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  57 passed (57)
+      Tests  910 passed (910)
+   Start at  01:12:15
+   Duration  85.84s (environment 77%, setup 8%, import 7%, tests 4%, transform 4%)
+
+Environment  jsdom was created 57 times · 676.75s total, 77% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 596 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-D1gLyKeV.js   900.96 kB │ gzip: 273.46 kB
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 3.62s
+exit=0
+--- git status --porcelain --untracked-files=all
+ M app/src/App.test.tsx
+ M app/src/App.tsx
+ M app/src/components/GameActions.test.tsx
+ M app/src/components/GameActions.tsx
+ M app/src/components/Header.test.tsx
+ M app/src/components/Header.tsx
+ M app/src/components/LobbyList.tsx
+ M app/src/hooks/useMyGames.test.tsx
+ M app/src/hooks/useMyGames.ts
+ M app/src/pages/GameDetailPage.test.tsx
+ M app/src/pages/GameDetailPage.tsx
+ M documents/REPORTES_MY_GAMES.md
+?? app/src/components/HistoryTime.tsx
+?? app/src/components/MyGamesSection.test.tsx
+?? app/src/components/MyGamesSection.tsx
+?? app/src/pages/MyGamesPage.test.tsx
+?? app/src/pages/MyGamesPage.tsx
+--- git diff --exit-code -- contracts/
+exit=0
+--- git diff --exit-code -- package.json app/package.json package-lock.json
+exit=0
+```
+Esta corrida fue más lenta (85 s de Vitest y 1 min de `npm ci`) porque la máquina estaba cargada; los resultados no cambian.
+
+### Resultado
+- **Tests:** 907 → **910** (+3: T4-14, T4-15, T5-17), en 57 archivos.
+- **Build:** 900.93 → 900.96 kB (273.44 → 273.46 kB gzip).
+- **Lint y typecheck:** 0, sin `eslint-disable`.
+- **Sin cambios:** `contracts/`, `package*.json`, `sui/` y los componentes.
+- **`documents/REPORTES_MY_GAMES.md`:** sale modificado por la revisión del MID; no lo toqué.
+- **Greps sobre `git diff -- app` y los archivos nuevos:** claves, rutas personales, `console.`, `eslint-disable` y hex de 40-64: vacíos.
+
+### Desviaciones
+1. **Preparación de T5-12.**
+   - **Qué cambió:** con H-5, T5-12 fallaba por cómo estaba armado el test. El test cambiaba la respuesta del nodo a "G cancelada" justo después de ver la fila, **antes** de que corriera la relectura del montaje. Entonces esa relectura ya traía G cancelada, la fijaba en "Terminadas" y la fila perdía su `GameActions`. Es el caso RM-14 (la relectura del montaje termina después de la transacción), no el caso normal que T5-12 describe.
+   - **Corrección:** una espera, `await waitFor(() => expect(queryClient.isFetching()).toBe(0))`, antes de `serve(A, cancelada)`, con un comentario que cita H-5/RM-14. Ninguna aserción cambia.
+   - **Verificación extra:** el resultado adoptado aparece en la fila, igual que antes.
+2. **T5-17 navega fuera de la página con "Abrir partida por ID"** y vuelve con un `Link` agregado al `LocationProbe` del test. Es la forma de desmontar y volver a montar la página con el router real, sin un detalle real. La aceptación "fuera de la página" se simula con `invalidateQueries(myGames)` y la respuesta nueva, como permite T5-17.
+
+### Riesgos
+- **RM-14:** queda como lo documenta la v1.3. La Desviación 1 lo muestra en un test: con la relectura del montaje terminando después del resultado, la fila pasa a su sección natural y pierde su `TransactionStatus`; el resultado sigue en "Terminadas", leído del objeto. Se documenta en `app/README.md` (TASK-6).
+=====
+
+---
+
+## Re-revisión TASK-5: NO PASA (H-5 sola rompe MINOR-6; corrección H-6, handoff v1.4)
+
+Revisé TASK-5 entera contra el diff real partiendo de `ea0a713`: la UI ya revisada más el addendum "TASK-5, corrección
+C-1 (H-5)". La UI sigue como en la revisión anterior, y no hay hallazgos nuevos en componentes ni páginas. El cambio de
+`useMyGames.ts` es exactamente la condición `settled` de la v1.3. El gate es completo: 910 tests en 57 archivos, lint y
+typecheck en 0 sin `eslint-disable`, build 900.96 kB; `contracts/` y `package*.json` sin delta.
+
+**Foco 1: ¿la Desviación 1 esconde una regresión de MINOR-6? Sí.**
+- **El hecho que la decide:** cuando la UI muestra "Confirmando en la red…", la transacción **ya se ejecutó** on-chain.
+  La wallet (también la burner) devuelve el digest después de ejecutar, y `confirming` solo espera la lectura del nodo
+  (`useExecuteTransaction`, etapas de #11).
+- **Por eso:** si la vista se remonta durante esa etapa (volver a la cuenta A, el escenario de MINOR-6; o volver a la
+  página), la relectura del montaje ya trae el estado nuevo. Con H-5 la fila se fija recién con las fuentes quietas,
+  es decir, con ese estado. Pasa a "Terminadas", pierde su `GameActions` y el resultado adoptado no se ve.
+- **La preparación original de T5-12 era la realista:** el nodo responde G cancelada antes de la relectura del montaje.
+  Por eso fallaba con H-5.
+- **La Desviación 1** (esperar `isFetching() === 0` antes de cambiar la respuesta) fuerza el orden opuesto, que en la
+  práctica no se da en esta etapa. Así esconde la regresión.
+- **El error de diseño es mío** (v1.3), no del DEV: H-5 no contemplaba las mutaciones vivas. El DEV lo marcó como RM-14,
+  pero es el caso central de MINOR-6, no un nodo lento.
+
+**Foco 2: T4-15 sin fallar con la reversión. Tiene sentido, como test de invariantes.** Fija lo que la regla no puede
+romper:
+- una fila sin pin se ve durante la relectura;
+- la fijada no se mueve;
+- la nueva queda fijada al final.
+
+No discrimina H-5 (la sección natural de H es la misma durante y después), y el DEV lo explica bien. Los que
+discriminan son T4-14, T5-13 y T5-17, y en la v1.4 se suman T4-17 y T5-18. No pido cambiarlo.
+
+**Foco 3: T4-9 sin bucle. ✅** El DEV volvió a medir 1 render sin IDs nuevos y 2 con IDs nuevos (sin delta), y 0 en el
+siguiente `advance`. El `setState` sigue siendo uno y condicional (C-2 intacto).
+
+**Desviación 2 (T5-17 navega con "Abrir partida por ID" y vuelve con un `Link` del probe):** aceptada. Desmonta y vuelve a
+montar con el router real, y la aceptación "afuera" se simula con `invalidateQueries` y la respuesta nueva, como permite
+T5-17.
+
+### Corrección: H-6 (handoff v1.4)
+
+> Decisión (2026-11-04): además de H-5, se fijan en seguida las partidas con una mutación **viva** de la cuenta (el
+> criterio de adopción de #12), sobre aceptar la regresión de MINOR-6 o volver al fijado desde la caché para todo.
+> Motivo: conserva lo que H-5 arregló (T5-13, T5-17) y recupera T5-12. De paso cierra RM-14, porque una acción sobre una
+> fila sin pin fija la fila en ese mismo render. Decisión interna del MID.
+
+**Contrato** (el detalle está en la fila H-6 de §1 del handoff):
+- **`hooks/txSession.ts`:** `type TxGameEntry = { id; status; gameId: string | null }`, `toTxGameEntry(m)` (el `gameId`
+  normalizado de `txVariablesOf(...).action`; `null` en `create`) y `liveTxGameIds(entries, mount): ReadonlySet<string>`,
+  que devuelve los `gameId` con `status === 'pending'` ∨ `mount.pendingIds.has(id)` ∨ `id > mount.maxId`.
+- **`sui/myGames.ts`:** solo se exporta la clave privada como `myGameKey(item)`.
+- **`useMyGames`:**
+  - `const [mount] = useState(() => mountSnapshot(queryClient.getMutationCache().getAll()))`;
+  - `live = liveTxGameIds(useMutationState({ filters: { mutationKey: queryKeys.txAccount(network, address) }, select: toTxGameEntry }), mount)`;
+  - `pinnable = settled ? merged : merged.filter((item) => live.has(myGameKey(item)))`;
+  - `next = address === null ? pins : extendPins(pins, pinnable, address)`;
+  - C-2 y el `setState` único y condicional no cambian.
+
+**Tests:**
+- **T4-16** (`txSession.test.ts`): `liveTxGameIds`. Incluye en curso, en curso al montar y empezada después de montar;
+  excluye la terminada antes de montar, `create` y variables ajenas; normaliza el ID.
+- **T4-17** (`useMyGames.test.tsx`): caché con G `Pending` y un `cancel` de G en curso al montar, con la relectura lenta
+  que trae `Cancelled` ⇒ G fijada en `pending` desde el primer render, y ahí sigue.
+- **T5-12:** se **revierte la Desviación 1** (el `serve(A, cancelada)` vuelve a ir antes de la relectura del montaje) y
+  tiene que pasar sin cambiar lo que afirma.
+- **T5-18** (nuevo, cierra RM-14): relectura del montaje lenta y "Cancelar" sobre la fila todavía sin pin. Con los dos
+  órdenes de terminación, la fila sigue en "Tus partidas pendientes" con "Partida cancelada: se devolvieron…" y sin
+  "Cancelar".
+- **Re-correr:** T4-8, T4-8 bis, T4-9, T4-12, T4-13, T4-14, T4-15, T5-13 y T5-17, sin cambiar lo que afirman.
+- **Mutaciones a reportar:**
+  - sin el filtro `live` (solo H-5) ⇒ fallan T5-12, T5-18 y T4-17;
+  - sin `settled` (fijar siempre) ⇒ fallan T4-14, T5-13 y T5-17.
+
+### Hallazgos
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| C-2 | DL-5, DL-9, MINOR-6 (T5-12), PROY-16 | `app/src/hooks/useMyGames.ts` (cálculo de `next`); `app/src/pages/MyGamesPage.test.tsx:453-456` (espera agregada) | Con H-5 sola, una fila con su transacción ya ejecutada y todavía en "Confirmando…" pasa a "Terminadas" al remontar la vista, y se pierde el resultado adoptado. La espera agregada en T5-12 lo esconde | H-6 según el contrato de arriba y la fila H-6 de §1 del handoff v1.4; revertir la espera de T5-12; T4-16, T4-17 y T5-18 |
+
+### Siguiente paso: correcciones al DEV (C-2), con `HANDOFF_MY_GAMES` v1.4
+
+- **Archivos permitidos:** `hooks/txSession.ts` y `txSession.test.ts`, `hooks/useMyGames.ts` y `useMyGames.test.tsx`,
+  `sui/myGames.ts` (solo exportar `myGameKey`) y `pages/MyGamesPage.test.tsx`.
+- **Reporte:** addendum con el diff, los tests, las dos mutaciones y el gate completo.
+
+### Mensaje de commit propuesto (para cuando pase)
+
+```
+app: add the my-games page with per-row actions (#13)
+
+#/my-games, linked from the header, shows received invitations, own pending
+games and finished games for the connected account. Each actionable row runs
+GameActions in a row variant (one useTxTarget per row, no repeated in-flight
+notice, actions hidden after an own success). The page shows the in-flight
+notice once, plus an open-by-ID box and, on testnet, the explorer account
+link (D-20261103-03). Section footers never claim "none" while history is
+left to review, and a failed refetch keeps the rows. Pins form from fresh data
+once both sources are idle, except for games with a live transaction of the
+account, which are pinned right away so their result stays in the row.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+## TASK-5, corrección C-2 (H-6)
+
+> Addendum a la entrega de TASK-5, tras la "Re-revisión TASK-5" y el handoff v1.4. HEAD `c561eb3`, sin commits.
+> Archivos tocados (todos dentro de los permitidos):
+> - `app/src/hooks/txSession.ts`, `txSession.test.ts`
+> - `app/src/hooks/useMyGames.ts`, `useMyGames.test.tsx`
+> - `app/src/sui/myGames.ts` (solo el export)
+> - `app/src/pages/MyGamesPage.test.tsx`
+
+### Diff
+**`app/src/hooks/txSession.ts`**
+```diff
+ import type { Transaction } from '@mysten/sui/transactions';
++import { normalizeSuiAddress } from '@mysten/sui/utils';
+@@
++/** Proyección de una mutación para el fijado de "Mis partidas" (H-6 de #13): su id, su estado y la partida que toca. */
++export type TxGameEntry = { id: number; status: MutationStatus; gameId: string | null };
++
++/**
++ * Proyección de una mutación del caché para H-6: el `gameId` normalizado de su acción (como la clave de `myGameKey`), o
++ * `null` para una creación o para variables sin la forma de la app.
++ */
++export function toTxGameEntry(m: MutationLike): TxGameEntry {
++  const action = txVariablesOf(m.state.variables)?.action;
++  const gameId = action === undefined || action.kind === 'create' ? null : normalizeSuiAddress(action.gameId);
++  return { id: m.mutationId, status: m.state.status, gameId };
++}
++
++/**
++ * Partidas con una transacción "viva" para la vista (H-6 de #13), con el criterio de adopción de #12: en curso, en curso
++ * al montar, o empezada después de montar. "Mis partidas" las fija en seguida con los datos que haya, para que la fila no
++ * cambie de sección (y pierda su resultado) con la relectura que trae el estado ya ejecutado. Las terminadas antes de
++ * montar no cuentan: esas se reagrupan con datos frescos (H-5).
++ */
++export function liveTxGameIds(entries: readonly TxGameEntry[], mount: MountSnapshot): ReadonlySet<string> {
++  const live = new Set<string>();
++  for (const entry of entries) {
++    if (entry.gameId === null) continue;
++    if (entry.status === 'pending' || mount.pendingIds.has(entry.id) || entry.id > mount.maxId) live.add(entry.gameId);
++  }
++  return live;
++}
+```
+
+**`app/src/sui/myGames.ts`:** solo el export. Renombré la función privada `gameKey` a `myGameKey` y la exporté. Las tres llamadas internas (`mergeMyGames`, `extendPins`, `groupMyGames`) cambian solo el nombre:
+```diff
+-function gameKey(item: MyGameItem): string | null {
++export function myGameKey(item: MyGameItem): string | null {
+@@ (×3)
+-    const key = gameKey(item);
++    const key = myGameKey(item);
+```
+
+**`app/src/hooks/useMyGames.ts`:** cambian el JSDoc y el comentario de H-6, además de este código.
+```diff
+-import { useInfiniteQuery, useQueryClient, type InfiniteData, type UseInfiniteQueryResult } from '@tanstack/react-query';
++import { useInfiniteQuery, useMutationState, useQueryClient, type InfiniteData, type UseInfiniteQueryResult } from '@tanstack/react-query';
+@@
+   mergeMyGames,
++  myGameKey,
+@@
+ import { queryKeys } from './queryKeys';
++import { liveTxGameIds, mountSnapshot, toTxGameEntry } from './txSession';
+@@
+   const [pinState, setPinState] = useState<PinState>(() => ({ address, pins: new Map() }));
++  // H-6: foto del caché de mutaciones al montar, para saber qué transacciones de la cuenta siguen "vivas" para la vista.
++  const [mount] = useState(() => mountSnapshot(queryClient.getMutationCache().getAll()));
++  const live = liveTxGameIds(
++    useMutationState({ filters: { mutationKey: queryKeys.txAccount(config.network, address) }, select: toTxGameEntry }),
++    mount,
++  );
+@@
++  // H-6 (v1.4): salvo las partidas con una transacción viva de la cuenta, que se fijan en seguida con los datos que haya:
++  // la transacción ya se ejecutó, y la relectura traería el estado nuevo y sacaría la fila (con su resultado) de su sección.
+@@
+   const settled = !activityQuery.isFetching && !invitationsQuery.isFetching;
+-  const next = address === null || !settled ? pins : extendPins(pins, merged, address);
++  const pinnable = settled
++    ? merged
++    : merged.filter((item) => {
++        const key = myGameKey(item);
++        return key !== null && live.has(key);
++      });
++  const next = address === null ? pins : extendPins(pins, pinnable, address);
+   if (!sameAccount || next !== pinState.pins) setPinState({ address, pins: next });
+```
+Lo que no cambia:
+- C-2 de TASK-4: los pins por cuenta y el único `setState` condicional.
+- `groupMyGames` sigue recibiendo `pins: next`.
+- `txSession.ts` sigue sin importar nada de `./`.
+
+### Tests (910 → 915, +5)
+- **T4-16** (`txSession.test.ts`, +2), con `mount = { maxId: 5, pendingIds: {4} }`:
+  - **incluye** un `cancel` en curso (id 6), un `reject` que estaba en curso al montar y ya terminó (id 4) y un `accept` que empezó y terminó después de montar (id 7);
+  - **excluye** un `cancel` que terminó antes de montar (id 3), un `create` y variables `{ foo: 1 }`;
+  - `toTxGameEntry` normaliza la forma corta (`0x5` y `0X5`) y devuelve `gameId: null` para `create` y para variables ajenas.
+- **T4-17** (`useMyGames.test.tsx`, +1):
+  - preparación: la caché de A tiene G `Pending` como creador, hay un `cancel` de G en curso (un `useMutation` con la clave de la cuenta y las variables de la app) y `invalidateQueries(myGames)`;
+  - la relectura del montaje es lenta (un `deferred`) y trae G `Cancelled`;
+  - desde el primer render, G está en `pending`;
+  - al terminar la relectura, G sigue en `pending` con el estado `cancelled`, y `finished` queda vacía.
+- **T5-18** (`MyGamesPage.test.tsx`, +2, un `it.each` con los dos órdenes):
+  - preparación: con A, la página se desmonta (abriendo el detalle), la caché se marca vieja y, al volver, la relectura de la actividad del montaje es lenta;
+  - el usuario pulsa "Cancelar" en la fila de G, que todavía no tiene pin;
+  - el nodo pasa a responder G cancelada;
+  - en los dos órdenes ("confirmation first" y "refetch first"), la fila sigue en "Tus partidas pendientes" con "Partida cancelada: se devolvieron 0.003000003 SUI a tu cuenta", sin "Cancelar", y "Terminadas" no tiene filas.
+- **T5-12: revertí la Desviación 1.** Saqué la espera `queryClient.isFetching() === 0`, así que `serve(A, cancelada)` vuelve a ir enseguida después de ver la fila. Pasa sin cambiar lo que afirma.
+- **Re-corridos sin cambios, en verde:** T4-8, T4-8 bis, T4-12, T4-13, T4-14, T4-15, T5-13 y T5-17.
+- **T4-9:** volví a medir: 1 render sin IDs nuevos y 2 con IDs nuevos, igual que antes. Sigue "≤ 2 extra" y "0 en el siguiente".
+
+### Mutaciones
+Restauré los archivos después de cada una (`cmp` igual).
+```text
+[sin-filtro-de-vivas]   const pinnable = settled ? merged : [];
+     × pins at once a game with a live transaction of the account, with the stale cache (T4-17, H-6)
+     × T5-12: A in flight → B (remount, nothing of A) → A still in flight ⇒ the adopted result appears in the row
+     × keeps the row in "Tus partidas pendientes" with its result (confirmation first)      ← T5-18
+     × keeps the row in "Tus partidas pendientes" with its result (refetch first)           ← T5-18
+      Tests  4 failed | 39 passed (43)
+[sin-settled]           const pinnable = true ? merged : merged.filter(…)
+     × pins with the fresh refetch, not with a stale cache, when a new instance mounts (T4-14, H-5)
+     × T5-13: A in flight → B → finished while on B → A ⇒ no result; the game with its read state in its natural section
+     × regroups an invitation accepted outside the page: back on #/my-games it ends in "Terminadas" with "Aceptaste"   ← T5-17
+      Tests  3 failed | 40 passed (43)
+```
+
+### Gate completo, job `app` (forma canónica)
+```text
+v26.13.0
+c561eb3
+
+added 293 packages, and audited 295 packages in 10s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit=0
+audited 292 packages in 11s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+exit=0
+found 0 vulnerabilities
+exit=0
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  57 passed (57)
+      Tests  915 passed (915)
+   Start at  01:23:26
+   Duration  20.07s (environment 60%, tests 13%, import 10%, setup 9%, transform 7%, worker 1%)
+
+Environment  jsdom was created 57 times · 113.76s total, 60% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 596 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-Ck3iRlQ-.js   901.45 kB │ gzip: 273.61 kB
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 599ms
+exit=0
+--- git status --porcelain --untracked-files=all
+ M app/src/App.test.tsx
+ M app/src/App.tsx
+ M app/src/components/GameActions.test.tsx
+ M app/src/components/GameActions.tsx
+ M app/src/components/Header.test.tsx
+ M app/src/components/Header.tsx
+ M app/src/components/LobbyList.tsx
+ M app/src/hooks/txSession.test.ts
+ M app/src/hooks/txSession.ts
+ M app/src/hooks/useMyGames.test.tsx
+ M app/src/hooks/useMyGames.ts
+ M app/src/pages/GameDetailPage.test.tsx
+ M app/src/pages/GameDetailPage.tsx
+ M app/src/sui/myGames.ts
+ M documents/REPORTES_MY_GAMES.md
+?? app/src/components/HistoryTime.tsx
+?? app/src/components/MyGamesSection.test.tsx
+?? app/src/components/MyGamesSection.tsx
+?? app/src/pages/MyGamesPage.test.tsx
+?? app/src/pages/MyGamesPage.tsx
+--- git diff --exit-code -- contracts/
+exit=0
+--- git diff --exit-code -- package.json app/package.json package-lock.json
+exit=0
+```
+
+### Resultado
+- **Tests:** 910 → **915**, en 57 archivos.
+- **Build:** 900.96 → 901.45 kB (273.46 → 273.61 kB gzip).
+- **Lint y typecheck:** 0, sin `eslint-disable`.
+- **Sin cambios:** `contracts/`, `package*.json` y los componentes.
+- **`documents/REPORTES_MY_GAMES.md`:** sale modificado por la re-revisión del MID; no lo toqué.
+- **Greps sobre `git diff -- app` y los archivos nuevos:** claves, rutas personales, `console.`, `eslint-disable` y hex de 40-64, todos vacíos.
+
+### Desviaciones
+1. **`txSession.ts` importa `normalizeSuiAddress` de `@mysten/sui/utils`.**
+   - **Por qué:** `toTxGameEntry` tiene que devolver el `gameId` normalizado igual que `myGameKey`, que usa esa misma función.
+   - **Permisos:** la capa `hooks/` permite `@mysten/sui*`, y el archivo sigue sin importar nada de `./`.
+   - **Diferencia con DL-12:** la lista de imports de DL-12 no incluía este módulo.
+2. **Cómo se arma T4-17.**
+   - **Qué hace:** el `cancel` vivo es un `useMutation` de test, con la clave de mutación de la cuenta y las variables con la forma de la app.
+   - **Por qué:** no hace falta la máquina completa; `toTxGameEntry` solo lee `state.variables` y `state.status`.
+3. **Cómo se arma T5-18.** Desmonta la página abriendo el detalle con "Abrir partida por ID" y vuelve con el `Link` del probe, como T5-17. La confirmación y la relectura lenta son `deferred`.
+
+### Riesgos
+- **RM-14:** queda cerrado por H-6, que T5-18 verifica en los dos órdenes.
+- **Límite que sigue abierto (v1.4):** la primera visita sin caché con una transacción ya en curso. La fila nunca se mostró con acciones, así que no se pierde nada a la vista.
+=====
+
+---
+
+## Re-revisión 2 TASK-5: PASA
+
+Revisé TASK-5 entera contra el diff real partiendo de `c561eb3` (`HANDOFF_MY_GAMES` v1.4): la UI de la primera entrega,
+H-5 (v1.3) y H-6 (v1.4). Greps propios sobre el diff de `app/` y los archivos nuevos: 0 hex de 40-64, 0 rutas
+personales, 0 claves, sin `console.` ni `eslint-disable`.
+
+| Revisión | Resultado |
+|---|---|
+| UI (primera revisión) | ✅ Sin cambios desde la revisión anterior, que no tuvo hallazgos de UI. Ruta y enlace; página sin cuenta sin consultas; `key={address}`; aviso "en curso" una vez; "Abrir partida por ID" y el enlace del explorador (D-20261103-03); secciones con `ReadState` solo sin datos, notas DL-17 y pie por `sectionFooter` (H-1); `GameActions` con `variant='row'` y H-3; texto R-7 |
+| H-5 | ✅ `settled = !activityQuery.isFetching && !invitationsQuery.isFetching`. Sin la condición fallan T4-14, T5-13 y T5-17 (los que discriminan) |
+| H-6, contrato | ✅ `txSession.ts`: `TxGameEntry`, `toTxGameEntry` (el `gameId` de `txVariablesOf(...).action` normalizado; `null` en `create` y en variables ajenas) y `liveTxGameIds` con el criterio de adopción de #12 (`pending` ∨ `mount.pendingIds` ∨ `id > mount.maxId`). `sui/myGames.ts` solo renombra y exporta `myGameKey`, con las tres llamadas internas renombradas. `useMyGames` toma una foto `mountSnapshot` perezosa, un `useMutationState` filtrado por la clave de la cuenta con un `select` que da objetos planos, y `pinnable = settled ? merged : merged.filter(vivas)` |
+| H-6, semántica | ✅ En el escenario de MINOR-6, al remontar, la mutación de A sigue en curso (`pendingIds`), así que la fila se fija desde la caché previa a la transacción en el primer render. La relectura, que ya trae el estado ejecutado, no la mueve, y el resultado adoptado aparece en la fila (T5-12 con su preparación **original**). Una acción sobre una fila sin pin crea una mutación viva y la fija en ese render (T5-18, los dos órdenes): RM-14 queda cerrado. Lo terminado antes de montar sigue con H-5 (T5-13, T5-17) |
+| Sin bucle, C-2 | ✅ Un único `setState`, condicional; `extendPins` devuelve la misma instancia si no hay nada nuevo; T4-9 medido otra vez: 1 render sin IDs nuevos, 2 con IDs nuevos, 0 en el siguiente. Pins por cuenta sin cambios (T4-13) |
+| Capas / ARQ-5 | ✅ `txSession.ts` sigue sin imports de `./`; `normalizeSuiAddress` de `@mysten/sui/utils` está permitido en `hooks/` (Desviación 1) |
+| Tests | ✅ 910 → 915 (+5: T4-16 ×2, T4-17, T5-18 ×2). T5-12 vuelve a su preparación original. Los re-corridos siguen en verde sin cambiar lo que afirman. Mutaciones: sin el filtro de vivas fallan T4-17, T5-12 y T5-18 (×2); sin `settled` fallan T4-14, T5-13 y T5-17. Es exactamente lo pedido |
+| Gates | ✅ Completos en forma canónica: lint y typecheck 0, 915/57, build 901.45 kB (273.61 kB gzip); `contracts/` y `package*.json` sin delta |
+
+**Desviaciones:** aceptadas.
+1. **`normalizeSuiAddress` en `txSession.ts`** en lugar de `normalizeSuiObjectId`: es la misma normalización que usa
+   `myGameKey`, así que las dos claves coinciden por construcción, y el resultado es idéntico para IDs de objeto.
+2. **T4-17 con un `useMutation` de test** (clave de la cuenta y variables de la app) para tener una mutación viva real
+   en el `MutationCache`: es la forma más fiel sin montar la máquina entera.
+3. **T5-18 con la preparación de T5-17** (desmontar abriendo el detalle, marcar la caché vieja y volver): es justamente
+   el caso de "volver a la página" con la relectura lenta.
+
+### Hallazgos
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Ninguno | — |
+
+### Siguiente paso: TASK-6 (docs), con `HANDOFF_MY_GAMES` v1.4
+
+El gate de la app parte de 915 tests en 57 archivos y build de 901.45 kB. TASK-6 documenta:
+- el fijado (H-5 + H-6);
+- que RM-14 quedó cerrado, más el único resto: la primera visita sin caché con una transacción en curso;
+- el resto de §3 de TASK-6.
+
+### Mensaje de commit propuesto
+
+```
+app: add the my-games page with per-row actions (#13)
+
+#/my-games, linked from the header, shows received invitations, own pending
+games and finished games for the connected account. Each actionable row runs
+GameActions in a row variant (one useTxTarget per row, no repeated in-flight
+notice, actions hidden after an own success). The page shows the in-flight
+notice once, plus an open-by-ID box and, on testnet, the explorer account
+link (D-20261103-03). Section footers never claim "none" while history is
+left to review, and a failed refetch keeps the rows. Pins form from fresh data
+once both sources are idle, except for games with a live transaction of the
+account, which are pinned right away so their result stays in the row.
+App 915 tests in 57 files.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```

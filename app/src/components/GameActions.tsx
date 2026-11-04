@@ -90,8 +90,13 @@ function AcceptBlock({ bet, disabled, onAccept }: { bet: bigint; disabled: boole
  * partida. Una sola fuente de bloqueo para la partida (`useTxTarget`, DL-8 de #12): una transacción de la cuenta en curso
  * o un "sin confirmar" de esta partida deshabilitan los botones; la alerta "sin confirmar" y "Ya la revisé" salen una
  * vez. El resultado de aceptar solo aparece con la confirmación del nodo (SEG-10).
+ *
+ * `variant='row'` (DL-6 de #13) es la fila de "Mis partidas": sin "Conecta tu wallet…" (la página ya exige cuenta) ni el
+ * aviso "en curso" (la página lo muestra una sola vez). Con un `success` propio o adoptado en la fila (H-3), tampoco
+ * ofrece "Aceptar", "Cancelar" ni "Rechazar": las tres dejan la partida terminal, aunque el objeto leído siga viejo. Los
+ * estados de transacción y la alerta "sin confirmar" se mantienen. `variant='detail'` es el detalle de siempre.
  */
-export function GameActions({ game }: { game: Game }) {
+export function GameActions({ game, variant = 'detail' }: { game: Game; variant?: 'detail' | 'row' }) {
   const { network } = useAppConfig();
   const { address } = useWalletAccount();
   const target = useTxTarget({ kind: 'game', gameId: game.id });
@@ -106,15 +111,21 @@ export function GameActions({ game }: { game: Game }) {
   const cancelValue = cancel.outcome?.kind === 'success' ? cancel.outcome.value : null;
   const rejectValue = reject.outcome?.kind === 'success' ? reject.outcome.value : null;
   const acceptValue = accept.outcome?.kind === 'success' ? accept.outcome.value : null;
+  const row = variant === 'row';
+  const settled =
+    row &&
+    ([accept.outcome, cancel.outcome, reject.outcome].some((outcome) => outcome?.kind === 'success') ||
+      adopted?.outcome.kind === 'success');
+  const offer = !settled;
 
   return (
     <div className="game-actions">
-      {accepting === 'no_account' && (
+      {accepting === 'no_account' && !row && (
         <p className="hint">Conecta tu wallet para aceptar la partida, cancelarla si es tuya o rechazarla si te invitaron</p>
       )}
       {accepting === 'not_invited' && <p className="hint">{NOT_INVITED_HINT}</p>}
-      {accepting === 'available' && <AcceptBlock bet={game.bet} disabled={busy} onAccept={accept.accept} />}
-      {showCancel && (
+      {accepting === 'available' && offer && <AcceptBlock bet={game.bet} disabled={busy} onAccept={accept.accept} />}
+      {showCancel && offer && (
         <button
           type="button"
           disabled={busy}
@@ -125,7 +136,7 @@ export function GameActions({ game }: { game: Game }) {
           Cancelar
         </button>
       )}
-      {showReject && (
+      {showReject && offer && (
         <button
           type="button"
           disabled={busy}
@@ -139,7 +150,7 @@ export function GameActions({ game }: { game: Game }) {
       <TransactionStatus stage={accept.stage} outcome={accept.outcome} network={network} successText={acceptedText(acceptValue, address)} />
       <TransactionStatus stage={cancel.stage} outcome={cancel.outcome} network={network} successText={cancelledText(cancelValue)} />
       <TransactionStatus stage={reject.stage} outcome={reject.outcome} network={network} successText={rejectedText(rejectValue)} />
-      {target.notice?.kind === 'in_flight' && <p role="status">{IN_FLIGHT_TEXT}</p>}
+      {target.notice?.kind === 'in_flight' && !row && <p role="status">{IN_FLIGHT_TEXT}</p>}
       {adopted !== null && <TransactionStatus stage="done" outcome={adopted.outcome} network={network} successText={adopted.text} />}
       {target.unconfirmed !== null && (
         <>
