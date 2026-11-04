@@ -1,9 +1,14 @@
 # HANDOFF_HOUSE_ADMIN
 > Plan: PLAN_HOUSE_ADMIN v1.1 (MAYOR: APPROVE en la ronda corta, 2026-11-04; `0bfd916`) | Issue: #14 | Branch:
-> `feature/issue-14-house-admin` | Versión: v1.4 | Fecha: 2026-11-04
+> `feature/issue-14-house-admin` | Versión: v1.5 | Fecha: 2026-11-04
 
 ## Changelog
 
+- **v1.5 (2026-11-04)**: revisión del smoke (MID: PASA 21/21; `documents/REPORTES_HOUSE_ADMIN.md`, "Revisión del smoke").
+  Se suma **TASK-5b (SM-1)**, que va **antes** de TASK-6: los campos del panel que el admin no editó siguen a la House
+  vigente (hoy se quedan con la del montaje y, tras un remontaje con la caché vieja, el bloque ofrece revertir el último
+  cambio). TASK-6 suma una línea sobre ese comportamiento. En el runbook (para una próxima corrida), el paso 19 suma
+  `GetServiceInfo` (indicador de red), `GetBalance` y `ListEvents` (visitas a `#/`) a los métodos esperados. Nada más cambia.
 - **v1.4 (2026-11-04)**: revisión de TASK-5 (MID, PASA; `documents/REPORTES_HOUSE_ADMIN.md`, "Revisión TASK-5"). Cambian
   solo el orden y el runbook del smoke; ningún task de código:
   - **Orden:** el smoke corre **antes** de TASK-6. TASK-6 es solo docs y no cambia código: así, si el smoke encuentra algo,
@@ -766,6 +771,82 @@ Reporte §5. Sin commits ni pushes.
 
 ---
 
+## TASK-5b: campos que siguen a la House vigente (SM-1 del smoke) — área: app (`components/`)
+
+### 1. Historia de usuario del task
+
+**Como** admin de la House, **quiero** que los campos de comisión y de límites que no toqué muestren siempre el valor
+vigente de la House, **para** que el panel nunca me ofrezca, con el botón habilitado, revertir un cambio que acabo de hacer.
+
+### 2. Contexto
+
+- **SM-1 (smoke, pasos 13 → 16):** `FeeBlock` y `LimitsBlock` (`app/src/components/HouseAdminPanel.tsx:129` y `:191-192`)
+  inicializan el texto con `useState(<valor de la House al montar>)`. En el paso 13 el panel se remontó con la House en
+  caché (0.001/50); la confirmación llevó la House a 0.002/10, pero los campos siguieron en `0.001`/`50`, y al final del
+  paso 16 el bloque mostraba "De 0.002–10 SUI a 0.001–50 SUI" con "Actualizar límites" habilitado: un clic revertía el
+  cambio. El resumen (P-3) lo hacía visible y el contrato valida igual; no hay riesgo de fondos. Con la comisión pasa lo
+  mismo.
+- Hoy los errores se muestran solo con `touched` (`:130-133`, `:193-195`).
+
+### 3. Qué implementar
+
+Cada campo pasa a tener un **borrador** opcional: `draft: string | null` (`null` = sin editar).
+
+1. **Valor mostrado** = `draft ?? <valor vigente formateado>`: comisión `String(house.feeRate)`; mínimo y máximo
+   `formatMist(house.minBet)` / `formatMist(house.maxBet)`, cada campo con su propio borrador. Un campo sin editar sigue
+   a la House en cada render (sin `useEffect`, sin `key` que remonte el bloque, sin `setState` en el render).
+2. **`onChange`** ⇒ `setDraft(event.target.value)`. La validación se hace sobre el valor mostrado, igual que hoy, contra la
+   House vigente.
+3. **Errores visibles** solo si **algún** campo del bloque tiene borrador (reemplaza `touched`); sin borradores, no hay
+   error ni resumen y el botón queda deshabilitado (`unchanged`).
+4. **Al lanzar la acción** (submit con la validación `ok` y sin `busy`): `tx.update(…)` con los valores validados y, en el
+   mismo handler, todos los borradores del bloque a `null`. Desde ahí los campos muestran la House vigente: la de antes
+   mientras corre la transacción y la nueva cuando la invalidación de H-5 la relee. Si la transacción falla, los campos
+   quedan en el valor vigente y el error sigue en el `TransactionStatus` del bloque (el admin vuelve a escribir: se
+   declara en TASK-6).
+5. **Un campo editado** conserva su texto aunque la House cambie (otra pestaña, adoptado): el resumen dice "De <vigente
+   nuevo> a <lo escrito>" y, si lo escrito coincide con lo vigente, `unchanged` y el botón deshabilitado.
+6. El retiro no cambia (no tiene campos).
+
+### 4. Archivos a tocar / NO tocar
+
+- **Cambiados:** `app/src/components/HouseAdminPanel.tsx`, `HouseAdminPanel.test.tsx` (y, si el DEV lo prefiere para T5-19,
+  `HouseAdminPanel.machine.test.tsx`).
+- **NO tocar:** `hooks/`, `sui/`, `HouseAdminPage.tsx`, `Header.tsx`, `App.tsx`, los textos de §1.
+
+### 5. Tests obligatorios
+
+- T5-16: montado con la House en 0 bps / 0.001–50 SUI y re-renderizado con 250 bps / 0.002–10 SUI **sin tocar nada** ⇒ los
+  tres campos muestran `250`, `0.002` y `10`; sin resumen ni error; "Actualizar comisión" y "Actualizar límites"
+  deshabilitados.
+- T5-17 (**reproduce SM-1**): el caso del paso 13 → 16. Montado con 0.001–50 SUI (caché vieja), la House pasa a 0.002–10
+  SUI ⇒ **nunca** aparece "De 0.002–10 SUI a 0.001–50 SUI" y "Actualizar límites" queda deshabilitado. Con la
+  implementación de hoy este test falla (el DEV lo verifica antes del cambio y lo dice en el reporte).
+- T5-18: con el mínimo editado a `0.005` (borrador) y el máximo sin tocar, la House pasa a 0.002–10 SUI ⇒ el mínimo sigue en
+  `0.005`, el máximo muestra `10` y el resumen es "De 0.002–10 SUI a 0.005–10 SUI".
+- T5-19: al lanzar "Actualizar comisión" con `260`, `update` recibe `{ capId, feeRate: 260 }` y el campo vuelve a mostrar la
+  House vigente (`0` en ese render); al re-renderizar con 260, muestra `260` sin resumen ni error. Lo mismo para límites.
+- T5-20: con la acción terminada en `failure`, los campos muestran el valor vigente y el `TransactionStatus` del bloque
+  sigue con el mensaje.
+- Los tests de T5-6/T5-7 que usaban `touched` se ajustan al borrador **solo** en la preparación (escribir en el campo); sus
+  aserciones de textos no cambian. Se declara en el reporte.
+
+### 6. Smoke
+
+No hace falta repetir el smoke: el caso queda reproducido de forma determinista por T5-17. Si el MAYOR lo pide en la
+revisión de integración, se corre solo la secuencia de los pasos 13 → 16 sobre una génesis nueva.
+
+### 7. Criterios de aceptación
+
+- T5-16..T5-20 en verde (T5-17 en rojo antes del cambio, pegado); gate de la app completo; lint 0 sin `useEffect`,
+  `useRef` ni `key` nuevos en los bloques.
+
+### 8. Al terminar
+
+Reporte §5 (sección "TASK-5b"). Sin commits ni pushes.
+
+---
+
 ## TASK-6: documentación — área: docs
 
 ### 1. Historia de usuario del task
@@ -785,7 +866,8 @@ pasa si se pierde el cap" con la "Nota para #14"; la fila de `version()`; "Lectu
 1. `app/README.md`: sección nueva "Panel de la House (#14)" (detección por tipo y regla de certeza; `CapKnowledge` y los
    estados; "Volver a comprobar"; las tres acciones con el aviso de la comisión copiada y el de los límites; `precheck`
    por `getObject`; retiro total a la cuenta que firma; `migrate`/`transfer_house_cap` solo por CLI; el costo de 1
-   `ListOwnedObjects` por cuenta en el encabezado; el límite de T4-15: si el cap cambia de manos entre el `precheck` y la
+   `ListOwnedObjects` por cuenta en el encabezado; los campos sin editar siguen a la House vigente y se vacían al lanzar
+   la acción (TASK-5b: tras un fallo, el admin vuelve a escribir); el límite de T4-15: si el cap cambia de manos entre el `precheck` y la
    preflight, el texto es "No se pudo preparar la transacción: …" con el del nodo, y el siguiente intento lo corta el
    `precheck`; lo medido en V-12); filas nuevas en los mapas; tabla de invalidación con H-5 y la nota de
    `build(sender)`/`precheck(signal, sender)`; fixture nueva y su recaptura en "Fixtures de lectura"; texto
@@ -889,7 +971,8 @@ completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nu
     puede releer al montarse (v1.4).
 - **Pedidos en CDP** (`Network.requestWillBeSent`) por sesión: se cuentan **solo los `POST` de gRPC-web**
   (`request.method === 'POST'`; los `OPTIONS` del preflight CORS no cuentan, SUGGESTION-3 de #13), por método según la
-  ruta: `StateService/ListOwnedObjects`, `LedgerService/GetObject`, `LedgerService/BatchGetObjects`,
+  ruta: `LedgerService/GetServiceInfo` (indicador de red, v1.5), `StateService/GetBalance` y `LedgerService/ListEvents`
+  (visitas a `#/`, v1.5), `StateService/ListOwnedObjects`, `LedgerService/GetObject`, `LedgerService/BatchGetObjects`,
   `TransactionExecutionService/SimulateTransaction`, `TransactionExecutionService/ExecuteTransaction`,
   `LedgerService/GetTransaction` (el `getObject` del SDK, también el del `precheck`, sale como `BatchGetObjects`). Por
   acción con burner: **2** `SimulateTransaction` + **1** `ExecuteTransaction`. Las
