@@ -1397,3 +1397,337 @@ per-path M-7 rule.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+---
+
+## TASK-5
+
+## Task completado: HANDOFF_TESTNET_PUBLISH — TASK-5
+
+> Reporte del DEV (texto plano, copiado tal cual por el orquestador tras leerlo entero y pasar los greps §R-6).
+
+```text
+REPORTE TASK-5 de #8 — Verificación post-publicación (solo lecturas)
+Handoff: documents/HANDOFF_TESTNET_PUBLISH.md v1.2.1 (TASK-5, Parte B B0-B11) | Branch: feature/issue-8-testnet-publish @ 36068e7 | PR: #48
+Fecha: 2026-11-04 | DEV | Toolchain: sui 1.83.0-16d2dc1e05ed, Node v26.13.0 (ruta absoluta), npm 11.20.0, @mysten/sui 2.37.0
+
+== Estado: COMPLETADO — Parte B 12/12 PASA ==
+Primera corrida: B0-B9 PASA y STOP en B10 por la consola. Dictamen del MID: opción (a), B10 ✅ con observación; la
+aceptación se limita a la firma exacta del pedido a api.slush.app/api/wallet/metadata (4 líneas por carga: log CORS,
+ERR_FAILED, Failed to load resource, console.error "Error fetching metadata TypeError: Failed to fetch"). Cualquier otro
+error de consola o de red sería NO PASA; b10-out.txt cumple (16 en total = 4 cargas × 4).
+Segunda corrida: solo B11, sobre 36068e7, PASA.
+
+== B10 (historial del STOP, resuelto) ==
+Lo que pedía B10: "consola sin errores". En cada carga hubo el console.error del kit y su fallo de red: CORS
+MissingAllowOriginHeader; curl con Origin 127.0.0.1:4173 → HTTP/2 403, server: cloudflare. Es la condición de E-6b de #15.
+El DEV propuso (a), (b) o (c) y recomendó (a); el MID dictaminó (a). En el smoke, la fila B10 lleva el texto del MID tal cual.
+
+== Pasos ==
+B0 ✅ owner: los 4 digests (publicación 4yK3mtfz4e2Ztn3V9XCP7aeCxL7gHHt4r4ffbfoZXo7s, comisión BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw,
+   crear FpqGNLhCFdK8rEdLJdQwMKqd2bEigiHsuzah1zrXJXu4 → GAME 0x6173…6858, cancelar 9up8hCmk7hJMhqxNeufyr2PTCBp5nsNyGfgLuVnnsVP7);
+   custodia sí ×3; PV 140 / época 1273; gas del dry run 47246000 MIST; N-3 "lo dejo". Los dos archivos = 327f5d4.
+B1 ✅ git show --stat 327f5d4: solo Published.toml (+12) y deployments/testnet.json (+16). git diff --exit-code 327f5d4 HEAD -- <los 2> = 0.
+   check = "1 despliegue(s) válidos y coherentes con Published.toml". jq: 14 claves, testnet, 4c78adac, packageId == originalPackageId,
+   packageVersion 1, suiCliVersion 1.83.0-16d2dc1e05ed, frameworkRev 05ad86a3…, sourceCommit = SHA completo de 26f2676.
+   is-ancestor = 0. CI de 26f2676: run 41754236438, contracts/app/framework-drift success. diff --stat sources Move.lock vacío;
+   Move.toml: exactamente "+license = "Apache-2.0"".
+B2-B8 ✅ sonda (salida completa abajo): RESUMEN 32 PASA / 0 NO PASA.
+B9 ✅ gates (abajo), idénticos al baseline de §0.
+B10 ✅ con observación (dictamen del MID, opción (a); texto del MID en el smoke). Cumple: en las 4 rutas "testnet · nodo OK", "Conectar wallet", "Mis partidas", y el header sin
+   enlace a #/admin (nav = solo "Mis partidas #/my-games"). #/: "Conecta tu wallet para crear una partida", lobby
+   "No hay partidas abiertas". #/game/<GAME>: "Cancelada", Comisión "2 %", 0.001 SUI. #/my-games: "Conecta tu wallet para ver
+   tus partidas e invitaciones", sin listas. #/admin: "Conecta la wallet que tiene el HouseCap para administrar la House", sin
+   datos de la House ("Administrar House" solo como <h2> de la página). Sin wallet de desarrollo: wallet-standard 0
+   registradas, y el modal del ConnectButton lista solo "Slush" (no se eligió ninguna). CSP: 0 violaciones.
+B11 ✅ (36068e7, localnet aislada, variante B; la sección B11 está abajo).
+
+== Hallazgos (n° de paso + digest / output) ==
+- B3: la publicación creó exactamente 5 objetos: paquete (PackageWrite), House Shared, HouseCap, UpgradeCap y 1 Publisher.
+  objectTypes trae el literal "package" para el paquete, que no es un struct tag: normalizeStructTag lanza (ver Desviaciones 2).
+- B4: initialSharedVersion de la House = 1, como se esperaba (en localnet, 2).
+- B5: custodia definitiva HouseCap/UpgradeCap/Publisher con dueño S, true ×3. S-5 de #17 cumplido: "publicadora importada".
+- B6: checkpoints publicación 402798973 < comisión 402799414 < crear 402799600; cancelar 402799730.
+- B7: el ListEvents de GameCreated desde la publicación da 1 evento (el propio, fee_rate 200); 0 ajenas.
+- B8 (forma del address balance): una sola entrada de balanceChanges de S en SUI por transacción, neta. Gas neto:
+  crear 2953200 (1000000 + 1953200 − 0) → Δ −3953200; cancelar 1988195 (1000000 + 2941200 − 1953005) → Δ −988195. Suma
+  −4941395 = −Σgas. gasData.payment: 1 objeto en crear y 0 en publicación, comisión y cancelar. La House no aparece en cancelar.
+- B10: el 403 de Slush al origen 127.0.0.1 deja un console.error en cada carga. El MID lo aceptó como observación (opción (a)).
+- B11: con [published.testnet] presente, la variante B publica (exit=0), check da 2 despliegues y nada publicado cambia.
+  Los smokes en localnet de #17 quedan desbloqueados.
+
+== Salida de la sonda (verify-testnet.mjs; solo booleanos, digests, checkpoints, montos e IDs abreviados) ==
+CHECK B2.chain PASA chain id 4c78adac
+INFO piso de historial del nodo (lowestAvailableCheckpoint) 397333828
+CHECK B3.success PASA 4yK3mtfz4e2Ztn3V9XCP7aeCxL7gHHt4r4ffbfoZXo7s checkpoint 402798973
+INFO S = sender(publishTxDigest) en memoria (no se imprime)
+CHECK B3.package PASA PackageWrite creado 1 == packageId 0x8b78…6f51: true
+CHECK B3.house PASA House 0x54ee…eb1a creada, Shared y tipo exacto: true
+CHECK B3.houseCap PASA HouseCap 0xcf08…37fe creado, tipo exacto, dueño de salida == S: true
+CHECK B3.upgradeCap PASA UpgradeCap 0x3e3e…7702 creado, tipo exacto, dueño de salida == S: true
+CHECK B3.publisher PASA 0x2::package::Publisher creados: 1 (0x1840…5329)
+INFO objetos creados en la publicación: 5; fuera de los 5 esperados: 0
+CHECK B4.shared PASA dueño Shared, tipo exacto: true
+CHECK B4.fee_rate PASA fee_rate 200
+CHECK B4.min_bet PASA min_bet 1000000
+CHECK B4.max_bet PASA max_bet 50000000000
+CHECK B4.version PASA version 1
+INFO fees_collected 0 (se espera 0 salvo partidas aceptadas)
+CHECK B4.fees_collected PASA fees_collected 0
+INFO initialSharedVersion de la House 1 (informativo; se espera 1)
+CHECK B5.houseCap PASA HouseCap AddressOwner == S: true
+CHECK B5.upgradeCap PASA UpgradeCap AddressOwner == S: true
+CHECK B5.publisher PASA Publisher AddressOwner == S: true
+CHECK B6.success PASA BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw
+CHECK B6.sender PASA sender == S: true
+CHECK B6.event PASA FeeRateUpdated house_id == houseId: true; old_fee_rate 0 → new_fee_rate 200
+CHECK B6.order PASA checkpoints publicación 402798973 < comisión 402799414 < crear 402799600: true
+CHECK B7.success PASA FpqGNLhCFdK8rEdLJdQwMKqd2bEigiHsuzah1zrXJXu4
+CHECK B7.sender PASA sender == S: true
+CHECK B7.event PASA GameCreated creator == S: true; bet 1000000; fee_rate 200; opponent none
+CHECK B7.game_id PASA game_id 0x6173…6858 == GAME entregado: true
+INFO cota del escaneo 402798973 (publicación)
+INFO GameCreated del paquete desde 402798973: 1 (creador == S: 1; otros: 0)
+INFO propia 0x6173…6858 fee_rate 200 checkpoint 402799600 FpqGNLhCFdK8rEdLJdQwMKqd2bEigiHsuzah1zrXJXu4
+CHECK B7.scan.includes PASA el GameCreated de crear está en el escaneo: true
+CHECK B7.scan.mine200 PASA todas las propias con fee_rate 200: true
+INFO otras con fee_rate != 200 (s-4, no hacen NO PASA): 0
+CHECK B8.success PASA 9up8hCmk7hJMhqxNeufyr2PTCBp5nsNyGfgLuVnnsVP7 checkpoint 402799730
+CHECK B8.sender PASA sender == S: true
+CHECK B8.event PASA GameCancelled refund 1000000; cancelled_by == creator: true; creator == S: true; game_id == GAME: true
+CHECK B8.game PASA Game 0x6173…6858 tipo exacto y Shared: true; state Cancelled; stake 0; bet 1000000; fee_rate 200
+INFO crear: gas neto 2953200 (computation 1000000, storage 1953200, rebate 0); balanceChanges totales 1, de S en SUI 1 [-3953200]; gasData.payment 1 objeto(s)
+INFO cancelar: gas neto 1988195 (computation 1000000, storage 2941200, rebate 1953005); balanceChanges totales 1, de S en SUI 1 [-988195]; gasData.payment 0 objeto(s)
+INFO comisión: gas neto 1000282 (computation 1000000, storage 2819600, rebate 2819318); balanceChanges totales 1, de S en SUI 1 [-1000282]; gasData.payment 0 objeto(s)
+INFO publicación: gas neto 46258000 (computation 1000000, storage 45258000, rebate 0); balanceChanges totales 1, de S en SUI 1 [-46258000]; gasData.payment 0 objeto(s)
+CHECK B8.balance.crear PASA Δ(S, crear) -3953200 == −(1000000 + 2953200) = -3953200: true
+CHECK B8.balance.cancelar PASA Δ(S, cancelar) -988195 == 1000000 − 1988195 = -988195: true
+INFO Δ(S, crear) + Δ(S, cancelar) = -4941395 == −(gas crear + gas cancelar) = -4941395: true
+INFO la House entre los objetos cambiados de cancelar: false
+RESUMEN 32 PASA / 0 NO PASA
+(primera corrida, antes del fix de Desviaciones 2: llegó hasta B3.upgradeCap PASA y salió con "ERROR Invalid struct tag: package",
+exit 5, sin ningún NO PASA. La corrida de arriba es la segunda, completa: exit 0.)
+grep -cE '[0-9a-fA-F]{40,}' de la salida = 0.
+
+== Gates (B9) ==
+contracts, desde contracts/ con printf 'n\n' |:
+  sui move build -e testnet --warnings-are-errors → exit 0, 0 warnings
+  sui move build -e testnet --lint --warnings-are-errors → exit 0, 0 lints
+  sui move test -e testnet --warnings-are-errors → "Test result: OK. Total tests: 83; passed: 83; failed: 0"
+  [[ node == v26.* ]] ok; node --test scripts/*.test.mjs → tests 104, pass 104, fail 0
+  node scripts/publish.mjs check → "1 despliegue(s) válidos y coherentes con Published.toml"
+  git diff --exit-code -- Move.lock → 0
+  Sin cambio de comportamiento con [published.testnet] presente.
+app, desde la raíz:
+  npm ci → 293 paquetes; 11 moderate solo dev (#35)
+  npm audit signatures → "292 packages have verified registry signatures" (143 attestations)
+  npm audit --omit=dev --audit-level=high → "found 0 vulnerabilities"
+  npm run lint -w app → 0; npm run typecheck -w app → 0
+  npm test -w app → "Test Files 65 passed (65)", "Tests 1156 passed (1156)"
+  VITE_SUI_NETWORK=testnet npm run build -w app → "dist/assets/index-B3BeMVQC.js   917.80 kB │ gzip: 277.96 kB", IDÉNTICO a la CI
+  git status --porcelain --untracked-files=all → solo " M documents/SMOKE_TESTNET_PUBLISH.md"
+
+== B11 (localnet aislada, variante B, sobre 36068e7) ==
+Preparación (sin sui): <SMOKE_DIR> = <scratchpad>/smoke-b11 nuevo, con net/tmp/home vacíos y env.sh con rutas literales.
+  Línea base de ~/.sui: client.yaml 244 B, mtime 2026-10-30 17:52:52.515735237 -0500; ls = client.yaml.
+  loc=0, pub=0, deployments/ = testnet.json; ningún proceso sui; puertos libres.
+Génesis: exit=0. Arranque en segundo plano con exec, PID en sui.pid.
+PRE suic chain-identifier → Hex: d04ac4a1 (≠ 4c78adac, ≠ 35834a8a).
+PRE suic addresses --json: exit=0, 5 cuentas. ADMIN = la primera, a ids.env sin imprimirla; formato 0x+64 ok y en la lista. Sin new-address.
+PRE act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs publish --network localnet
+  --pubfile-path "$SMOKE_DIR/Pub.localnet.toml" (sin --out):
+  exit=0. "Despliegue escrito en <repo>/contracts/deployments/localnet.json": 14 claves, chainId d04ac4a1, frameworkRev 05ad86a3…,
+  suiCliVersion 1.83.0-16d2dc1e05ed, publishTxDigest GTgt6BHdBzWcQo2dHbxrDfsrg5uxzzBnTYkUWZLJyKG1.
+  sourceCommit null: el árbol tenía el smoke modificado, y localnet lo admite (como en A5).
+  test-publish no falló con [published.testnet]. La dirección de ADMIN aparece 0 veces en la salida.
+Con la red arriba: "$NODE" scripts/publish.mjs check → "2 despliegue(s) válidos y coherentes con Published.toml" (exit 0).
+git diff --exit-code -- contracts/Move.lock contracts/Published.toml contracts/deployments/testnet.json → 0.
+Cierre M-7:
+  - kill del PID guardado; kill -0 falla (kill0=1); el comando en segundo plano sale con 144 (esperado); 9000/9123/9184 libres;
+  - rm -rf <SMOKE_DIR> (ya no existe); rm -f contracts/deployments/localnet.json, sin borrar la carpeta;
+  - sin env.sh: client.yaml 244 B, mtime 2026-10-30 17:52:52.515735237 -0500, ls = client.yaml → idéntico;
+  - git diff --exit-code de nuevo → 0; loc=0; pub=0; deployments/ = testnet.json;
+  - git status --porcelain --untracked-files=all:
+      M documents/HANDOFF_TESTNET_PUBLISH.md   ← v1.2.2 del MID (dictamen de B10), escrita en el worktree a las 10:08 durante la
+                                                 corrida; la corrida no lo tocó (Desviación 9)
+      M documents/SMOKE_TESTNET_PUBLISH.md
+
+== Desviaciones del handoff ==
+1. Orden: npm ci (primer step de B9) corrió antes de la sonda B2-B8, que necesita @mysten/sui; el resto de B9 corrió
+   después. npm ci corrió dos veces seguidas (la segunda solo para capturar la línea "added"); el lock no cambió.
+2. Sonda: en la primera corrida, sameType tiró "Invalid struct tag: package" (objectTypes trae "package" para el paquete).
+   Ahora sameType devuelve false ante un tag inválido, y se repitió la sonda completa.
+3. documents/STATUS.md no se tocó: TASK-5 §4 lo lista, pero la instrucción del orquestador fue que git status muestre solo el
+   smoke. Las filas de baseline/evidencia de STATUS quedan para el orquestador o TASK-6.
+4. La "Guarda de cero claves" del job contracts no se corrió en local: depende del SUI_CONFIG_DIR de la CI y lee el keystore.
+   Equivalente local: ls ~/.sui/sui_config/ = solo client.yaml (sin keystore).
+5. B10, evidencia extra:
+   - dos scripts CDP adicionales: el header leído por DOM (el chequeo por texto daba un falso NO PASA en #/admin por el <h2>),
+     el detalle de red y el modal del ConnectButton abierto con un click real, sin elegir wallet;
+   - un curl público GET a api.slush.app con Origin 127.0.0.1:4173, para el status. Es la única lectura fuera del fullnode de
+     testnet, el mismo pedido que hace el navegador.
+6. Comando de preview: npm run preview -w app -- --host 127.0.0.1 --port 4173 --strictPort (puerto libre al arrancar).
+7. Header del smoke: "v1.2 (TASK-4 = Parte A, corrida con la v1.1; TASK-5 = Parte B, con la v1.2.1)".
+8. STOP en B10 en la primera corrida; B11 corrió aparte, después del dictamen.
+   (El MID aceptó las desviaciones 1-7; la 3, STATUS, pasa a TASK-6.)
+9. git status final con dos archivos: además del smoke, documents/HANDOFF_TESTNET_PUBLISH.md, que es la v1.2.2 del MID.
+   La dejé tal cual, sin revertir ni commitear: no es del DEV.
+10. B11: un filtro jq mío para contar las cuentas tuvo un error de precedencia ("Cannot index array with string") y lo
+    rehíce. ADMIN se escribió igual con .addresses[0][1], y lo verifiqué (formato y pertenencia) sin imprimirlo.
+
+== ~/.sui (stat/ls, nunca cat) ==
+Antes (1.ª corrida y línea base de B11): client.yaml 2026-10-30 17:52:52.515735237 -0500, 244 B; ls = client.yaml
+Después (fin de B11, sin env.sh):         client.yaml 2026-10-30 17:52:52.515735237 -0500, 244 B; ls = client.yaml  → idéntico
+
+== Seguridad / reglas ==
+- Ningún sui client ni sui keytool contra testnet. sui client solo en la localnet aislada de B11, con el prefijo
+  (env.sh + smoke_guard, suic = printf 'n\n' |). Sin publicación ni --dry-run en testnet, sin faucet, sin new-address,
+  sin --force-regenesis, sin pkill, sin simulate/dryRun. Todos los sui con printf 'n\n' |.
+- S solo en memoria; la sonda imprime comparaciones. Ninguna dirección en el smoke ni en este reporte. GAME, abreviado.
+
+== Limpieza ==
+- vite preview (PIDs propios 1243689 npm → 1243708 sh → 1243709 node) y Chrome (PID propio 1244461) terminados con kill
+  por PID. kill -0 falla en los cuatro, :4173 y :9223 libres. El preview salió con 144 (SIGTERM, esperado).
+- Perfil desechable de Chrome (profile, home, XDG) borrado. Quedan los scripts y salidas en <scratchpad>/b10/.
+- git diff --exit-code -- contracts/Move.lock contracts/Published.toml contracts/deployments/testnet.json = 0;
+  test ! -e contracts/deployments/localnet.json → 0; ! compgen -G 'contracts/Pub.*.toml' → 0; deployments/ = testnet.json.
+- B11: la localnet terminó (kill -0 falla), <SMOKE_DIR> está borrado y localnet.json también; contracts/deployments/ conserva testnet.json.
+- git status --porcelain --untracked-files=all = " M documents/HANDOFF_TESTNET_PUBLISH.md" (v1.2.2 del MID, no del DEV) y
+  " M documents/SMOKE_TESTNET_PUBLISH.md". node_modules/ y app/dist/ están ignorados.
+
+== Veredicto ==
+PASA, 12/12. La publicación coincide con el repo, la custodia es la definitiva de N-3 y los gates son idénticos a la CI.
+La app de testnet muestra lo esperado (B10 con la observación aceptada), y la variante B en localnet convive con
+[published.testnet] (B11).
+```
+
+## Revisión TASK-5: PASA
+
+> MID · 2026-11-04 · Contra `documents/HANDOFF_TESTNET_PUBLISH.md` v1.2.2 (TASK-5, §3 y §6), `agents.md` §3 ("Localnet
+> aislada", regla B4 y paso 7 M-7), `FLUJO_AGENTES.md` §6, `AGENTE_MID.md` §M5 y el diff real sobre `36068e7`:
+> `documents/SMOKE_TESTNET_PUBLISH.md` (+32/−22, Parte B), este archivo (reporte del DEV) y el handoff v1.2.2 (del MID,
+> desviación 9). Nada fuera de esos tres archivos: `git diff --exit-code -- contracts/ app/ agents.md README.md
+> documents/STATUS.md documents/DECISIONES.md` = 0.
+
+**1. Smoke contra el handoff v1.2.2: ✅ (salvo m-1)**
+- Las 12 filas B0-B11 tienen "Acción" y "Resultado esperado" de §6. "Resultado obtenido" se llenó durante la corrida,
+  con evidencia por paso. Todas en ✅. El reporte final dice 12/12, con hallazgos por paso y veredicto PASA (formato M5).
+- B0 sale de la entrega del owner (§"Entrega del owner"), anotada como `owner:`, con `GAME` abreviado (DL-5).
+- B1: §3.1 completo.
+  - `327f5d4` trae solo los dos archivos, y el head no los cambió.
+  - `check` da 1 despliegue; los 14 campos coinciden.
+  - `sourceCommit` es ancestro y su CI está verde (run 41754236438).
+  - `sources/` y `Move.lock` no tienen delta, y `Move.toml` da exactamente `+license = "Apache-2.0"` (comando de SUG-3).
+- B4 anota `initialSharedVersion` = 1. B5 es la custodia definitiva de D-20261104-06 (`true` ×3), así que **S-5 de #17
+  queda cumplido** (MINOR-3 de la v1.2).
+- B8 anota la forma del *address balance*: una entrada neta de `S` por transacción, `gasData.payment` 1/0/0/0. La
+  igualdad cierra exacta.
+- B9: gates idénticos a la CI de `24afcec` (§0.1), con la línea del bundle literal (MINOR-1 de la v1.2).
+- B10: el texto del dictamen está tal cual. La firma aceptada es la del límite de v1.2.2, y `b10/run/b10-out.txt` lo
+  confirma: 4 líneas por carga, 16 en total, todas del pedido a `api.slush.app/api/wallet/metadata`. Ningún otro error
+  ni fallo de red; 0 violaciones de CSP.
+- B11 sigue §3.5 al pie de la letra:
+  - variante B sin `--out`, `exit=0`; `test-publish` no falla con `[published.testnet]`;
+  - `check` = `2 despliegue(s) válidos y coherentes con Published.toml`;
+  - `Move.lock`, `Published.toml` y `testnet.json` sin delta;
+  - cierre M-7 completo: `kill -0` falla, `<SMOKE_DIR>` borrado, `localnet.json` borrado sin tocar la carpeta, `loc=0`,
+    `pub=0` y `~/.sui/sui_config/` idéntico a la línea base.
+- **m-1:** la columna "Resultado esperado" de B10 en el smoke todavía dice "…Sin wallet de desarrollo; consola sin
+  errores" (texto de v1.2.1), y el encabezado dice "TASK-5 = Parte B, con la v1.2.1". TASK-5 §4 pide copiar las columnas
+  de la versión vigente, que ahora es la v1.2.2. Ver "Hallazgos".
+
+**2. Reporte contra smoke: ✅**
+- Pasos, hallazgos, gates, B11, limpieza y `~/.sui` coinciden fila por fila con el smoke: digests, checkpoints, montos de
+  gas, conteos, `d04ac4a1` y `GTgt6BHd…`.
+- El reporte nombra la v1.2.1 en su encabezado porque la corrida empezó con esa versión. La excepción de B10 aplicada es
+  la de la v1.2.2. Es correcto y queda declarado.
+- **Desviaciones:**
+  - la 5 (scripts CDP extra para el header por DOM y el modal, y un `curl` público a `api.slush.app`) se acepta ahora:
+    es evidencia adicional, sin escritura ni claves;
+  - la 8 (B11 en una corrida aparte, después del dictamen) es lo que pidió el dictamen;
+  - la 9 (la v1.2.2 aparece modificada en `git status`) es correcta: el archivo es del MID, y no revertirlo ni
+    commitearlo era lo que correspondía;
+  - la 10 (filtro `jq` rehecho por precedencia) se acepta: `ADMIN` se verificó por formato y pertenencia sin imprimirse,
+    y la salida de la publicación la nombra 0 veces;
+  - las 1, 2, 3, 4, 6 y 7 ya estaban aceptadas en el dictamen de B10. La 3 (STATUS) va a TASK-6, como dice v1.2.2.
+
+**3. Sonda contra smoke: ✅**
+- El bloque `CHECK B2.chain` … `RESUMEN` de `<scratchpad>/probe-out.txt` es **idéntico**, byte a byte (`diff` vacío), al
+  pegado en el reporte. Da 32 `CHECK … PASA` y la única línea con "NO PASA" de los checks es `RESUMEN 32 PASA / 0 NO PASA`;
+  la otra es el texto informativo de s-4.
+- Contra el smoke, B3-B8 coinciden en IDs abreviados, checkpoints 402798973 < 402799414 < 402799600 < 402799730, montos
+  y booleanos.
+- Código (`<scratchpad>/verify-testnet.mjs`):
+  - s-5: toda línea pasa por `emit`, que corta y sale con 3 ante 40 o más hex. `S` vive solo en memoria (`:136`) y el
+    `catch` final muestra solo `error.message` (`:309-311`).
+  - SUG-1: `getTransaction` pide `transaction` y `balanceChanges` (`:72`).
+  - Desviación 2: `sameType` devuelve `false` ante el literal `package` (`:52-58`), y `objetos fuera de los 5 esperados: 0`
+    confirma que no esconde nada.
+  - El `GAME` completo está en el código (`:43`), que no se commitea; en la salida, abreviado.
+
+**4. Higiene §R-6: ✅**
+Sobre las líneas agregadas de los tres archivos (`git diff -U0 | grep '^+'`):
+- 40-64 hex: vacío en los tres;
+- `0x` + 8 hex: vacío en los tres;
+- el tercero (claves y rutas personales): vacío en el smoke y en el handoff. En este archivo solo hay
+  coincidencias en líneas ya commiteadas (`:403`, `:795-796`, `:957-958`), que son las palabras dentro de las higienes
+  de TASK-1..3.
+
+En el handoff completo, el hex largo solo aparece donde ya estaba declarado (los dos revs del framework y `GAME` en
+`:143`).
+
+**5. Dirección de cuenta: ✅, 0 en el repo**
+- La busqué **sin imprimirla**: lectura pública gRPC del `sender` de `4yK3mtfz…` y búsqueda en todos los archivos de
+  `git ls-files`, leídos del worktree con los cambios sin commitear. Cuatro formas: completa, primeros 16 hex, últimos 16
+  y la abreviada de la app (`643a…8a3d`). Resultado: **0 archivos** en las cuatro.
+- `grep -nE '643a|8a3d'` en los tres archivos: vacío.
+- La forma abreviada aparece **solo** en `<scratchpad>/b10/run/b10-out.txt` (texto visible de `#/game/…`, "Creador"),
+  que no se commitea. No aparece en `REPORTE_TASK5_8.txt` ni en `probe-out.txt`. El `ADMIN` de la localnet de B11 no se
+  imprimió.
+
+**6. Criterios de aceptación (TASK-5 §7): ✅**
+- Parte B 12/12 PASA, con evidencia de los criterios 3, 4 y 5 de #8.
+- Ningún archivo publicado editado: el `git diff --exit-code` de B1, B9 y B11 da 0.
+- Ninguna dirección en el smoke, el reporte ni STATUS (punto 5).
+- B10 cumple con la excepción acotada de v1.2.2, que el MAYOR verifica en la revisión de integración.
+- B11 desbloquea los smokes en localnet posteriores (TASK-2 de #17).
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| m-1 | FLUJO §6 / TASK-5 §4 (v1.2.2) | `documents/SMOKE_TESTNET_PUBLISH.md:3` y fila B10, columna "Resultado esperado" | La columna sigue con el texto de v1.2.1 ("…Sin wallet de desarrollo; consola sin errores"), aunque la v1.2.2 cambió el esperado de B10. El encabezado no nombra la v1.2.2 | Antes del commit, lo aplica el DEV o el orquestador (el MID no toca el smoke). (1) En la fila B10, reemplazar "Sin wallet de desarrollo; consola sin errores" por el texto de la fila B10 del §6 del handoff v1.2.2, desde "Sin wallet de desarrollo. **v1.2.2:** consola sin errores, salvo…" hasta "…en la revisión de integración". (2) En `:3`, "TASK-5 = Parte B, con la v1.2.1" pasa a "TASK-5 = Parte B, con la v1.2.1; B10 según la v1.2.2". Verificación: `grep -c 'v1.2.2' documents/SMOKE_TESTNET_PUBLISH.md` ≥ 2 y `grep -c 'Sin wallet de desarrollo; consola sin errores' documents/SMOKE_TESTNET_PUBLISH.md` = 0 |
+
+### Siguiente paso
+1. Aplicar m-1 en el smoke y verificarlo con los dos `grep` de la tabla.
+2. Commitear los tres archivos en un solo commit, con el mensaje de abajo, y pushear. Con la CI del head en verde,
+   **TASK-6 queda autorizado según el handoff v1.2.2**, sobre ese head. Su precondición ya está cumplida:
+   D-20261104-06 está en `documents/DECISIONES.md:13` desde `36068e7`, con "Riesgo aceptado" y la condición de B5.
+3. TASK-6 incluye la fila de evidencia de TASK-5 en "Baselines de gates" (v1.2.2). El ítem del paso 12 del runbook
+   también se resuelve ahí: B1-B5 dieron PASA, así que el owner ya puede borrar los dos `battleship-publish-*` (SUG-2), y
+   TASK-6 escribe el estado real en ese momento.
+4. Avisos que siguen pendientes del orquestador:
+   - al MID de #16: TASK-6 de #8 quita "(PR #48)" de `README.md:27`;
+   - al MID de #17: el baseline de `master` después de S-4 y S-5 cumplido sin `dcap`;
+   - al MAYOR: verificar en la integración la aceptación de B10 y su límite.
+
+### Mensaje de commit propuesto
+```
+docs: verify the testnet deployment with public reads (#8)
+
+Part B of SMOKE_TESTNET_PUBLISH, 12/12. A key-less gRPC probe (32/0)
+confirms the publication matches deployments/testnet.json: five created
+objects, the House shared at fee 200 with the default limits, HouseCap,
+UpgradeCap and Publisher owned by the publish sender (the final N-3
+custody, D-20261104-06), the fee update between publish and create, and
+the smoke create/cancel with exact balance changes. Gates match the CI of
+the merged head, bundle included. The testnet build shows the expected
+texts on #/, the game, #/my-games and #/admin with no wallet; the only
+console error is the known Slush metadata 403 on 127.0.0.1 (E-6b of #15),
+accepted with that exact limit in handoff v1.2.2. The isolated localnet,
+variant B, still publishes with [published.testnet] present (check: 2
+deployments). Adds the DEV report and its review.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+---
