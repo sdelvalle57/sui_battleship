@@ -41,14 +41,17 @@ sui_battleship/
 │   ├── scripts/              # (#7) publish.mjs (publish/record/check), deployment.mjs, tests y fixtures/ de la CLI
 │   ├── fixtures/             # (#10) game-reads.localnet.json: lecturas gRPC reales del Game y sus eventos por variante;
 │   │                         # (#11, #12) game-tx.localnet.json: House, simulaciones fallidas y transacciones ejecutadas
-│   │                         #   reales de crear, cancelar, rechazar y aceptar (con cada ganador y un fallo ejecutado)
+│   │                         #   reales de crear, cancelar, rechazar y aceptar (con cada ganador y un fallo ejecutado);
+│   │                         # (#14) house-admin.localnet.json: listado del HouseCap por tipo, aborts de house y las
+│   │                         #   transacciones de admin (comisión, límites, retiro)
 │   ├── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos); lo escribe el script
 │   └── Published.toml        # (#8) lo escribe `sui client publish`: fuente de los datos del paquete
 ├── app/                      # cliente React (Vite + TS + SDK de Sui + wallet kit); guía en app/README.md
 │   ├── Caddyfile             # (#15) servidor de la imagen de Railway: CSP y cabeceras (app/README.md, "Despliegue")
 │   ├── public/               # (#15) estáticos que Vite copia tal cual a la raíz de dist/: favicon.svg
 │   └── scripts/              # recaptura de contracts/fixtures/ en la localnet aislada: capture-read-fixtures.mjs (#10),
-│                             # capture-tx-fixtures.mjs (#11) y su guarda compartida localnet-guard.mjs (#11: sin SDK ni red);
+│                             # capture-tx-fixtures.mjs (#11), capture-house-fixtures.mjs (#14) y su guarda compartida
+│                             # localnet-guard.mjs (#11: sin SDK ni red);
 │                             # check-deploy-image.sh (#15): chequeo de la imagen de Railway (job deploy-image y local)
 ├── Dockerfile                # (#15) imagen de Railway: build de testnet + Caddy; sin testnet.json no se construye
 ├── .dockerignore             # (#15) contexto en lista blanca (sin localnet.json, .env*, node_modules ni dist)
@@ -254,8 +257,10 @@ eventos y códigos de abort. La UI los consume desde un único módulo (`app/src
 | Firmas y eventos | `contracts/sources/*.move` | Tabla en `contracts/README.md`; cambios = STOP (§6 de FLUJO) |
 | Abort codes | constantes `E*` de cada módulo | Tabla en `contracts/README.md` + `ABORT_MESSAGES` (módulo + código → mensaje) en `app/src/sui/errors.ts` (#11), con un test por código; un código nuevo entra en los dos en el mismo PR |
 | Layout BCS de `Game` y de sus eventos | `contracts/sources/game.move` | Esquemas en `app/src/sui/game.ts` y `events.ts`; fixtures en `contracts/fixtures/game-reads.localnet.json` (se recapturan si cambia el layout) |
-| Layout BCS de la `House` | `contracts/sources/house.move` | Esquema en `app/src/sui/house.ts` (#11; lo reutiliza #14); fixture en `contracts/fixtures/game-tx.localnet.json` (se recaptura si cambia el layout) |
-| Fórmula de la comisión y del pago | `game.move` (`accept_game`) | `resolutionAmounts` de `app/src/sui/game.ts` = fórmula de la v1 (D-20261030-16 D2/D3). Un upgrade que la cambie conserva la vieja para las partidas resueltas con el código viejo (por versión del `Game` o leyendo `GameResolved`) en el mismo PR. La app no replica `house::MAX_FEE_BPS`; si una vista lo replica (#14), entra en esta tabla |
+| Layout BCS de la `House` | `contracts/sources/house.move` | Esquema en `app/src/sui/house.ts` (#11; lo reutiliza #14); fixtures en `contracts/fixtures/game-tx.localnet.json` y `house-admin.localnet.json` (se recapturan si cambia el layout) |
+| Layout BCS del `HouseCap` y de los eventos de admin (`FeeRateUpdated`, `BetLimitsUpdated`, `FeesWithdrawn`) | `contracts/sources/house.move` | Esquemas en `app/src/sui/houseCap.ts` y `houseAdmin.ts` (#14); fixture en `contracts/fixtures/house-admin.localnet.json` (se recaptura si cambia el layout) |
+| Comisión máxima | `house::MAX_FEE_BPS` (`house.move`) | Espejo `HOUSE_MAX_FEE_BPS` = 1000 en `app/src/sui/houseAdmin.ts` (#14), solo para la validación de cortesía del panel; el contrato aborta igual con `house`/0. **Se revisa en todo upgrade que toque `MAX_FEE_BPS`**, en el mismo PR |
+| Fórmula de la comisión y del pago | `game.move` (`accept_game`) | `resolutionAmounts` de `app/src/sui/game.ts` = fórmula de la v1 (D-20261030-16 D2/D3). Un upgrade que la cambie conserva la vieja para las partidas resueltas con el código viejo (por versión del `Game` o leyendo `GameResolved`) en el mismo PR. El panel de #14 replica `house::MAX_FEE_BPS` (fila "Comisión máxima") |
 
 **Regla:** tras la primera publicación en testnet, un cambio incompatible con upgrade (firma pública,
 layout de struct con `key`/`store`, eliminar función pública) es **STOP**: se decide entre upgrade
@@ -389,8 +394,10 @@ testnet con una wallet real.
   `Published.toml`) → `update_fee_rate` con el comando que imprime el script → entrega de `testnet.json` +
   `Published.toml` + digest (sin direcciones) en el mismo PR → borrar el directorio temporal del script.
 - **Dirección publicadora:** recibe el `HouseCap` (`key` sin `store`, PROY-3). Si no es la wallet del
-  navegador del panel admin (#14), el owner le pasa el cap con `transfer_house_cap` (no con "Send" de la
-  wallet).
+  navegador del panel admin (#14, `#/admin`), el owner le pasa el cap con `transfer_house_cap` por CLI (no con "Send"
+  de la wallet; la app no lo transfiere), con el checklist de `contracts/README.md`, "Qué pasa si se pierde el cap".
+  La dirección publicadora también tiene el `UpgradeCap` y el `Publisher`: importarla en una wallet de navegador los
+  expone a la extensión; la alternativa es `transfer_house_cap` a la wallet del panel. Decisión del owner (N-3).
 - **Post-publicación (#8):** la House nace con fee 0 (D-20261030-11); `update_fee_rate` antes de anunciar el
   juego, o las partidas creadas antes quedan con comisión 0 para siempre.
 - **App:** Railway (D-20261104-01, D-20261104-03): imagen del `Dockerfile` de la raíz (build de testnet + Caddy con

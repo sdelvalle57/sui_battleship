@@ -9,6 +9,7 @@ import {
   toTxEntry,
   type CreateTarget,
   type GameTarget,
+  type HouseTarget,
   type TxNotice,
   type TxTarget,
   type TxView,
@@ -23,6 +24,24 @@ import { useAppConfig } from './useAppConfig';
 let lastViewId = 0;
 function nextViewId(): number {
   return ++lastViewId;
+}
+
+/**
+ * Objetivo normalizado a partir de sus primitivos (M-5; MINOR-3 del plan de #14): un `case` por objetivo y sin `default`,
+ * así uno nuevo sin su `case` rompe el `typecheck` (V-8: antes, todo lo que no era `game` pasaba por `create`). `gameId`
+ * llega ya normalizado y existe solo para `game`.
+ */
+function normalizedTarget(kind: TxTarget['kind'], gameId: string | null): TxTarget {
+  switch (kind) {
+    case 'create':
+      return { kind: 'create' };
+    case 'game':
+      // Invariante de `useTxTarget`: `gameId` es `null` solo si el objetivo no es una partida.
+      if (gameId === null) throw new Error('objetivo game sin gameId');
+      return { kind: 'game', gameId };
+    case 'house':
+      return { kind: 'house' };
+  }
 }
 
 /** Lo que una vista necesita para sus botones sobre un objetivo (DL-8). */
@@ -48,6 +67,7 @@ export type TxTargetState<T extends TxTarget> = {
  */
 export function useTxTarget(target: CreateTarget): TxTargetState<CreateTarget>;
 export function useTxTarget(target: GameTarget): TxTargetState<GameTarget>;
+export function useTxTarget(target: HouseTarget): TxTargetState<HouseTarget>;
 export function useTxTarget(target: TxTarget): TxTargetState<TxTarget>;
 export function useTxTarget(target: TxTarget): TxTargetState<TxTarget> {
   const { network } = useAppConfig();
@@ -57,12 +77,13 @@ export function useTxTarget(target: TxTarget): TxTargetState<TxTarget> {
   const [mount] = useState(() => mountSnapshot(queryClient.getMutationCache().getAll()));
 
   const address = account === null ? null : normalizeSuiAddress(account.address);
+  const { kind } = target;
   const gameId = target.kind === 'game' ? normalizeSuiObjectId(target.gameId) : null;
   const view = useMemo((): TxView => {
-    const normalized: TxTarget = gameId === null ? { kind: 'create' } : { kind: 'game', gameId };
+    const normalized = normalizedTarget(kind, gameId);
     const key = queryKeys.txTarget(network, address, normalized);
     return { target: normalized, viewId, key, accountKey: queryKeys.txAccount(network, address), targetHash: hashKey(key) };
-  }, [network, address, gameId, viewId]);
+  }, [network, address, kind, gameId, viewId]);
 
   const entries = useMutationState({ filters: { mutationKey: view.accountKey }, select: toTxEntry(view) });
   const { notice, unconfirmed } = deriveTargetState({ entries, viewId, mount });

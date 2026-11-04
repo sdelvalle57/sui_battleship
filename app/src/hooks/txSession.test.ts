@@ -222,3 +222,48 @@ describe('queryKeys.txAccount / txTarget', () => {
     expect(queryKeys.txTarget('localnet', A, { kind: 'game', gameId: '0xC' })).toEqual(['sui', 'localnet', 'tx', A, 'game', `0x${'0'.repeat(63)}c`]);
   });
 });
+
+describe('House admin actions in the transaction session (TASK-3 of #14, NIT-3 of #12)', () => {
+  const HOUSE_ACTIONS = [{ kind: 'updateFeeRate' }, { kind: 'updateBetLimits' }, { kind: 'withdrawFees' }] as const;
+  const houseKey = queryKeys.txTarget('localnet', A, { kind: 'house' });
+  const houseView = { targetHash: hashKey(houseKey) };
+  const vars = (action: unknown, viewId: number, runId: number) => ({ input: {}, viewId, runId, action, account: null, targetHash: '' });
+
+  it('T3-2: txVariablesOf recognizes the three House actions and rejects an unknown one such as migrate', () => {
+    for (const action of HOUSE_ACTIONS) {
+      expect(txVariablesOf({ viewId: 1, runId: 2, action })).toEqual({ viewId: 1, runId: 2, action });
+    }
+    expect(txVariablesOf({ viewId: 1, runId: 2, action: { kind: 'migrate' } })).toBeNull();
+  });
+
+  it('T3-3: an own updateFeeRate in flight on the House target is not foreign and shows no notice', () => {
+    const own = toTxEntry(houseView)(mutation(1, 'pending', houseKey, undefined, vars({ kind: 'updateFeeRate' }, VIEW, 1)));
+    expect(own).toMatchObject({ viewId: VIEW, action: { kind: 'updateFeeRate' }, sameTarget: true });
+    const state = derive([own]);
+    expect(state.inFlightForeign).toBe(false);
+    expect(state.notice).toBeNull();
+  });
+
+  it('T3-4: a foreign finished withdrawFees on the House that started after mounting is adopted with its action', () => {
+    const outcome: TxOutcome<unknown> = { kind: 'success', digest: 'W1', value: 10_000_000n, indexed: true, cost: 1n };
+    const foreign = toTxEntry(houseView)(mutation(5, 'success', houseKey, outcome, vars({ kind: 'withdrawFees' }, FOREIGN, 5)));
+    expect(derive([foreign], { maxId: 4, pendingIds: new Set() }).notice).toEqual({
+      kind: 'adopted',
+      adopted: { action: 'withdrawFees', outcome },
+    });
+  });
+
+  it('T3-5: toTxGameEntry has gameId null for the three House actions and liveTxGameIds adds nothing for them', () => {
+    const key = queryKeys.txAccount('localnet', A);
+    const entries = HOUSE_ACTIONS.map((action, i) => toTxGameEntry(mutation(i + 1, 'pending', key, undefined, vars(action, 1, i + 1))));
+    expect(entries.map((e) => e.gameId)).toEqual([null, null, null]);
+    expect(liveTxGameIds(entries, EMPTY).size).toBe(0);
+  });
+
+  it('T3-7: the House target key ends in house and differs from create; houseCap normalizes the address', () => {
+    expect(houseKey).toEqual(['sui', 'localnet', 'tx', A, 'house']);
+    expect(hashKey(houseKey)).not.toBe(hashKey(queryKeys.txTarget('localnet', A, { kind: 'create' })));
+    expect(queryKeys.houseCap('localnet', GAME, '0xA')).toEqual(['sui', 'localnet', 'houseCap', GAME, `0x${'0'.repeat(63)}a`]);
+    expect(queryKeys.houseCap('localnet', GAME, A.toUpperCase().replace('0X', '0x'))).toEqual(['sui', 'localnet', 'houseCap', GAME, A]);
+  });
+});

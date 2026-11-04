@@ -7,6 +7,7 @@ import { appRoutes } from './App';
 import { useAppConfig } from './hooks/useAppConfig';
 import { useCheckpointTime } from './hooks/useCheckpointTime';
 import { useGame } from './hooks/useGame';
+import { useHouseCap } from './hooks/useHouseCap';
 import { useLobby } from './hooks/useLobby';
 import { useNodeStatus } from './hooks/useNodeStatus';
 import { useTransactionTime } from './hooks/useTransactionTime';
@@ -18,6 +19,7 @@ vi.mock('./hooks/useNodeStatus', () => ({ useNodeStatus: vi.fn() }));
 vi.mock('./hooks/useWalletAccount', () => ({ useWalletAccount: vi.fn() }));
 vi.mock('./hooks/useLobby', () => ({ useLobby: vi.fn() }));
 vi.mock('./hooks/useGame', () => ({ useGame: vi.fn() }));
+vi.mock('./hooks/useHouseCap', () => ({ useHouseCap: vi.fn() }));
 vi.mock('./hooks/useTransactionTime', () => ({ useTransactionTime: vi.fn() }));
 vi.mock('./hooks/useCheckpointTime', () => ({ useCheckpointTime: vi.fn() }));
 vi.mock('@mysten/dapp-kit-react/ui', () => ({
@@ -59,6 +61,7 @@ beforeEach(() => {
   vi.mocked(useTransactionTime).mockReturnValue({ timestampMs: null, status: { kind: 'ready', refreshing: false } });
   vi.mocked(useCheckpointTime).mockReturnValue({ timestampMs: null, status: { kind: 'ready', refreshing: false } });
   vi.mocked(useGame).mockReturnValue({ kind: 'invalid_id' });
+  vi.mocked(useHouseCap).mockReturnValue({ kind: 'no_account' });
 });
 
 describe('App routes', () => {
@@ -92,5 +95,19 @@ describe('App routes', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Sui Battleship' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Página no encontrada' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Volver al inicio' })).toHaveAttribute('href', '/');
+  });
+});
+
+describe('App route /admin (T5-14, D-2 of #14)', () => {
+  it('mounts the House admin page at /admin, without account the fixed text', () => {
+    renderAt('/admin');
+    expect(screen.getByRole('heading', { level: 2, name: 'Administrar House' })).toBeInTheDocument();
+    expect(screen.getByText('Conecta la wallet que tiene el HouseCap para administrar la House')).toBeInTheDocument();
+  });
+
+  it('keeps an unknown route on the not found page', () => {
+    renderAt('/nada');
+    expect(screen.getByRole('heading', { level: 2, name: 'Página no encontrada' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Administrar House' })).toBeNull();
   });
 });

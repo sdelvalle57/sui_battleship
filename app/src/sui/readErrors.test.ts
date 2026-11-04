@@ -10,6 +10,7 @@ import {
   ReadTimeoutError,
   readErrorMessage,
 } from './readErrors';
+import { isTransientReadError } from './readPolicy';
 
 const ID = `0x${'1'.repeat(64)}`;
 
@@ -54,5 +55,21 @@ describe('read error classes', () => {
     expect(new HistoryPrunedError('OUT_OF_RANGE', { cause: e }).cause).toBe(e);
     expect(new ReadDataError('malformed', 'x', { cause: e }).cause).toBe(e);
     expect(new ReadTimeoutError(10_000).cause).toBeUndefined();
+  });
+});
+
+describe('ReadDataError incomplete (#14, H-1)', () => {
+  it('keeps its reason and has its own message for the HouseCap search', () => {
+    const error = new ReadDataError('incomplete', 'sin respuesta cierta en 3 páginas');
+    expect(error.reason).toBe('incomplete');
+    expect(readErrorMessage(error, 'testnet')).toBe('El nodo no completó la búsqueda del HouseCap; reintenta');
+  });
+
+  it('is not transient: it is not retried on its own', () => {
+    expect(isTransientReadError(new ReadDataError('incomplete', 'x'))).toBe(false);
+  });
+
+  it('leaves the generic message for the other reasons', () => {
+    expect(readErrorMessage(new ReadDataError('invariant', 'dos HouseCap'), 'testnet')).toBe('El nodo devolvió datos que la app no reconoce');
   });
 });

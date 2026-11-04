@@ -1,5 +1,6 @@
 import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
+import { Transaction } from '@mysten/sui/transactions';
 import { fromBase64 } from '@mysten/sui/utils';
 import { onlineManager, QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
@@ -16,6 +17,8 @@ import {
 import { createPolicyQueryClient, queryWrapper } from '../test/queryHarness';
 import { deferred, useGameView } from '../test/txHarness';
 import { useAppConfig } from './useAppConfig';
+import { useExecuteTransaction } from './useExecuteTransaction';
+import { useTxTarget } from './useTxTarget';
 
 vi.mock('@mysten/dapp-kit-react', () => ({ useCurrentClient: vi.fn(), useCurrentAccount: vi.fn(), useDAppKit: vi.fn() }));
 vi.mock('./useAppConfig', () => ({ useAppConfig: vi.fn() }));
@@ -417,5 +420,47 @@ describe('networkMode (T3-12)', () => {
     } finally {
       onlineManager.setOnline(true);
     }
+  });
+});
+
+describe('House target (T3-8, T3-9, TASK-3 of #14)', () => {
+  const HOUSE_INPUT = {
+    action: { kind: 'updateFeeRate' as const },
+    build: () => new Transaction(),
+    interpret: () => null,
+  };
+  /** Una vista del panel de la House: su objetivo y una acción de la máquina común con la misma `view`. */
+  function useHouseProbe() {
+    const target = useTxTarget({ kind: 'house' });
+    return { target, tx: useExecuteTransaction<null>(target.view) };
+  }
+  const renderHouse = () => renderHook(useHouseProbe, { wrapper: queryWrapper(queryClient) });
+  const renderCreate = () => renderHook(() => useTxTarget({ kind: 'create' }), { wrapper: queryWrapper(queryClient) });
+
+  it('T3-8: the House view key ends in house and its targetHash differs from the create one of the same account', () => {
+    const house = renderHouse().result.current.target.view;
+    const create = renderCreate().result.current.view;
+    expect(house.key.at(-1)).toBe('house');
+    expect(house.target).toEqual({ kind: 'house' });
+    expect(house.accountKey).toEqual(create.accountKey);
+    expect(house.targetHash).not.toBe(create.targetHash);
+  });
+
+  it('T3-9: an unconfirmed updateFeeRate of the House blocks only the House target: create neither sees nor adopts it', async () => {
+    vi.mocked(confirmTransaction).mockRejectedValueOnce(new DOMException('timeout', 'TimeoutError'));
+    const house = renderHouse();
+    act(() => {
+      house.result.current.tx.execute(HOUSE_INPUT);
+    });
+    await waitFor(() => {
+      expect(house.result.current.target.unconfirmed).toEqual({ digest: DIGEST });
+    });
+    expect(house.result.current.target.notice).toBeNull();
+    const create = renderCreate();
+    expect(create.result.current.unconfirmed).toBeNull();
+    expect(create.result.current.notice).toBeNull();
+    expect(create.result.current.busy).toBe(false);
+    const otherHouse = renderHouse();
+    expect(otherHouse.result.current.target.unconfirmed).toEqual({ digest: DIGEST });
   });
 });
