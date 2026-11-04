@@ -936,3 +936,509 @@ TASK-4 (aceptar, resultado y detalle) autorizado con `HANDOFF_ACCEPT` **v1.4**, 
 
 ### Snippet para STATUS.md
 El que propone el DEV para TASK-3, sin cambios.
+
+## Task completado: HANDOFF_ACCEPT (v1.4) — TASK-4 (aceptar, resultado y detalle)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-12-accept-resolve` @ `7369be7`. Sin commits del DEV; los cambios están en el árbol de trabajo.
+
+### Archivos modificados/creados
+- **`app/src/hooks/`**
+  - `txSession.ts`, solo §3.0 (v1.4): `ACTION_KINDS` suma `'accept'` y `TxValueByAction` suma `accept: GameResolvedEvent | null`. Con eso `AdoptedTx` incluye aceptar.
+  - `txInvalidation.ts`: `TxAction` suma `{ kind: 'accept'; gameId }`, con su fila de invalidación. El comentario ahora dice "#14 suma aquí las acciones de la House".
+  - `useAcceptGame.ts` (nuevo).
+  - Tests: `txSession.test.ts`, `txInvalidation.test.ts` y `useAcceptGame.test.tsx` (nuevo).
+- **`app/src/components/`**
+  - `GameActions.tsx`: aceptar, `acceptState`, `AcceptBlock`, textos del resultado y resultado adoptado.
+  - `GameDetail.tsx`: prop `account` y "Resultado para ti".
+  - Tests: `GameActions.test.tsx`, `GameActions.machine.test.tsx` y `GameDetail.test.tsx`.
+- **`app/src/pages/`**
+  - `GameDetailPage.tsx`: pasa `useWalletAccount().address` al detalle.
+  - Test: `GameDetailPage.test.tsx`.
+- `app/src/index.css`: sin cambios (no hizo falta ningún estilo).
+
+### Qué se implementó (3 líneas máx)
+"Aceptar" en el detalle aparece solo con `acceptState` = `available`, con la apuesta, la nota de la vista previa de la wallet y el chequeo de saldo con "≈ 0.01 SUI de reserva para el gas". Una invitación ajena muestra el aviso (D-20261103-02) y una cuenta desconectada, el texto de M-3.
+`useAcceptGame` (sin `precheck`) arma el PTB con el `Random` al final, lee el `GameResolved` de la confirmación del nodo e invalida lobby, partida, saldo y House.
+El resultado ("¡Ganaste!…", "Perdiste: ganó quien…" o "no se pudo leer"), propio o adoptado, sale solo de la confirmación del nodo. El detalle muestra "Resultado para ti".
+
+### Tests y gates (output pegado, por área tocada)
+- **Agregados o modificados (+30; de 725 en 51 archivos a 755 en 52):**
+  - `useAcceptGame.test.tsx`: 5, nuevo, T4-1, con la máquina real (`useTxTarget` + `useAcceptGame` sobre un `QueryClient` real de `createPolicyQueryClient`):
+    - el builder recibe `game.bet` (u64 del `Pure`), la partida de la vista y `config.houseId`, y `accept_game` es el último comando;
+    - el valor es el `GameResolved` real de `acceptAcceptorWins`;
+    - sin evento en la confirmación ⇒ `success` con `value: null`;
+    - invalidaciones exactas (`reset` del lobby; `invalidate` de partida, saldo y House) y ninguna de `txInfo`, `publishCheckpoint`, `checkpointTime` ni `nodeInfo`;
+    - **v1.4:** durante una aceptación propia, `busy: true` y `notice: null`; al terminar, el `outcome` se lee por `runId`.
+  - `txSession.test.ts`: 15 → 16. `txVariablesOf` reconoce las cuatro acciones, incluida `accept` (T4-1, v1.4).
+  - `txInvalidation.test.ts`: 7 → 8. La fila de aceptar.
+  - `GameActions.test.tsx`: 11 → 30, con hooks mockeados:
+    - T4-2: sin cuenta, una partida `pending` muestra el texto nuevo y ningún botón; `cancelled` y `resolved` no muestran aviso ni botón.
+    - T4-3: creador; abierta con otra cuenta (las dos notas, la apuesta, `accept()` sin argumentos y `useAcceptGame(view, game)`); invitado con "Aceptar" y "Rechazar"; tercero en una invitación ⇒ `NOT_INVITED_HINT` sin "Aceptar".
+    - T4-4: `insufficient` (justo un MIST por debajo de `bet` + reserva), `unknown` (error de lectura) y `ok` (justo `bet` + reserva).
+    - T4-5 ×4: SEG-10 en `preflight`, `signing`, `confirming` e `indexing`; ningún token en `.tx-status` ni en `.game-actions`.
+    - T4-6 ×3: ganado (dirección de la cuenta en mayúsculas), perdido (ganador en mayúsculas) y `value: null`, cada uno con digest y "Costo de red".
+    - T4-7 ×2: `game`/4 y el texto de DL-11.
+    - T4-8: `in_flight` deshabilita "Aceptar" y "Rechazar" (invitado) y "Cancelar" (creador), con el texto de TASK-3.
+    - T4-9: una alerta, "Aceptar" deshabilitado y "Ya la revisé" llama a `acknowledge`.
+    - T4-10 ×2: un `adopted` de `accept` muestra su texto de resultado; uno de `cancel`, el de cancelar.
+  - `GameActions.machine.test.tsx`: 1 → 2. T4-11: un "sin confirmar" de aceptar con la máquina real da una alerta, un "Ya la revisé", "Aceptar" deshabilitado y una sola preflight.
+  - `GameDetail.test.tsx`: 4 → 6. T4-12: ganaste o perdiste para el creador y el aceptante (direcciones en otro formato); nada para un tercero, sin cuenta ni en `pending`.
+  - `GameDetailPage.test.tsx`: 10 → 11. La página pasa la cuenta al detalle ("Resultado para ti" = ganaste).
+- **Mutation testing de §3.0:** saqué `'accept'` de `ACTION_KINDS` a mano y fallan 6 tests: el de `txVariablesOf` y los 5 de `useAcceptGame`; el de v1.4 falla porque la aceptación propia se ve como ajena. Con `'accept'` pasan. Quedó restaurado.
+- **Greps de entrega** (diff más archivos nuevos): claves, rutas personales, hex de 40-64, `any`, `console` y `eslint-disable`, todos vacíos.
+- **§7:** componentes y páginas solo importan `@mysten/dapp-kit-react/ui` (el `Header` de antes). Ningún componente arma transacciones, IDs ni mensajes de error: el PTB y el parser están en `sui/`, los mensajes de error en `errors.ts`, y los textos de resultado en el componente, como `cancelledText`/`rejectedText`.
+- **"NO tocar" (§4):** `sui/`, `useExecuteTransaction.ts`, `useTxTarget.ts`, `TransactionStatus.tsx`, `index.css`, `package*`, `contracts/` y `eslint.config.js`, todos sin delta. `txSession.ts` cambió solo en lo de §3.0.
+- **Contracts:** no aplica. **Tablas de contrato:** no aplica.
+- **App** (forma canónica, desde `<repo>`, Node 26):
+
+```text
+v26.13.0
+added 293 packages, and audited 295 packages in 10s
+67 packages are looking for funding
+  run `npm fund` for details
+11 moderate severity vulnerabilities
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+Run `npm audit` for details.
+exit=0
+audited 292 packages in 8s
+292 packages have verified registry signatures
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+exit=0
+found 0 vulnerabilities
+exit=0
+> lint
+> eslint . --max-warnings 0
+exit=0
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+exit=0
+> test
+> vitest run
+ RUN  v5.0.5 <repo>/app
+ Test Files  52 passed (52)
+      Tests  755 passed (755)
+   Start at  21:33:44
+   Duration  16.98s (environment 63%, tests 12%, setup 10%, import 10%, transform 5%, worker 1%)
+exit=0
+> build
+> vite build
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 589 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.27 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-CTgzBU_I.js   887.10 kB │ gzip: 270.12 kB
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 493ms
+exit=0
+--- git status --porcelain --untracked-files=all
+ M app/src/components/GameActions.machine.test.tsx
+ M app/src/components/GameActions.test.tsx
+ M app/src/components/GameActions.tsx
+ M app/src/components/GameDetail.test.tsx
+ M app/src/components/GameDetail.tsx
+ M app/src/hooks/txInvalidation.test.ts
+ M app/src/hooks/txInvalidation.ts
+ M app/src/hooks/txSession.test.ts
+ M app/src/hooks/txSession.ts
+ M app/src/pages/GameDetailPage.test.tsx
+ M app/src/pages/GameDetailPage.tsx
+?? app/src/hooks/useAcceptGame.test.tsx
+?? app/src/hooks/useAcceptGame.ts
+```
+
+(Este reporte, `documents/REPORTES_ACCEPT.md`, se escribió después del gate.)
+
+- **Conteo por archivo** (Vitest con `--reporter=json`; 755 tests en 52 archivos, 0 fallidos): errors 70, config 52, format 35, readPolicy 32, GameActions 30, game 29, lobby 28, useExecuteTransaction 28, execution 25, CreateGameForm 23, createGame 23, ids 23, transactions/game 23, gameActions 19, nodeInfo 19, events 17, LobbyList 16, txSession 16, explorer 15, gameTx 14, useTxTarget 14, gameDetail 13, house 13, readErrors 13, TransactionStatus 12, networks 12, useLobby 12, GameDetailPage 11, acceptGame 10, transactionInfo 10, useGame 10, readStatus 8, txInvalidation 8, NetworkBadge 7, useNodeStatus 7, GameDetail 6, ReadState 6, useTransactionTime 6, dappKit 5, useAcceptGame 5, useCreateGame 5, useHouse 5, CreateGameForm.machine 4, App 3, AccountBadge 2, GameActions.machine 2, Header 2, account 2, useCancelGame 2, AppProviders 1, ConfigError 1, HomePage 1.
+- **Delta contra TASK-3:** +30 tests y +1 archivo. El build pasa de 883.14 a 887.10 kB (de 269.18 a 270.12 kB gzip).
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica: TASK-4 §6 la deja para el smoke del ciclo. Sin localnet y sin testnet.
+
+### Desviaciones del handoff
+1. **Tres tests existentes de `GameActions.test.tsx` cambian por comportamiento que pide el handoff:**
+   - "shows no button without account…": el texto sin cuenta pasa a "Conecta tu wallet para aceptar la partida, cancelarla si es tuya o rechazarla si te invitaron" (M-3); antes buscaba `/Conecta tu wallet para cancelar la partida/`.
+   - "shows only Rechazar to the invitee…" pasa a llamarse "shows Rechazar (and not Cancelar) to the invitee…": ahora el invitado también ve "Aceptar" (T4-3). Las aserciones no cambian.
+   - "shows no Rechazar on an open game": `queryByRole('button')` pasa a `queryByRole('button', { name: 'Rechazar' })`, porque esa cuenta (que no es el creador) ahora ve "Aceptar" en una abierta.
+2. **`GameDetail` recibe la prop obligatoria `account`** (§3.4): los 4 renders existentes de `GameDetail.test.tsx` pasan `account={null}`, sin otros cambios. `GameDetailPage.test.tsx` mockea `useWalletAccount` (la página ahora lo usa), con `address: null` por defecto.
+3. **El aviso de saldo sin leer** sale solo si `useSuiBalance` terminó con error. Mientras carga, `acceptBalanceCheck` da `unknown` y el botón queda habilitado, pero no se muestra "No se pudo leer tu saldo" (sería falso). Los avisos de saldo no tienen `role` (`field-error` y `hint`), para no confundirse con la alerta "sin confirmar" ni con el `status` de la transacción.
+4. **`useAcceptGame` vive en `GameActions`**, no dentro del bloque del botón: cuando la partida se refresca a "Resuelta", el bloque desaparece (`acceptState` = `not_pending`) pero el resultado de la aceptación sigue a la vista. El bloque (`AcceptBlock`) es el que monta `useSuiBalance`, solo con `available` (§3.3).
+5. **El texto de ganar o perder** usa `wonBy(value, address)` como dice §3.3. Sin cuenta, dice "Perdiste" (no ocurre: el resultado propio se filtra por la clave de la cuenta, y el adoptado es de la misma cuenta).
+
+### Riesgos / pendientes
+- **Docs (TASK-5):** `app/README.md` todavía describe la API vieja de la máquina (`:126`, `:222-223`) y no menciona aceptar, `useAcceptGame` ni "Resultado para ti" (PROY-20).
+- **Texto "Perdiste: ganó quien creó la partida"** asume que quien ve el resultado es el aceptante, lo que es cierto para la aceptación propia y para la adoptada de la misma cuenta. Una vista de un tercero no tiene ni una ni otra.
+- **El aviso `NOT_INVITED_HINT`** usa la clase `hint`, como los demás avisos de `GameActions`.
+
+### Documentación
+- **READMEs y `agents.md`:** pendiente para TASK-5 (arriba).
+- **Snippet propuesto para `documents/STATUS.md`:** `| app @ feature/issue-12-accept-resolve (TASK-4 de #12), Node v26.13.0, 2026-11-03 | npm run lint / typecheck / npm test / build (VITE_SUI_NETWORK=testnet) | 🟢 exit 0. 0 problemas / 0 errores / **755 tests PASS en 52 archivos** (+30: GameActions 30 (+19), useAcceptGame 5 nuevo, GameDetail 6, GameDetailPage 11, txSession 16, txInvalidation 8, GameActions.machine 2) / index-*.js 887.10 kB (270.12 kB gzip). Aceptar en el detalle (acceptState, saldo + reserva 0,01 SUI, nota de la vista previa, aviso de invitación ajena), resultado solo con la confirmación del nodo (SEG-10), adoptado incluido, y "Resultado para ti" |`
+
+## Revisión TASK-4: PASA (con N-1, una línea, antes del commit)
+
+> MID, 2026-11-03. Revisé el diff real sobre `7369be7`: 11 archivos modificados y 2 nuevos en `app/src`. No corrí gates
+> (D-20261030-02): verifico el output pegado.
+
+**Foco pedido:**
+- **SEG-10.**
+  - `acceptedText` solo llega a la pantalla como `successText` de `TransactionStatus`, que la dibuja únicamente con `outcome.kind === 'success'`. Ese `outcome` sale del caché por `runId`, que a su vez lo escribió la `mutationFn` después del `success` del nodo.
+  - El adoptado usa `adopted.outcome`, que solo existe para una mutación terminada (`deriveTargetState`), con el mismo texto.
+  - Durante las etapas solo se ven los textos neutros. T4-5 recorre las 4 etapas y busca los 5 tokens con mayúsculas exactas en `.tx-status` y `.game-actions`.
+  - "Resultado para ti" está en `GameDetail` y sale de la lectura del objeto: es una lectura del nodo y está permitida (DL-5).
+- **Condición §3.0 de v1.4.**
+  - `ACTION_KINDS` suma `'accept'`, con un comentario que explica por qué cada acción tiene que estar. `TxValueByAction` suma `accept: GameResolvedEvent | null`, y `AdoptedTx` lo incluye.
+  - En T4-1 (v1.4), con la máquina real, una aceptación propia en curso da `busy: true` y `notice` `null`, y su `outcome` se lee por `runId`.
+  - El mutation testing (sin `'accept'` fallan 6 tests) confirma que esos tests detectan la regresión.
+- **D-20261103-02.** `not_invited` ⇒ `NOT_INVITED_HINT` sin botón. Nunca sin cuenta: `acceptState` devuelve `no_account` antes. T4-3 lo prueba con la tercera cuenta sobre una invitación.
+- **M-3.**
+  - El orden `not_pending` → `no_account` → … lo fija TASK-2.
+  - El aviso sin cuenta ahora sale de `accepting === 'no_account'`, que reemplaza la condición vieja.
+  - T4-2: sin cuenta y `pending`, el texto nuevo y ningún botón; en `cancelled`/`resolved`, ningún aviso ni botón.
+- **Invalidaciones exactas (DL-6).** La fila `accept` es `reset` del lobby e `invalidate` de partida, saldo y House (`txInvalidation.ts`). La prueban `txInvalidation.test.ts` y T4-1 con espías, sin claves inmutables. El comentario de la tabla ya no dice "#12 suma".
+- **Capas (ARQ-1/ARQ-2).**
+  - Los componentes importan solo hooks, tipos y `sui/` puros; de `@mysten/*`, nada nuevo.
+  - El PTB y el parser viven en `sui/`. `useAcceptGame` no tiene `precheck` (DL-3) y toma `bet` del `Game` y `houseId` de config.
+  - `AcceptBlock` monta `useSuiBalance` solo con `available` (§3.3).
+- **Textos exactos.** La apuesta, la vista previa y "≈ 0.01 SUI de reserva para el gas" (v1.3) coinciden con el handoff.
+
+**Desviaciones:**
+
+| # | Evaluación |
+|---|---|
+| 1 (3 tests de `GameActions.test.tsx`) | (a) Texto sin cuenta: **aceptada**, M-3 fija el texto nuevo. (b) Cambio de nombre sin cambio de aserción: **aceptada**. (c) "shows no Rechazar on an open game": **aceptada con N-1**. Pasar de `queryByRole('button')` a `{ name: 'Rechazar' }` era necesario, porque esa cuenta ahora ve "Aceptar", pero se perdió que tampoco ve "Cancelar", que antes estaba implícito en "ningún botón" |
+| 2 (`account` obligatoria en `GameDetail`) | **Aceptada.** Los 4 renders existentes pasan `account={null}` sin otros cambios. La página mockea `useWalletAccount` |
+| 3 (aviso de saldo solo con error) | **Aceptada.** Mientras se lee, decir "no se pudo leer" sería falso. El botón queda habilitado igual (`unknown` no bloquea), como pide DL-4 |
+| 4 (`useAcceptGame` en `GameActions`) | **Aceptada y correcta:** el resultado sigue a la vista cuando la partida pasa a `Resolved` y desaparece el bloque |
+| 5 (`wonBy`, "Perdiste" sin cuenta) | **Aceptada.** Ningún resultado propio ni adoptado llega a una vista sin cuenta, porque las claves de mutación son por cuenta |
+
+**Hallazgos:**
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| N-1 | LIM-11 (regresión de #11) | `app/src/components/GameActions.test.tsx:117-121` | El test de #11 garantizaba que una cuenta que no es el creador no ve ningún botón en una abierta, lo que incluía "Cancelar". Tras el ajuste solo comprueba la ausencia de "Rechazar" | Antes del commit: en ese test, además de la ausencia de "Rechazar", `expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument()` y `expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Aceptar'])`. El conteo de tests no cambia. El orquestador lo verifica en el diff |
+| N-2 | PROY-20 | `app/README.md` | Sigue sin aceptar, `useAcceptGame` ni "Resultado para ti" | **TASK-5** (ya en su alcance) |
+
+### Siguiente paso
+Con N-1 aplicado y el gate de la app re-corrido por el DEV, en verde (755 en 52), queda autorizado **TASK-5 (docs)**. Después viene el smoke del ciclo: el MID genera `documents/SMOKE_ACCEPT.md` a partir de la sección "Smoke del ciclo" del handoff v1.4.
+
+### Mensajes de commit propuestos
+1. Código: `app/src/hooks/`, `app/src/components/` y `app/src/pages/` (11 modificados y 2 nuevos, con N-1).
+   ```
+   app: accept a game from the detail and show the verified result (#12)
+
+   GameActions shows Aceptar only when acceptState is available, with the bet,
+   the wallet-preview note and the balance check (0.01 SUI gas reserve); an
+   invitation for another address shows the hint without the button
+   (D-20261103-02). useAcceptGame builds the PTB with Random last and reads the
+   own GameResolved from the node confirmation, so the won/lost text, payout and
+   fee only appear after the node confirms (SEG-10), also for an adopted result.
+   Accept invalidates lobby, game, balance and House; the detail shows the
+   result for the connected player.
+   ```
+2. Docs: `documents/REPORTES_ACCEPT.md`.
+   ```
+   docs: add #12 TASK-4 report and MID review (#12)
+   ```
+
+### Snippet para STATUS.md
+El que propone el DEV para TASK-4, sin cambios.
+
+## Addendum TASK-4, N-1 (DEV)
+
+- **Cambio:** `app/src/components/GameActions.test.tsx`, test "shows no Rechazar on an open game" (`:117-124`). Además
+  de la ausencia de "Rechazar", ahora comprueba que no hay "Cancelar"
+  (`queryByRole('button', { name: 'Cancelar' })` ausente) y que el único botón es "Aceptar"
+  (`getAllByRole('button').map((b) => b.textContent)` = `['Aceptar']`), con un comentario que explica la diferencia
+  con #11. No hay tests nuevos: el conteo queda en 755.
+- **Gate de la app re-corrido** (forma canónica, desde `<repo>`, Node 26), en verde e igual a TASK-4 (755 en 52; build
+  887.10 kB):
+
+```text
+v26.13.0
+added 293 packages, and audited 295 packages in 18s
+67 packages are looking for funding
+  run `npm fund` for details
+11 moderate severity vulnerabilities
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+Run `npm audit` for details.
+exit=0
+audited 292 packages in 7s
+292 packages have verified registry signatures
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+exit=0
+found 0 vulnerabilities
+exit=0
+> lint
+> eslint . --max-warnings 0
+exit=0
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+exit=0
+> test
+> vitest run
+ RUN  v5.0.5 <repo>/app
+ Test Files  52 passed (52)
+      Tests  755 passed (755)
+   Start at  21:39:07
+   Duration  41.85s (environment 60%, import 12%, setup 10%, tests 10%, transform 8%)
+exit=0
+> build
+> vite build
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 589 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.27 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-CTgzBU_I.js   887.10 kB │ gzip: 270.12 kB
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 3.12s
+exit=0
+--- git status --porcelain --untracked-files=all
+ M app/src/components/GameActions.machine.test.tsx
+ M app/src/components/GameActions.test.tsx
+ M app/src/components/GameActions.tsx
+ M app/src/components/GameDetail.test.tsx
+ M app/src/components/GameDetail.tsx
+ M app/src/hooks/txInvalidation.test.ts
+ M app/src/hooks/txInvalidation.ts
+ M app/src/hooks/txSession.test.ts
+ M app/src/hooks/txSession.ts
+ M app/src/pages/GameDetailPage.test.tsx
+ M app/src/pages/GameDetailPage.tsx
+ M documents/REPORTES_ACCEPT.md
+?? app/src/hooks/useAcceptGame.test.tsx
+?? app/src/hooks/useAcceptGame.ts
+```
+
+
+## Task completado: HANDOFF_ACCEPT (v1.4) — TASK-5 (docs del ciclo)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-12-accept-resolve` @ `7369be7` (TASK-4 con N-1 todavía sin commitear en el mismo árbol). Sin commits del DEV.
+
+### Archivos modificados/creados
+- `app/README.md`
+- `contracts/README.md`
+- `agents.md`
+- `documents/STATUS.md`
+- `documents/REPORTES_ACCEPT.md` (esta sección y el addendum de N-1)
+
+No se tocó código, `DECISIONES.md` ni `PLAN_ACCEPT.md`.
+
+### Qué se implementó (3 líneas máx)
+`app/README.md` queda al día con #12: el mapa de `sui/` y de `hooks/`, la API nueva de la máquina (`useTxTarget`, `useExecuteTransaction(view)`, sin `isBusy`, `reset` ni `useRef`), "Transacciones (#11, #12)" (candado global, avisos y adopción, R-5, DL-10, NIT-2, fila de aceptar, cancelaciones del runtime), la sección nueva "Aceptar y resultado (#12)" y la fixture con 11 y 9 casos.
+`contracts/README.md` describe las cancelaciones del runtime como implementadas y `agents.md` §2 actualiza la línea de la fixture.
+En `STATUS.md` entran las filas de TASK-2, TASK-3 y TASK-4 (TASK-4 como baseline completo de la app), la fila de TASK-1 alineada al formato de la tabla (N-1 de la revisión de TASK-2) y la fila de #12 en el ciclo activo.
+
+### Tests y gates (output pegado, por área tocada)
+- **Tests:** ninguno nuevo (§5).
+- **Gate de la app** (§5, "sin delta"; solo cambiaron docs): 755 tests en 52 archivos y `index-*.js` 887.10 kB, igual que TASK-4 con N-1.
+
+```text
+v26.13.0
+added 293 packages, and audited 295 packages in 19s
+67 packages are looking for funding
+  run `npm fund` for details
+11 moderate severity vulnerabilities
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+Run `npm audit` for details.
+exit=0
+audited 292 packages in 13s
+292 packages have verified registry signatures
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+exit=0
+found 0 vulnerabilities
+exit=0
+> lint
+> eslint . --max-warnings 0
+exit=0
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+exit=0
+> test
+> vitest run
+ RUN  v5.0.5 <repo>/app
+ Test Files  52 passed (52)
+      Tests  755 passed (755)
+   Start at  21:44:40
+   Duration  19.32s (environment 61%, tests 12%, import 10%, setup 9%, transform 6%)
+exit=0
+> build
+> vite build
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 589 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.27 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-CTgzBU_I.js   887.10 kB │ gzip: 270.12 kB
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 613ms
+exit=0
+--- git status --porcelain --untracked-files=all
+ M agents.md
+ M app/README.md
+ M app/src/components/GameActions.machine.test.tsx
+ M app/src/components/GameActions.test.tsx
+ M app/src/components/GameActions.tsx
+ M app/src/components/GameDetail.test.tsx
+ M app/src/components/GameDetail.tsx
+ M app/src/hooks/txInvalidation.test.ts
+ M app/src/hooks/txInvalidation.ts
+ M app/src/hooks/txSession.test.ts
+ M app/src/hooks/txSession.ts
+ M app/src/pages/GameDetailPage.test.tsx
+ M app/src/pages/GameDetailPage.tsx
+ M contracts/README.md
+ M documents/REPORTES_ACCEPT.md
+ M documents/STATUS.md
+?? app/src/hooks/useAcceptGame.test.tsx
+?? app/src/hooks/useAcceptGame.ts
+```
+
+- **Contracts:** solo cambió `contracts/README.md` (docs); ni código Move ni `contracts/scripts/`, así que el job `contracts` no se ve afectado.
+- **Greps del diff de los 4 docs:** rutas personales, claves y hex de 40-64, todos vacíos.
+- **Criterio §7, `grep -n "#12" app/README.md contracts/README.md agents.md app/src`, revisado a mano** (líneas recortadas a 170 caracteres). Todas son atribuciones de lo hecho en #12 o referencias a sus decisiones (DL-x, S-x, TASK-1); no queda ningún "lo hace #12" vigente. El comentario de `txInvalidation.ts` ya dice "#14 suma aquí las acciones de la House" (TASK-4). `errors.ts:149` ("lo reutilizan #12 y #14") es código fuera del alcance de TASK-5 y ya es cierto para #12.
+
+```text
+agents.md:42:│   │                         # (#11, #12) game-tx.localnet.json: House, simulaciones fallidas y transacciones ejecutadas
+app/README.md:111:| `transactions/game.ts` | builders puros de PTB: `buildCreateGameTx` (`splitCoins(gas)` + `create_game`), `buildCancelGameTx`, `buildRejectGameTx` y `b
+app/README.md:112:| `errors.ts` | `ABORT_MESSAGES` (módulo + código → mensaje), `findMoveAbort` (estructurado, formato del SDK y formato Rust del nodo; `cause` hasta 5 ni
+app/README.md:113:| `execution.ts` | `preflightTransaction` (simulación de una copia, corte de 20 s, `PreflightNetworkError`; DL-10: un `SimulationError` sin `executionEr
+app/README.md:114:| `gameTx.ts` | `parseCreatedGame` (único `GameCreated` del firmante), `cancelledRefund` (`refund` del `GameCancelled` de esa partida) y `parseResolvedG
+app/README.md:118:| `gameActions.ts` | `canCancel` (creador, `Pending`), `canReject` (invitado, `Pending`), `acceptState` (en orden: `not_pending` → `no_account` → `creat
+app/README.md:119:| `acceptGame.ts` | `ACCEPT_GAS_RESERVE_MIST` (0,01 SUI; ver "Aceptar y resultado"), `acceptBalanceCheck` (`ok`/`insufficient`/`unknown`), `wonBy` y `pl
+app/README.md:125:| `queryKeys.ts` | **únicas** claves de TanStack Query: `['sui', red, recurso, …]` (`nodeInfo`, `lobby`, `game`, `txInfo`, `publishCheckpoint`, `checkpo
+app/README.md:127:| `txSession.ts` | lo puro de la máquina (#12, sin React): tipos (`TxTarget`, `TxView`, `TxVariables`, `TxNotice`, `AdoptedTx`), `toTxEntry`, `mountSnap
+app/README.md:128:| `useTxTarget` | **una** llamada por vista con acciones sobre un objetivo (`{ kind: 'create' }` o `{ kind: 'game', gameId }`): `view` (para los hooks d
+app/README.md:137:### Componentes de transacción (#11, #12)
+app/README.md:196:### Transacciones (#11, #12)
+app/README.md:234:- **Candado global por cuenta (DL-7 de #12):** `execute` no hace nada si hay una mutación de la cuenta en curso
+app/README.md:251:- **Errores al preparar (DL-10 de #12):** un `SimulationError` **sin** abort ni `executionError` es un rechazo del nodo
+app/README.md:316:### Aceptar y resultado (#12)
+app/README.md:328:  se pudo leer tu saldo: no se verificó si alcanza (la wallet lo hará al firmar)". **Medición** (TASK-1 de #12, S-4, en
+app/README.md:335:  versión y House). El nodo simula con `Random` (S-1 de #12), así que un abort (`game`/4, 5, 9, 10) sale en la preflight
+app/README.md:357:`contracts/fixtures/game-tx.localnet.json` (#11 y #12: House, 11 `SimulationError` reales, 9 transacciones ejecutadas
+app/README.md:428:  varios segundos. Se mide en los smokes de #11 y #12 (localnet) y en testnet en #17.
+app/README.md:432:  extensión que serializa el error y deja solo el texto cae en "La wallet no completó la operación: …" (R-3 de #12: no
+app/src/components/GameDetail.tsx:34: * partida resuelta y la cuenta conectada como creador o aceptante, "Resultado para ti" (DL-12 de #12), leído del objeto.
+app/src/hooks/txInvalidation.ts:17: * reinicia (como "Actualizar") y el saldo cambia. Cancelar/rechazar: además, la partida. Aceptar (DL-6 de #12): además, la
+app/src/hooks/queryKeys.ts:32:   * Clave de **mutación** de todas las transacciones de una cuenta (DL-7 de #12): el candado global (`isMutating` con
+app/src/sui/gameActions.ts:21:/** Qué puede hacer la cuenta conectada con "Aceptar" (M-3 de #12). */
+app/src/sui/config.ts:23:  /** Versión vigente del paquete: target de las llamadas (#11, #12). */
+app/src/sui/house.test.ts:53:      // Las 3 aceptaciones de la captura de #12 (TASK-1), con comisión 50000 cada una.
+app/src/components/CreateGameForm.tsx:91:  // decida. También bloquea una transacción de la cuenta en curso (DL-7 de #12).
+app/src/sui/execution.test.ts:103:    // S-2 de #12: un comando después del MoveCall con Random.
+app/src/sui/execution.test.ts:105:    // S-6 bis de #12: selección de gas con saldo insuficiente.
+app/src/sui/errors.ts:149:/** Sufijo de diagnóstico de un abort, con formato fijo `(código <módulo>/<n>)` (M-5; lo reutilizan #12 y #14). */
+app/src/sui/errors.ts:163: * Textos de las cancelaciones del runtime (DL-11 de #12): la red no ejecutó la transacción y solo cobró el costo de red.
+app/src/sui/transactions/game.ts:74: * §7; S-2 de #12). El `splitCoins` previo sí está permitido.
+app/src/sui/execution.ts:34: * Si el `cause` de un `SimulationError` **sin** `executionError` es un corte de red (DL-10 de #12). V-3: con
+app/src/sui/execution.ts:38: * (`isTransientReadError`): los rechazos permanentes medidos en TASK-1 de #12 (comando tras `Random`, S-2; selección de
+app/src/hooks/useExecuteTransaction.ts:37: * Resultado que muestra el hook de una acción (M-1 (b) de #12): nunca `unconfirmed`. La alerta "sin confirmar" la dibuja
+app/src/hooks/useExecuteTransaction.ts:83: * Máquina común de transacciones de #11, #12 y #14 (DL-11): verifica (precheck + preflight propia), firma con la wallet,
+app/src/hooks/useExecuteTransaction.ts:89: * Las mutaciones viven en el `MutationCache` con la clave del objetivo de la vista (DL-7 de #12): el candado es global
+app/src/components/GameActions.test.tsx:122:    // N-1: quien no es el creador ve solo "Aceptar" en una partida abierta (antes de #12, ningún botón).
+app/src/hooks/txSession.ts:8: * Sesión de transacciones de la pestaña (DL-7/DL-8 de #12), en funciones puras sin React: qué ve una vista de las
+app/src/pages/GameDetailPage.tsx:16: * (DL-14). El detalle recibe la cuenta conectada para "Resultado para ti" (DL-12 de #12).
+app/src/hooks/useTxTarget.ts:43: * Fuente única de bloqueo y avisos de una vista sobre su objetivo (DL-8 de #12), leída del `MutationCache` de la cuenta
+contracts/README.md:18:| `fixtures/game-tx.localnet.json` | Transacciones reales de crear, cancelar, rechazar (#11) y aceptar (#12): éxitos (con cada ganador y sobre una 
+contracts/README.md:355:no cambian. La app (#12) las reconoce en `runtimeCancellation` de `app/src/sui/errors.ts`: la congestión por el
+contracts/README.md:360:costo de red; intenta de nuevo en unos segundos". El reintento es el mismo botón. En las capturas de #12 no se observó
+contracts/README.md:448:- **Fixture de transacciones (#11, aceptar en #12):** `contracts/fixtures/game-tx.localnet.json` = `ids` (paquete, House
+contracts/README.md:460:  `runtimeCancelled` existe solo si una captura observó `ExecutionCancelledDueToRandomnessUnavailable` (en #12 no
+app/src/hooks/useAcceptGame.ts:11: * Aceptar una partida con la máquina común (DL-1, DL-2, DL-3 de #12): iguala la apuesta del `Game` leído y el contrato
+app/src/sui/acceptGame.ts:6: * Reserva de gas que la app exige además de la apuesta antes de ofrecer "Aceptar" (DL-4). Medida en TASK-1 de #12 (S-4,
+app/src/components/GameActions.tsx:88: * Acciones sobre una partida en el detalle: "Aceptar" para quien puede (`acceptState`, M-3 y D-20261103-02 de #12),
+app/src/components/GameActions.tsx:91: * partida. Una sola fuente de bloqueo para la partida (`useTxTarget`, DL-8 de #12): una transacción de la cuenta en curso
+app/src/components/txNotice.ts:2: * Aviso de una vista cuando hay una transacción de la cuenta en curso que no lanzó ella (DL-8 de #12): el mismo texto
+```
+
+- **Tablas de contrato:** no aplica.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica (docs).
+
+### Desviaciones del handoff
+1. **Filas de baseline en `STATUS.md` por task.** Además del baseline de la app, que pide §3, entran las filas de TASK-2, TASK-3 y TASK-4, como pidió el orquestador. TASK-4 va en el formato de cuatro filas de los baselines de `master` (con el conteo por archivo); TASK-2 y TASK-3, en una fila cada una. Todas con el SHA de su commit (TASK-4 todavía no tiene: "sobre `7369be7`"). La fila de TASK-1 se reescribe con el formato de la tabla (código entre backticks, SHA `0d533cf`, números en negrita), sin cambiar su contenido.
+2. **Fila de #12 en el ciclo activo:** 🚧 con el avance por task. "Siguiente" deja de nombrar a #12 y suma "#13 después de #12". La fila "UI React" del punto de partida no se tocó: se actualiza en el housekeeping del merge, como en los ciclos anteriores.
+3. **`app/README.md` también actualiza "Pendientes conocidos"** (tamaño del build ≈ 887 kB; el smoke de #12 mide el "Actualizando datos…"; R-3 en el texto de una wallet de extensión), la viñeta del detalle en "Formulario de creación" (el texto sin cuenta de M-3) y la línea de `test/` en el árbol de `src/` (el arnés de la máquina).
+
+### Riesgos / pendientes
+- **El smoke del ciclo** (`documents/SMOKE_ACCEPT.md`, lo genera el MID) puede pedir retocar algún texto de "Aceptar y resultado" con lo que mida, por ejemplo la latencia de confirmación en el navegador.
+- **Housekeeping al merge:** la fila "UI React" del punto de partida, la fila de #12 a ✅ con el SHA del merge, y la tabla "Mergeadas".
+
+### Documentación
+- **READMEs y `agents.md`:** actualizados (este task).
+- **Snippet para `documents/STATUS.md`:** ya aplicado en este task (filas de TASK-1 a TASK-4 y fila de #12 en el ciclo activo); al cerrar el ciclo solo falta el housekeeping.
+
+## Revisión TASK-5: PASA
+
+> MID, 2026-11-03. Revisé el diff real de los cuatro docs (`app/README.md`, `contracts/README.md`, `agents.md` y
+> `documents/STATUS.md`) sobre `fabb0ec`. Confirmo N-1 de TASK-4 en el código commiteado:
+> `git show fabb0ec -- app/src/components/GameActions.test.tsx` muestra, en "shows no Rechazar on an open game", la
+> ausencia de "Rechazar" y de "Cancelar" y los botones = `['Aceptar']`. No corrí gates (D-20261030-02).
+
+**Checklist (TASK-5 §3/§7, PROY-20):**
+- **`app/README.md`:**
+  - **Mapas:** el de `sui/` suma `buildAcceptGameTx`, `runtimeCancellation`, DL-10, `parseResolvedGame`, `acceptState`/`NOT_INVITED_HINT` y `acceptGame.ts`. Los hooks suman las claves de mutación, `txSession.ts`, `useTxTarget`, `useExecuteTransaction(view)` sin `isBusy`/`reset` y `useAcceptGame`. Los componentes suman `GameActions` con aceptar, `GameDetail` y `txNotice.ts`.
+  - **"Transacciones (#11, #12)":** describe el candado global por cuenta, el "sin confirmar" por objetivo con una sola alerta por vista, los avisos `in_flight`/`adopted` y cuándo se descartan, los contadores de módulo, R-5 con la precisión de SUGGESTION-3, DL-10, NIT-2, la fila de aceptar y los textos de DL-11 en la tabla de fallbacks.
+  - **"Aceptar y resultado (#12)":** quién ve el botón, D-20261103-02, las notas de DL-5, la reserva con su medición, la transacción, SEG-10, "Resultado para ti" y DL-11.
+  - **Fixtures y pendientes:** los conteos de la fixture (11 y 9) y los pendientes, con 887 kB y #17.
+  - **API vieja:** ya no aparece (`isBusy`, `reset`, `useRef`), así que N-3 de TASK-3 y N-2 de TASK-4 quedan cerrados.
+- **`contracts/README.md`:** "Cancelaciones del runtime" está descrita como implementada, con los textos exactos y la nota de S-5.
+- **`agents.md` §2:** la línea de `game-tx.localnet.json` está al día.
+- **`documents/STATUS.md`:**
+  - Filas de baseline de TASK-1..4 (TASK-4 con el gate completo y el conteo por archivo).
+  - La fila de TASK-1 alineada al formato, que cierra N-1 de TASK-2.
+  - #12 en 🚧 en el ciclo activo, y "Siguiente" actualizado.
+- **Criterio §7, `grep -n "#12"`:** revisé la lista pegada. Son atribuciones de lo hecho y no queda ningún "lo hace #12" vigente.
+- **Seguridad:** sin rutas personales, claves ni hex largos en los cuatro docs (grep pegado; lo repetí sobre el diff).
+- **Gate de la app sin delta:** 755 tests en 52 archivos y 887,10 kB.
+
+**Hallazgos** (no bloquean; se pueden aplicar en el mismo commit de docs):
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| N-1 | PROY-20 (exactitud) | `app/README.md`, último punto de "Pendientes conocidos" | Dice que una cancelación del runtime con una wallet de extensión "cae en «La wallet no completó la operación: …»" y lo atribuye a R-3. Es impreciso. Una cancelación del runtime pasa al ejecutar, así que hay digest y la app clasifica el `status.error` **estructurado** que lee del nodo (DL-2); eso solo pasaría con una wallet que lance **sin** digest. R-3 es otra cosa: que la `description` real no coincida con las dos formas de texto | Reescribir así: "`runtimeCancellation` lee el error estructurado; con digest, la app lo toma de la confirmación del nodo. Solo una wallet que rechazara **sin** digest ante una cancelación caería en «La wallet no completó…» (no observado; se verifica en #17). R-3: la `description` real de la falta de aleatoriedad no se observó en localnet" |
+| N-2 | PROY-20 | `documents/STATUS.md`, fila de TASK-4 ("sobre `7369be7`") y fila de #12 ("TASK-4: aceptar…" sin SHA) | TASK-4 ya está commiteado (`fabb0ec`) | Citar `fabb0ec` en las dos filas |
+
+### Siguiente paso
+Smoke del ciclo: `documents/SMOKE_ACCEPT.md`, generado a partir de "Smoke del ciclo" del handoff v1.4 en el formato de §M5 (17 pasos, 0-16, con las columnas de resultado en ⏳). El DEV lo corre y lo llena **durante** la corrida.
+
+### Mensaje de commit propuesto
+Archivos: `app/README.md`, `contracts/README.md`, `agents.md`, `documents/STATUS.md`, `documents/REPORTES_ACCEPT.md` (con N-1/N-2 si se aplican) y `documents/SMOKE_ACCEPT.md`.
+```
+docs: document accept and the global transaction machine, add the #12 smoke runbook (#12)
+
+app/README covers useTxTarget and the global per-account lock, the unconfirmed
+block per target, adoption, R-5, DL-10/NIT-2, the accept flow and its result
+texts; contracts/README marks runtime cancellations as implemented; agents.md
+and STATUS carry the #12 fixtures and baselines. Adds the TASK-4/TASK-5 reports
+and MID reviews and documents/SMOKE_ACCEPT.md (17 steps, to be filled during the
+run).
+```

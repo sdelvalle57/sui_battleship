@@ -39,7 +39,8 @@ sui_battleship/
 ├── contracts/                # paquete Move (Move.toml, Move.lock, README.md, sources/, tests/)
 │   ├── scripts/              # (#7) publish.mjs (publish/record/check), deployment.mjs, tests y fixtures/ de la CLI
 │   ├── fixtures/             # (#10) game-reads.localnet.json: lecturas gRPC reales del Game y sus eventos por variante;
-│   │                         # (#11) game-tx.localnet.json: House, simulaciones fallidas y transacciones ejecutadas reales
+│   │                         # (#11, #12) game-tx.localnet.json: House, simulaciones fallidas y transacciones ejecutadas
+│   │                         #   reales de crear, cancelar, rechazar y aceptar (con cada ganador y un fallo ejecutado)
 │   ├── deployments/          # <red>.json con packageId y object IDs publicados (sin secretos); lo escribe el script
 │   └── Published.toml        # (#8) lo escribe `sui client publish`: fuente de los datos del paquete
 ├── app/                      # cliente React (Vite + TS + SDK de Sui + wallet kit); guía en app/README.md

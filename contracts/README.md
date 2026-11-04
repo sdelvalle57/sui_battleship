@@ -352,7 +352,13 @@ Una transacción de `accept_game` puede no ejecutarse aunque el contrato no abor
 
 Ambas llegan como `effects.status = failure` con ese `kind` y **sin** `MoveAbort`
 (`crates/sui-types/src/execution_status.rs:259, 270-271` @ `testnet-v1.83.0`); la partida y los fondos apostados
-no cambian. #12 las muestra como "reintentar", nunca como éxito ni como error del contrato (SEG-10).
+no cambian. La app (#12) las reconoce en `runtimeCancellation` de `app/src/sui/errors.ts`: la congestión por el
+`$kind` `CongestedObjects` del SDK, y la falta de aleatoriedad por un `$kind` `Unknown` cuyo texto es el nombre de la
+variante o el texto Rust ("randomness could not be generated", sin distinguir mayúsculas). Muestra un texto neutro
+respecto de la acción, nunca éxito ni error del contrato (SEG-10): "La red canceló la transacción sin ejecutarla (la
+aleatoriedad de la red todavía no está disponible | hay congestión en un objeto compartido): no cambió nada salvo el
+costo de red; intenta de nuevo en unos segundos". El reintento es el mismo botón. En las capturas de #12 no se observó
+ninguna (aceptaciones a 5,8 s y 8,2 s del arranque de la localnet).
 
 ### Versionado del `Game` (D-20261030-15 DV)
 
