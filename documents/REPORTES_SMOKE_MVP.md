@@ -1224,3 +1224,586 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ### Snippet para STATUS.md
 "#17 TASK-2 ✅: sonda de verificación ensayada en la localnet aislada (variante B), 8 bloques, 99 PASA / 0 NO PASA;
 autoprueba negativa exit 1 / exit 3; cierre limpio. Handoff v1.2 con la sonda final (C-1..C-4); TASK-2b antes de TASK-3."
+
+---
+
+## TASK-2b
+
+## Task completado: HANDOFF_SMOKE_MVP — TASK-2b
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-17-mvp-smoke` @ `5593813`, ya pusheado. No hice commits ni pushes.
+
+### Archivos modificados/creados
+- `documents/REPORTES_SMOKE_MVP.md`: se agrega esta sección TASK-2b. La agrega el orquestador desde
+  `<scratchpad>/smoke17-probe/REPORTE_TASK2b.txt`, porque el harness del DEV no escribe reportes `.md`.
+- Fuera del repo y sin commitear: `<scratchpad>/smoke17-probe/verify-mvp.mjs`, que es el Anexo B extraído tal cual. La
+  versión de TASK-2 queda aparte, como `verify-mvp.task2.mjs`.
+- No toqué código, `contracts/` ni `documents/SMOKE_MVP.md`.
+
+### Qué se implementó (3 líneas máx)
+Extraje el Anexo B v1.2 y el `diff` contra `verify-mvp.mjs` salió vacío. Lo re-ensayé en una localnet aislada **nueva**
+(variante B, B4), con el cap en `ADMIN`, sin `transfer_house_cap` (`CAP ∉ {A, B}`). Los 8 bloques dan **96 PASA / 0 NO
+PASA**, y la autoprueba da exit 1 en (a), exit 3 ×2 en (b) y exit 4 a los 31 s en (c).
+
+### Tests y gates
+- Ningún gate de código (docs).
+- `git diff --exit-code -- contracts/Move.lock` da exit 0, y `git status --porcelain --untracked-files=all` queda vacío.
+
+### Verificación manual
+
+#### 1. Extracción del Anexo B y `diff`
+
+**Hallazgo previo.** El `<scratchpad>/smoke17-probe/verify-mvp.mjs` que encontré **no** estaba parcheado. Era la versión de
+TASK-2 (mtime 06:53, 693 líneas), y su `diff` contra el Anexo B, de 734 líneas, **no** sale vacío. Las diferencias son el
+encabezado y exactamente C-1..C-4 (salida completa más abajo). No corrí nada con esa versión.
+
+Lo que hice:
+1. Moví esa versión a `verify-mvp.task2.mjs`.
+2. Extraje el bloque ```js del "Anexo B" de `documents/HANDOFF_SMOKE_MVP.md` @ `5593813` con `awk`, desde
+   `## Anexo B` hasta el fence de cierre, a `verify-mvp.mjs`.
+3. Repetí el `diff` del bloque contra ese archivo:
+```text
+$ awk '…Anexo B…' documents/HANDOFF_SMOKE_MVP.md | diff - <scratchpad>/smoke17-probe/verify-mvp.mjs
+diff Anexo B vs verify-mvp.mjs exit=0
+734 <scratchpad>/smoke17-probe/verify-mvp.mjs
+```
+`diff` vacío: la sonda ensayada es el Anexo B tal cual. No hizo falta tocarla, así que no hay v1.3. Los greps de §R-6
+sobre el archivo dan vacío.
+
+`diff` de la versión de TASK-2 (encontrada en el scratchpad, `>`) contra el Anexo B (`<`), antes del reemplazo:
+```text
+1c1
+< // verify-mvp.mjs: sonda de verificación del smoke del MVP (#17, HANDOFF_SMOKE_MVP v1.2 §Sonda). Solo lecturas gRPC.
+---
+> // verify-mvp.mjs: sonda de verificación del smoke del MVP (#17, HANDOFF_SMOKE_MVP §Sonda). Solo lecturas gRPC.
+4c4
+< //     --block pre|1|2|3|4a|4b|h|final < <scratchpad>/smoke17-probe/verify-mvp.mjs
+---
+> //     --block pre|1|2|3|4a|4b|h|final < <scratchpad>/verify-mvp.mjs
+7c7
+< // 4 SIN CHECKPOINT (repetir el bloque) · 5 error de lectura, datos faltantes o historial podado.
+---
+> // 4 SIN CHECKPOINT (repetir el bloque) · 5 error de lectura o datos faltantes.
+77d76
+< const { TransactionError } = await import('@mysten/sui/client');
+137d135
+<     await checkpointOf(digest); // C-4: espera a que esté en un checkpoint antes de leerla entera
+167,171c165
+< /**
+<  * Checkpoint de un digest, con reintento cada 500 ms hasta 30 s (TX_INDEX_TIMEOUT_MS). Nunca 0. C-4 (v1.2): el
+<  * fullnode responde "not found" (`TransactionError`) hasta que la transacción está en un checkpoint
+<  * (app/README.md, "Indexación"), así que ese error también se reintenta.
+<  */
+---
+> /** Checkpoint de un digest, con reintento cada 500 ms hasta 30 s (TX_INDEX_TIMEOUT_MS). Nunca 0. */
+175,182c169,171
+<     let cp = null;
+<     try {
+<       const r = await client.getTransaction({ digest, include: {} });
+<       cp = body(r).checkpoint ?? null;
+<     } catch (error) {
+<       if (!(error instanceof TransactionError)) throw error;
+<     }
+<     if (cp !== null) return BigInt(cp);
+---
+>     const r = await client.getTransaction({ digest, include: {} });
+>     const cp = body(r).checkpoint;
+>     if (cp !== null && cp !== undefined) return BigInt(cp);
+184c173
+<       emit(`SIN CHECKPOINT: ${digest} sin checkpoint (o inexistente) tras 30 s; revisar el digest y repetir el bloque`);
+---
+>       emit('SIN CHECKPOINT: repetir el bloque');
+241,247d229
+< /** Piso de historial del nodo (`lowestAvailableCheckpoint`), o `null` si no lo informa (nodo sin poda). */
+< async function nodeFloor() {
+<   const { response } = await client.ledgerService.getServiceInfo({});
+<   const floor = response.lowestAvailableCheckpoint;
+<   return floor === undefined || floor === null ? null : BigInt(floor);
+< }
+< const HISTORY_FLOOR_MARGIN_CHECKPOINTS = 16_000n; // el mismo margen que app/src/sui/eventScan.ts
+254,258d235
+<   // C-3 (v1.2): una ventana que empieza debajo del piso no se escanea: error explícito, nunca una lista incompleta.
+<   const floor = await nodeFloor();
+<   if (floor !== null && floor > startCheckpoint) {
+<     throw new Error(`historial podado: la ventana empieza en ${startCheckpoint} y el piso del nodo es ${floor}`);
+<   }
+370,386c347,350
+<   // C-2 (v1.2): cota = máx(publicación, piso + margen), como historyLowerBound de app/src/sui/eventScan.ts; el margen
+<   // solo con piso > 0. Si la publicación ya está podada, la cota es la del piso.
+<   let kp = null;
+<   try {
+<     const r = await client.getTransaction({ digest: deployment.publishTxDigest, include: {} });
+<     kp = body(r).checkpoint === null || body(r).checkpoint === undefined ? null : BigInt(body(r).checkpoint);
+<   } catch (error) {
+<     if (!(error instanceof TransactionError)) throw error;
+<   }
+<   const floor = await nodeFloor();
+<   const floorBound = floor !== null && floor > 0n ? floor + HISTORY_FLOOR_MARGIN_CHECKPOINTS : null;
+<   if (kp === null && floorBound === null) throw new Error('sin checkpoint de la publicación ni piso del nodo para acotar 0.6');
+<   const bound = kp === null ? floorBound : floorBound === null || kp >= floorBound ? kp : floorBound;
+<   const origin = bound === kp ? 'publicación' : 'piso + 16000: lo anterior no es visible';
+<   const created = await scanEvents('game::GameCreated', bound);
+<   const resolved = await scanEvents('game::GameResolved', bound);
+<   check('0.6', true, `desde el checkpoint ${bound} (${origin}): ${created.length} GameCreated, ${resolved.length} GameResolved`);
+---
+>   const kp = await checkpointOf(deployment.publishTxDigest);
+>   const created = await scanEvents('game::GameCreated', kp);
+>   const resolved = await scanEvents('game::GameResolved', kp);
+>   check('0.6', true, `desde el checkpoint ${kp} de la publicación: ${created.length} GameCreated, ${resolved.length} GameResolved`);
+701,702d664
+<   // C-1 (v1.2): las partes son A, B y quien retiró (W = sender(d4w) = CAP), sin repetir. Vale con las dos custodias de
+<   // N-3: con el cap en A, W == A y la suma es la de la v1.1; con el cap en otra cuenta, se suma su Δ.
+705,707d666
+<   const W = senderOf(await tx(need('d4w')));
+<   const parties = [...new Set([A, B, W])];
+<   const who = W === A ? 'A, B (CAP == A)' : W === B ? 'A, B (CAP == B)' : 'A, B, CAP';
+713c672
+<     for (const p of parties) dSum += delta(p, r);
+---
+>     dSum += delta(A, r) + delta(B, r);
+717c676
+<   check('H7.conservacion', dSum === want, `Σ Δ(${who}) ${dSum} == −Σ gas ${-gSum} + (amount − fee(d1a) − fee(d2a)) ${amount - fee1 - fee2} = ${want}`);
+---
+>   check('H7.conservacion', dSum === want, `Σ Δ(A) + Σ Δ(B) ${dSum} == −Σ gas ${-gSum} + (amount − fee(d1a) − fee(d2a)) ${amount - fee1 - fee2} = ${want}`);
+```
+
+**SDK.** `@mysten/sui` 2.37.0 exporta `TransactionError` desde `@mysten/sui/client`, y `getTransaction` del cliente gRPC
+lo lanza con `notFound` ante `NOT_FOUND` (`dist/grpc/core.mjs`). C-4 funciona con este SDK.
+
+#### 2. Recorrido
+
+**Entorno.** El de TASK-2:
+- `<SMOKE_DIR>` = `<scratchpad>/smoke17`, nuevo;
+- `env.sh` con rutas literales, `app.env` con su guarda y nunca en la misma llamada que `env.sh`;
+- `PRE` delante de todo `suic`, y `printf 'n\n' |` delante de cada `sui`.
+
+**Línea base.**
+- `stat` da `2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml`, y `ls` da `client.yaml`.
+- Puertos `9000`, `9123` y `9184` libres, sin ningún `sui start`.
+- Sin `contracts/deployments/`, y el árbol limpio.
+
+`import('@mysten/sui/grpc')` por stdin desde `<repo>/app` da `ok` con exit 0.
+
+| # | Paso | Resultado |
+|---|---|---|
+| L-0 | Génesis, arranque en segundo plano, cuentas | Génesis con exit 0; el PID que escucha en `:9000` es el de `sui.pid`; chain id `984e75e1`. `ADMIN`, `A`, `B` y `C` a `ids.env` sin imprimirlas: 4 distintas |
+| 1 | `ADMIN` publica (variante B, sin `--out`) | exit 0; `publishTxDigest` `FL9orRcguxErRWmrNJ9gUhtCXiEEHBY3Uc3Uki6VMX8c` (checkpoint 90); `packageId == originalPackageId`; `Move.lock` sin delta; `git status` vacío |
+| 1b | `ADMIN`: `update_fee_rate` 200 | `9Y2cu9CSU4UoTGzFfdGwBToW5LK7t7XuV68SPboUH5yB` (checkpoint 93) |
+| 2 | **Sin `transfer_house_cap`** | el cap queda en `ADMIN`, y no hay `dcap` en `digests.json` |
+| 3 | Sonda `pre` | 8 PASA. "sin dcap"; 0.6 con origen "publicación" |
+| 4 | `A` crea `d1c`; `B` acepta `d1a` | `9tLqR6d14REnfsZEcNZDgeNMwfDJbqSWDYsZtCbgJQFt` (167) / `GUxBrhP1YxyrkvSXHRRLh5uFranFwhoSu5vTsNT6rrea` (171); ganó A. Sonda `1`: 20 PASA |
+| 5 | `A` invita a `B` (`d2c`, `some(@$B)`); `B` acepta `d2a` | `CZ7cgPYwcnv4gdhGajUFW5DwM7GtBLAhHcSDYtsBTBh1` (274) / `2otY4M8FZpPZWNa3c4qPezBtS6qgayLoMjHy5Bhfkqea` (278); ganó A. Sonda `2`: 21 PASA (corrida después de la ajena 1; ver Desviaciones) |
+| 6 | Ajena 1: `C` crea, `ADMIN` acepta | `EwMMeCZ5G6kNN73YcCVJ6xA8kTRBjwwMzp3RSyfk6Y3Q` (282) / `Febch4NPcdWc4YJJM4rEmwfG528KACFyhDPhtdrH3BTx` (288); comisión 40000; `0x34f2…8b61` |
+| 7 | `A` crea `d3c` y cancela `d3x` | `8QjGQ1CUEbfdQFbDyhEh7ubS9fqFt58o8mCTnDgJP8Kn` (328) / `7BSN1sfda7AS2D2hRqSNt2MgQevZpCjXP4i1YRMTa74J` (331). Sonda `3`: 16 PASA |
+| 8 | Sonda `4a` | `F4 = 8040000`, `K4 = 288`, con la ajena 1 listada. 2 PASA |
+| 9 | **`ADMIN`** retira (`d4w`): `withdraw_fees` + `TransferObjects` a `@$ADMIN` | `BRPgJzfeJeK1QgzJ8U138ZDCG7ya4pKxV8y3HheG7gTn` (405) |
+| 10 | Ajena 2, en la misma llamada que `d4w` | `5CAcFy8hAm2giR5SbQt6uA4eq2ehCUpYSqSoB7nNTojm` (407) / `hsXZNsGXouSHQHKQSvUYNPq257Y2oMueh7RsunY98tG` (**413**); comisión 40000; `0x681b…f129`. No cayó en el checkpoint de `d4w`. Sonda `4b`: 7 PASA |
+| 11 | **`ADMIN`**: `dh1` 201, `dh2` 200, `dh3` 2000000/10000000000, `dh4` 1000000/50000000000 | `3QG93icPbdRVEvpHd6ihkoBbKqzjrPoGAj2rhurGPqgu` (454), `3DvK5EQBfZRUxGLhkLxEDwLKa4NP2EHhvx8t4b6fKB1F` (456), `95NLCQRGT9raPfsHvLKBPUyzYziZqgXGxy9Qb8oPcnvw` (459), `Ct4j4gpS8rPR9uwJJTizUS5UkyRAy4NvMbQBBLuuEbb6` (461). Sonda `h`: 16 PASA |
+| 12 | Sonda `final` | 6 PASA |
+
+Los digests son de una génesis desechable que ya se borró; entre paréntesis va el checkpoint.
+
+#### 3. Output de la sonda (pegado tal cual)
+
+`pre`:
+```text
+BLOQUE pre · red localnet · paquete 0x29ed…7d21
+CHECK 0.3 PASA chain id 984e75e1, json 984e75e1
+CHECK 0.4.shared PASA House 0x5592…25a8 Shared y tipo exacto: true
+CHECK 0.4.fee_rate PASA fee_rate 200
+CHECK 0.4.min_bet PASA min_bet 1000000
+CHECK 0.4.max_bet PASA max_bet 50000000000
+CHECK 0.4.version PASA version 1
+INFO F0 = 0 · K0 = 93 (checkpoint de previousTransaction 9Y2cu9CSU4UoTGzFfdGwBToW5LK7t7XuV68SPboUH5yB)
+CHECK 0.5.cap PASA HouseCap 0x2f66…987d con dueño AddressOwner (CAP)
+INFO sin dcap: 0.5 solo con el dueño actual
+CHECK 0.6 PASA desde el checkpoint 90 (publicación): 0 GameCreated, 0 GameResolved
+RESUMEN 8 PASA / 0 NO PASA
+exit=0
+```
+
+`1`:
+```text
+BLOQUE 1 · red localnet · paquete 0x29ed…7d21
+CHECK 1.B≠A PASA B ≠ A: true
+INFO gas d1c 9tLqR6d14REnfsZEcNZDgeNMwfDJbqSWDYsZtCbgJQFt: 3941200 (computation 1000000, storage 2941200, rebate 0)
+CHECK 1.d1c.success PASA 9tLqR6d14REnfsZEcNZDgeNMwfDJbqSWDYsZtCbgJQFt
+CHECK 1.d1c.sender PASA sender == A: true
+CHECK 1.d1c.creator PASA creator == A: true
+CHECK 1.d1c.bet PASA bet 100000000
+CHECK 1.d1c.opponent PASA opponent none: true
+CHECK 1.d1c.fee_rate PASA fee_rate 200
+CHECK 1.d1c.delta PASA Δ(A) -103941200 == −bet − gas -103941200
+INFO 1.d1c: game_id 0xd29f…153f
+INFO gas d1a GUxBrhP1YxyrkvSXHRRLh5uFranFwhoSu5vTsNT6rrea: 3462748 (computation 1000000, storage 5943200, rebate 3480452)
+CHECK 1.d1a.success PASA GUxBrhP1YxyrkvSXHRRLh5uFranFwhoSu5vTsNT6rrea
+CHECK 1.d1a.game_id PASA game_id == 0xd29f…153f: true
+CHECK 1.d1a.creator PASA creator == A: true
+CHECK 1.d1a.acceptor PASA acceptor == B: true
+CHECK 1.d1a.winner PASA winner == A
+CHECK 1.d1a.pot PASA pot 200000000 (2·bet 200000000)
+CHECK 1.d1a.fee PASA fee 4000000 (⌊pot·200/10000⌋ = 4000000)
+CHECK 1.d1a.payout PASA payout 196000000 (pot − fee 196000000)
+CHECK 1.d1a.delta.B PASA gana A: Δ(B) -103462748 == −bet − gas -103462748
+CHECK 1.d1a.delta.A PASA gana A: Δ(A) 196000000 == +payout 196000000
+CHECK 1.d1a.ptb PASA comandos SplitCoins,MoveCall; accept_game último MoveCall: true
+CHECK 1.d1a.object PASA 0xd29f…153f Resolved, acceptor == B y winner == evento: true, stake 0
+OBS O-7 d1a: gasBudget 4462748, gasPrice 1000, gasBudget ≤ 10000000: true
+RESUMEN 20 PASA / 0 NO PASA
+exit=0
+```
+
+`2`:
+```text
+BLOQUE 2 · red localnet · paquete 0x29ed…7d21
+INFO gas d2c CZ7cgPYwcnv4gdhGajUFW5DwM7GtBLAhHcSDYtsBTBh1: 2208598 (computation 1000000, storage 3184400, rebate 1975802)
+CHECK 2.d2c.success PASA CZ7cgPYwcnv4gdhGajUFW5DwM7GtBLAhHcSDYtsBTBh1
+CHECK 2.d2c.sender PASA sender == A: true
+CHECK 2.d2c.creator PASA creator == A: true
+CHECK 2.d2c.bet PASA bet 100000001
+CHECK 2.d2c.opponent PASA opponent == B: true
+CHECK 2.d2c.fee_rate PASA fee_rate 200
+CHECK 2.d2c.delta PASA Δ(A) -102208599 == −bet − gas -102208599
+INFO 2.d2c: game_id 0xdb96…f933
+CHECK 2.d2a.sender PASA sender == B: true
+INFO gas d2a 2otY4M8FZpPZWNa3c4qPezBtS6qgayLoMjHy5Bhfkqea: 2474871 (computation 1000000, storage 6186400, rebate 4711529)
+CHECK 2.d2a.success PASA 2otY4M8FZpPZWNa3c4qPezBtS6qgayLoMjHy5Bhfkqea
+CHECK 2.d2a.game_id PASA game_id == 0xdb96…f933: true
+CHECK 2.d2a.creator PASA creator == A: true
+CHECK 2.d2a.acceptor PASA acceptor == B: true
+CHECK 2.d2a.winner PASA winner == A
+CHECK 2.d2a.pot PASA pot 200000002 (2·bet 200000002)
+CHECK 2.d2a.fee PASA fee 4000000 (⌊pot·200/10000⌋ = 4000000)
+CHECK 2.d2a.payout PASA payout 196000002 (pot − fee 196000002)
+CHECK 2.d2a.delta.B PASA gana A: Δ(B) -102474872 == −bet − gas -102474872
+CHECK 2.d2a.delta.A PASA gana A: Δ(A) 196000002 == +payout 196000002
+CHECK 2.d2a.ptb PASA comandos SplitCoins,MoveCall; accept_game último MoveCall: true
+CHECK 2.d2a.object PASA 0xdb96…f933 Resolved, acceptor == B y winner == evento: true, stake 0
+CHECK 2.d2a.previousTransaction PASA previousTransaction == d2a: true
+OBS O-7 d2a: gasBudget 4462772, gasPrice 1000, gasBudget ≤ 10000000: true
+RESUMEN 21 PASA / 0 NO PASA
+exit=0
+```
+
+`3`:
+```text
+BLOQUE 3 · red localnet · paquete 0x29ed…7d21
+INFO gas d3c 8QjGQ1CUEbfdQFbDyhEh7ubS9fqFt58o8mCTnDgJP8Kn: 1965398 (computation 1000000, storage 2941200, rebate 1975802)
+CHECK 3.d3c.success PASA 8QjGQ1CUEbfdQFbDyhEh7ubS9fqFt58o8mCTnDgJP8Kn
+CHECK 3.d3c.sender PASA sender == A: true
+CHECK 3.d3c.creator PASA creator == A: true
+CHECK 3.d3c.bet PASA bet 1000000
+CHECK 3.d3c.opponent PASA opponent none: true
+CHECK 3.d3c.fee_rate PASA fee_rate 200
+CHECK 3.d3c.delta PASA Δ(A) -2965398 == −bet − gas -2965398
+INFO 3.d3c: game_id 0xc4dc…291d
+INFO gas d3x 7BSN1sfda7AS2D2hRqSNt2MgQevZpCjXP4i1YRMTa74J: 1988294 (computation 1000000, storage 3929200, rebate 2940906)
+CHECK 3.d3x.success PASA 7BSN1sfda7AS2D2hRqSNt2MgQevZpCjXP4i1YRMTa74J
+CHECK 3.d3x.sender PASA sender == A: true
+CHECK 3.d3x.game_id PASA game_id == 0xc4dc…291d: true
+CHECK 3.d3x.refund PASA refund 1000000
+CHECK 3.d3x.cancelled_by PASA cancelled_by == creator == A: true
+CHECK 3.d3x.delta PASA Δ(A,d3x) -988294 == refund − gas -988294
+CHECK 3.refund_integro PASA Δ(A,d3c) + Δ(A,d3x) -3953692 == −gas(d3c) − gas(d3x) -3953692
+CHECK 3.d3x.sin_house PASA la House no está entre los inputs ni los objetos cambiados: true
+CHECK 3.G3 PASA 0xc4dc…291d Cancelled, stake 0
+RESUMEN 16 PASA / 0 NO PASA
+exit=0
+```
+
+`4a`:
+```text
+BLOQUE 4a · red localnet · paquete 0x29ed…7d21
+INFO F4 = 8040000 · K4 = 288
+CHECK 4a.ventana PASA checkpoint(d1a) 171 y checkpoint(d2a) 278 en (K0 93, K4 288]: true
+AJENA GameResolved 0x34f2…8b61 fee 40000 checkpoint 288
+INFO ajenas en (K0, K4]: 1, Σ fee 40000
+CHECK 4a.F4 PASA F4 8040000 == F0 0 + fee(d1a) 4000000 + fee(d2a) 4000000 + Σ ajenas 40000 = 8040000
+RESUMEN 2 PASA / 0 NO PASA
+exit=0
+```
+
+`4b`:
+```text
+BLOQUE 4b · red localnet · paquete 0x29ed…7d21
+INFO gas d4w BRPgJzfeJeK1QgzJ8U138ZDCG7ya4pKxV8y3HheG7gTn: 1988381 (computation 1000000, storage 4795600, rebate 3807219)
+CHECK 4b.success PASA BRPgJzfeJeK1QgzJ8U138ZDCG7ya4pKxV8y3HheG7gTn
+CHECK 4b.sender PASA sender == CAP: true
+INFO CAP == A: false
+CHECK 4b.ptb PASA comandos MoveCall,TransferObjects; withdraw_fees + TransferObjects a quien firma: true
+CHECK 4b.house_id PASA house_id == houseId: true
+CHECK 4b.amount≥F4 PASA amount 8040000 ≥ F4 8040000
+INFO checkpoint(d4w) = 405
+CHECK 4b.amount==F4 PASA sin GameResolved en (K4 288, 405]: amount 8040000 == F4 8040000
+CHECK 4b.delta PASA Δ(CAP,d4w) 6051619 == amount − gas 6051619
+RESUMEN 7 PASA / 0 NO PASA
+exit=0
+```
+
+`h`:
+```text
+BLOQUE h · red localnet · paquete 0x29ed…7d21
+INFO gas dh1 3QG93icPbdRVEvpHd6ihkoBbKqzjrPoGAj2rhurGPqgu: 1000381 (computation 1000000, storage 3807600, rebate 3807219)
+CHECK h.dh1.success PASA 3QG93icPbdRVEvpHd6ihkoBbKqzjrPoGAj2rhurGPqgu
+CHECK h.dh1.sender PASA sender == CAP: true
+CHECK h.dh1.valores PASA FeeRateUpdated: old_fee_rate 200, new_fee_rate 201; house_id == houseId: true
+CHECK h.dh1.delta PASA Δ(CAP) -1000381 == −gas -1000381
+INFO gas dh2 3DvK5EQBfZRUxGLhkLxEDwLKa4NP2EHhvx8t4b6fKB1F: 1000381 (computation 1000000, storage 3807600, rebate 3807219)
+CHECK h.dh2.success PASA 3DvK5EQBfZRUxGLhkLxEDwLKa4NP2EHhvx8t4b6fKB1F
+CHECK h.dh2.sender PASA sender == CAP: true
+CHECK h.dh2.valores PASA FeeRateUpdated: old_fee_rate 201, new_fee_rate 200; house_id == houseId: true
+CHECK h.dh2.delta PASA Δ(CAP) -1000381 == −gas -1000381
+INFO GameCreated en [checkpoint(dh1) 454, checkpoint(dh2) 456]: 0
+INFO gas dh3 95NLCQRGT9raPfsHvLKBPUyzYziZqgXGxy9Qb8oPcnvw: 1000381 (computation 1000000, storage 3807600, rebate 3807219)
+CHECK h.dh3.success PASA 95NLCQRGT9raPfsHvLKBPUyzYziZqgXGxy9Qb8oPcnvw
+CHECK h.dh3.sender PASA sender == CAP: true
+CHECK h.dh3.valores PASA BetLimitsUpdated: old_min_bet 1000000, old_max_bet 50000000000, new_min_bet 2000000, new_max_bet 10000000000; house_id == houseId: true
+CHECK h.dh3.delta PASA Δ(CAP) -1000381 == −gas -1000381
+INFO gas dh4 Ct4j4gpS8rPR9uwJJTizUS5UkyRAy4NvMbQBBLuuEbb6: 1000381 (computation 1000000, storage 3807600, rebate 3807219)
+CHECK h.dh4.success PASA Ct4j4gpS8rPR9uwJJTizUS5UkyRAy4NvMbQBBLuuEbb6
+CHECK h.dh4.sender PASA sender == CAP: true
+CHECK h.dh4.valores PASA BetLimitsUpdated: old_min_bet 2000000, old_max_bet 10000000000, new_min_bet 1000000, new_max_bet 50000000000; house_id == houseId: true
+CHECK h.dh4.delta PASA Δ(CAP) -1000381 == −gas -1000381
+RESUMEN 16 PASA / 0 NO PASA
+exit=0
+```
+
+`final`:
+```text
+BLOQUE final · red localnet · paquete 0x29ed…7d21
+CHECK H7.shared PASA House Shared y tipo exacto: true
+CHECK H7.fee_rate PASA fee_rate 200
+CHECK H7.limites PASA 1000000/50000000000
+CHECK H7.version PASA version 1
+INFO Ff = fees_collected 40000 · Kf = 461
+RESUELTA G1 0xd29f…153f fee 4000000 checkpoint 171
+RESUELTA G2 0xdb96…f933 fee 4000000 checkpoint 278
+RESUELTA ajena 0x34f2…8b61 fee 40000 checkpoint 288
+RESUELTA ajena 0x681b…f129 fee 40000 checkpoint 413
+CHECK H7.comisiones PASA amount 8040000 + Ff 40000 = 8080000 == F0 0 + Σ fee 8080000 (4 GameResolved en (K0 93, Kf 461], 2 ajenas)
+CHECK H7.conservacion PASA Σ Δ(A, B, CAP) -17989490 == −Σ gas -18029490 + (amount − fee(d1a) − fee(d2a)) 40000 = -17989490
+RESUMEN 6 PASA / 0 NO PASA
+exit=0
+```
+
+#### 4. Valores obtenidos contra esperados (TASK-2b §3.3)
+
+| Esperado | Obtenido | Estado |
+|---|---|---|
+| `pre` con "sin dcap" | `INFO sin dcap: 0.5 solo con el dueño actual` | ✅ |
+| 0.6 con origen "publicación" | `CHECK 0.6 PASA desde el checkpoint 90 (publicación)` | ✅ |
+| `4b`: `sender == CAP: true` y `CAP == A: false` | `CHECK 4b.sender PASA sender == CAP: true` · `INFO CAP == A: false` | ✅ |
+| `4b`: `amount == 8040000`, `≥ F4` | `8040000`; ventana `(288, 405]` vacía ⇒ `== F4` | ✅ |
+| `final`: `Σ Δ(A, B, CAP)` exacta (C-1) | `Σ Δ(A, B, CAP) -17989490 == −Σ gas -18029490 + 40000` | ✅ |
+| `final`: `amount + Ff == 8080000` | `8040000 + 40000 = 8080000` = Σ fee de 4 `GameResolved` en `(93, 461]` | ✅ |
+| `final`: `Ff == 40000` | `40000` (la ajena 2) | ✅ |
+| `h`: `sender == CAP` y `Δ(CAP) == −gas` en `dh1`..`dh4` | 4 de 4 | ✅ |
+| Todo en PASA | 8 + 20 + 21 + 16 + 2 + 7 + 16 + 6 = **96 PASA / 0 NO PASA** | ✅ |
+
+**C-1, por qué la suma de 3 partes da exacta.** Con el cap en `ADMIN`, el `+amount − gas(d4w)` de `d4w` cae en `CAP`.
+Con la suma de la v1.1, `Σ Δ(A) + Σ Δ(B)`, habría faltado `Δ(CAP, d4w)` = 6051619 y daba NO PASA. La v1.2 lo suma y la
+igualdad cierra. Con el cap en A (TASK-2), `W == A` y la suma es la misma de la v1.1.
+
+**Gas de cada transacción (MIST).**
+
+| Tx | Gas | Tx | Gas | Tx | Gas |
+|---|---|---|---|---|---|
+| fee 200 (aux.) | 1000381 | `d2a` | 2474871 | `d4w` | 1988381 |
+| `d1c` | 3941200 | ajena 1 crear (aux.) | 3941200 | ajena 2 crear (aux.) | 1965398 |
+| `d1a` | 3462748 | ajena 1 aceptar (aux.) | 2474847 | ajena 2 aceptar (aux.) | 1486946 |
+| `d2c` | 2208598 | `d3c` | 1965398 | `dh1`..`dh4` | 1000381 c/u |
+| | | `d3x` | 1988294 | | |
+
+O-7 (CLI, no cuenta según R-3): `d1a` 4462748 y `d2a` 4462772, con precio 1000.
+
+#### 5. Autoprueba
+
+(a) Bloque `1` con `d1a` cambiado por `d2a`. Da **exit 1**. Aquí son 4 NO PASA y no 5 como en TASK-2: en esta génesis
+ganó A las dos partidas, así que el check `object` coincide por azar. El resto falla como se espera.
+```text
+BLOQUE 1 · red localnet · paquete 0x29ed…7d21
+CHECK 1.B≠A PASA B ≠ A: true
+INFO gas d1c 9tLqR6d14REnfsZEcNZDgeNMwfDJbqSWDYsZtCbgJQFt: 3941200 (computation 1000000, storage 2941200, rebate 0)
+CHECK 1.d1c.success PASA 9tLqR6d14REnfsZEcNZDgeNMwfDJbqSWDYsZtCbgJQFt
+CHECK 1.d1c.sender PASA sender == A: true
+CHECK 1.d1c.creator PASA creator == A: true
+CHECK 1.d1c.bet PASA bet 100000000
+CHECK 1.d1c.opponent PASA opponent none: true
+CHECK 1.d1c.fee_rate PASA fee_rate 200
+CHECK 1.d1c.delta PASA Δ(A) -103941200 == −bet − gas -103941200
+INFO 1.d1c: game_id 0xd29f…153f
+INFO gas d1a 2otY4M8FZpPZWNa3c4qPezBtS6qgayLoMjHy5Bhfkqea: 2474871 (computation 1000000, storage 6186400, rebate 4711529)
+CHECK 1.d1a.success PASA 2otY4M8FZpPZWNa3c4qPezBtS6qgayLoMjHy5Bhfkqea
+CHECK 1.d1a.game_id NO PASA game_id == 0xd29f…153f: false
+CHECK 1.d1a.creator PASA creator == A: true
+CHECK 1.d1a.acceptor PASA acceptor == B: true
+CHECK 1.d1a.winner PASA winner == A
+CHECK 1.d1a.pot NO PASA pot 200000002 (2·bet 200000000)
+CHECK 1.d1a.fee PASA fee 4000000 (⌊pot·200/10000⌋ = 4000000)
+CHECK 1.d1a.payout NO PASA payout 196000002 (pot − fee 196000002)
+CHECK 1.d1a.delta.B NO PASA gana A: Δ(B) -102474872 == −bet − gas -102474871
+CHECK 1.d1a.delta.A PASA gana A: Δ(A) 196000002 == +payout 196000002
+CHECK 1.d1a.ptb PASA comandos SplitCoins,MoveCall; accept_game último MoveCall: true
+CHECK 1.d1a.object PASA 0xd29f…153f Resolved, acceptor == B y winner == evento: true, stake 0
+OBS O-7 d1a: gasBudget 4462772, gasPrice 1000, gasBudget ≤ 10000000: true
+RESUMEN 16 PASA / 4 NO PASA
+exit=1
+```
+
+(b) Filtro de salida, con la línea de 64 hex armada en memoria. Da **exit 3** las dos veces:
+```text
+$ "$NODE" --input-type=module - --url http://127.0.0.1:9000 --selftest filter-0x < verify-mvp.mjs
+FILTRO: línea cortada (hex de 40 o más caracteres)
+exit=3
+$ "$NODE" --input-type=module - --url http://127.0.0.1:9000 --selftest filter-raw < verify-mvp.mjs
+FILTRO: línea cortada (hex de 40 o más caracteres)
+exit=3
+```
+
+(c) **C-4.** Bloque `1` con `d1c` cambiado por un digest bien formado que no existe: el real con el carácter 20 cambiado
+por otro del alfabeto base58, también de 44 caracteres. Da **exit 4** a los ≈ 30 s. `tx()` espera el checkpoint y
+`checkpointOf` reintenta el `TransactionError` "not found":
+```text
+BLOQUE 1 · red localnet · paquete 0x29ed…7d21
+SIN CHECKPOINT: 9tLqR6d14REnfsZEcNZ2geNMwfDJbqSWDYsZtCbgJQFt sin checkpoint (o inexistente) tras 30 s; revisar el digest y repetir el bloque
+exit=4
+duración 31 s
+```
+
+#### 6. C-3 (guarda de poda): verificada por lectura de código
+
+No se puede ejercitar en localnet. `getServiceInfo` de esta localnet, leído por gRPC antes del cierre, dio:
+```text
+lowestAvailableCheckpoint = 0 · checkpointHeight = 745
+```
+
+Con piso 0, `floor > startCheckpoint` nunca se cumple. Lo que muestra la lectura del Anexo B:
+- **Cubre todos los escaneos.** `scanEvents` es el único lugar que llama a `ListEvents`, así que la guarda cubre 0.6,
+  `4a`, `4b`, `h` y `final`.
+- **Va antes del primer pedido.** Llama a `nodeFloor()` (`getServiceInfo.lowestAvailableCheckpoint`) antes del primer
+  `ListEvents`. Si `floor > startCheckpoint`, lanza `historial podado: la ventana empieza en <s> y el piso del nodo es
+  <f>`.
+- **Sale con exit 5.** El `catch` de nivel superior lo convierte en `ERROR historial podado…` y exit 5. Nunca devuelve una
+  lista incompleta.
+- **La comparación es estricta.** Con `floor == startCheckpoint`, el checkpoint de inicio sigue disponible.
+- **No choca con la cota de 0.6 (C-2).** Cuando hay piso > 0, la cota es `máx(publicación, piso + 16000)`, así que
+  nunca queda debajo del piso y 0.6 no dispara C-3.
+- **Publicación podada.** Si la publicación ya está podada, `getTransaction(publishTxDigest)` da `TransactionError`, que
+  se captura: `kp = null` y la cota sale del piso, con el origen "piso + 16000: lo anterior no es visible".
+- **Bloques posteriores.** En `4a`, `4b`, `h` y `final` la ventana empieza en `K0 + 1`, `K4 + 1` o `checkpoint(dh1)`.
+  Si quedó debajo del piso, sale con exit 5, que es la regla de ventana de §Sonda.
+- **Dónde se ve en TASK-3.** Lo que se observa es el origen que imprime 0.6.
+
+#### 7. Greps §R-6
+
+Corrí los tres greps sobre `verify-mvp.mjs`, los `out-*.txt`, el `diff` y este reporte:
+```text
+$ grep -nE '[0-9a-fA-F]{40,64}' verify-mvp.mjs out-*.txt diff-v11-vs-anexoB.txt REPORTE_TASK2b.txt
+$ grep -nE '0x[0-9a-fA-F]{8,}' verify-mvp.mjs out-*.txt diff-v11-vs-anexoB.txt REPORTE_TASK2b.txt
+$ grep -niE '<patrón 3 de §R-6: claves, frases y rutas personales>' verify-mvp.mjs out-*.txt diff-v11-vs-anexoB.txt REPORTE_TASK2b.txt
+(los tres sin salida)
+```
+
+#### 8. Cierre M-7
+- `kill` del PID propio, sin `pkill`. El comando de fondo salió con 144, lo esperado ante SIGTERM.
+- En otra llamada, `kill -0` falla, y después borré `<SMOKE_DIR>` con `rm -rf`; ya no existe.
+- `rm -f contracts/deployments/localnet.json` y `rmdir contracts/deployments`. No quedan `deployments/`, `Published.toml`
+  ni `Pub.*.toml`.
+- `stat`/`ls` de `<HOME real>/.sui/sui_config/` sin `env.sh`: `2026-10-30 17:52:52.515735237 -0500 244 …/client.yaml` y
+  `client.yaml`, **idénticos** a la línea base.
+- `Move.lock` sin delta, y `git status --porcelain --untracked-files=all` vacío.
+- Ningún proceso `sui`; `9000`, `9123` y `9184` libres.
+- Sin Chrome, sin tocar Docker ni `:4173`, y nada contra testnet.
+- En `<scratchpad>/smoke17-probe/` borré `digests*.json` y `state*.json`, que tenían IDs completos de la génesis borrada.
+
+### Desviaciones del handoff
+- **El `verify-mvp.mjs` del scratchpad no coincidía con el Anexo B.**
+  - Qué cambió: lo reemplacé por la extracción del handoff y guardé el anterior como `verify-mvp.task2.mjs`.
+  - Por qué: el Anexo B es el texto canónico. El archivo previo era la versión de TASK-2, sin C-1..C-4.
+  - Verificación: `diff` vacío después de la extracción, y el `diff` previo pegado en §1.
+  - La sonda no se modificó: lo que se ensayó es el Anexo B byte por byte.
+- **Orden: la sonda `2` corrió después de la ajena 1 (paso 6) y no antes.**
+  - Por qué: así salieron las llamadas.
+  - Verificación: el bloque `2` no lee la House, y la ajena 1 no toca `G2`. El check `previousTransaction(G2) == d2a` dio
+    PASA.
+- `none`/`some(@$B)` funcionaron tal cual, y los digests auxiliares fueron a `<SMOKE_DIR>/aux.json`, como en TASK-2.
+
+### Riesgos / pendientes
+1. **Proceso: la sonda no estaba parcheada aunque el MID decía que sí.** TASK-3 tiene que volver a extraer el Anexo B y
+   pegar el `diff` vacío, como ya exige su precondición.
+2. **C-3 solo verificado por lectura.** La primera evidencia real es el origen que imprime 0.6 en TASK-3.
+3. **Costo de C-2/C-3 en llamadas.** Hay un `getServiceInfo` extra por escaneo. Es despreciable, pero en testnet suma
+   pedidos al fullnode público.
+
+### Documentación
+- READMEs: no aplica.
+- Snippet para STATUS: "#17 TASK-2b: sonda v1.2 (Anexo B, `diff` vacío) re-ensayada en una localnet aislada nueva con el
+  cap en una cuenta que no juega: 96 PASA / 0 NO PASA; autoprueba exit 1, 3, 3, 4. C-3 verificada por lectura (piso 0 en
+  localnet)."
+- Commit sugerido (§6): `docs: re-rehearse the v1.2 MVP smoke probe with the cap outside the players (#17)`.
+
+## Revisión TASK-2b: PASA
+
+> MID, 2026-11-04, contra `HANDOFF_SMOKE_MVP.md` v1.2 (`5593813`). El MID no corrió la sonda: revisó el output pegado y
+> comparó archivos con `diff`.
+
+**Implementa lo pedido.**
+- La sonda ensayada es el Anexo B byte por byte: el DEV pegó el `diff` vacío, y el MID repitió la comparación contra
+  `5593813`.
+- Localnet aislada nueva, variante B y B4, **sin** `transfer_house_cap`: `CAP ∉ {A, B}` y `ADMIN` firma `d4w` y
+  `dh1..dh4`.
+- Los 8 bloques dan 96 PASA / 0 NO PASA. Son 3 menos que TASK-2 porque no hay `dcap`.
+- Los esperados de §3.3, todos cumplidos:
+  - "sin dcap";
+  - 0.6 con origen "publicación";
+  - `CAP == A: false`;
+  - `amount == F4 == 8040000`;
+  - `amount + Ff == 8080000` y `Ff == 40000`.
+- **C-1 comprobada con números.** El MID rehízo la suma. `Σ Δ` da −17989490: A suma +181896511, B −205937620 y CAP
+  (`d4w`) +6051619. `Σ gas` da 18029490 y `amount − fees = 40000`. La v1.1 habría dejado afuera los 6051619 de CAP.
+- **Autoprueba:**
+  - (a) da exit 1 con 4 NO PASA. Son 4 porque ganó A las dos partidas, y la explicación es correcta;
+  - (b) da exit 3 dos veces;
+  - (c) da exit 4 a los 31 s, con el digest inexistente: **C-4 comprobada**, `TransactionError` reintentado y no exit 5.
+- **C-3:** verificada por lectura, de forma razonada (piso 0 en localnet, con `getServiceInfo` pegado). La primera
+  evidencia real es el origen que imprime 0.6 en TASK-3, como dice el handoff.
+- §R-6 vacío en el reporte (lo repitió el MID) y cierre M-7 limpio.
+
+**Desviaciones: las 2 se aceptan.**
+1. Reemplazar el archivo del scratchpad por la extracción del Anexo B era lo correcto: el Anexo B es el texto canónico.
+2. El bloque `2` corrió después de la ajena 1. No lee la House y la ajena no toca `G2`, y
+   `previousTransaction(G2) == d2a` dio PASA.
+
+### Nota sobre la discrepancia del archivo de la sonda (causa: MID)
+- **Qué pasó.** Al escribir la v1.2, el MID aplicó C-1..C-4 sobre una **copia**, `<scratchpad>/verify-mvp.v12.mjs`, y
+  embebió esa copia en el Anexo B. No reemplazó `<scratchpad>/smoke17-probe/verify-mvp.mjs`, que siguió siendo la versión
+  de TASK-2.
+- **Qué se informó.** La entrega del MID decía "un bloque `js` idéntico (`diff` vacío) al archivo parcheado". Era cierto
+  para la copia, pero no nombraba la ruta, y se leía como si fuera el archivo de `smoke17-probe/`.
+- **Impacto: ninguno.** El DEV no corrió nada con la versión vieja, extrajo el Anexo B y lo ensayó tal cual. El MID
+  comprobó que lo extraído es idéntico a la copia que parcheó y al Anexo B de `5593813`.
+- **Por qué no se repite.** La fuente de la sonda es solo el Anexo B, nunca un archivo del scratchpad. TASK-2b y TASK-3
+  exigen extraerlo y pegar el `diff` vacío antes de correr, y esa regla es la que lo detectó. La v1.2.1 lo deja escrito en
+  §Sonda.
+
+### Hallazgos
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Ninguno sobre el trabajo del DEV | — |
+
+Los riesgos 2 y 3 del DEV se aceptan: la evidencia de C-3 llega en TASK-3, y hay un `getServiceInfo` más por escaneo, lo
+que es despreciable. El riesgo 1 queda cubierto por la precondición de TASK-3.
+
+### Siguiente paso
+- TASK-2b **PASA**. Ningún task más es autorizable antes de #8.
+- TASK-3 espera S-1..S-8, que empiezan con la publicación de #8 por el owner.
+- La sonda queda fijada en el Anexo B de la v1.2, sin v1.3.
+
+### Mensaje de commit propuesto
+(Uno solo, con este reporte y el handoff v1.2.1; abajo.)
+
+### Snippet para STATUS.md
+"#17 TASK-2b ✅: sonda v1.2 (Anexo B, `diff` vacío) re-ensayada con el cap en una cuenta que no juega: 96 PASA / 0 NO
+PASA; autoprueba exit 1 / 3 / 3 / 4; C-3 por lectura (piso 0 en localnet). TASK-3 espera a #8 y a S-1..S-8."

@@ -1,6 +1,13 @@
 # HANDOFF_SMOKE_MVP
 > Plan: PLAN_SMOKE_MVP v1 (aprobado por el MAYOR con cambios, 2026-11-04) | Issue: #17 | Branch:
-> `feature/issue-17-mvp-smoke` | Versión: v1.2 | Fecha: 2026-11-04 | Autor: MID
+> `feature/issue-17-mvp-smoke` | Versión: v1.2.1 | Fecha: 2026-11-04 | Autor: MID
+
+**Changelog v1.2.1** (TASK-2b en **PASA**, 96 PASA / 0 NO PASA con el cap en una cuenta que no juega; sin cambios en la
+sonda):
+- tabla de estado: TASK-2 y TASK-2b en PASA; TASK-3 espera a #8 y a S-1..S-8;
+- §Sonda: la fuente de la sonda es **solo** el Anexo B, nunca un archivo que haya quedado en un scratchpad. En TASK-2b, el
+  archivo de `smoke17-probe/` era la versión de TASK-2, porque el MID había parcheado una copia (nota en la revisión de
+  TASK-2b); lo detectó la extracción con `diff`, que sigue siendo obligatoria.
 
 **Changelog v1.2** (TASK-2 en **PASA**: sonda ensayada en la localnet aislada, variante B, 8 bloques, 99 PASA / 0 NO PASA;
 revisión del MID en `REPORTES_SMOKE_MVP.md`). Es la precondición de TASK-3 junto con TASK-2b:
@@ -85,8 +92,8 @@ corrida, la plantilla de `SMOKE_MVP.md` y el cierre del MVP.
 |---|---|---|---|
 | TASK-1 | docs (este handoff) | **PASA** (v1 aprobado con cambios por el MAYOR; v1.1 los aplica) | Plan v1 aprobado (cumplida) |
 | TASK-2 | ensayo de la sonda en la localnet aislada | **PASA** (revisión en `REPORTES_SMOKE_MVP.md`) | — |
-| TASK-2b | re-ensayo de la sonda v1.2 (C-1..C-4) | **Autorizable antes de #8** (v1.2) | La localnet aislada libre (un DEV a la vez, sin otro smoke en curso) |
-| TASK-3 | precondiciones públicas (paso 0) | Especificado, **no empezar** | S-1..S-8 de la secuencia cumplidos; TASK-2b en PASA (con la sonda del Anexo B sin cambios, o la versión que fije un handoff posterior) |
+| TASK-2b | re-ensayo de la sonda v1.2 (C-1..C-4) | **PASA** (revisión en `REPORTES_SMOKE_MVP.md`) | — |
+| TASK-3 | precondiciones públicas (paso 0) | Especificado, **no empezar**: espera a #8 | S-1..S-8 de la secuencia cumplidos (empiezan con la publicación de #8 por el owner); TASK-2b en PASA (cumplida); la sonda extraída del Anexo B con `diff` vacío |
 | TASK-4 | la corrida (owner firma, DEV verifica) | Especificado, **no empezar** | TASK-3 en PASA |
 | TASK-5 | docs de cierre del MVP | Especificado, **no empezar** | TASK-4 con veredicto PASA |
 | TASK-6 | PR, revisión y housekeeping | Especificado, **no empezar** | TASK-5 en PASA |
@@ -198,7 +205,9 @@ El plan explica el porqué de cada paso ("Secuencia de vuelta del owner"). 🔒 
 ## Sonda de verificación (especificación completa)
 
 **Dónde y cómo (v1.2).** Un solo archivo, `<scratchpad>/smoke17-probe/verify-mvp.mjs`, que **no se commitea** (DL-2). Su
-texto es el del **Anexo B**: el DEV lo extrae del handoff tal cual, y el `diff` contra el bloque tiene que salir vacío. Va en
+texto es el del **Anexo B**: el DEV lo extrae del handoff tal cual, y el `diff` contra el bloque tiene que salir vacío. La
+fuente es **solo** el Anexo B: un archivo que haya quedado en un scratchpad (de TASK-2 o de otra sesión) no vale aunque
+tenga el mismo nombre (v1.2.1). Va en
 una carpeta propia, fuera de `<SMOKE_DIR>`, que se borra al cerrar. Se corre por stdin con cwd `<repo>/app`, así resuelve
 `@mysten/sui` (m-4 de #8). Si el worktree no tiene `node_modules`, antes va `npm ci` con Node 26 (ignorado por git):
 
