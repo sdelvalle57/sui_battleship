@@ -1,14 +1,58 @@
+import type { UiWalletAccount } from '@mysten/dapp-kit-react';
+import type { Transaction } from '@mysten/sui/transactions';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 import type { Mutation, MutationStatus, QueryKey } from '@tanstack/react-query';
 import { hashKey } from '@tanstack/react-query';
 import type { GameCreatedEvent, GameResolvedEvent } from '../sui/events';
-import type { TxAction } from './txInvalidation';
-import type { ExecuteInput, TxOutcome, TxResult } from './useExecuteTransaction';
+import type { NodeTransactionResult } from '../sui/execution';
 
 /**
  * Sesión de transacciones de la pestaña (DL-7/DL-8 de #12), en funciones puras sin React: qué ve una vista de las
  * mutaciones del `MutationCache` de su cuenta. El caché (un `QueryClient` por carga de página) es la única fuente: así
  * salir de la pantalla y volver no permite un segundo envío ni pierde el resultado de la que estaba en curso.
  */
+
+// Tipos de la máquina de transacciones (DL-12 de #13, NIT-1 de #12): viven aquí para que `txSession.ts` no importe nada de
+// `hooks/` y no haya ciclos de imports de tipos (`txSession` ↔ `useExecuteTransaction`, `queryKeys` → `txSession` →
+// `txInvalidation` → `queryKeys`).
+
+/** Acción de una transacción propia: decide qué datos quedaron viejos (DL-6 de #11). */
+export type TxAction =
+  | { kind: 'create' }
+  | { kind: 'cancel'; gameId: string }
+  | { kind: 'reject'; gameId: string }
+  | { kind: 'accept'; gameId: string };
+
+/**
+ * Resultado honesto de una transacción (DL-2, M-3). `success` y `failure` con `cost` los decide la lectura del nodo;
+ * `failure` sin digest es un fallo antes de ejecutar; `unconfirmed` = hay digest pero el nodo no respondió a tiempo.
+ * `value: null` en un éxito = el nodo confirmó pero no se pudo interpretar el resultado (NIT-1 de v1.1).
+ */
+export type TxOutcome<T> =
+  | { kind: 'success'; digest: string; value: T | null; indexed: boolean; cost: bigint }
+  | { kind: 'failure'; message: string; digest: string | null; cost: bigint | null }
+  | { kind: 'unconfirmed'; digest: string };
+
+/**
+ * Resultado que muestra el hook de una acción (M-1 (b) de #12): nunca `unconfirmed`. La alerta "sin confirmar" la dibuja
+ * la vista, desde `useTxTarget().unconfirmed`, una sola vez por objetivo.
+ */
+export type TxResult<T> = Exclude<TxOutcome<T>, { kind: 'unconfirmed' }>;
+
+/** Corte previo a la preflight (M-2): un texto para el usuario y las claves a invalidar. */
+export type TxPrecheckStop = { stop: string; invalidate?: QueryKey[] };
+
+/**
+ * Lo que cada acción aporta a la máquina común: la acción, el builder, el chequeo previo y la lectura del resultado.
+ * `interpret` recibe la dirección que firmó (DL-11 de #13): la de la cuenta capturada al lanzar, no la que esté
+ * conectada cuando la transacción termina.
+ */
+export type ExecuteInput<T> = {
+  action: TxAction;
+  build: () => Transaction;
+  precheck?: (signal: AbortSignal) => Promise<TxPrecheckStop | null>;
+  interpret: (nodeResult: NodeTransactionResult, signer: string) => T;
+};
 
 /** Objetivo de una transacción: el formulario de creación o una partida. */
 export type TxTarget = { kind: 'create' } | { kind: 'game'; gameId: string };
@@ -28,8 +72,19 @@ export type TxView<T extends TxTarget = TxTarget> = {
   targetHash: string;
 };
 
-/** Variables de cada mutación: la entrada de la acción y quién la lanzó (vista y ejecución). */
-export type TxVariables<T> = { input: ExecuteInput<T>; viewId: number; runId: number; action: TxAction };
+/**
+ * Variables de cada mutación: la entrada de la acción, quién la lanzó (vista y ejecución) y, capturados en el clic
+ * (DL-11 de #13), la cuenta que firma y el `targetHash` del objetivo: preflight, firma, `interpret` e invalidación usan
+ * esa cuenta por construcción, y la etapa queda ligada a ese objetivo aunque la vista pase a otra cuenta.
+ */
+export type TxVariables<T> = {
+  input: ExecuteInput<T>;
+  viewId: number;
+  runId: number;
+  action: TxAction;
+  account: UiWalletAccount | null;
+  targetHash: string;
+};
 
 /**
  * Lo que se lee de una creación exitosa: la partida creada (DL-9 de #11; `null` si no se pudo identificar) y si la
@@ -127,6 +182,34 @@ export function mountSnapshot(mutations: readonly Pick<Mutation, 'mutationId' | 
     if (m.state.status === 'pending') pendingIds.add(m.mutationId);
   }
   return { maxId, pendingIds };
+}
+
+/** Proyección de una mutación para el fijado de "Mis partidas" (H-6 de #13): su id, su estado y la partida que toca. */
+export type TxGameEntry = { id: number; status: MutationStatus; gameId: string | null };
+
+/**
+ * Proyección de una mutación del caché para H-6: el `gameId` normalizado de su acción (como la clave de `myGameKey`), o
+ * `null` para una creación o para variables sin la forma de la app.
+ */
+export function toTxGameEntry(m: MutationLike): TxGameEntry {
+  const action = txVariablesOf(m.state.variables)?.action;
+  const gameId = action === undefined || action.kind === 'create' ? null : normalizeSuiAddress(action.gameId);
+  return { id: m.mutationId, status: m.state.status, gameId };
+}
+
+/**
+ * Partidas con una transacción "viva" para la vista (H-6 de #13), con el criterio de adopción de #12: en curso, en curso
+ * al montar, o empezada después de montar. "Mis partidas" las fija en seguida con los datos que haya, para que la fila no
+ * cambie de sección (y pierda su resultado) con la relectura que trae el estado ya ejecutado. Las terminadas antes de
+ * montar no cuentan: esas se reagrupan con datos frescos (H-5).
+ */
+export function liveTxGameIds(entries: readonly TxGameEntry[], mount: MountSnapshot): ReadonlySet<string> {
+  const live = new Set<string>();
+  for (const entry of entries) {
+    if (entry.gameId === null) continue;
+    if (entry.status === 'pending' || mount.pendingIds.has(entry.id) || entry.id > mount.maxId) live.add(entry.gameId);
+  }
+  return live;
 }
 
 /** Estado derivado de una vista sobre su objetivo. */

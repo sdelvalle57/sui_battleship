@@ -105,7 +105,7 @@ describe('GameDetailPage', () => {
   it('adds the share text for an invitation and the stored fee when it changed', () => {
     renderAt(`/game/${ID}`, ready(), { created: { digest: DIGEST, costMist: '1', invitation: true, feeChanged: { from: 250, to: 300 } } });
     const notice = screen.getByRole('status');
-    expect(notice).toHaveTextContent('Comparte el enlace de esta página con el invitado; guárdalo para volver a esta partida');
+    expect(notice).toHaveTextContent('Comparte el enlace de esta página con el invitado; guárdalo, o encuéntrala en «Mis partidas»');
     expect(notice).toHaveTextContent('La partida se creó con comisión 3 % (el formulario mostraba 2.5 %)');
   });
 

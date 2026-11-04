@@ -1,23 +1,10 @@
 import { Link } from 'react-router';
 import { useAppConfig } from '../hooks/useAppConfig';
-import { useCheckpointTime } from '../hooks/useCheckpointTime';
 import { useLobby, type LobbyRow } from '../hooks/useLobby';
-import { useTransactionTime } from '../hooks/useTransactionTime';
-import { formatBps, formatMist, formatTimestamp, shortAddress } from '../sui/format';
+import { formatBps, formatMist, shortAddress } from '../sui/format';
 import { readErrorMessage } from '../sui/readErrors';
+import { CreatedAt, FloorSince } from './HistoryTime';
 import { ReadState } from './ReadState';
-
-/** Hora de creación de una fila: la de su transacción, o "—" mientras carga, si falla o si no hay digest. */
-function CreatedAt({ txDigest }: { txDigest: string }) {
-  const { timestampMs } = useTransactionTime(txDigest);
-  return <span className="lobby-time">{timestampMs === null ? '—' : formatTimestamp(timestampMs)}</span>;
-}
-
-/** " (desde <fecha>)" del piso de historial del nodo; sin fecha si la hora no llega (nunca "cargando"). */
-function FloorSince({ checkpoint }: { checkpoint: bigint }) {
-  const { timestampMs } = useCheckpointTime(checkpoint);
-  return timestampMs === null ? null : <> (desde {formatTimestamp(timestampMs)})</>;
-}
 
 function LobbyRowView({ row }: { row: LobbyRow }) {
   if (row.kind === 'unreadable') {

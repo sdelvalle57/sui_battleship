@@ -70,9 +70,11 @@ src/
 ├── sui/         # funciones puras sobre el SDK (sin React): red, config, montos, lecturas, parsers, política
 ├── hooks/       # hooks de React sobre el kit y TanStack Query (+ ConfigContext, queryKeys)
 ├── providers/   # QueryClientProvider (política común) > DAppKitProvider > ConfigContext
-├── components/  # UI sin lógica de negocio (LobbyList, GameDetail, ReadState, Header, CreateGameForm, GameActions…)
-├── pages/       # páginas del router por hash: HomePage (#/), GameDetailPage (#/game/:id), NotFoundPage
-├── test/        # setup de Vitest, arnés de TanStack Query y de la máquina de transacciones para tests
+├── components/  # UI sin lógica de negocio (LobbyList, GameDetail, ReadState, Header, CreateGameForm, GameActions,
+│                #   MyGamesSection, HistoryTime…)
+├── pages/       # páginas del router por hash: HomePage (#/), GameDetailPage (#/game/:id), MyGamesPage (#/my-games),
+│                #   NotFoundPage
+├── test/        # setup de Vitest, arneses de TanStack Query, de la máquina de transacciones y del escaneo de eventos
 └── App.tsx      # rutas (appRoutes) + RouterProvider
 scripts/
 ├── localnet-guard.mjs          # guarda compartida de las capturas: solo http://127.0.0.1:9000 y la génesis del despliegue
@@ -96,7 +98,7 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 | `networks.ts` | `Network`, URL gRPC y base del explorador por red, `isNetwork`, `shortChainId` | #9 |
 | `config.ts` | **único** lector de `import.meta.env` y de `contracts/deployments/*.json`; valida el esquema de #7 (incluido `publishTxDigest`, cota del lobby) | #9, #10 |
 | `format.ts` | SUI ↔ MIST con `bigint` (`parseSuiToMist`, `formatMist`), `shortAddress`, `formatBps`, `formatTimestamp` | #9, #10 |
-| `explorer.ts` | links a transacción y objeto (Suiscan en testnet; `null` en localnet) | #9 |
+| `explorer.ts` | links a transacción, objeto y cuenta (`explorerAccountUrl`, "Ver tu historial completo en el explorador"; Suiscan en testnet; `null` en localnet); validan antes de mirar la red | #9, #13 |
 | `nodeInfo.ts` | `fetchNodeInfo` (consulta viva con el corte común; trae el piso `lowestAvailableCheckpoint`) y `deriveNodeStatus` (con `retrying`) | #9, #10 |
 | `dappKit.ts` | instancia del kit con `createDAppKit` y `SuiGrpcClient` | #9 |
 | `game.ts` | esquema BCS del `Game`, `gameType`, `parseGameObject` (tipo exacto, dueño compartido, bytes canónicos, invariantes) y `resolutionAmounts` | #10 |
@@ -107,7 +109,9 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 | `ids.ts` | `parseObjectIdInput` y `parseAddressInput` (validan y normalizan en el borde, mismo helper) y `sameAddress` | #10, #11 |
 | `transactionInfo.ts` | hora/checkpoint de una transacción, checkpoint de la publicación (`null` = podada) y hora de un checkpoint | #10 |
 | `gameDetail.ts` | `fetchGame` (detalle por ID), `GAME_REFETCH_MS` y `gameRefetchInterval` (corta el intervalo ante un error definitivo, DL-7) | #10, #11 |
-| `lobby.ts` | `fetchLobbyPage` (lobby por eventos con el `ListEvents` crudo), `lobbyLowerBound` y las constantes calibradas | #10 |
+| `eventScan.ts` | escaneo crudo común (DL-2 de #13, extraído del lobby sin cambiar su comportamiento): `historyLowerBound` y `HISTORY_FLOOR_MARGIN_CHECKPOINTS`, `eventTypeFilter`, `requestEvents` (cualquier `EventFilter` y `limit`; `readMask` **sin `sender`**; último `watermark.cursor`) y `requestOrPruned` (`OUT_OF_RANGE`/piso ⇒ `HistoryPrunedError`) | #10, #13 |
+| `lobby.ts` | `fetchLobbyPage` (lobby por eventos sobre `eventScan.ts`) y las constantes calibradas (50 / 2 / 20) | #10, #13 |
+| `myGames.ts` | "Mis partidas" (ver esa sección): `myActivityFilter`, `fetchMyActivityPage`, `fetchInvitationsPage`, `naturalSection`, `mergeMyGames`, `extendPins`, `groupMyGames`, `myGameKey`, `sectionFooter` y `MY_ACTIVITY_*` (50 / 1) | #13 |
 | `transactions/game.ts` | builders puros de PTB: `buildCreateGameTx` (`splitCoins(gas)` + `create_game`), `buildCancelGameTx`, `buildRejectGameTx` y `buildAcceptGameTx` (`splitCoins(gas, [bet])` + `accept_game(game, house, coin, random)` con `tx.object.random()`, **último** comando: después de un comando con `Random` el nodo solo admite `TransferObjects`/`MergeCoins`); lanzan ante un ID o un monto inválidos; sin `sender` ni gas | #11, #12 |
 | `errors.ts` | `ABORT_MESSAGES` (módulo + código → mensaje), `findMoveAbort` (estructurado, formato del SDK y formato Rust del nodo; `cause` hasta 5 niveles), `abortCodeSuffix`, `runtimeCancellation` + `RUNTIME_CANCELLED_MESSAGES` (cancelaciones del runtime, DL-11) y `transactionErrorMessage` con sus fallbacks | #11, #12 |
 | `execution.ts` | `preflightTransaction` (simulación de una copia, corte de 20 s, `PreflightNetworkError`; DL-10: un `SimulationError` sin `executionError` cuyo `cause` es un corte de red, según `isPreflightNetworkCause` = `isTransientReadError`, también es `PreflightNetworkError`), `confirmTransaction` (30 s), `waitForCheckpoint` (30 s), `classifyExecution`, `digestFromError`, `networkCost` | #11, #12 |
@@ -122,28 +126,32 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 
 | Hook | Qué devuelve |
 |---|---|
-| `queryKeys.ts` | **únicas** claves de TanStack Query: `['sui', red, recurso, …]` (`nodeInfo`, `lobby`, `game`, `txInfo`, `publishCheckpoint`, `checkpointTime`, `house`, `balance` con la dirección normalizada); los `bigint` como string. Claves de **mutación** (#12): `txAccount(red, cuenta)` = `['sui', red, 'tx', <cuenta normalizada> \| 'none']` y `txTarget(red, cuenta, objetivo)` = `[...txAccount, 'create']` o `[...txAccount, 'game', <id normalizado>]` |
-| `txInvalidation.ts` | `TxAction` (`create`, `cancel`, `reject`, `accept`) y `transactionInvalidations`: la tabla única de qué reiniciar/invalidar tras una transacción propia (DL-6) |
-| `txSession.ts` | lo puro de la máquina (#12, sin React): tipos (`TxTarget`, `TxView`, `TxVariables`, `TxNotice`, `AdoptedTx`), `toTxEntry`, `mountSnapshot` (foto de **todo** el `MutationCache` al montar) y `deriveTargetState` (en curso ajena, "sin confirmar" del objetivo, adopción) |
+| `queryKeys.ts` | **únicas** claves de TanStack Query: `['sui', red, recurso, …]` (`nodeInfo`, `lobby`, `game`, `txInfo`, `publishCheckpoint`, `checkpointTime`, `house`, `balance` con la dirección normalizada; #13: `myGames(red, pkg, cuenta)` = `['sui', red, 'myGames', pkg, <cuenta normalizada>]` y sus sub-claves `myActivity` = `[...myGames, 'activity']` y `myInvitations` = `[...myGames, 'invitations']`); los `bigint` como string. Claves de **mutación** (#12): `txAccount(red, cuenta)` = `['sui', red, 'tx', <cuenta normalizada> \| 'none']` y `txTarget(red, cuenta, objetivo)` = `[...txAccount, 'create']` o `[...txAccount, 'game', <id normalizado>]` |
+| `txInvalidation.ts` | `transactionInvalidations`: la tabla única de qué reiniciar/invalidar tras una transacción propia (DL-6) |
+| `txSession.ts` | lo puro de la máquina (#12, sin React; no importa nada de `hooks/`, DL-12 de #13): los tipos de la máquina (`TxAction`, `TxOutcome`, `TxResult`, `TxPrecheckStop`, `ExecuteInput`, `TxVariables` con `account` y `targetHash`, `TxTarget`, `TxView`, `TxNotice`, `AdoptedTx`), `toTxEntry`, `mountSnapshot` (foto de **todo** el `MutationCache` al montar), `deriveTargetState` (en curso ajena, "sin confirmar" del objetivo, adopción) y, para "Mis partidas", `toTxGameEntry`/`liveTxGameIds` (H-6) |
 | `useTxTarget` | **una** llamada por vista con acciones sobre un objetivo (`{ kind: 'create' }` o `{ kind: 'game', gameId }`): `view` (para los hooks de acción), `busy`, `notice` (`in_flight` / `adopted`), `unconfirmed` y `acknowledge` ("Ya la revisé"). Ver "Transacciones (#11, #12)" |
-| `useExecuteTransaction` | máquina común de transacciones: `useExecuteTransaction(view)` → `stage`, `outcome` (`success`/`failure` de **su** última ejecución, leído del caché por `runId`; nunca `unconfirmed`, que muestra la vista) y `execute` |
+| `useExecuteTransaction` | máquina común de transacciones: `useExecuteTransaction(view)` → `stage` (ligada al objetivo con que se lanzó; otra cuenta ve `idle`), `outcome` (`success`/`failure` de **su** última ejecución, leído del caché por `runId`; nunca `unconfirmed`, que muestra la vista) y `execute` |
 | `useCreateGame` / `useCancelGame` / `useRejectGame` / `useAcceptGame` | hooks finos sobre la máquina, que reciben la `view` de la vista (la partida sale de `view.target`): builder, relectura de la House (crear), y lo que se lee del resultado (partida creada y `feeChanged`; reembolso; el `GameResolved` de la aceptación) |
 | `useHouse` / `useSuiBalance` | la House de la config (sin intervalo; al montar y al foco) y el saldo de la cuenta conectada (sin cuenta no consulta) |
+| `useMyGames` | "Mis partidas" de la cuenta conectada: sin cuenta `{ kind: 'no_account' }` y ninguna consulta; con cuenta, `sections` (las tres, ya fijadas y deduplicadas), `unreadableEvents`, `activity` e `invitations` (`MyGamesSource`: `status` de la primera carga, `hasData`, `refreshRetrying`, `refreshError`, `hasNextPage`, `isFetchingNextPage`, `nextPageError`, `stalled`, `lowerBound`, `end`, `loadMore`, `retry`), `isFetching` y `refresh`. Ver "Mis partidas (#13)" |
+| `useAccountTxBusy` | hay una transacción de la cuenta conectada en curso, de cualquier objetivo (`useIsMutating` con `txAccount`); sin cuenta, `false`. El aviso "en curso" único de "Mis partidas" |
 | `useLobby` (+ `usePublishCheckpoint`) | filas con `isMine`, `ReadStatus` combinado con la publicación, `hasNextPage`, `isFetchingNextPage`, `nextPageError`, `stalled`, `lowerBound`, `end`, `loadMore`, `refresh` |
 | `useGame` | `invalid_id` sin consulta, o la partida con su `ReadStatus`; refresco cada 15 s y al foco, salvo tras un error definitivo (DL-7) |
 | `useTransactionTime` / `useCheckpointTime` | hora inmutable (`staleTime: Infinity`); sin digest (`null`/`''`) o sin número no consultan |
 | `useNodeStatus`, `useWalletAccount`, `useAppConfig` | indicador de red, cuenta conectada y config |
 
-### Componentes de transacción (#11, #12)
+### Componentes de transacción y listas (#11, #12, #13)
 
 | Componente | Qué hace |
 |---|---|
 | `TransactionStatus` | etapa en curso o resultado del nodo: éxito con digest (link solo en testnet), costo de red y nota si no se indexó; "sin confirmar" con digest y sin "Reintentar"; fallo con mensaje y, si se ejecutó, digest y costo |
 | `CreateGameForm` | formulario de la portada (ver "Formulario de creación"); `useTxTarget({ kind: 'create' })`; navega al detalle con el aviso en el `state` del router |
-| `GameActions` | "Aceptar" (ver "Aceptar y resultado"), "Cancelar" (creador) y "Rechazar" (invitado) en el detalle, con **una** `useTxTarget` de la partida y un `TransactionStatus` por acción, más el aviso "en curso", el resultado adoptado y **una** alerta "sin confirmar" con "Ya la revisé" |
+| `GameActions` | "Aceptar" (ver "Aceptar y resultado"), "Cancelar" (creador) y "Rechazar" (invitado) en el detalle, con **una** `useTxTarget` de la partida y un `TransactionStatus` por acción, más el aviso "en curso", el resultado adoptado y **una** alerta "sin confirmar" con "Ya la revisé". `variant='row'` (#13) es la fila de "Mis partidas": sin "Conecta tu wallet…" ni el aviso "en curso" (los da la página), y sin acciones después de un `success` propio o adoptado en la fila (H-3) |
+| `MyGamesSection` / `MyGameRow` | una sección de "Mis partidas" con su pie (`sectionFooter`), las notas de relectura y las filas (`li.my-game-row[data-game-id]`; en "Terminadas", el rol y `.my-game-result`; en las otras dos, `GameActions variant='row'`) |
+| `HistoryTime` | `CreatedAt` (hora de la transacción de una fila, "—" si no llega) y `FloorSince` (" (desde <fecha>)" del piso del nodo), comunes al lobby y a "Mis partidas" |
 | `GameDetail` | el detalle de la partida; con la partida resuelta y la cuenta conectada como creador o aceptante, "Resultado para ti: ganaste/perdiste" (DL-12, leído del objeto) |
 | `createdNotice.ts` | escribe y lee el aviso de creación del `state` del router (costo como string: react-router serializa la ubicación con `JSON.stringify`) |
-| `txNotice.ts` | el texto "Hay una transacción en curso desde esta cuenta; espera a que termine", común al formulario y al detalle |
+| `txNotice.ts` | el texto "Hay una transacción en curso desde esta cuenta; espera a que termine", común al formulario, al detalle y a "Mis partidas" (una vez por página) |
 
 ### Lecturas (#10)
 
@@ -181,11 +189,12 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
   siga `Pending`: se ve por su ID en `#/game/:id`, que lee el objeto. Sin filas, el lobby dice "No hay partidas abiertas
   en el historial disponible del nodo (desde <fecha>)" y, con filas, deja esa nota al pie; la fecha es la del
   checkpoint de la cota, una aproximación de hasta ~1 h. La hora de una transacción podada sale como "—".
-- **Listas por eventos (lo hereda #13):** en el fullnode público de testnet, `client.listEvents` del SDK (sin rango de
-  checkpoints) falla con `OUT_OF_RANGE` (sonda P7 de #10). Toda lista por eventos usa el crudo
-  `client.ledgerService.listEvents` con `startCheckpoint` (la cota de arriba) y trata `OUT_OF_RANGE` como **fin del
-  historial disponible** (`HistoryPrunedError`), no como error. La paginación del SDK solo vale contra un nodo sin poda
-  (p. ej. la localnet). El filtro `eventType` exige direcciones completas.
+- **Listas por eventos (lobby y "Mis partidas"):** en el fullnode público de testnet, `client.listEvents` del SDK (sin
+  rango de checkpoints) falla con `OUT_OF_RANGE` (sonda P7 de #10). Toda lista por eventos usa el crudo
+  `client.ledgerService.listEvents` de `sui/eventScan.ts`, con `startCheckpoint` (la cota de arriba, `historyLowerBound`),
+  y trata `OUT_OF_RANGE` como **fin del historial disponible** (`HistoryPrunedError`), no como error. La paginación del
+  SDK solo vale contra un nodo sin poda (p. ej. la localnet). El filtro `eventType` exige direcciones completas. "Mis
+  partidas" suma el filtro por remitente: ver "Mis partidas (#13)".
 - **IDs de entrada** (D12, SEG-9): implementado en `ids.ts` (`parseObjectIdInput`) y usado por `useGame`: un ID de la
   URL se valida y normaliza antes de consultar; uno inválido no consulta la red. Todo ID o dirección que entre por
   formulario pasa por el mismo borde antes de consultar o armar un PTB (la invitación usa `parseAddressInput`, #11). `explorer.ts` valida
@@ -204,12 +213,23 @@ el texto de red).
 
 | Etapa | Texto | Qué pasa |
 |---|---|---|
-| `preflight` | "Verificando la transacción…" | sin cuenta ⇒ "Conecta tu wallet". `precheck` de la acción (crear: **relee la House** y la compara con lo mostrado, M-2). Después, **preflight propia**: simula una **copia** con `sender` (`build({ client })`). Nada de esto abre la wallet |
+| `preflight` | "Verificando la transacción…" | sin cuenta (en las variables) ⇒ "Conecta tu wallet". `precheck` de la acción (crear: **relee la House** y la compara con lo mostrado, M-2). Después, **preflight propia**: simula una **copia** con `sender` (`build({ client })`). Nada de esto abre la wallet |
 | `signing` | "Esperando la firma en la wallet…" | a la wallet va el `Transaction` **sin construir** (la wallet resuelve gas y pago) |
 | `confirming` | "Confirmando en la red…" | `waitForTransaction` por digest con efectos y eventos. **El nodo es la única fuente de éxito o fallo** (DL-2, SEG-10): de la wallet solo se toma el digest |
 | `indexing` | "Actualizando datos…" | si la confirmación no trae `checkpoint`, `waitForCheckpoint`; después, las invalidaciones de la acción |
 | `done` | — | queda el `outcome` |
 
+- **Cuenta capturada (DL-11 de #13, MINOR-1 de #12):** `execute` guarda en las variables de la mutación (`TxVariables`)
+  la cuenta del clic (el `UiWalletAccount` de `useCurrentAccount()`) y el `targetHash` del objetivo. `run` usa **esa**
+  cuenta para la preflight, para firmar (`signAndExecuteTransaction({ transaction, account })`), para interpretar el
+  resultado (`ExecuteInput.interpret(nodeResult, signer)` recibe la dirección que firmó; crear y aceptar la usan para
+  reconocer su evento) y para la invalidación. Si la wallet ya no expone esa cuenta, el kit lanza antes de abrirla: sin
+  digest, "La wallet no completó la operación…". La **etapa** queda ligada al `targetHash` con que se lanzó: si la vista
+  pasa a otra cuenta, ve `idle` y `outcome: null`; al volver, la etapa y el resultado de la cuenta original.
+  **Límites:** en "Mis partidas" el cambio de cuenta remonta la página (`key={address}`), así que esto rinde en el
+  detalle y en el formulario; si después del cambio la **misma** instancia lanza una acción con la otra cuenta, su etapa
+  y su `runId` pasan a ser de esa ejecución y, al volver, ya no muestra el resultado anterior (su "sin confirmar" sigue
+  bloqueando el objetivo). La burner no permite reproducirlo; se verifica con una wallet de extensión en #17.
 - **Resultados:** `success` (digest, valor leído del resultado, `indexed`, costo de red = cómputo + storage − rebate);
   `failure` (mensaje y, si se ejecutó, digest y costo); `unconfirmed` (digest), **solo** cuando el nodo no respondió o
   venció el corte. Un error de la wallet o del SDK con digest, o cualquier error después de tenerlo, nunca es `failure`
@@ -257,15 +277,17 @@ el texto de red).
   muestra el abort mapeado y se aplican las invalidaciones de la acción (el estado mostrado está viejo).
 - **Invalidación (DL-6, `txInvalidation.ts`):**
 
-  | Acción | `resetQueries` | `invalidateQueries` |
+  | Acción | `resetQueries` | `invalidateQueries` (en este orden) |
   |---|---|---|
-  | crear | `lobby` (vuelve a la primera página) | `balance` de la cuenta |
-  | cancelar / rechazar | `lobby` | `game` de esa partida y `balance` de la cuenta |
-  | aceptar | `lobby` | `game` de esa partida, `balance` de la cuenta y `house` (cobró la comisión) |
+  | crear | `lobby` (vuelve a la primera página) | `balance` de la cuenta, `myGames` de la cuenta |
+  | cancelar / rechazar | `lobby` | `game` de esa partida, `balance` de la cuenta, `myGames` de la cuenta |
+  | aceptar | `lobby` | `game` de esa partida, `balance` de la cuenta, `house` (cobró la comisión), `myGames` de la cuenta |
 
-  Nunca `nodeInfo`, `txInfo`, `publishCheckpoint` ni `checkpointTime`. Se aplica también tras un abort en la preflight,
-  un fallo del nodo y un "sin confirmar" (el estado pudo cambiar). `done` llega **después** de la relectura: con el lobby
-  montado, "Actualizando datos…" dura lo que tarde esa lectura. #14 suma aquí las acciones de la House.
+  `myGames` (#13, DL-7) es el prefijo de las dos fuentes de "Mis partidas" de la cuenta que firmó, y va **al final**:
+  relee en serie todas sus páginas cargadas (ver "Mis partidas (#13)"). Sin cuenta, ni `balance` ni `myGames`. Nunca
+  `nodeInfo`, `txInfo`, `publishCheckpoint` ni `checkpointTime`. Se aplica también tras un abort en la preflight, un
+  fallo del nodo y un "sin confirmar" (el estado pudo cambiar). `done` llega **después** de la relectura: con el lobby o
+  "Mis partidas" montados, "Actualizando datos…" dura lo que tarde esa lectura. #14 suma aquí las acciones de la House.
 - **Mensajes de abort** (`errors.ts`, M-5): por **módulo + código**, solo si el abort viene de nuestro `packageId` u
   `originalPackageId` (normalizados), con el sufijo de diagnóstico fijo `(código <módulo>/<n>)`, p. ej. "Solo quien creó
   la partida puede cancelarla. (código game/3)". Los textos de `game` 0–10 y `house` 0–4 viven solo en
@@ -306,7 +328,7 @@ el texto de red).
   reserva de gas; tras el éxito, el costo real de red de esa transacción.
 - **Después de crear:** con la partida identificada (único `GameCreated` del firmante) navega a `#/game/<id>` con el
   aviso "Partida creada", digest y costo; en una invitación, "Comparte el enlace de esta página con el invitado;
-  guárdalo para volver a esta partida" (las invitaciones no aparecen en el lobby). Sin identificarla, queda en la
+  guárdalo, o encuéntrala en «Mis partidas»" (R-7 de #13; las invitaciones no aparecen en el lobby). Sin identificarla, queda en la
   portada con "Partida creada" y el digest.
 - **Detalle:** "Cancelar" solo para el creador y "Rechazar" solo para el invitado, en `Pending`; el reembolso que se
   muestra sale del `GameCancelled` de la transacción. Sin cuenta, el formulario dice "Conecta tu wallet para crear una
@@ -346,6 +368,110 @@ el texto de red).
 - **Cancelaciones del runtime** (DL-11): una aceptación cancelada por falta de aleatoriedad o por congestión no es éxito
   ni error del contrato; se muestra el texto de "intenta de nuevo" (ver "Mensajes de abort"), y el reintento es el
   mismo botón.
+
+### Mis partidas (#13)
+
+Página `#/my-games`, con el enlace "Mis partidas" en el encabezado. Sin cuenta dice "Conecta tu wallet para ver tus
+partidas e invitaciones" y no consulta nada. Con cuenta muestra `<MyGamesView key={address} />`: al cambiar de cuenta la
+vista se remonta (DL-9). Todo sale de `sui/myGames.ts` y `hooks/useMyGames.ts`; los componentes solo dibujan.
+
+- **Dos fuentes (DL-1), con el `ListEvents` crudo de `eventScan.ts`:**
+  - **(A) actividad propia:** la DNF `[sender = cuenta ∧ tipo = GameCreated] ∨ [sender = cuenta ∧ tipo = GameResolved]`
+    (`myActivityFilter`, tipos del paquete original, `sender` normalizado). El nodo la resuelve por índice: medido en el
+    fullnode público de testnet (`sui-node` 1.83.1, V-2) y en la localnet (`sui` 1.83.0, TASK-1 de #13, S-1);
+  - **(B) invitaciones recibidas:** el escaneo de todos los `GameCreated` del paquete (como el lobby) con el filtro
+    `opponent == cuenta` en el cliente: no hay filtro por campo del evento (V-1). Su costo crece con el volumen del
+    paquete (ver "Límite sin indexador").
+  - El `readMask` es el del lobby, **sin `sender`**: el remitente se verifica en el contenido del evento.
+- **Estado del objeto e invariantes (DL-3):** los IDs salen de los eventos y el estado de `getObjects` en lote, con
+  `parseGameObject`; cada fila guarda la versión del objeto (`objectVersion`). En (A), `GameCreated.creator` y
+  `GameResolved.acceptor` tienen que ser la cuenta; si no, la fila es **ilegible**: nunca se muestra como propia
+  (SEG-10). Un objeto que ya no existe se omite.
+- **Ilegibles:** en (A), un evento o un objeto ilegible da una fila "Partida ilegible" en "Terminadas". En (B), un
+  **evento** ilegible no da fila (no se sabe a quién invita): se cuenta y la página dice "N eventos ilegibles en lo
+  revisado". Un **objeto** ilegible de una invitación a la cuenta sí da fila, en "Invitaciones recibidas".
+- **Secciones (DL-4):** "Invitaciones recibidas" (pendientes, con "Aceptar" y "Rechazar"), "Tus partidas pendientes"
+  (creadas por la cuenta, en `Pending`, con "Cancelar") y "Terminadas" (resueltas con la cuenta como creador o
+  aceptante, con "Creaste"/"Aceptaste" y "Ganaste"/"Perdiste" leídos del objeto, más pozo y pago "según la fórmula del
+  contrato"; las canceladas propias dicen "Cancelada: la apuesta volvió a quien la creó"). Una invitación terminada en
+  la que la cuenta no fue el aceptante (rechazada o cancelada por el creador) no tiene sección. Orden: la más nueva
+  primero, por el checkpoint del evento.
+- **Deduplicación (`mergeMyGames`, H-2):** una invitación aceptada llega por las dos fuentes y es **una** fila. Gana la
+  lectura legible; entre dos legibles, la de mayor `objectVersion`, con rol "Aceptaste" si alguna fuente lo trae y el
+  evento más nuevo. `objectVersion` es una versión **Lamport** (sube a la del último commit del objeto, p. ej. 4 → 415 al
+  aceptar, y la comparten objetos de la misma transacción, V-10): solo se compara entre lecturas del **mismo** objeto.
+- **Fijado (DL-5, H-5, H-6):** cada partida queda en la sección donde se fijó hasta "Actualizar", hasta que la página se
+  remonta (volver a ella, cambiar de cuenta) o hasta que cambia la cuenta (los pins guardan su cuenta). Así, tras una
+  acción propia la fila **no salta** de sección: queda con su estado nuevo ("Resuelta", "Cancelada"), sin botones y con
+  su `TransactionStatus` (digest, montos).
+  - **H-5:** se fija solo con las **dos** fuentes quietas (`!isFetching`). Mientras alguna pide, las filas sin pin se
+    muestran en su sección natural y las fijadas no se mueven. Al remontar, la caché puede traer datos que la
+    invalidación de DL-7 marcó viejos y que TanStack relee recién ahora: el fijado espera a la relectura, así "volver a
+    la página" reagrupa con datos frescos.
+  - **H-6:** las partidas con una transacción **viva** de la cuenta (en curso, en curso al montar o empezada después de
+    montar: el criterio de adopción de #12, `liveTxGameIds`) se fijan **en seguida** con los datos que haya. La
+    transacción ya se ejecutó cuando la UI dice "Confirmando en la red…", y la relectura traería el estado nuevo: sin
+    H-6, la fila pasaría a "Terminadas" y perdería su resultado. Así una fila con una transacción en curso no se mueve
+    aunque se vuelva a la página o se cambie de cuenta, y el resultado adoptado aparece en ella. Esto cierra **RM-14**.
+    Lo único que queda: la primera visita sin caché con una transacción ya en curso; esa fila nunca se vio con
+    acciones, así que no se pierde nada a la vista.
+- **Pie honesto por fuente (DL-16, H-1, `sectionFooter`):**
+  - texto de vacío definitivo ("No tienes invitaciones pendientes", "No tienes partidas pendientes", "Todavía no hay
+    partidas terminadas") **solo** sin más páginas, sin `stalled` y sin error de "cargar más"; si no, "Sin … en lo
+    revisado";
+  - botón visible con más páginas y sin `stalled`, **también** con un error de "cargar más" (sirve de reintento), y
+    deshabilitado mientras carga ("Cargando más…"): "Cargar más actividad" al pie de "Tus partidas pendientes" **y** de
+    "Terminadas" (comparten la fuente (A)); en "Invitaciones recibidas", "Buscar más atrás" sin filas o "Cargar más
+    invitaciones" con filas;
+  - con un error de "cargar más", `role="alert"` con el mensaje, también con `stalled`;
+  - con la cota en el piso del nodo, el sufijo "en el historial disponible del nodo (desde <fecha>)" en el vacío, o la
+    nota "Solo se muestra el historial disponible del nodo (desde <fecha>)" con filas.
+- **Página vacía tras `ITEM_LIMIT` (V-9):** si lo revisado terminaba justo en el tope de un pedido, el nodo responde
+  `ITEM_LIMIT` y el pedido siguiente llega **vacío** con `CHECKPOINT_BOUND`. Es un fin normal, no un error: "Cargar más"
+  no trae filas y recién entonces aparece el texto definitivo. Forma de los frames medida en localnet (TASK-1 de #13):
+  con `ITEM_LIMIT`, el `QueryEnd` llega en el frame del último evento; con `CHECKPOINT_BOUND`, en un frame extra; cada
+  frame trae `watermark.cursor`, y el cursor final de un `CHECKPOINT_BOUND` es el de la cota.
+- **Relectura sin desmontar (DL-17):** por fuente, la primera carga (`status`: cargando, reintentando, error) reemplaza
+  las filas con `ReadState`; con datos, una relectura en reintento o fallida **no** las reemplaza: va como nota arriba de
+  la sección ("Reintentando… (intento n de m)" o "No se pudo actualizar la lista: …; los datos pueden estar
+  desactualizados" con "Reintentar"). "Reintentar" de una fuente cuya cota (la publicación) falló relee la publicación,
+  no el escaneo.
+- **Paginación (DL-8):** actividad, **50** eventos por pedido y **1** pedido por página; invitaciones, las constantes del
+  lobby (**50** / **2** / **20** candidatas). Objetos en lote (≤ 50 por pedido del SDK). Cota común:
+  `historyLowerBound`. Sin refresco automático ni al foco (DL-13): "Actualizar" vuelve a la primera página de las dos
+  fuentes y reinicia los pins.
+- **Invalidación (DL-7) y su costo:** cada transacción propia invalida `myGames` de la cuenta al final de su lista (tabla
+  de "Transacciones"). Con la página montada, las dos fuentes se releen **antes** de `done`, en serie y página por
+  página: con muchas páginas cargadas, "Actualizando datos…" y el candado global duran más (RM-12). Con reintentos, eso
+  dura hasta que terminan los de la política común: hasta 3 intentos con corte de 10 s y esperas de 1 s y 2 s, **por
+  cada pedido** de las páginas cargadas (H-4). `invalidateQueries` no lanza: `done` llega igual, y una relectura fallida
+  queda como nota (DL-17). Al releer, la primera página empieza en el tope actual: si llegaron eventos nuevos, las
+  mismas páginas cubren un tramo más reciente y una fila vieja puede quedar fuera hasta "cargar más" (la ventana se
+  corre).
+- **Acciones en las filas (DL-6, H-3):** una `useTxTarget` por fila (`GameActions variant='row'`), con el candado global
+  por cuenta: durante una transacción, todos los botones de todas las filas se deshabilitan y la página muestra el
+  aviso "Hay una transacción en curso desde esta cuenta; espera a que termine" **una** sola vez (`useAccountTxBusy`). Un
+  "sin confirmar" bloquea solo su fila hasta "Ya la revisé". Con un `success` propio o adoptado en la fila, sus acciones
+  desaparecen aunque el objeto leído siga viejo.
+- **Ayudas (D-20261103-03, DL-15):** "Abrir partida por ID" (`parseObjectIdInput`: forma corta y mayúsculas valen; un
+  ID inválido dice "ID de partida inválido" sin navegar ni pedir) y, solo en testnet, el enlace "Ver tu historial
+  completo en el explorador" (`explorerAccountUrl`, Suiscan, en otra pestaña).
+
+#### Límite sin indexador
+
+- **Ventana del nodo:** en testnet, las tres secciones cubren solo el historial que conserva el fullnode público
+  (≈ **14,6 días**, piso `lowestAvailableCheckpoint`; D-20261103-03, como el lobby por D-20261102-04 (1)). Lo dicen con
+  el sufijo o la nota "desde <fecha>".
+- **El caso del creador:** una partida creada hace más de ~14,6 días y resuelta después **no** aparece en "Terminadas"
+  del creador. El `GameResolved` tiene como remitente al aceptante, y el `GameCreated` del creador ya está podado. Se ve
+  por su enlace, por "Abrir partida por ID" o por el explorador.
+- **Costo del escaneo de invitaciones:** (B) recorre **todos** los `GameCreated` del paquete; con muchas partidas ajenas,
+  encontrar una invitación vieja puede pedir varios "Buscar más atrás". Está acotado (50 / 2 / 20 por página) y dice
+  "en lo revisado" (RM-2).
+- **Sin filtro por campo:** ni el `ListEvents` del fullnode ni GraphQL filtran por `opponent`: (B) no se puede
+  abaratar sin un indexador propio.
+- **Seguimiento post-MVP:** mostrar en testnet el historial completo, más allá de la ventana, queda en **#51**
+  (D-20261103-03: GraphQL u otro índice, con su medición).
 
 ### Fixtures de lectura
 
@@ -422,10 +548,13 @@ habilita ni se ofrece.
 
 ## Pendientes conocidos
 
-- El build de testnet pesa ≈ 887 kB (≈ 270 kB gzip; desde #11 entra el SDK de transacciones) y Vite avisa de un chunk
-  mayor de 500 kB: el code-splitting queda para #15 (hosting).
-- `done` espera la relectura del lobby si está montado (DL-6): con una red lenta "Actualizando datos…" puede durar
-  varios segundos. Se mide en los smokes de #11 y #12 (localnet) y en testnet en #17.
+- El build de testnet pesa ≈ 901 kB (≈ 274 kB gzip; desde #11 entra el SDK de transacciones y desde #13 "Mis
+  partidas") y Vite avisa de un chunk mayor de 500 kB: el code-splitting queda para #15 (hosting).
+- `done` espera la relectura del lobby y de "Mis partidas" si están montados (DL-6, DL-7): con una red lenta o con
+  muchas páginas cargadas, "Actualizando datos…" puede durar varios segundos (RM-12, H-4). Se mide en los smokes de
+  #11, #12 y #13 (localnet) y en testnet en #17.
+- El cambio de cuenta a mitad de una transacción (DL-11 de #13) y el historial podado de "Mis partidas" ("desde
+  <fecha>", el caso del creador) se verifican con una wallet de extensión en testnet en #17.
 - Lo que no prueba el smoke de localnet (una wallet de extensión real y su texto de error, R-1 de #11; su vista previa de
   aceptar; la latencia de testnet) queda para el owner en #17.
 - `runtimeCancellation` lee el error estructurado; con digest, la app lo toma de la confirmación del nodo. Solo una

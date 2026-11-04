@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useNodeStatus } from '../hooks/useNodeStatus';
@@ -26,12 +27,20 @@ const CONFIG: AppConfig = {
   burnerWalletEnabled: false,
 };
 
+/** El encabezado lleva un `Link` (DL-10 de #13): se dibuja dentro de un router. */
+const renderHeader = () =>
+  render(
+    <MemoryRouter>
+      <Header />
+    </MemoryRouter>,
+  );
+
 describe('Header', () => {
   it('renders the title, network badge, connected account and connect button', () => {
     vi.mocked(useAppConfig).mockReturnValue(CONFIG);
     vi.mocked(useNodeStatus).mockReturnValue({ kind: 'ok', checkpointHeight: 1n });
     vi.mocked(useWalletAccount).mockReturnValue({ address: `0x${'ab'.repeat(32)}`, short: '0xabab…abab' });
-    render(<Header />);
+    renderHeader();
     expect(screen.getByRole('heading', { level: 1, name: 'Sui Battleship' })).toBeInTheDocument();
     expect(screen.getByText('testnet')).toBeInTheDocument();
     expect(screen.getByText('nodo OK')).toBeInTheDocument();
@@ -39,11 +48,19 @@ describe('Header', () => {
     expect(screen.getByRole('button', { name: 'Conectar wallet' })).toBeInTheDocument();
   });
 
+  it('links to my games (T5-1)', () => {
+    vi.mocked(useAppConfig).mockReturnValue(CONFIG);
+    vi.mocked(useNodeStatus).mockReturnValue({ kind: 'loading' });
+    vi.mocked(useWalletAccount).mockReturnValue({ address: null, short: null });
+    renderHeader();
+    expect(screen.getByRole('link', { name: 'Mis partidas' })).toHaveAttribute('href', '/my-games');
+  });
+
   it('renders no account badge when disconnected', () => {
     vi.mocked(useAppConfig).mockReturnValue(CONFIG);
     vi.mocked(useNodeStatus).mockReturnValue({ kind: 'loading' });
     vi.mocked(useWalletAccount).mockReturnValue({ address: null, short: null });
-    render(<Header />);
+    renderHeader();
     expect(screen.queryByTitle(/^0x/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Conectar wallet' })).toBeInTheDocument();
   });

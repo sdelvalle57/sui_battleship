@@ -4,16 +4,9 @@ import { GrpcTypes, RpcError } from '@mysten/sui/grpc';
 import { fromBase64, normalizeSuiAddress, toBase64 } from '@mysten/sui/utils';
 import { describe, expect, it, vi } from 'vitest';
 import { gameEventType } from './events';
+import { HISTORY_FLOOR_MARGIN_CHECKPOINTS, type EventScanClient } from './eventScan';
 import { parseGameObject, type GameObjectInput } from './game';
-import {
-  fetchLobbyPage,
-  LOBBY_EVENTS_PER_REQUEST,
-  LOBBY_FLOOR_MARGIN_CHECKPOINTS,
-  LOBBY_MAX_REQUESTS_PER_PAGE,
-  LOBBY_PAGE_TARGET,
-  lobbyLowerBound,
-  type LobbyClient,
-} from './lobby';
+import { fetchLobbyPage, LOBBY_EVENTS_PER_REQUEST, LOBBY_MAX_REQUESTS_PER_PAGE, LOBBY_PAGE_TARGET } from './lobby';
 import { PaginationStalledError, ReadDataError } from './readErrors';
 import { shouldRetryRead } from './readPolicy';
 
@@ -141,7 +134,7 @@ function makeClient({
       objects: objectIds.map((id) => byId.get(id) ?? new ObjectError('notExists', `${id} not found`, { reason: 'notFound', objectId: id })),
     }),
   );
-  const client = { ledgerService: { listEvents, getServiceInfo }, getObjects } as unknown as LobbyClient;
+  const client = { ledgerService: { listEvents, getServiceInfo }, getObjects } as unknown as EventScanClient;
   return { client, listEvents, getServiceInfo, getObjects };
 }
 
@@ -150,26 +143,13 @@ const request = (mock: ReturnType<typeof makeClient>['listEvents'], i: number): 
   if (!args) throw new Error(`no hubo pedido ${String(i)}`);
   return args[0];
 };
-const fetchPage = (client: LobbyClient, opts: { publishCheckpoint?: bigint | null; before?: string | null } = {}) =>
+const fetchPage = (client: EventScanClient, opts: { publishCheckpoint?: bigint | null; before?: string | null } = {}) =>
   fetchLobbyPage(client, { originalPackageId: PKG, publishCheckpoint: opts.publishCheckpoint ?? 59n, before: opts.before ?? null });
 
 // ---------- Tests ----------
 describe('calibrated constants', () => {
   it('match the TASK-1 calibration (50 / 2 / 20 / 16 000)', () => {
-    expect([LOBBY_EVENTS_PER_REQUEST, LOBBY_MAX_REQUESTS_PER_PAGE, LOBBY_PAGE_TARGET, LOBBY_FLOOR_MARGIN_CHECKPOINTS]).toEqual([50, 2, 20, 16_000n]);
-  });
-});
-
-describe('lobbyLowerBound', () => {
-  it.each([
-    ['publish above floor + margin', 100_000n, 1_000n, { checkpoint: 100_000n, kind: 'publish' }],
-    ['floor + margin above publish', 59n, 1_000n, { checkpoint: 17_000n, kind: 'node_floor' }],
-    ['pruned publish (null)', null, 1_000n, { checkpoint: 17_000n, kind: 'node_floor' }],
-    ['floor 0: publish without margin', 59n, 0n, { checkpoint: 59n, kind: 'publish' }],
-    ['floor null: publish without margin', 59n, null, { checkpoint: 59n, kind: 'publish' }],
-    ['both null', null, null, { checkpoint: 0n, kind: 'none' }],
-  ])('%s', (_name, publishCheckpoint, nodeFloor, expected) => {
-    expect(lobbyLowerBound({ publishCheckpoint, nodeFloor })).toEqual(expected);
+    expect([LOBBY_EVENTS_PER_REQUEST, LOBBY_MAX_REQUESTS_PER_PAGE, LOBBY_PAGE_TARGET, HISTORY_FLOOR_MARGIN_CHECKPOINTS]).toEqual([50, 2, 20, 16_000n]);
   });
 });
 
@@ -311,7 +291,7 @@ describe('fetchLobbyPage: pruned history (M-4, H-5)', () => {
   it('uses floor + margin as startCheckpoint when the publish transaction was pruned', async () => {
     const { client, listEvents } = makeClient({ scripts: [page([], QueryEndReason.CHECKPOINT_BOUND, 'c1')], floors: [1_000n] });
     const result = await fetchPage(client, { publishCheckpoint: null });
-    expect(request(listEvents, 0).startCheckpoint).toBe(1_000n + LOBBY_FLOOR_MARGIN_CHECKPOINTS);
+    expect(request(listEvents, 0).startCheckpoint).toBe(1_000n + HISTORY_FLOOR_MARGIN_CHECKPOINTS);
     expect(result.lowerBound).toEqual({ checkpoint: 17_000n, kind: 'node_floor' });
   });
 

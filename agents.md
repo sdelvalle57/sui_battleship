@@ -223,7 +223,9 @@ Navegador (app React) ──wallet (firma)──▶ Sui fullnode (gRPC-web) ─�
   wallet.
 - **Redes:** `localnet` (smokes), `testnet` (despliegue del MVP). `mainnet` fuera de alcance sin decisión.
 - **Indexado:** las listas (partidas abiertas, mis partidas) salen de **eventos** del paquete; no hay
-  registros globales en objetos compartidos (PROY-6).
+  registros globales en objetos compartidos (PROY-6). "Mis partidas" (#13): la actividad propia con el filtro por
+  remitente del nodo y las invitaciones por escaneo de `GameCreated`, con el estado vigente leído del objeto. En testnet
+  solo cubren la ventana del fullnode (≈ 14,6 días, D-20261103-03; seguimiento en #51).
 
 ## 5. Contrato on-chain ↔ UI
 

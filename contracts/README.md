@@ -493,6 +493,26 @@ transacción (cómputo + storage − rebate de `effects.gasUsed`).
   `client.ledgerService.listEvents` descendente con `startCheckpoint` = máx(checkpoint de la publicación, piso + margen)
   (#10, D-20261102-04): el escaneo termina con `QueryEndReason.CHECKPOINT_BOUND` al
   llegar a la cota, sin eventos anteriores.
+- **Listas de "Mis partidas" (#13):** dos fuentes sobre el mismo `ListEvents` crudo (`app/src/sui/eventScan.ts`):
+  - **actividad propia:** el filtro del nodo es una DNF (`terms[]` en OR de `literals[]` en AND, con `negated` y
+    predicados `sender`, `emitModule`, `eventType` y `eventStreamHead`; sin filtro por campo del evento):
+    `[sender = cuenta ∧ eventType = GameCreated] ∨ [sender = cuenta ∧ eventType = GameResolved]`. Vale porque
+    `GameCreated` lo emite el creador y `GameResolved` el aceptante (`ctx.sender()` en los dos). La app igual verifica
+    `creator`/`acceptor` en el contenido del evento y no pide `sender` en el `readMask`;
+  - **invitaciones recibidas:** el escaneo de todos los `GameCreated` (como el lobby) con `opponent == cuenta` en el
+    cliente, porque no hay filtro por `opponent`. Un `GameCancelled` no hace falta: el estado vigente sale del objeto.
+  - **Medido en la localnet aislada** (`sui` 1.83.0, TASK-1 de #13; el fullnode público de testnet, `sui-node` 1.83.1, ya
+    lo había dado en el plan):
+    - S-1: la DNF filtra por remitente. La cuenta que creó 3 partidas recibe sus 3 `GameCreated` y no el `GameResolved`
+      que firmó otra; una dirección sin actividad recibe 0 eventos y `CHECKPOINT_BOUND`;
+    - S-2: con `limit` 5 y `before` = último `watermark.cursor`, los 12 `GameCreated` de un solo PTB (mismo digest,
+      `event_index` 0..11) salen 5 + 5 + 2, sin repetidos ni faltantes, también sin filtro de `sender`;
+    - con exactamente `limit` eventos restantes, el pedido termina en `ITEM_LIMIT` y el siguiente llega vacío con
+      `CHECKPOINT_BOUND` (fin normal);
+    - `object.version` es una versión Lamport (4 → 415 al aceptar; compartida por los objetos de una misma
+      transacción): solo se compara entre lecturas del mismo objeto.
+  - **Límite:** en testnet cubren solo la ventana del fullnode (≈ 14,6 días, D-20261103-03): ver `app/README.md`, "Mis
+    partidas (#13)" → "Límite sin indexador" (seguimiento en #51).
 - El parser de #10 usa **un** formato y trata una variante desconocida como error, nunca como `Pending` (SEG-10).
 - El resultado de aceptar se lee del evento `GameResolved` de la transacción o del objeto
   (`Resolved { acceptor, winner }`).

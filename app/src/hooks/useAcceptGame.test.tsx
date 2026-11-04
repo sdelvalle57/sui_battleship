@@ -153,6 +153,7 @@ describe('useAcceptGame (T4-1)', () => {
       queryKeys.game('localnet', GAME_ID),
       queryKeys.balance('localnet', ACCEPTOR),
       queryKeys.house('localnet', CONFIG.houseId),
+      queryKeys.myGames('localnet', CONFIG.originalPackageId, ACCEPTOR),
     ]);
     const all = JSON.stringify([...resetSpy.mock.calls, ...invalidateSpy.mock.calls].map((c) => c[0]?.queryKey));
     for (const key of ['txInfo', 'publishCheckpoint', 'checkpointTime', 'nodeInfo']) expect(all).not.toContain(key);

@@ -76,6 +76,17 @@ describe('App routes', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('ID de partida inválido');
   });
 
+  it('renders my games at /my-games, without account the fixed text and no reads (T5-1)', () => {
+    vi.mocked(useLobby).mockClear();
+    vi.mocked(useGame).mockClear();
+    renderAt('/my-games');
+    expect(screen.getByRole('heading', { level: 2, name: 'Mis partidas' })).toBeInTheDocument();
+    expect(screen.getByText('Conecta tu wallet para ver tus partidas e invitaciones')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Mis partidas' })).toHaveAttribute('href', '/my-games');
+    expect(useLobby).not.toHaveBeenCalled();
+    expect(useGame).not.toHaveBeenCalled();
+  });
+
   it('renders the not found page with a link home for an unknown route', () => {
     renderAt('/no-existe');
     expect(screen.getByRole('heading', { level: 1, name: 'Sui Battleship' })).toBeInTheDocument();

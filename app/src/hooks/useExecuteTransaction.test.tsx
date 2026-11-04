@@ -18,11 +18,11 @@ import {
 } from '../sui/execution';
 import { buildCancelGameTx } from '../sui/transactions/game';
 import { queryWrapper } from '../test/queryHarness';
+import { deferred } from '../test/txHarness';
 import { queryKeys } from './queryKeys';
-import type { TxAction } from './txInvalidation';
 import { useAppConfig } from './useAppConfig';
-import type { TxTarget } from './txSession';
-import { CONNECT_WALLET_MESSAGE, PREPARE_FAILED_PREFIX, useExecuteTransaction, type ExecuteInput, type TxStage } from './useExecuteTransaction';
+import type { ExecuteInput, TxAction, TxTarget } from './txSession';
+import { CONNECT_WALLET_MESSAGE, PREPARE_FAILED_PREFIX, useExecuteTransaction, type TxStage } from './useExecuteTransaction';
 import { useTxTarget } from './useTxTarget';
 
 vi.mock('@mysten/dapp-kit-react', () => ({ useCurrentClient: vi.fn(), useCurrentAccount: vi.fn(), useDAppKit: vi.fn() }));
@@ -130,6 +130,7 @@ const resetKeys = () => resetSpy.mock.calls.map((c) => c[0]?.queryKey);
 const invalidatedKeys = () => invalidateSpy.mock.calls.map((c) => c[0]?.queryKey);
 const LOBBY = queryKeys.lobby('localnet', PKG);
 const BALANCE = queryKeys.balance('localnet', SENDER);
+const MY_GAMES = queryKeys.myGames('localnet', PKG, SENDER);
 
 beforeEach(() => {
   queryClient = new QueryClient();
@@ -198,9 +199,9 @@ describe('useExecuteTransaction: happy path', () => {
   });
 
   it.each([
-    ['create', { kind: 'create' }, [BALANCE]],
-    ['cancel', { kind: 'cancel', gameId: fixture.ids.games.open }, [queryKeys.game('localnet', fixture.ids.games.open), BALANCE]],
-    ['reject', { kind: 'reject', gameId: fixture.ids.games.open }, [queryKeys.game('localnet', fixture.ids.games.open), BALANCE]],
+    ['create', { kind: 'create' }, [BALANCE, MY_GAMES]],
+    ['cancel', { kind: 'cancel', gameId: fixture.ids.games.open }, [queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]],
+    ['reject', { kind: 'reject', gameId: fixture.ids.games.open }, [queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]],
   ] as [string, TxAction, unknown[]][])('invalidates exactly the keys of %s, none immutable', async (_name, action, invalidated) => {
     await runToOutcome(input(action));
     expect(resetKeys()).toEqual([LOBBY]);
@@ -314,7 +315,7 @@ describe('useExecuteTransaction: before the wallet', () => {
       cost: null,
     });
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
     expect(signAndExecuteTransaction).not.toHaveBeenCalled();
   });
 
@@ -365,7 +366,7 @@ describe('useExecuteTransaction: wallet and node', () => {
     expect(result.current.target.unconfirmed?.digest).toBe(OPEN_DIGEST);
     expect(result.current.outcome).toBeNull();
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
   });
 
   it('is unconfirmed (never failure) and still invalidates when the node answer is malformed after the wallet digest', async () => {
@@ -374,7 +375,7 @@ describe('useExecuteTransaction: wallet and node', () => {
     expect(result.current.target.unconfirmed?.digest).toBe(OPEN_DIGEST);
     expect(result.current.outcome).toBeNull();
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
   });
 
   it('fails with the effects message, digest and cost when the node says failure although the wallet said success', async () => {
@@ -387,7 +388,7 @@ describe('useExecuteTransaction: wallet and node', () => {
       digest: FAILED_DIGEST,
       cost: 1_000_294n,
     });
-    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
   });
 
   it('succeeds with value null when interpret throws after the node confirmed (NIT-1), with normal invalidations', async () => {
@@ -397,7 +398,7 @@ describe('useExecuteTransaction: wallet and node', () => {
     const { result } = await runToOutcome(input({ kind: 'create' }, { interpret }));
     expect(result.current.outcome).toEqual({ kind: 'success', digest: OPEN_DIGEST, value: null, indexed: true, cost: 3_941_200n });
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([BALANCE]);
+    expect(invalidatedKeys()).toEqual([BALANCE, MY_GAMES]);
   });
 });
 
@@ -424,7 +425,7 @@ describe('useExecuteTransaction: indexing (S-1 bis)', () => {
     const { result } = await runToOutcome();
     expect(result.current.outcome).toMatchObject({ kind: 'success', indexed: false });
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([BALANCE]);
+    expect(invalidatedKeys()).toEqual([BALANCE, MY_GAMES]);
   });
 
   it('still invalidates when the component unmounts during confirming', async () => {
@@ -445,7 +446,7 @@ describe('useExecuteTransaction: indexing (S-1 bis)', () => {
     unmount();
     confirm(nodeResult(OPEN_OK));
     await waitFor(() => {
-      expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+      expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
     });
     expect(resetKeys()).toEqual([LOBBY]);
   });
@@ -466,7 +467,7 @@ describe('useExecuteTransaction: wallet abort without digest (T3-13, NIT-2)', ()
       cost: null,
     });
     expect(resetKeys()).toEqual([LOBBY]);
-    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE]);
+    expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
     expect(confirmTransaction).not.toHaveBeenCalled();
   });
 
@@ -498,5 +499,161 @@ describe('useExecuteTransaction: SimulationError without abort (T3-14, DL-10)', 
     const { result } = await runToOutcome();
     expect(result.current.outcome).toMatchObject({ kind: 'failure', message: 'La red no ejecutó la transacción: InsufficientCoinBalance in command 0' });
     expect(signAndExecuteTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('useExecuteTransaction: account switch (MINOR-1 of #12, DL-11 of #13)', () => {
+  type Account = NonNullable<ReturnType<typeof useCurrentAccount>>;
+  const ACCOUNT_A = { address: SENDER } as Account;
+  const ACCOUNT_B = { address: `0x${'e'.repeat(64)}` } as Account;
+  type Hook = ReturnType<typeof render>;
+  /** La wallet pasa a otra cuenta sin desmontar la vista. */
+  function switchTo(hook: Hook, account: Account) {
+    vi.mocked(useCurrentAccount).mockReturnValue(account);
+    hook.rerender();
+  }
+  const walletCall = (i: number) =>
+    signAndExecuteTransaction.mock.calls[i]?.[0] as { account: unknown; transaction: { getData: () => { sender: string | null } } };
+  async function settle() {
+    await waitFor(() => {
+      expect(queryClient.isMutating()).toBe(0);
+    });
+  }
+
+  beforeEach(() => {
+    vi.mocked(useCurrentAccount).mockReturnValue(ACCOUNT_A);
+  });
+
+  it('shows idle and no outcome to another account while A confirms, and A sees its stage and success again on return (T3-2, T3-3)', async () => {
+    const confirm = deferred<NodeTransactionResult>();
+    vi.mocked(confirmTransaction).mockReturnValueOnce(confirm.promise);
+    const hook = render();
+    act(() => {
+      hook.result.current.execute(input());
+    });
+    await waitFor(() => {
+      expect(hook.result.current.stage).toBe('confirming');
+    });
+    switchTo(hook, ACCOUNT_B);
+    expect(hook.result.current.stage).toBe<TxStage>('idle');
+    expect(hook.result.current.outcome).toBeNull();
+    expect(hook.result.current.target.busy).toBe(false);
+    expect(hook.result.current.target.notice).toBeNull();
+    await act(async () => {
+      confirm.resolve(nodeResult(OPEN_OK));
+      await Promise.resolve();
+    });
+    await settle();
+    expect(hook.result.current.stage).toBe<TxStage>('idle');
+    expect(hook.result.current.outcome).toBeNull();
+    switchTo(hook, ACCOUNT_A);
+    expect(hook.result.current.stage).toBe<TxStage>('done');
+    expect(hook.result.current.outcome).toEqual({ kind: 'success', digest: OPEN_DIGEST, value: 'interpreted', indexed: true, cost: 3_941_200n });
+  });
+
+  it('signs, interprets and invalidates with the account captured at the click when the wallet switches during the preflight (T3-4)', async () => {
+    const preflight = deferred<Uint8Array>();
+    vi.mocked(preflightTransaction).mockReturnValueOnce(preflight.promise);
+    const interpret = vi.fn<(nodeResult: NodeTransactionResult, signer: string) => string>(() => 'interpreted');
+    const hook = render();
+    act(() => {
+      hook.result.current.execute(input({ kind: 'create' }, { interpret }));
+    });
+    await waitFor(() => {
+      expect(preflightTransaction).toHaveBeenCalled();
+    });
+    switchTo(hook, ACCOUNT_B);
+    await act(async () => {
+      preflight.resolve(new Uint8Array());
+      await Promise.resolve();
+    });
+    await settle();
+    expect(vi.mocked(preflightTransaction).mock.calls[0]?.[2]).toBe(SENDER);
+    expect(walletCall(0).account).toBe(ACCOUNT_A);
+    expect(interpret).toHaveBeenCalledTimes(1);
+    expect(interpret.mock.calls[0]?.[1]).toBe(SENDER);
+    expect(invalidatedKeys()).toEqual([BALANCE, MY_GAMES]);
+  });
+
+  it("keeps A's unconfirmed transaction blocking only A: B executes, and A is blocked again on return (T3-5)", async () => {
+    vi.mocked(confirmTransaction).mockRejectedValueOnce(new Error('timeout'));
+    const hook = render();
+    act(() => {
+      hook.result.current.execute(input());
+    });
+    await waitFor(() => {
+      expect(hook.result.current.target.unconfirmed).toEqual({ digest: OPEN_DIGEST });
+    });
+    switchTo(hook, ACCOUNT_B);
+    expect(hook.result.current.target.unconfirmed).toBeNull();
+    act(() => {
+      hook.result.current.execute(input());
+    });
+    await waitFor(() => {
+      expect(hook.result.current.outcome?.kind).toBe('success');
+    });
+    expect(walletCall(1).account).toBe(ACCOUNT_B);
+    switchTo(hook, ACCOUNT_A);
+    expect(hook.result.current.target.unconfirmed).toEqual({ digest: OPEN_DIGEST });
+    act(() => {
+      hook.result.current.execute(input());
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(preflightTransaction).toHaveBeenCalledTimes(2);
+    expect(signAndExecuteTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not show A's outcome on return after B ran from the same instance, and A's unconfirmed still blocks A (T3-6)", async () => {
+    const confirm = deferred<NodeTransactionResult>();
+    vi.mocked(confirmTransaction).mockReturnValueOnce(confirm.promise);
+    const hook = render();
+    act(() => {
+      hook.result.current.execute(input());
+    });
+    await waitFor(() => {
+      expect(hook.result.current.stage).toBe('confirming');
+    });
+    switchTo(hook, ACCOUNT_B);
+    act(() => {
+      hook.result.current.execute(input());
+    });
+    await waitFor(() => {
+      expect(hook.result.current.outcome?.kind).toBe('success');
+    });
+    await act(async () => {
+      confirm.reject(new Error('timeout'));
+      await Promise.resolve();
+    });
+    await settle();
+    switchTo(hook, ACCOUNT_A);
+    expect(hook.result.current.outcome).toBeNull();
+    // La etapa es la de A (su `finally` corrió después del de B): `done` sin resultado no dibuja texto en TransactionStatus.
+    expect(hook.result.current.stage).toBe<TxStage>('done');
+    expect(hook.result.current.target.unconfirmed).toEqual({ digest: OPEN_DIGEST });
+    act(() => {
+      hook.result.current.execute(input());
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(signAndExecuteTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps "Conecta tu wallet" without calls when the variables carry account null (T3-7)', async () => {
+    vi.mocked(useCurrentAccount).mockReturnValue(null);
+    const { result } = await runToOutcome();
+    expect(result.current.outcome).toEqual({ kind: 'failure', message: CONNECT_WALLET_MESSAGE, digest: null, cost: null });
+    const [mutation] = queryClient.getMutationCache().getAll();
+    expect(mutation?.state.variables).toMatchObject({ account: null, targetHash: result.current.target.view.targetHash });
+    expect(preflightTransaction).not.toHaveBeenCalled();
+    expect(signAndExecuteTransaction).not.toHaveBeenCalled();
+  });
+
+  it('passes the captured account to the wallet and still sends the transaction without sender (T3-9)', async () => {
+    await runToOutcome();
+    expect(walletCall(0).account).toBe(ACCOUNT_A);
+    expect(walletCall(0).transaction.getData().sender).toBeNull();
   });
 });

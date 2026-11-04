@@ -25,6 +25,18 @@ export const queryKeys = {
   house: (network: Network, houseId: string) => ['sui', network, 'house', houseId] as const,
   /** Saldo de SUI de una cuenta, con la dirección normalizada (una cuenta, una clave). */
   balance: (network: Network, address: string) => ['sui', network, 'balance', normalizeSuiAddress(address)] as const,
+  /**
+   * Prefijo de "Mis partidas" de una cuenta (DL-7 de #13): lo invalida cada transacción propia y lo reinicia "Actualizar".
+   * Con la dirección normalizada, como `balance`.
+   */
+  myGames: (network: Network, originalPackageId: string, address: string) =>
+    ['sui', network, 'myGames', originalPackageId, normalizeSuiAddress(address)] as const,
+  /** Páginas de la actividad propia de una cuenta (DL-1 (A)). */
+  myActivity: (network: Network, originalPackageId: string, address: string) =>
+    [...queryKeys.myGames(network, originalPackageId, address), 'activity'] as const,
+  /** Páginas del escaneo de invitaciones a una cuenta (DL-1 (B)). */
+  myInvitations: (network: Network, originalPackageId: string, address: string) =>
+    [...queryKeys.myGames(network, originalPackageId, address), 'invitations'] as const,
   /** Hora de un checkpoint por número (inmutable). */
   checkpointTime: (network: Network, sequenceNumber: bigint) =>
     ['sui', network, 'checkpointTime', sequenceNumber.toString()] as const,

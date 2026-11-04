@@ -42,7 +42,7 @@ export function GameDetailPage() {
           successText="Partida creada"
           costNote="(incluye el depósito de almacenamiento, que no se recupera)"
         >
-          {created.invitation && <p>Comparte el enlace de esta página con el invitado; guárdalo para volver a esta partida</p>}
+          {created.invitation && <p>Comparte el enlace de esta página con el invitado; guárdalo, o encuéntrala en «Mis partidas»</p>}
           {created.feeChanged !== null && (
             <p>
               La partida se creó con comisión {formatBps(created.feeChanged.to)} (el formulario mostraba{' '}

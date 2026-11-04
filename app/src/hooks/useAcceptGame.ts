@@ -1,4 +1,3 @@
-import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import type { GameResolvedEvent } from '../sui/events';
 import type { Game } from '../sui/game';
 import { parseResolvedGame } from '../sui/gameTx';
@@ -18,16 +17,14 @@ export function useAcceptGame(
   game: Pick<Game, 'bet'>,
 ): UseExecuteTransaction<GameResolvedEvent | null> & { accept: () => void } {
   const config = useAppConfig();
-  const account = useCurrentAccount();
   const tx = useExecuteTransaction<GameResolvedEvent | null>(view);
-  const sender = account?.address ?? null;
   const accept = () => {
     const { gameId } = view.target;
     tx.execute({
       action: { kind: 'accept', gameId },
       build: () => buildAcceptGameTx({ packageId: config.packageId, houseId: config.houseId, gameId, bet: game.bet }),
-      interpret: (result) =>
-        sender === null ? null : parseResolvedGame(result, { originalPackageId: config.originalPackageId, gameId, acceptor: sender }),
+      // El aceptante es la cuenta que firmó (DL-11 de #13), no la que esté conectada al terminar.
+      interpret: (result, signer) => parseResolvedGame(result, { originalPackageId: config.originalPackageId, gameId, acceptor: signer }),
     });
   };
   return { ...tx, accept };
