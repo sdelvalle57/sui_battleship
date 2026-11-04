@@ -10,6 +10,12 @@
 
 ---
 
+### D-20261103-03 — Historial de "Mis partidas" en testnet: la ventana del fullnode (STOP P-1 de #13)
+- **Decisión:** las listas de "Mis partidas" (invitaciones recibidas, partidas pendientes propias y terminadas) leen, como el lobby, solo el historial que conserva el fullnode público de testnet (~14,6 días, piso `lowestAvailableCheckpoint`), con un texto honesto que lo dice. Se suman dos ayudas: un campo "Abrir partida por ID" y, solo en testnet, un enlace "Ver tu historial completo en el explorador". Una partida más vieja sigue abriéndose por su enlace o su ID, o por la CLI. Confirma D-20261102-04 (1) para las listas de #13; queda un issue de seguimiento post-MVP con la medición de GraphQL.
+- **Alternativa descartada:** GraphQL de Mysten solo en testnet (dos caminos de lectura, el de testnet sin prueba en localnet, dependencia de otro servicio; reabre D-20261102-02 (1)); recordar las partidas propias en el navegador (no cubre invitaciones recibidas ni otros dispositivos).
+- **Motivo:** STOP P-1 del plan v1 de #13; mediciones públicas del MID y del MAYOR (ventana de 14,56 días; GraphQL sin OR ni filtro por campo, así que no abarata el escaneo de invitaciones).
+- **Aprobado por:** usuario ("Aceptar la ventana", 2026-11-03). **Fecha:** 2026-11-03.
+
 ### D-20261103-02 — Invitación ajena en el detalle: aviso sin botón (STOP P-1 de #12)
 - **Decisión:** una cuenta conectada que abre una invitación dirigida a otra dirección **no ve el botón "Aceptar"**; ve el aviso "Esta invitación es para otra dirección." (el mismo sentido que `ENotInvited`). Nunca se muestra el aviso sin cuenta conectada. El criterio del smoke de #12 "intento con una tercera cuenta (abriendo el detalle por URL) que muestra el error mapeado" se reinterpreta así: en la app, la tercera cuenta recibe el error mapeado `game`/4 al aceptar una partida abierta que otro aceptó antes (carrera); `game`/5 (`ENotInvited`) se cubre por CLI en el smoke y con el test sobre la fixture real.
 - **Alternativa descartada:** mostrar el botón a la tercera cuenta para que falle al pulsarlo (contradice el criterio de visibilidad y ofrece una acción que siempre falla); ocultarlo sin aviso.
