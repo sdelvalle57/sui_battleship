@@ -1,9 +1,20 @@
 # HANDOFF_HOUSE_ADMIN
 > Plan: PLAN_HOUSE_ADMIN v1.1 (MAYOR: APPROVE en la ronda corta, 2026-11-04; `0bfd916`) | Issue: #14 | Branch:
-> `feature/issue-14-house-admin` | Versión: v1.3 | Fecha: 2026-11-04
+> `feature/issue-14-house-admin` | Versión: v1.4 | Fecha: 2026-11-04
 
 ## Changelog
 
+- **v1.4 (2026-11-04)**: revisión de TASK-5 (MID, PASA; `documents/REPORTES_HOUSE_ADMIN.md`, "Revisión TASK-5"). Cambian
+  solo el orden y el runbook del smoke; ningún task de código:
+  - **Orden:** el smoke corre **antes** de TASK-6. TASK-6 es solo docs y no cambia código: así, si el smoke encuentra algo,
+    la corrección va antes de escribir los READMEs, y TASK-6 cita los valores medidos (latencias, "Volver a comprobar",
+    pedidos). El MID copió la sección a `documents/SMOKE_HOUSE_ADMIN.md` con el estado "EN CURSO" al aprobar TASK-5.
+  - **Campos precargados (desviación 1 de TASK-5):** los campos de comisión y de límites arrancan con los valores actuales.
+    En el smoke, antes de `Input.insertText` hay que seleccionar todo el contenido del campo (`el.focus(); el.select()`) para
+    que el texto insertado lo **reemplace**; si no, "0" + "250" queda "0250".
+  - **Pedidos de `ListOwnedObjects` (desviación 3 de TASK-5):** el panel suma un observador de la consulta del cap (para
+    "Actualizar"), que relee al montarse; el encabezado tiene el suyo. Los conteos de `ListOwnedObjects` del smoke son
+    informativos ("≥ 1, anotado"), nunca un criterio de PASA.
 - **v1.3 (2026-11-04)**: revisión de TASK-2 (MID, NO PASA por un hallazgo de tests; `documents/REPORTES_HOUSE_ADMIN.md`,
   "Revisión TASK-2"). El código de `fetchHouseCap` ya relanza tal cual los errores de red (`RpcError` transitorio,
   `ReadTimeoutError` del corte de 10 s), así que `useHouseCap` sigue la política común de lecturas de #10 (DL-5: 3 intentos,
@@ -814,9 +825,9 @@ Reporte §5 con el snippet de STATUS. Sin commits ni pushes.
 
 ---
 
-## Smoke del ciclo (después de TASK-6; runbook en la forma de AGENTE_MID §M5)
+## Smoke del ciclo (v1.4: después de TASK-5 y antes de TASK-6; runbook en la forma de AGENTE_MID §M5)
 
-Al aprobarse TASK-6, el MID copia esta sección a `documents/SMOKE_HOUSE_ADMIN.md` (con el estado "EN CURSO") y el DEV la
+Al aprobarse TASK-5 (v1.4), el MID copia esta sección a `documents/SMOKE_HOUSE_ADMIN.md` (con el estado "EN CURSO") y el DEV la
 completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nunca se llenan por adelantado.
 
 ```markdown
@@ -827,8 +838,8 @@ completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nu
 
 ### Precondiciones
 
-- **Worktree:** `<repo>`, branch `feature/issue-14-house-admin` con TASK-1..6 commiteadas; `npm ci` con Node 26; gate de
-  la app en verde (reporte de TASK-6). Nada de esta corrida se commitea salvo `documents/SMOKE_HOUSE_ADMIN.md`. Sin
+- **Worktree:** `<repo>`, branch `feature/issue-14-house-admin` con TASK-1..5 commiteadas (v1.4); `npm ci` con Node 26; gate de
+  la app en verde (reporte de TASK-5). Nada de esta corrida se commitea salvo `documents/SMOKE_HOUSE_ADMIN.md`. Sin
   `contracts/Published.toml` ni `contracts/Pub.*.toml` (si aparecen durante la corrida, se detiene y se avisa).
 - **Red:** localnet **aislada** (`agents.md` §3), `env.sh` + `ids.env` + `smoke_guard`, publicación **variante B**, cierre
   del paso 7. **Una sola localnet** (`ss -ltn` sin `:9000`). **Regla B4:** todo `suic` lleva `PRE` **escrito** en su fila
@@ -871,7 +882,11 @@ completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nu
     'visible'`), **nunca** `Page.bringToFront`;
   - después de fondear una burner se navega **solo por hash** (`location.hash`): recargar cambia su dirección, y la de
     `W` tendría el cap en una clave perdida (si pasa, génesis nueva o fin de la corrida);
-  - campos con foco + `Input.insertText`; clics con `element.click()` en `Runtime.evaluate`.
+  - campos con foco y **todo el contenido seleccionado** (`el.focus(); el.select()`, v1.4: los campos del panel arrancan
+    con los valores actuales) + `Input.insertText`, que reemplaza la selección; clics con `element.click()` en
+    `Runtime.evaluate`;
+  - los conteos de `ListOwnedObjects` son informativos: el encabezado y el panel observan la consulta del cap y cada uno
+    puede releer al montarse (v1.4).
 - **Pedidos en CDP** (`Network.requestWillBeSent`) por sesión: se cuentan **solo los `POST` de gRPC-web**
   (`request.method === 'POST'`; los `OPTIONS` del preflight CORS no cuentan, SUGGESTION-3 de #13), por método según la
   ruta: `StateService/ListOwnedObjects`, `LedgerService/GetObject`, `LedgerService/BatchGetObjects`,
