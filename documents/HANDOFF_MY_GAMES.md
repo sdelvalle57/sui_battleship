@@ -1,9 +1,27 @@
 # HANDOFF_MY_GAMES
 > Plan: PLAN_MY_GAMES v2 (MAYOR: APPROVE en la segunda ronda, 2026-11-03; `ae2b134`) | Issue: #13 | Branch:
-> `feature/issue-13-my-games` | Versión: v1.1 | Fecha: 2026-11-03
+> `feature/issue-13-my-games` | Versión: v1.2 | Fecha: 2026-11-03
 
 ## Changelog
 
+- **v1.2 (2026-11-03)**: tras TASK-1 (revisión del MID: PASA; `documents/REPORTES_MY_GAMES.md`). Lo medido en la
+  localnet no cambia ninguna decisión (DL-1..DL-17, H-1..H-4): S-1 confirma el filtro por remitente en `sui 1.83.0` y
+  S-2 confirma que el cursor dentro de una transacción no repite ni pierde eventos. Cambian solo §2 (hechos nuevos),
+  tests de TASK-2 y TASK-5, un punto de TASK-6 y los pasos 9 y 15 del smoke:
+  - **V-9 (Riesgo 1 y 3 del DEV), forma de los frames:** con `ITEM_LIMIT`, el `QueryEnd` llega en el frame del último
+    evento; con `CHECKPOINT_BOUND`, en un frame extra sin evento; cada frame trae `watermark.cursor`, y el cursor final
+    de un `CHECKPOINT_BOUND` es el de la cota (el mismo con los dos filtros), no el del último evento. Si quedan
+    **exactamente** `limit` eventos, el pedido termina en `ITEM_LIMIT` y el siguiente viene **vacío** con
+    `CHECKPOINT_BOUND`: una página vacía sin `hasNextPage` es un fin normal, nunca un error ni un `stalled`. T2-7, T2-9 y
+    T5-5 lo suman; los mocks de TASK-2 replican esta forma.
+  - **V-10 (Riesgo 2), `objectVersion` es Lamport:** `GA1` pasó de 4 a 415 al aceptar, y 12 partidas distintas
+    comparten la versión 4. H-2 compara solo lecturas del **mismo** `gameId`; ningún código ni test supone "+1" ni
+    compara versiones entre partidas. T2-12 usa valores no consecutivos.
+  - **V-11 (Riesgo 4):** el nodo local responde `server=sui-node/unknown`; su versión es la de la CLI que levantó la
+    red (`1.83.0-16d2dc1e05ed`).
+  - **Smoke:** el paso 9 usa la sintaxis de PTB de varias partidas medida en TASK-1 (sin `--gas-budget`). El paso 15
+    fija **entre 101 y 150** partidas abiertas: con ≥ 101, `G7` queda fuera de la primera página; con ≤ 150, en el paso
+    17 la segunda página llega al fin del historial con una sola pulsación, aunque el último pedido venga vacío (V-9).
 - **v1.1 (2026-11-03)**: revisión del MAYOR del handoff v1 (APPROVE con 2 MINOR y 4 SUGGESTION). TASK-1..3 no cambian
   (el DEV puede seguir con la v1 en esos tasks), salvo el grep de cierre de TASK-3 (SUGGESTION-3). Cambian T2-13,
   TASK-4 y el smoke.
@@ -180,6 +198,9 @@ Rutas relativas a `<repo>/node_modules/`; `@mysten/sui` 2.37.0, `@mysten/dapp-ki
 | V-6 | `isRefetchError` = `isError && hasData`; en las infinitas, los errores de "cargar más" quedan en `isFetchNextPageError` y no cuentan como refetch. `failureCount` vuelve a 0 al empezar cada fetch | `@tanstack/query-core/build/modern/queryObserver.js:402`; `infiniteQueryObserver.js:125` |
 | V-7 | `react-hooks/set-state-in-render` (preset recomendado del plugin 7.1.1) marca solo el `setState` en un bloque **incondicional** del render. El `setState` dentro de un `if` (el patrón "guardar información de renders anteriores") no se marca | `eslint-plugin-react-hooks/cjs/eslint-plugin-react-hooks.development.js:45367-45460` |
 | V-8 | `parseCreatedGame`/`parseResolvedGame` comparan con `sameAddress`: el `signer` sin normalizar es seguro | `app/src/sui/gameTx.ts:51, 87` |
+| V-9 | (TASK-1, localnet `sui 1.83.0`) La DNF de DL-1 filtra por remitente (S-1: `A` ⇒ sus 3 `GameCreated`, sin el `GameResolved` que firmó `B`; una dirección sin actividad ⇒ 0 eventos, 1 frame, `CHECKPOINT_BOUND`). Con `limit` 5 y `before` = último `watermark.cursor`, 12 `GameCreated` de un PTB salen 5 + 5 + 2 sin repetidos ni faltantes, también sin `sender` (S-2). **Frames:** con `ITEM_LIMIT`, frames = eventos (el `QueryEnd` va en el último); con `CHECKPOINT_BOUND`, frames = eventos + 1; el cursor final de un `CHECKPOINT_BOUND` es el de la cota. Con exactamente `limit` restantes, el pedido siguiente viene vacío con `CHECKPOINT_BOUND` | `documents/REPORTES_MY_GAMES.md`, TASK-1 (S-1, S-2, Riesgos 1 y 3) |
+| V-10 | `object.version` es una versión Lamport: sube a la del último commit del objeto (4 → 415 al aceptar) y se comparte entre objetos de la misma transacción. Solo es comparable entre dos lecturas del **mismo** objeto | TASK-1, S-3 (Riesgo 2) |
+| V-11 | El nodo local responde `server=sui-node/unknown`; su versión es la de la CLI (`1.83.0-16d2dc1e05ed`) | TASK-1 (Riesgo 4) |
 
 ## 3. Reglas transversales (todos los tasks)
 
@@ -382,17 +403,23 @@ En `myGames.test.ts`:
 - T2-6: invariante: `GameCreated` con `creator` ≠ cuenta y `GameResolved` con `acceptor` ≠ cuenta ⇒ ítems
   `unreadable`, nunca `game`.
 - T2-7: fin de historial (`OUT_OF_RANGE`) ⇒ `end: 'history_pruned'`, lo reunido y `lowerBound.kind: 'node_floor'`;
-  cursor repetido con `hasNextPage` ⇒ `PaginationStalledError`.
+  cursor repetido con `hasNextPage` ⇒ `PaginationStalledError`. (v1.2, V-9) Una página que pide con el cursor de un
+  `ITEM_LIMIT` y recibe un solo frame sin evento con `CHECKPOINT_BOUND` (cursor de la cota) ⇒ `items: []`,
+  `hasNextPage: false`, `end: 'bound'`, sin error ni `PaginationStalledError`. Los mocks usan la forma de V-9 (con
+  `ITEM_LIMIT`, el `end` en el frame del último evento; con `CHECKPOINT_BOUND`, un frame extra).
 - T2-8: objeto inexistente ⇒ omitido; objeto ilegible ⇒ `unreadable` con `gameId`, sin ocultar los sanos.
 - T2-9: `fetchInvitationsPage`: solo entra la invitación a la cuenta (no la abierta ni la invitación a otro), también
-  terminada; respeta 50 / 2 / 20 (cuenta de pedidos); `history_pruned` y `stalled` como el lobby.
+  terminada; respeta 50 / 2 / 20 (cuenta de pedidos); `history_pruned` y `stalled` como el lobby. (v1.2, V-9) Con
+  exactamente 50 eventos restantes, el primer pedido termina en `ITEM_LIMIT` y el segundo, dentro de la misma página,
+  viene vacío con `CHECKPOINT_BOUND` ⇒ la página termina con `hasNextPage: false` y `end: 'bound'`.
 - T2-10 (MINOR-4): un evento ilegible en las invitaciones ⇒ `unreadableEvents: 1` y ningún ítem; un objeto ilegible de
   una invitación a la cuenta ⇒ ítem `unreadable` con rol `invitee`.
 - T2-11: `naturalSection` para cada caso de §3.6 (pendiente invitado, pendiente creador, resuelta como creador y como
   aceptante, cancelada propia, invitación rechazada ⇒ `null`, ilegibles por rol).
 - T2-12 (MINOR-5): `mergeMyGames` con la invitación aceptada en las dos fuentes, **en los dos órdenes** de versión
   (actividad nueva con invitaciones viejas, y al revés): gana la mayor `objectVersion`; rol `acceptor`; evento más
-  nuevo; una sola fila.
+  nuevo; una sola fila. (v1.2, V-10) Versiones **no consecutivas** (p. ej. `4n` contra `415n`), y dos partidas
+  distintas con la **misma** versión no se mezclan.
 - T2-13: `extendPins` devuelve la **misma** instancia sin IDs nuevos y un `Map` nuevo con ellos (el anterior intacto).
   (v1.1, MINOR-1) Aplicado sobre `mergeMyGames(...)`: G llega por las dos fuentes con lecturas distintas (actividad
   `Resolved` con `objectVersion` mayor e invitaciones `Pending`; aparte, (B) ilegible contra (A) legible) ⇒ el pin de G
@@ -705,7 +732,9 @@ historial, **para** aceptar, rechazar o cancelar sin buscar enlaces.
 
 - T5-5 (MAJOR-1): sección 2 vacía con `activity.hasNextPage` ⇒ "Sin partidas pendientes en lo revisado" y "Cargar más
   actividad" en la sección 2 **y** en la 3; sin `hasNextPage` ⇒ "No tienes partidas pendientes" y sin botón; ídem
-  "Terminadas" y la sección 1 con su fuente; con la cota en el piso, el sufijo "desde <fecha>".
+  "Terminadas" y la sección 1 con su fuente; con la cota en el piso, el sufijo "desde <fecha>". (v1.2, V-9) Pulsar
+  "Cargar más actividad" con una página siguiente **vacía** (`CHECKPOINT_BOUND`) ⇒ sin filas nuevas, el texto definitivo
+  y ni alert ni botón.
 - T5-6 (H-1, MINOR-N1): `nextPageError` sin `stalled` ⇒ sin texto definitivo, **con** el botón (que reintenta) y el
   `role="alert"`; `stalled` ⇒ sin texto definitivo, sin botón y con el alert.
 - T5-7 (MINOR-3): aceptar desde una fila con la relectura de DL-7 fallando, y en otra corrida reintentando ⇒ la fila,
@@ -775,7 +804,8 @@ app" (listas del lobby).
     - estado del objeto, invariantes e ilegibles;
     - secciones, fijado y deduplicación (versión del objeto; legible sobre ilegible);
     - pie honesto (DL-16/H-1) y relectura sin desmontar (DL-17);
-    - paginación (50 / 1; 50 / 2 / 20);
+    - paginación (50 / 1; 50 / 2 / 20), con la nota de V-9: "Cargar más" puede traer una página vacía cuando lo
+      revisado terminaba justo en el tope de un pedido, y recién ahí aparece el texto definitivo;
     - invalidación, con su costo, el corrimiento de la ventana (RM-12) y la duración de "Actualizando datos…" con
       reintentos (H-4);
     - aviso único y acciones ocultas tras un éxito propio en la fila (H-3);
@@ -890,13 +920,13 @@ completa **durante** la corrida: las columnas "Resultado obtenido" y "Estado" nu
 | 6 | 🌐 `T2`: "Mis partidas"; después `#/` | "Invitaciones recibidas" = `G2` ("Te invitó `AW`", 0,2 SUI) con "Aceptar", "Rechazar" y la nota de la vista previa; `G1` no está en las listas de `BW`; en el lobby (`#/`), `G1` sí aparece y `G2` no (lobby sin cambios) | | ⏳ |
 | 7 | DEV: `PRE act_as "$C" && suic ptb --split-coins gas "[50000000]" --assign c --move-call "$PKG::game::create_game" @$HOUSE c.0 "some(@$AW)"` (`G3`). 🌐 "Actualizar" en `T1` y en `T2` (`#/my-games`) | `T1`: `G3` en "Invitaciones recibidas" ("Te invitó `C`", 0,05 SUI); `T2`: no aparece | | ⏳ |
 | 8 | 🌐 `T2`: observador; clic en "Aceptar" de la fila de `G2` (muestreo cada 250 ms). DEV: `PRE suic tx-block <digest> --json` (`GameResolved`); `PRE suic balance $AW` y `PRE suic balance $BW` antes y después | Etapas en orden; **ningún token** en `.tx-status`/`.game-actions` durante las tres primeras etapas; después "¡Ganaste! Recibiste 0.39 SUI (pozo 0.4 SUI − comisión 0.01 SUI)" o "Perdiste: ganó quien creó la partida y recibió 0.39 SUI (…)", con el digest; 2 `SimulateTransaction` + 1 `ExecuteTransaction`; la fila de `G2` **sigue** en "Invitaciones recibidas" con "Resuelta" y sin botones; `GameResolved` `pot` 400000000, `fee` 10000000, `payout` 390000000, ganador coherente con el texto | | ⏳ |
-| 9 | (RM-5) DEV: `C` crea en **un PTB** 25 invitaciones a `AW` de 1000000 MIST (`PRE act_as "$C" && suic ptb --split-coins gas "[1000000,…×25]" --assign c` + 25 `create_game` con `"some(@$AW)"`, sintaxis de TASK-1). 🌐 `T1`: marca de tiempo, "Actualizar", y espera hasta ver ≥ 25 `li.my-game-row` en `invitations`; después, clic en "Aceptar" de una de ellas (`G4`) con marca hasta "Verificando la transacción…" | ≥ 26 filas (las 25 más `G3`), cada una con `GameActions`; tiempos anotados (referencia, sin umbral bloqueante); la aceptación de `G4` termina como en el paso 8 (montos de 0,001 SUI), su fila queda sin botones (H-3) y las demás se rehabilitan al final | | ⏳ |
+| 9 | (RM-5) DEV: `C` crea en **un PTB** 25 invitaciones a `AW` de 1000000 MIST con la sintaxis medida en TASK-1 (sin `--gas-budget`): `PRE act_as "$C" && N=25 && amounts=$(printf '1000000,%.0s' $(seq $N)); amounts="[${amounts%,}]"; calls=(); for i in $(seq 0 $((N-1))); do calls+=(--move-call "$PKG::game::create_game" @$HOUSE c.$i "some(@$AW)"); done; suic ptb --split-coins gas "$amounts" --assign c "${calls[@]}" --json`. 🌐 `T1`: marca de tiempo, "Actualizar", y espera hasta ver ≥ 25 `li.my-game-row` en `invitations`; después, clic en "Aceptar" de una de ellas (`G4`) con marca hasta "Verificando la transacción…" | ≥ 26 filas (las 25 más `G3`), cada una con `GameActions`; tiempos anotados (referencia, sin umbral bloqueante); la aceptación de `G4` termina como en el paso 8 (montos de 0,001 SUI), su fila queda sin botones (H-3) y las demás se rehabilitan al final | | ⏳ |
 | 10 | 🌐 `T2`: "Actualizar" | `G2` pasa a "Terminadas" con "Aceptaste" y `.my-game-result` coherente con el paso 8; "Invitaciones recibidas": "No tienes invitaciones pendientes" | | ⏳ |
 | 11 | 🌐 `T1`: "Actualizar" | "Terminadas": `G2` con "Creaste" y el resultado **complementario** del paso 8, y `G4` con "Aceptaste"; "Tus partidas pendientes" = solo `G1` | | ⏳ |
 | 12 | 🌐 `T1`: clic en "Cancelar" de `G1`. DEV: `PRE suic tx-block <digest>` (`GameCancelled`) | "Partida cancelada: se devolvieron 0.1 SUI a tu cuenta"; la fila queda "Cancelada" y sin botones en "Tus partidas pendientes"; tras "Actualizar", `G1` en "Terminadas" con "Cancelada: la apuesta volvió a quien la creó" y "Tus partidas pendientes": "No tienes partidas pendientes" | | ⏳ |
 | 13 | 🌐 `T1`: clic en "Rechazar" de `G3`. DEV: `PRE suic balance $C` antes y después; `PRE suic tx-block <digest>` | "Invitación rechazada: se devolvieron 0.05 SUI a quien te invitó"; `GameCancelled.refund` 50000000; tras "Actualizar", `G3` ya no está en las listas de `AW` | | ⏳ |
 | 14 | DEV: dos `PRE act_as "$C" && suic ptb …`: 2 invitaciones a `BW` de 1000000 MIST (`G5`, `G6`). 🌐 `T2`: "Actualizar"; en un mismo `Runtime.evaluate`, `click()` en "Aceptar" de la fila de `G5` y de la de `G6`; después, "Aceptar" de `G6` | Primer intento: **1** `ExecuteTransaction` (la de `G5`); durante ella, el botón de `G6` deshabilitado e `IN_FLIGHT_TEXT` **1** vez en `section.my-games` (contar ocurrencias); después `G6` se acepta con su propia transacción | | ⏳ |
-| 15 | DEV: `PRE act_as "$C" && suic ptb …`: 1 invitación a `BW` (`G7`); después, en uno o dos `PRE act_as "$C" && suic ptb …`, ≥ 101 partidas abiertas (`none`). 🌐 `T2`: "Actualizar" | "Invitaciones recibidas" sin `G7`: "Sin invitaciones pendientes en lo revisado" y "Buscar más atrás" (nunca "No tienes invitaciones pendientes"); tras "Actualizar", **3** `ListEvents` en total (2 de invitaciones + 1 de actividad: CDP no separa la fuente sin decodificar el cuerpo; los `net::ERR_ABORTED` del doble montaje no cuentan); al pulsar "Buscar más atrás", **+1 o +2** `ListEvents` y aparece `G7` (DL-8, DL-16) | | ⏳ |
+| 15 | DEV: `PRE act_as "$C" && suic ptb …`: 1 invitación a `BW` (`G7`); después, en uno o dos `PRE act_as "$C" && suic ptb …` (la sintaxis del paso 9 con `none`), **entre 101 y 150** partidas abiertas (v1.2: ≥ 101 deja `G7` fuera de la primera página; ≤ 150 garantiza el "una vez" del paso 17). 🌐 `T2`: "Actualizar" | "Invitaciones recibidas" sin `G7`: "Sin invitaciones pendientes en lo revisado" y "Buscar más atrás" (nunca "No tienes invitaciones pendientes"); tras "Actualizar", **3** `ListEvents` en total (2 de invitaciones + 1 de actividad: CDP no separa la fuente sin decodificar el cuerpo; los `net::ERR_ABORTED` del doble montaje no cuentan); al pulsar "Buscar más atrás", **+1 o +2** `ListEvents` y aparece `G7` (DL-8, DL-16) | | ⏳ |
 | 16 | 🌐 `T1`: "Abrir partida por ID" con `xyz` y después con el ID de `G1` | `xyz` ⇒ "ID de partida inválido", sin pedidos nuevos; `G1` ⇒ `#/game/<G1>` con el detalle "Cancelada" | | ⏳ |
 | 17 | 🌐 `T2`: recargar (burner nueva = otra cuenta), conectar y `#/my-games` | (v1.1, MINOR-2) Con > 100 `GameCreated` en la red: "Tus partidas pendientes" y "Terminadas" con el texto definitivo (la DNF de una cuenta sin actividad termina en `CHECKPOINT_BOUND`); "Invitaciones recibidas" con "Sin invitaciones pendientes en lo revisado" y "Buscar más atrás"; tras pulsarlo **una** vez, "No tienes invitaciones pendientes" y sin botón (H-1 de punta a punta); ninguna fila de `BW` (DL-9) | | ⏳ |
 | 18 | DEV: cierre = §3 paso 7 de `agents.md` más la app: `kill` por PID de Chrome (`chrome.pid`), `vite` (`vite.pid`; exit 143 esperado) y `sui` (`sui.pid`; exit 144 esperado); **en otra llamada**, `kill -0` falla en los tres; `pgrep -af <SMOKE_DIR>/chrome-profile` vacío (el Chrome del usuario no se toca); `ss -ltn` con 9000, 9123, 9184, 5003, 5173 y 9229 libres; recién entonces `rm -f <repo>/contracts/deployments/localnet.json`, `rmdir <repo>/contracts/deployments 2>/dev/null \|\| true`, `rm -rf <SMOKE_DIR>` (perfil incluido) y `test ! -e`; **sin cargar `env.sh`**, `stat`/`ls` de `<HOME real>/.sui/sui_config/` idénticos a la línea base; `git diff --exit-code -- contracts/Move.lock`; ni `contracts/Published.toml` ni `contracts/Pub.*.toml`; `git status --porcelain` solo con `documents/SMOKE_MY_GAMES.md` | Todo limpio; `~/.sui/` sin cambios | | ⏳ |
