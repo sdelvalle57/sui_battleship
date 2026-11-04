@@ -19,7 +19,7 @@ RUN set -eu; \
       v="$(node -p "require('./contracts/deployments/testnet.json').$f")"; \
       grep -rqF "$v" app/dist/assets || { echo "ERROR (#15): $f de testnet.json no está en el bundle" >&2; exit 1; }; \
     done; \
-    if grep -rqE 'network:"localnet"|"network":"localnet"' app/dist/assets; then echo "ERROR (#15): localnet en el bundle" >&2; exit 1; fi; \
+    if grep -rqE 'network"?:[^[:alnum:]]localnet[^[:alnum:]]' app/dist/assets; then echo "ERROR (#15): localnet en el bundle" >&2; exit 1; fi; \
     grep -rqF 'https://fullnode.testnet.sui.io' app/dist/assets
 
 FROM caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5

@@ -1,5 +1,5 @@
 # SMOKE_RAILWAY_DEPLOY, parte A (local, antes de #8)
-> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: 2026-11-04 | Estado: parte 1 PASA (21/21); parte 2 PASA (11/11)
+> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: 2026-11-04 | Estado: parte 1 PASA (21/21); parte 2 PASA (11/11); parte 3 PASA (7/7)
 
 ## Precondiciones
 - **Red:** en la parte 1 no hay red local. Solo descargas de imágenes públicas y, en E-6, lecturas públicas de testnet sin claves.
@@ -303,6 +303,28 @@ E-1g da el mismo listado sin `/ctx/contracts/Published.toml` ni `/ctx/contracts/
 - **Hallazgos:** H-1 (patrón de localnet del Dockerfile inefectivo; mitigado por la lista blanca). 0 violaciones de
   CSP con el kit montado: `style-src 'self'` alcanza sin `'unsafe-inline'`.
 - **Veredicto (parte 2):** PASA.
+
+## Parte 3: H-1, comprobación (b) del bundle (TASK-2b)
+
+> Corrida del 2026-11-04 (10:26-10:40 UTC) sobre `bbb419f` (handoff v1.5), con el `Dockerfile` del repo ya en v1.5:
+> `git diff Dockerfile` muestra una sola línea, la de (b), idéntica al literal de §3.2 (extraído del handoff y comparado
+> con `diff`). Puertos: solo 8090. Builder clásico (sin buildx).
+
+| # | Acción | Resultado esperado | Resultado obtenido | Estado |
+|---|--------|--------------------|--------------------|--------|
+| H-0 | Línea base de Docker en `<scratchpad>/docker-base-15-h/`; `ss -ltn 'sport = :8090'` sin filas | Base anotada (contenedores, imágenes); puerto libre | 2026-11-04T10:26:00Z: **2 contenedores, 3 imágenes** (`postgres:17`, `postgres:16-alpine`, `busybox:latest`). `:8090` sin filas | ✅ |
+| H-1 | Contexto `<scratchpad>/h1-15/ctx` (E-1a..E-1e) más `localnet.json` literal del fixture de #48 y `!contracts/deployments/localnet.json` solo en el `.dockerignore` de la copia; `publish.mjs check` | `2 despliegue(s) válidos y coherentes con Published.toml`; el repo no cambia | Copia de 205 archivos; `publish.mjs` y `deployment.mjs` de `origin/feature/issue-8-testnet-publish`; `testnet.json` sintético (`campos 14 cambiados network,chainId`) y `Published.toml` `[published.testnet]` coherente. `localnet.json` = el fixture byte a byte (`cmp`). El `diff` del `.dockerignore` contra el del repo da solo `> !contracts/deployments/localnet.json`. El `Dockerfile` de la copia es igual al del repo (v1.5). `check` ⇒ **`2 despliegue(s) válidos y coherentes con Published.toml`**, exit 0. `git status`: solo ` M Dockerfile` | ✅ |
+| H-2 | **Rojo:** la línea (b) de la copia vuelve al patrón viejo; `docker build --force-rm -t battleship-app:h2-15`; `docker rmi` | `exit=0`: la imagen se construye **con** `localnet` embebido (reproduce H-1) | El `diff` contra el repo da solo la línea 22 (patrón viejo). Build **`exit=0`** en 128 s: Step 5 (guarda), Step 12 (`npm run build`, `index-Clv0Fafr.js` 918.59 kB) y Step 13 (comprobaciones del bundle) pasan; `Successfully tagged battleship-app:h2-15`. Dentro de la imagen, `grep -rhoE 'network.{0,2}localnet.{0,14}' /srv/assets` ⇒ ``network:`localnet`,chainId:`878`` (el registro de localnet del fixture, servido por Caddy). `docker rmi` ⇒ `Untagged` | ✅ (rojo reproducido) |
+| H-3 | **Verde:** la línea (b) de la copia vuelve a la del repo (v1.5); `docker build --force-rm -t battleship-app:h3-15`; `docker rmi … \|\| true` | `exit≠0`; `ERROR (#15): localnet en el bundle` en el Step de las comprobaciones; los Steps anteriores pasaron | `cmp` con el `Dockerfile` del repo: idénticos. Build **`exit=1`**: Steps 1-12 pasan (guarda, `check`, `npm ci` y build, de la caché de H-2, el mismo contexto); `Step 13/19 : RUN set -eu; for f in packageId …` ⇒ **`ERROR (#15): localnet en el bundle`** ⇒ `Removed intermediate container` ⇒ `The command '/bin/sh -c set -eu; …' returned a non-zero code: 1`. Sin etiqueta que borrar | ✅ |
+| H-4 | **Sin falsos positivos:** sin `localnet.json` ni la línea `!…localnet.json` en la copia; `bash app/scripts/check-deploy-image.sh <ctx> 8090` | `exit=0`, `OK (positivo)` (P1-P13) | `.dockerignore` de la copia = repo (`cmp`); `contracts/deployments/` solo con `testnet.json`. Script: P1-P12 ok (`/assets/index-CuqwqWvp.js` 200, `immutable`, `zstd`; favicon 200; los tres 404) y **`OK (positivo): …`**, **`exit=0`**, 98 s. Con GNU grep (bookworm), el patrón nuevo no toma nada del bundle de testnet. Sin `deploy-image-*` ni `battleship-app:*` después | ✅ |
+| H-5 | Negativo en el repo real: `bash app/scripts/check-deploy-image.sh . 8090` | `exit=0`, `OK (negativo)` | Sin `contracts/deployments/` en el repo. `Modo negativo…` / **`OK (negativo): sin contracts/deployments/testnet.json (#8) la imagen se niega a construirse`**, **`exit=0`** | ✅ |
+| C-3 | Cierre: limpieza por la línea base de H-0 (solo IDs nuevos, sin `prune`); `comm` vacío; `rm -rf <scratchpad>/h1-15 <scratchpad>/docker-base-15-h`; `:8090` libre; `git status` | Todo limpio | Contenedores nuevos: **0**. Imágenes nuevas: **25**, todas del ensayo y borradas por ID con `docker rmi` en 2 pasadas: 23 intermedias `<none>` con `Cmd [node]` (derivadas de `node:26.12.1`, que no estaba en la base), `node:26.12.1-bookworm-slim@…e28c` y `caddy:2.11.7-alpine@…4ee5`. `comm` repetido: contenedores 0, imágenes 0, faltantes `ps=0 img=0`; quedan `postgres:17`, `postgres:16-alpine` y `busybox:latest` con sus 2 contenedores ajenos. Borrados `<scratchpad>/h1-15` y `<scratchpad>/docker-base-15-h` (`ls`: no existen). `:8090` sin filas. `git status`: solo los archivos de TASK-2b | ✅ |
+
+## Reporte final (parte 3)
+- **Pasos PASA/TOTAL:** 7/7 (H-0..H-5 y C-3).
+- **Hallazgos:** ninguno. El rojo de H-2 reproduce H-1 a propósito, y H-3 prueba que el patrón nuevo lo corta dentro
+  de la imagen (GNU grep de bookworm). H-4 confirma que no hay falsos positivos en el bundle de testnet.
+- **Veredicto (parte 3):** PASA.
 
 ## Reporte final (parte 1)
 - **Pasos PASA/TOTAL:** 21/21.

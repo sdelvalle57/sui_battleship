@@ -1399,3 +1399,138 @@ Refs #15
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+## TASK-2b
+
+## Task completado: HANDOFF_RAILWAY_DEPLOY — TASK-2b (H-1: la comprobación (b) detecta `localnet` en cualquier forma)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-15-pages-deploy` @ `bbb419f` (handoff v1.5). No hice commits.
+
+### Archivos modificados/creados
+- `Dockerfile`: 1 línea, la de (b).
+- `app/README.md`: +4/−3.
+- `documents/STATUS.md`: +4/−2.
+- `documents/SMOKE_RAILWAY_DEPLOY.md`: parte 3 y estado del encabezado.
+
+### Qué se implementó (3 líneas máx)
+La comprobación (b) del `RUN` de bundle pasa a `grep -rqE 'network"?:[^[:alnum:]]localnet[^[:alnum:]]' app/dist/assets`, con el mismo mensaje. Lo extraje del bloque `dockerfile` de §3.2 v1.5 y el `diff` contra el Dockerfile anterior da solo la línea 22.
+En el README, la línea (b) de "La imagen" describe el registro de `localnet` en cualquier forma, y `style-src 'self'` pasa a **confirmado** en TASK-3.
+En STATUS agregué las filas de baseline de TASK-2b y TASK-3. En la fila del ciclo #15, TASK-3 queda ✅ con "H-1 corregido (TASK-2b)".
+
+### Tests y gates (output pegado, por área tocada)
+- **Agregados/modificados:** ninguno.
+- **Gate `app`:** no aplica (§5.3 del handoff). En `app/` solo cambia el README.
+- **Contracts:** sin cambios.
+- **Verificación 2:** `git diff -U0 Dockerfile` da **una** línea `-` y **una** `+`:
+```diff
+-    if grep -rqE 'network:"localnet"|"network":"localnet"' app/dist/assets; then echo "ERROR (#15): localnet en el bundle" >&2; exit 1; fi; \
++    if grep -rqE 'network"?:[^[:alnum:]]localnet[^[:alnum:]]' app/dist/assets; then echo "ERROR (#15): localnet en el bundle" >&2; exit 1; fi; \
+```
+- **Verificación 4 (greps sobre el diff):** claves 0, rutas personales 0, hex 40-64 nuevos 0. `git diff --check` limpio.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No usé localnet ni testnet. Detalle en `documents/SMOKE_RAILWAY_DEPLOY.md`, parte 3:
+- **H-0:** línea base de 2 contenedores y 3 imágenes; `:8090` libre.
+- **H-1:** contexto sintético armado como en E-1a..E-1e.
+  - Le sumé el `localnet.json` literal del fixture de #48 (`cmp`) y `!contracts/deployments/localnet.json` solo en el `.dockerignore` de la copia.
+  - `check` da `2 despliegue(s) válidos y coherentes con Published.toml`.
+  - El repo queda con solo ` M Dockerfile`.
+- **H-2 (rojo):** con el patrón viejo en la copia, el build sale con **`exit=0`** en 128 s.
+  - `Successfully tagged battleship-app:h2-15`.
+  - Dentro de la imagen, `/srv/assets` tiene ``network:`localnet`,chainId:`878…``.
+  - Esto reproduce H-1.
+- **H-3 (verde):** con el patrón v1.5 (copia = repo), el build sale con **`exit=1`** en el Step 13, con `ERROR (#15): localnet en el bundle`.
+  - Los Steps 1-12 pasan: guarda, `check`, `npm ci` y build.
+- **H-4:** sin `localnet.json` (copia = `.dockerignore` del repo), `check-deploy-image.sh <ctx> 8090` da P1-P13 y **`exit=0`** (`OK (positivo)`, 98 s). Con GNU grep de bookworm no hay falsos positivos.
+- **H-5:** el negativo en el repo real da `OK (negativo)`, **`exit=0`**.
+- **C-3:** 0 contenedores nuevos y 25 imágenes nuevas, todas borradas por ID.
+  - Las 25 son 23 intermedias `<none>` derivadas de `node`, más `node:26.12.1` y `caddy:2.11.7`.
+  - El `comm` repetido sale vacío y no falta nada de la base: los postgres ajenos y `busybox` siguen intactos.
+  - Borré `h1-15` y `docker-base-15-h`; `:8090` libre.
+
+### Desviaciones del handoff
+1. **H-3: los Steps 1-12 vinieron de la caché del builder clásico.**
+   - Qué pasó: H-2 y H-3 usan el mismo contexto y solo difieren en la línea del Step 13, así que esos pasos ya estaban construidos.
+   - Por qué está bien: los Steps 1-12 se ejecutaron de verdad en H-2, dentro de la misma corrida, y H-3 corre en limpio el Step 13, que es lo que se mide.
+2. **STATUS: dos cambios fuera de la fila del ciclo.**
+   - Qué cambió:
+     - en la fila del ciclo #15 actualicé "handoff v1.3" a "handoff v1.5";
+     - en la fila "Siguiente", "#15 (… TASK-3/TASK-6 en el seguimiento)" pasó a "#15 (PR #57, listo para pasar a ready tras TASK-2b; TASK-6 en el seguimiento)". Esa redacción venía de la resolución del merge con `master`.
+   - Por qué: con TASK-3 hecho, las dos quedaban desactualizadas.
+3. **SMOKE: la parte 3 quedó después del "Reporte final (parte 2)" y antes del de la parte 1.** El archivo ya tenía los reportes finales intercalados de esa forma, así que mantuve el mismo esquema.
+
+### Riesgos / pendientes
+- **Ninguno nuevo.** La primera vez que el patrón nuevo corre con BuildKit es en el CI de PR #57. En el camino negativo no llega al Step 13, así que el patrón recién se ejerce por el camino positivo en TASK-6, después de #8. Lo que sí está probado es que el patrón es POSIX ERE y que GNU grep de la imagen lo evalúa como se espera (H-3/H-4). Como el `grep` corre dentro de la imagen, ese resultado no depende del builder.
+- **TASK-6 sigue pendiente de #8.**
+
+### Documentación
+- **READMEs y `agents.md`:** sí, `app/README.md`. Los dos textos son los literales de la v1.5:
+  - (b): "que no haya un registro de `localnet` embebido (`network` con valor `localnet` en cualquier forma: comillas dobles, simples o el template literal que emite Vite 8)";
+  - `style-src 'self'`: "**confirmado** en TASK-3 de #15: con el kit montado (lobby, modal, rutas profundas), 0 violaciones; Lit aplica sus estilos por `adoptedStyleSheets` y no inserta `<style>`".
+- **`agents.md`:** no aplica.
+- **`documents/STATUS.md`:** las filas de baseline de TASK-2b (7/7) y TASK-3 (11/11) ya están aplicadas, y la fila del ciclo #15 tiene "TASK-3 ✅ … H-1 corregido (TASK-2b)".
+=====
+
+## Revisión TASK-2b: PASA (H-1 cerrado)
+
+> Revisor: MID | Fecha: 2026-11-04 | Contra: HANDOFF_RAILWAY_DEPLOY v1.5 (`bbb419f`), TASK-2b §3-§7, Anexo A parte 3, y
+> el diff real sin commitear. Sin gates propios.
+
+- **`Dockerfile`:** `git diff` muestra **una** línea, la (b), con el patrón `network"?:[^[:alnum:]]localnet[^[:alnum:]]`
+  y el mismo mensaje. El archivo entero es **idéntico** al literal de §3.2 de la v1.5 (lo comparé con `diff` contra el
+  bloque del handoff).
+- **`app/README.md`:** la línea (b) de "La imagen" y la de `style-src 'self'` ("confirmado en TASK-3…") usan el texto
+  de la v1.5. Nada más cambió.
+- **`STATUS.md`:**
+  - filas de baseline de TASK-3 (11/11) y TASK-2b (7/7);
+  - la fila del ciclo #15 pasa a handoff v1.5, con TASK-3 ✅ y H-1 corregido;
+  - "Siguiente" actualizado.
+
+  La desviación 2 (dos frases que habían quedado viejas, como "handoff v1.3" y "TASK-3 en el seguimiento") corrige
+  información desactualizada y no cambia el alcance: ✅.
+- **SMOKE, parte 3 (7/7):**
+  - **H-1:** el contexto es el esperado. `localnet.json` es igual al fixture byte a byte, y el `.dockerignore` de la
+    copia difiere solo en `!…localnet.json`. `check` da "2 despliegue(s)".
+  - **H-2 (rojo):** con el patrón viejo, el build da `exit=0` y la imagen sirve ``network:`localnet` ``. Esto
+    **reproduce H-1** dentro de la imagen, con GNU grep.
+  - **H-3 (verde):** con el patrón nuevo, `exit=1` en el Step 13 con `ERROR (#15): localnet en el bundle`.
+    - La desviación 1 es que H-3 reusó la caché de los Steps 1-12 de H-2: ✅. El contexto es el mismo y el Step 13 es
+      el único que cambia, así que se ejecutó entero. Es lo correcto para aislar el efecto del patrón.
+  - **H-4:** sin falsos positivos. El positivo da P1-P13 con `exit=0` en la imagen (GNU grep de bookworm).
+  - **H-5:** el negativo da `exit=0`.
+  - **C-3:** 25 imágenes nuevas, borradas por ID sin `prune`, con el `comm` vacío.
+
+  Lo confirmé por mi cuenta: Docker está en la línea base (2 postgres ajenos y `busybox`), no existen
+  `<scratchpad>/h1-15` ni `docker-base-15-h`, y `:8090` está libre. La desviación 3 (el orden de los reportes finales
+  del SMOKE) es cosmética: ✅.
+- **Higiene:** el diff no tiene rutas personales, claves ni hex nuevos. `.dockerignore`, `Caddyfile`, el script,
+  `ci.yml`, `app/src` y `contracts` no cambiaron. El gate `app` no aplica (declarado): la CI del PR lo corre igual.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Ninguno. **H-1 (MINOR-1 de la revisión de TASK-3) cerrado** | — |
+
+### Siguiente paso
+Commit de TASK-2b y push. Con el run de CI en verde, el **PR #57 pasa a ready** para la revisión de integración del
+MAYOR. Body en `<scratchpad>/pr57_body.md`, con `<sha TASK-2b>` y la sección CI pendientes.
+
+### Mensaje de commit propuesto
+```
+app: catch an embedded localnet record in any quoting (#15)
+
+The image's bundle check (b) only matched double-quoted
+network:"localnet", but Vite 8 emits the deployment record with
+template literals (network:`localnet`), so a leaked localnet.json would
+have passed. The pattern is now network"?:[^[:alnum:]]localnet[^[:alnum:]].
+SMOKE part 3 7/7: with a forced localnet.json in a scratchpad copy the
+old pattern built the image and the new one fails with "localnet en el
+bundle"; positive and negative paths stay green; Docker back to
+baseline. README: check (b) described, style-src 'self' confirmed by
+TASK-3. STATUS: TASK-3 and TASK-2b baselines.
+
+Refs #15
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```

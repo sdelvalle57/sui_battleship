@@ -82,7 +82,8 @@ imagen base fijada por digest:
      variables en Railway;
   4. al final comprueba tres cosas sobre `app/dist/assets/`:
      - que estén el `packageId`, el `originalPackageId`, el `houseId` y el `publishTxDigest` de `testnet.json`;
-     - que no haya `network:"localnet"`;
+     - que no haya un registro de `localnet` embebido (`network` con valor `localnet` en cualquier forma: comillas
+       dobles, simples o el template literal que emite Vite 8);
      - que esté el origen `https://fullnode.testnet.sui.io`.
 - **runtime** (`caddy:2.11.7-alpine`):
   - sirve `app/dist` desde `/srv` con `app/Caddyfile`, como `nobody` (65534);
@@ -140,8 +141,8 @@ La CSP, directiva por directiva:
   - MVR no hace falta, porque la app usa IDs `0x`. El ensayo midió 0 pedidos.
 - **`script-src 'self'`:** el bundle no usa `eval`, `new Function` ni `WebAssembly`.
 - **`img-src 'self' data:`:** los íconos de wallet-standard son `data:`.
-- **`style-src 'self'`:** el kit (Lit) usa `adoptedStyleSheets`. Con el kit montado se confirma en TASK-3 de #15, que
-  está pendiente: espera la localnet de #14.
+- **`style-src 'self'`:** **confirmado** en TASK-3 de #15: con el kit montado (lobby, modal, rutas profundas), 0
+  violaciones; Lit aplica sus estilos por `adoptedStyleSheets` y no inserta `<style>`.
 
 **Sin COOP (DL-11).** El wallet web de Slush abre un popup (`about:blank` → `https://my.slush.app`) y necesita
 `window.opener`; un `Cross-Origin-Opener-Policy` lo cortaría. El ensayo de #15 abrió el popup con `window.opener`
