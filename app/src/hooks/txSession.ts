@@ -5,6 +5,7 @@ import type { Mutation, MutationStatus, QueryKey } from '@tanstack/react-query';
 import { hashKey } from '@tanstack/react-query';
 import type { GameCreatedEvent, GameResolvedEvent } from '../sui/events';
 import type { NodeTransactionResult } from '../sui/execution';
+import type { BetLimitsUpdatedEvent, FeeRateUpdatedEvent } from '../sui/houseAdmin';
 
 /**
  * Sesión de transacciones de la pestaña (DL-7/DL-8 de #12), en funciones puras sin React: qué ve una vista de las
@@ -16,12 +17,18 @@ import type { NodeTransactionResult } from '../sui/execution';
 // `hooks/` y no haya ciclos de imports de tipos (`txSession` ↔ `useExecuteTransaction`, `queryKeys` → `txSession` →
 // `txInvalidation` → `queryKeys`).
 
-/** Acción de una transacción propia: decide qué datos quedaron viejos (DL-6 de #11). */
+/**
+ * Acción de una transacción propia: decide qué datos quedaron viejos (DL-6 de #11). Las de la House (#14) no llevan
+ * `gameId`: su objetivo es la House de la config.
+ */
 export type TxAction =
   | { kind: 'create' }
   | { kind: 'cancel'; gameId: string }
   | { kind: 'reject'; gameId: string }
-  | { kind: 'accept'; gameId: string };
+  | { kind: 'accept'; gameId: string }
+  | { kind: 'updateFeeRate' }
+  | { kind: 'updateBetLimits' }
+  | { kind: 'withdrawFees' };
 
 /**
  * Resultado honesto de una transacción (DL-2, M-3). `success` y `failure` con `cost` los decide la lectura del nodo;
@@ -44,20 +51,22 @@ export type TxPrecheckStop = { stop: string; invalidate?: QueryKey[] };
 
 /**
  * Lo que cada acción aporta a la máquina común: la acción, el builder, el chequeo previo y la lectura del resultado.
- * `interpret` recibe la dirección que firmó (DL-11 de #13): la de la cuenta capturada al lanzar, no la que esté
- * conectada cuando la transacción termina.
+ * `build`, `precheck` e `interpret` reciben la dirección que firma (DL-11 de #13; D-5 de #14): la de la cuenta capturada
+ * al lanzar, no la que esté conectada cuando la transacción termina. Así el retiro de comisiones va a la cuenta que firma
+ * por construcción (N-2) y el `precheck` del `HouseCap` mira a esa misma cuenta.
  */
 export type ExecuteInput<T> = {
   action: TxAction;
-  build: () => Transaction;
-  precheck?: (signal: AbortSignal) => Promise<TxPrecheckStop | null>;
+  build: (sender: string) => Transaction;
+  precheck?: (signal: AbortSignal, sender: string) => Promise<TxPrecheckStop | null>;
   interpret: (nodeResult: NodeTransactionResult, signer: string) => T;
 };
 
-/** Objetivo de una transacción: el formulario de creación o una partida. */
-export type TxTarget = { kind: 'create' } | { kind: 'game'; gameId: string };
+/** Objetivo de una transacción: el formulario de creación, una partida o la House (panel de admin, #14). */
+export type TxTarget = { kind: 'create' } | { kind: 'game'; gameId: string } | { kind: 'house' };
 export type CreateTarget = Extract<TxTarget, { kind: 'create' }>;
 export type GameTarget = Extract<TxTarget, { kind: 'game' }>;
+export type HouseTarget = Extract<TxTarget, { kind: 'house' }>;
 
 /**
  * Una vista con acciones sobre un objetivo (M-5): `key` = clave de mutación del objetivo (`queryKeys.txTarget`),
@@ -95,13 +104,22 @@ export type CreateGameValue = {
   feeChanged: { from: number; to: number } | null;
 };
 
-/** Valor del resultado de cada acción (lo que devuelve su `interpret`). */
-export type TxValueByAction = {
+/** Valor del resultado de cada acción (lo que devuelve su `interpret`). No se exporta: se lee por `TxValueByAction`. */
+type TxValueMap = {
   create: CreateGameValue;
   cancel: bigint | null;
   reject: bigint | null;
   accept: GameResolvedEvent | null;
+  updateFeeRate: FeeRateUpdatedEvent | null;
+  updateBetLimits: BetLimitsUpdatedEvent | null;
+  withdrawFees: bigint | null;
 };
+
+/**
+ * Valor del resultado de cada acción, indexado por `TxAction['kind']` (H-4 de #14): una acción sin su valor en
+ * `TxValueMap` rompe el `typecheck`.
+ */
+export type TxValueByAction = { [K in TxAction['kind']]: TxValueMap[K] };
 
 /** Una mutación ajena adoptada (M-2): su acción y su resultado, con el tipo de valor de esa acción. */
 export type AdoptedTx = {
@@ -125,8 +143,19 @@ export type TxEntry = {
 /** Lo mínimo de una `Mutation` que se lee (una `Mutation` real cumple este tipo). */
 export type MutationLike = Pick<Mutation, 'mutationId' | 'state'> & { options: { mutationKey?: QueryKey } };
 
-// Toda acción de `TxAction`: una que falte haría que la mutación propia se viera como ajena (sin `viewId`/`runId`).
-const ACTION_KINDS = new Set(['create', 'cancel', 'reject', 'accept']);
+// Toda acción de `TxAction`: una que falte haría que la mutación propia se viera como ajena (sin `viewId`/`runId`), como
+// el panel de la House con su propia transacción (NIT-3 de #12). `satisfies` ata las claves a `TxAction['kind']`: una que
+// falte o sobre rompe el `typecheck` (H-4 de #14).
+const TX_ACTION_KINDS = {
+  create: true,
+  cancel: true,
+  reject: true,
+  accept: true,
+  updateFeeRate: true,
+  updateBetLimits: true,
+  withdrawFees: true,
+} satisfies Record<TxAction['kind'], true>;
+const ACTION_KINDS: ReadonlySet<string> = new Set(Object.keys(TX_ACTION_KINDS));
 const OUTCOME_KINDS = new Set(['success', 'failure', 'unconfirmed']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -188,13 +217,33 @@ export function mountSnapshot(mutations: readonly Pick<Mutation, 'mutationId' | 
 export type TxGameEntry = { id: number; status: MutationStatus; gameId: string | null };
 
 /**
- * Proyección de una mutación del caché para H-6: el `gameId` normalizado de su acción (como la clave de `myGameKey`), o
- * `null` para una creación o para variables sin la forma de la app.
+ * La partida que toca una acción, normalizada (como la clave de `myGameKey`), o `null` si no toca ninguna. Un `case` por
+ * acción y sin `default` (MINOR-2 de v1.1 de #14): una acción nueva sin su `case` rompe el `typecheck`.
+ */
+function actionGameId(action: TxAction): string | null {
+  switch (action.kind) {
+    case 'cancel':
+    case 'reject':
+    case 'accept':
+      return normalizeSuiAddress(action.gameId);
+    case 'create':
+      return null;
+    case 'updateFeeRate':
+      return null;
+    case 'updateBetLimits':
+      return null;
+    case 'withdrawFees':
+      return null;
+  }
+}
+
+/**
+ * Proyección de una mutación del caché para H-6: el `gameId` normalizado de su acción, o `null` para una acción que no
+ * toca una partida (crear, las de la House) o para variables sin la forma de la app.
  */
 export function toTxGameEntry(m: MutationLike): TxGameEntry {
   const action = txVariablesOf(m.state.variables)?.action;
-  const gameId = action === undefined || action.kind === 'create' ? null : normalizeSuiAddress(action.gameId);
-  return { id: m.mutationId, status: m.state.status, gameId };
+  return { id: m.mutationId, status: m.state.status, gameId: action === undefined ? null : actionGameId(action) };
 }
 
 /**

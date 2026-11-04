@@ -16,6 +16,7 @@ código discrepan, manda el código y se corrige la tabla en el mismo PR (`agent
 | `deployments/<red>.json`, `Published.toml` | Datos de cada publicación (los escribe la primera publicación en testnet, #8) |
 | `fixtures/game-reads.localnet.json` | Lecturas gRPC reales de cada variante de `Game` y de sus eventos, capturadas en una localnet desechable con `app/scripts/capture-read-fixtures.mjs` (#10, ver "Lectura desde la app") |
 | `fixtures/game-tx.localnet.json` | Transacciones reales de crear, cancelar, rechazar (#11) y aceptar (#12): éxitos (con cada ganador y sobre una invitación), dos fallos `MoveAbort` ejecutados y 11 `SimulationError` de simulaciones sin firmar, y el objeto House, capturados en una localnet desechable con `app/scripts/capture-tx-fixtures.mjs` (ver "Lectura desde la app") |
+| `fixtures/house-admin.localnet.json` | Panel de la House (#14): listado real del `HouseCap` por tipo (`listOwnedObjects`), su `getObject`, 4 `SimulationError` de `house`/0, 1, 1, 2 y la preflight sin el cap, las transacciones de admin ejecutadas (`update_fee_rate`, `update_bet_limits`, `withdraw_fees` + `TransferObjects`) y la House después del retiro, capturados en una localnet desechable con `app/scripts/capture-house-fixtures.mjs` (ver "Lectura desde la app") |
 
 **Gates (build, lint, test, coverage):** forma canónica en `agents.md` §3 (desde `contracts/`, con
 `-e testnet` y `printf 'n\n' |` delante). Baselines vigentes en `documents/STATUS.md`.
@@ -58,7 +59,7 @@ Valores con los que nace la House (constantes del módulo):
 | `fees_collected(house: &House): u64` | `public` | cualquiera | `EWrongVersion` (3) | — |
 | `min_bet(house: &House): u64` | `public` | cualquiera | `EWrongVersion` (3) | — |
 | `max_bet(house: &House): u64` | `public` | cualquiera | `EWrongVersion` (3) | — |
-| `version(house: &House): u64` | `public` | cualquiera | — | — (lectura de diagnóstico **sin** chequeo de versión: el panel #14 la usa para detectar una House que no coincide con el paquete) |
+| `version(house: &House): u64` | `public` | cualquiera | — | — (lectura de diagnóstico **sin** chequeo de versión). El panel de #14 muestra el campo `version` del objeto ("Versión de la House"), leído del BCS; la app no replica `VERSION`, así que una House de otra versión se ve recién como `house`/3 al operar |
 
 En las funciones con `EWrongVersion`, el chequeo de versión va **antes** que cualquier otro: con una versión
 que no coincide, el abort es siempre `EWrongVersion`, aunque otro argumento también sea inválido. Los montos
@@ -107,8 +108,18 @@ aquí y en `ABORT_MESSAGES` en el mismo PR (`agents.md` §5).
 
 Sin `HouseCap`, las comisiones quedan **bloqueadas** y la configuración **congelada para siempre**. El caso
 probable es enviarlo a un **ID de objeto** (por ejemplo, el de la House) en vez de a una dirección: queda
-huérfano, porque solo `house` podría recibirlo (`transfer::receive`) y no lo expone. Nota para #14: validar
-el formato del destinatario (SEG-9) y que no sea un objeto existente antes de llamar a `transfer_house_cap`.
+huérfano, porque solo `house` podría recibirlo (`transfer::receive`) y no lo expone. La app (#14) **no** transfiere el
+cap (N-1): `transfer_house_cap` sigue siendo solo por CLI, igual que `migrate`. Checklist de quien lo use:
+
+- [ ] El destinatario es una **dirección de cuenta** válida (`0x` + 64 hex), no un ID de objeto. Comprobarlo con
+  `printf 'n\n' | SUI_CONFIG_DIR=<su dir> sui client object <destino>`, que tiene que fallar porque no existe un objeto con ese ID.
+- [ ] La dirección se verificó **dos veces** contra la de la wallet que va a administrar (la que muestra el título de
+  `.account-badge` en la app). Es irreversible.
+- [ ] Si el destino es una wallet de navegador nueva, primero se conecta en la app y se toma su dirección. Después de
+  transferir, `printf 'n\n' | SUI_CONFIG_DIR=<su dir> sui client object <HOUSE_CAP_ID> --json` muestra el dueño nuevo, y en `#/admin` aparece el panel
+  (si dice "Sin permisos", "Volver a comprobar": el índice puede ir unos cientos de ms atrás).
+- [ ] La dirección publicadora también tiene el `UpgradeCap` y el `Publisher`: importarla en una wallet de navegador
+  los expone a la extensión; la alternativa es `transfer_house_cap` a la wallet del panel. Decisión del owner (N-3).
 
 ### Fee por defecto 0 (D-20261030-11)
 
@@ -486,6 +497,32 @@ transacción (cómputo + storage − rebate de `effects.gasUsed`).
   claro si falta una partida (también si la única cancelada por su creador es una invitación), si faltan los dos
   ganadores, si el último fallo sobre `G_ACC1` no es `game`/4 o si `A`, `B`, `C` y `ADMIN` no son cuatro cuentas
   distintas.
+- **Panel de la House (#14):**
+  - **Detección:** el `HouseCap` se detecta **por tipo** entre los objetos de la cuenta,
+    `listOwnedObjects({ owner, type: <originalPackageId>::house::HouseCap })`, sin `houseCapId` en la config; la regla
+    de certeza está en `app/README.md`, "Panel de la House (#14)".
+  - **Antes de cada acción,** la app relee el cap por ID (`getObject`) para confirmar el dueño.
+  - **Lo que lee:** el BCS de `HouseCap` es solo el `UID`. Los eventos de admin (`FeeRateUpdated`, `BetLimitsUpdated`,
+    `FeesWithdrawn`) se leen con su BCS exacto y el `house_id` de la config.
+  - **Fixture:** `contracts/fixtures/house-admin.localnet.json` (`_meta`, `ids`, `houseCapListing`, `houseCapObject`,
+    `simulationErrors` con `sender` por rol, `executed` sin `sender` ni `signatures`, `house`).
+  - **Recaptura:** dentro de la localnet aislada (génesis nueva, variante B), después de estas transacciones por CLI,
+    **en este orden** y con el cap en `ADMIN` todo el tiempo:
+    1. `ADMIN`: `update_fee_rate` 250;
+    2. `ADMIN`: `update_bet_limits` 2000000 10000000000;
+    3. `A` crea una partida abierta de 200000000;
+    4. `B` la acepta (comisión 10000000);
+    5. `ADMIN`: `withdraw_fees` + `TransferObjects` a sí mismo en una PTB
+       (`suic ptb --move-call "$PKG::house::withdraw_fees" @$HOUSE @$HOUSE_CAP --assign fees --transfer-objects "[fees]" @$ADMIN`).
+
+    Ninguna transacción más (ni `transfer_house_cap`). Después, con el prefijo de Node 26:
+    `node app/scripts/capture-house-fixtures.mjs` desde `<repo>`.
+  - **Qué exige el script:**
+    - la misma guarda (código 2 ante otra `--url`, antes de cualquier pedido);
+    - deriva los roles on-chain (`ADMIN` = dueño del cap, `A` = creador, `B` = aceptante) y aborta si no son tres
+      cuentas distintas, si falta o sobra una transacción de admin, si no las firmó el dueño del cap o si la House no
+      quedó en 0;
+    - es determinista (solo cambia `_meta.capturedAt`).
 - **Listas (lobby, #10):** las partidas se descubren por eventos con `eventType` = `<originalPackageId>::game::<Evento>`
   (dirección **completa**: con `0x3` corto el nodo responde `INVALID_ARGUMENT`). En el fullnode público, `listEvents` del
   SDK (sin rango) falla con `OUT_OF_RANGE` ("requested data below earliest available"): el historial está podado

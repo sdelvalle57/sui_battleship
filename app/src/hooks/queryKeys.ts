@@ -1,4 +1,5 @@
 import { normalizeSuiAddress, normalizeSuiObjectId } from '@mysten/sui/utils';
+import type { QueryKey } from '@tanstack/react-query';
 import type { Network } from '../sui/networks';
 import type { TxTarget } from './txSession';
 
@@ -23,6 +24,12 @@ export const queryKeys = {
   publishCheckpoint: (network: Network, digest: string) => ['sui', network, 'publishCheckpoint', digest] as const,
   /** Objeto House (comisión y límites): se relee al montar y al foco, y se invalida si cambió (M-2). */
   house: (network: Network, houseId: string) => ['sui', network, 'house', houseId] as const,
+  /**
+   * `HouseCap` de una cuenta (#14, D-1): lo invalidan las acciones de la House (H-5) y lo relee "Volver a comprobar". Con
+   * la dirección normalizada, como `balance`.
+   */
+  houseCap: (network: Network, originalPackageId: string, address: string) =>
+    ['sui', network, 'houseCap', originalPackageId, normalizeSuiAddress(address)] as const,
   /** Saldo de SUI de una cuenta, con la dirección normalizada (una cuenta, una clave). */
   balance: (network: Network, address: string) => ['sui', network, 'balance', normalizeSuiAddress(address)] as const,
   /**
@@ -46,9 +53,18 @@ export const queryKeys = {
    */
   txAccount: (network: Network, address: string | null) =>
     ['sui', network, 'tx', address === null ? 'none' : normalizeSuiAddress(address)] as const,
-  /** Clave de **mutación** de un objetivo de la cuenta: crear, o una partida por ID normalizado (M-5). */
-  txTarget: (network: Network, address: string | null, target: TxTarget) =>
-    target.kind === 'create'
-      ? ([...queryKeys.txAccount(network, address), 'create'] as const)
-      : ([...queryKeys.txAccount(network, address), 'game', normalizeSuiObjectId(target.gameId)] as const),
+  /**
+   * Clave de **mutación** de un objetivo de la cuenta: crear, una partida por ID normalizado (M-5) o la House (#14). Un
+   * `case` por objetivo con tipo de retorno explícito: un objetivo nuevo sin su `case` rompe el `typecheck`.
+   */
+  txTarget: (network: Network, address: string | null, target: TxTarget): QueryKey => {
+    switch (target.kind) {
+      case 'create':
+        return [...queryKeys.txAccount(network, address), 'create'];
+      case 'game':
+        return [...queryKeys.txAccount(network, address), 'game', normalizeSuiObjectId(target.gameId)];
+      case 'house':
+        return [...queryKeys.txAccount(network, address), 'house'];
+    }
+  },
 };

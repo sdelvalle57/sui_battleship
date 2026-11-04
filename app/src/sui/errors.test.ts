@@ -329,3 +329,34 @@ describe('runtime cancellations (DL-11)', () => {
     );
   });
 });
+
+describe('real SimulationError of the house admin actions (#14, house-admin.localnet.json)', () => {
+  type HouseFixture = { ids: { packageId: string; originalPackageId: string }; simulationErrors: Record<string, FixtureSimulation> };
+  const HOUSE_FIXTURE_PATH = '../../../contracts/fixtures/house-admin.localnet.json';
+  const houseFixture = import.meta.glob<HouseFixture>('../../../contracts/fixtures/house-admin.localnet.json', {
+    eager: true,
+    import: 'default',
+  })[HOUSE_FIXTURE_PATH] as HouseFixture;
+  const HOUSE_PKG = houseFixture.ids.originalPackageId;
+  const HOUSE_IDS = { packageId: houseFixture.ids.packageId, originalPackageId: HOUSE_PKG };
+  const HOUSE_CASES: [string, number][] = [
+    ['feeTooHigh', 0],
+    ['limitsZeroMin', 1],
+    ['limitsMinAboveMax', 1],
+    ['withdrawNoFees', 2],
+  ];
+
+  it.each(HOUSE_CASES)('maps %s (structured) to house/%i with the diagnostic suffix', (name, code) => {
+    const sim = houseFixture.simulationErrors[name];
+    if (sim === undefined) throw new Error(`falta ${name}`);
+    const error = new SimulationError(sim.message, { executionError: sim.executionError });
+    expect(findMoveAbort(error)).toEqual({ packageId: HOUSE_PKG, module: 'house', code: String(code) });
+    expect(transactionErrorMessage(error, HOUSE_IDS)).toBe(`${ABORT_MESSAGES.house[code] ?? ''} (código house/${String(code)})`);
+  });
+
+  it.each(HOUSE_CASES)('maps %s by its message alone to house/%i', (name, code) => {
+    const sim = houseFixture.simulationErrors[name];
+    if (sim === undefined) throw new Error(`falta ${name}`);
+    expect(findMoveAbort(new Error(sim.message))).toEqual({ packageId: HOUSE_PKG, module: 'house', code: String(code) });
+  });
+});

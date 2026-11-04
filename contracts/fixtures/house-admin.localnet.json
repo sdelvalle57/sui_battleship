@@ -1,0 +1,587 @@
+{
+  "_meta": {
+    "suiCliVersion": "1.83.0-16d2dc1e05ed",
+    "sdkVersion": "2.37.0",
+    "capturedAt": "2026-11-04T08:08:56.279Z",
+    "network": "localnet",
+    "order": "Transacciones por CLI 1.83, en este orden y con el HouseCap en ADMIN: (1) ADMIN update_fee_rate 250; (2) ADMIN update_bet_limits 2000000 10000000000; (3) A crea una partida abierta de 200000000; (4) B la acepta (comisión 10000000); (5) ADMIN withdraw_fees + TransferObjects a sí mismo. Después, solo lecturas y simulaciones",
+    "method": {
+      "houseCapListing": "SuiGrpcClient.listOwnedObjects({ owner, type: normalizeStructTag(<originalPackageId>::house::HouseCap), limit, include: { content: true } }) ⇒ { objects, hasNextPage, cursor }: admin = ADMIN con limit 2; nonOwner = A con limit 2; adminLimit1 = ADMIN con limit 1",
+      "houseCapObject": "SuiGrpcClient.getObject({ objectId: houseCapId, include: { content: true } }); content en base64",
+      "simulationErrors": "SimulationError real de Transaction.build({ client }) con setSender(<cuenta de la génesis del rol>), sin firmar: feeTooHigh = update_fee_rate(1001); limitsZeroMin = update_bet_limits(0, 10000000000); limitsMinAboveMax = update_bet_limits(5000000, 1000000); withdrawNoFees = withdraw_fees + TransferObjects([Result 0], ADMIN) con la House en 0. Por caso: { sender: <rol>, message, executionError }. nonOwnerPreflight = update_fee_rate(300) con setSender(A), sin el cap: el error tal cual llega { sender: <rol>, errorName, message, executionError?, causeCode? }",
+      "executed": "SuiGrpcClient.getTransaction({ digest, include: { effects: true, events: true, objectTypes: true } }) de las transacciones de admin, encontradas por el único evento FeeRateUpdated, BetLimitsUpdated y FeesWithdrawn del paquete; effects.bcs y bcs de eventos en base64, sin sender ni signatures",
+      "house": "SuiGrpcClient.getObject({ objectId: houseId, include: { content: true, json: true } }) después del retiro; content en base64 (BCS de los campos del struct)"
+    },
+    "roles": "ADMIN = dueño del HouseCap (publicó; firmó las tres transacciones de admin); A = creador de la única partida (y la cuenta sin el cap de nonOwner y nonOwnerPreflight); B = el que la aceptó. Se derivan on-chain y nunca se escriben",
+    "note": "Captura de una localnet aislada y desechable (agents.md §3). Las direcciones e IDs son de cuentas efímeras de la génesis; sin claves ni frases. Sin sender: los casos llevan el rol."
+  },
+  "ids": {
+    "packageId": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3",
+    "originalPackageId": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3",
+    "houseId": "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868",
+    "houseCapId": "0xb76fd2da42fde6b71617504a6afcece7178e0e2543aeed76286d22aff8f3fa59"
+  },
+  "houseCapListing": {
+    "admin": {
+      "objects": [
+        {
+          "objectId": "0xb76fd2da42fde6b71617504a6afcece7178e0e2543aeed76286d22aff8f3fa59",
+          "version": "171",
+          "digest": "4G5x38eNijaUsYLJ3cesqizZsyqzmS9TV75n8dEKqCLx",
+          "content": "t2/S2kL95rcWF1BKavzs5xeODiVDru12KG0ir/jz+lk=",
+          "owner": {
+            "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+            "$kind": "AddressOwner"
+          },
+          "type": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::HouseCap"
+        }
+      ],
+      "hasNextPage": false,
+      "cursor": null
+    },
+    "nonOwner": {
+      "objects": [],
+      "hasNextPage": false,
+      "cursor": null
+    },
+    "adminLimit1": {
+      "objects": [
+        {
+          "objectId": "0xb76fd2da42fde6b71617504a6afcece7178e0e2543aeed76286d22aff8f3fa59",
+          "version": "171",
+          "digest": "4G5x38eNijaUsYLJ3cesqizZsyqzmS9TV75n8dEKqCLx",
+          "content": "t2/S2kL95rcWF1BKavzs5xeODiVDru12KG0ir/jz+lk=",
+          "owner": {
+            "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+            "$kind": "AddressOwner"
+          },
+          "type": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::HouseCap"
+        }
+      ],
+      "hasNextPage": false,
+      "cursor": null
+    }
+  },
+  "houseCapObject": {
+    "objectId": "0xb76fd2da42fde6b71617504a6afcece7178e0e2543aeed76286d22aff8f3fa59",
+    "version": "171",
+    "digest": "4G5x38eNijaUsYLJ3cesqizZsyqzmS9TV75n8dEKqCLx",
+    "owner": {
+      "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+      "$kind": "AddressOwner"
+    },
+    "type": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::HouseCap",
+    "content": "t2/S2kL95rcWF1BKavzs5xeODiVDru12KG0ir/jz+lk="
+  },
+  "simulationErrors": {
+    "feeTooHigh": {
+      "sender": "ADMIN",
+      "message": "Transaction resolution failed: MoveAbort in 1st command, abort code: 0, in '0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::update_fee_rate' (instruction 11)",
+      "executionError": {
+        "$kind": "MoveAbort",
+        "message": "MoveAbort in 1st command, abort code: 0, in '0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::update_fee_rate' (instruction 11)",
+        "command": 0,
+        "MoveAbort": {
+          "abortCode": "0",
+          "location": {
+            "package": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3",
+            "module": "house",
+            "function": 1,
+            "instruction": 11,
+            "functionName": "update_fee_rate"
+          }
+        }
+      }
+    },
+    "limitsZeroMin": {
+      "sender": "ADMIN",
+      "message": "Transaction resolution failed: MoveAbort in 1st command, abort code: 1, in '0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::update_bet_limits' (instruction 20)",
+      "executionError": {
+        "$kind": "MoveAbort",
+        "message": "MoveAbort in 1st command, abort code: 1, in '0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::update_bet_limits' (instruction 20)",
+        "command": 0,
+        "MoveAbort": {
+          "abortCode": "1",
+          "location": {
+            "package": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3",
+            "module": "house",
+            "function": 2,
+            "instruction": 20,
+            "functionName": "update_bet_limits"
+          }
+        }
+      }
+    },
+    "limitsMinAboveMax": {
+      "sender": "ADMIN",
+      "message": "Transaction resolution failed: MoveAbort in 1st command, abort code: 1, in '0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::update_bet_limits' (instruction 20)",
+      "executionError": {
+        "$kind": "MoveAbort",
+        "message": "MoveAbort in 1st command, abort code: 1, in '0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::update_bet_limits' (instruction 20)",
+        "command": 0,
+        "MoveAbort": {
+          "abortCode": "1",
+          "location": {
+            "package": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3",
+            "module": "house",
+            "function": 2,
+            "instruction": 20,
+            "functionName": "update_bet_limits"
+          }
+        }
+      }
+    },
+    "withdrawNoFees": {
+      "sender": "ADMIN",
+      "message": "Transaction resolution failed: MoveAbort in 1st command, abort code: 2, in '0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::withdraw_fees' (instruction 15)",
+      "executionError": {
+        "$kind": "MoveAbort",
+        "message": "MoveAbort in 1st command, abort code: 2, in '0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::withdraw_fees' (instruction 15)",
+        "command": 0,
+        "MoveAbort": {
+          "abortCode": "2",
+          "location": {
+            "package": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3",
+            "module": "house",
+            "function": 5,
+            "instruction": 15,
+            "functionName": "withdraw_fees"
+          }
+        }
+      }
+    },
+    "nonOwnerPreflight": {
+      "sender": "A",
+      "errorName": "SimulationError",
+      "message": "Error checking transaction input objects: Transaction was not signed by the correct sender: Object 0xb76fd2da42fde6b71617504a6afcece7178e0e2543aeed76286d22aff8f3fa59 is owned by account address 0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a, but given owner/signer address is 0x59efc6b96d882d63bda1b0c7f92819ca7f779629e2961a14a44b1f6f6e9a9255",
+      "causeCode": "INVALID_ARGUMENT"
+    }
+  },
+  "executed": {
+    "updateFeeRate": {
+      "$kind": "Transaction",
+      "Transaction": {
+        "digest": "BFUSwvsX4y3MYWHMeeFjopD7pxdRGpfg8g6BmnH6V4p1",
+        "epoch": "0",
+        "timestampMs": 1793779547796,
+        "checkpoint": "234",
+        "status": {
+          "success": true,
+          "error": null
+        },
+        "effects": {
+          "bcs": "AQAAAAAAAAAAAEBCDwAAAAAAcBk6AAAAAADzFzoAAAAAAH0BAAAAAAAAIJhKCRF3JS/gNIfhLsEXHoQrmSL6lz2Y8HXRF99mBYECAQAAAAABILm/EhAxICXMe8WGrQh/4hsQoqEahiF0FFZx/sl1vJYQAAMAAAAAAAAAAwrmP/2DjKB0+PSN+Gv5r/bkJJe+iCNtG6gLXJ0p30E9AQIAAAAAAAAAIDrVvi9IeVW29c8mkyPvISwiKy9E7fY8wnEuvrcbbZBvAOEXrkhB80uJzEz8QxEF0KIcii8XyUHAXnfuS2toMm06ASBJ8fBEM51KoQZzyg5+exVOHPzGRgasTguaG7i6+3YuxADhF65IQfNLicxM/EMRBdCiHIovF8lBwF537ktraDJtOgBHpLcEaXwnqgMxwOp5UM6p4AD2oheVWpLDLB7Lj4w4aAECAAAAAAAAACAoPQDKi/IJN3Te+FaodmIzoHbMYh7Lo4kfj17rVVpfhAICAAAAAAAAAAEgikEnTxMGgdDRpSxsRv224H5w89hm/tuR4Gra1YFInZoCAgAAAAAAAAAAt2/S2kL95rcWF1BKavzs5xeODiVDru12KG0ir/jz+lkBAgAAAAAAAAAgOOFalirRcImohuRRkvzYEdpGlWdcnmhCdqSmGuhP1wAA4ReuSEHzS4nMTPxDEQXQohyKLxfJQcBed+5La2gybToBII0gWMTG3SL0oV4yn6MiyzunTFnPzkbl/80YHrOKiJxJAOEXrkhB80uJzEz8QxEF0KIcii8XyUHAXnfuS2toMm06AAAA",
+          "version": 2,
+          "status": {
+            "success": true,
+            "error": null
+          },
+          "gasUsed": {
+            "computationCost": "1000000",
+            "storageCost": "3807600",
+            "storageRebate": "3807219",
+            "nonRefundableStorageFee": "381"
+          },
+          "transactionDigest": "BFUSwvsX4y3MYWHMeeFjopD7pxdRGpfg8g6BmnH6V4p1",
+          "gasObject": {
+            "objectId": "0x0ae63ffd838ca074f8f48df86bf9aff6e42497be88236d1ba80b5c9d29df413d",
+            "inputState": "Exists",
+            "inputVersion": "2",
+            "inputDigest": "4xfgYWvp6sDrdCFr4rHZonqKCnwhXRkKx1s8x8EczL6i",
+            "inputOwner": {
+              "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+              "$kind": "AddressOwner"
+            },
+            "outputState": "ObjectWrite",
+            "outputVersion": "3",
+            "outputDigest": "5yejYromdYuCLRoUbWGr89q1e5TmaHP41D6zbr4KStLb",
+            "outputOwner": {
+              "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+              "$kind": "AddressOwner"
+            },
+            "idOperation": "None"
+          },
+          "eventsDigest": "DW5Qf2rmB8dmgEmFnrHwkS8vgWMJP7B9HKtd22q6GpmM",
+          "dependencies": [],
+          "lamportVersion": "3",
+          "changedObjects": [
+            {
+              "objectId": "0x0ae63ffd838ca074f8f48df86bf9aff6e42497be88236d1ba80b5c9d29df413d",
+              "inputState": "Exists",
+              "inputVersion": "2",
+              "inputDigest": "4xfgYWvp6sDrdCFr4rHZonqKCnwhXRkKx1s8x8EczL6i",
+              "inputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "3",
+              "outputDigest": "5yejYromdYuCLRoUbWGr89q1e5TmaHP41D6zbr4KStLb",
+              "outputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868",
+              "inputState": "Exists",
+              "inputVersion": "2",
+              "inputDigest": "3i5G3TtdcsGFRNUBAiFX6SSoycLLWTu9FbDh5dtw1mmV",
+              "inputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "2"
+                }
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "3",
+              "outputDigest": "AJgtJCCYgfNH4ky5pa2LkSF7u5BW7kTZnoAixbtAiAiu",
+              "outputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "2"
+                }
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0xb76fd2da42fde6b71617504a6afcece7178e0e2543aeed76286d22aff8f3fa59",
+              "inputState": "Exists",
+              "inputVersion": "2",
+              "inputDigest": "4q38qhPgJcebHULyu1uF7E6ccS26SeCQiE476GDAWnSj",
+              "inputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "3",
+              "outputDigest": "AVu6PubVqS7b7S127x2UmT37aJsuBqTk8pg3YnjPjBc4",
+              "outputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "None"
+            }
+          ],
+          "unchangedConsensusObjects": [],
+          "auxiliaryDataDigest": null
+        },
+        "objectTypes": {
+          "0x0ae63ffd838ca074f8f48df86bf9aff6e42497be88236d1ba80b5c9d29df413d": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::House",
+          "0xb76fd2da42fde6b71617504a6afcece7178e0e2543aeed76286d22aff8f3fa59": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::HouseCap"
+        },
+        "events": [
+          {
+            "packageId": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3",
+            "module": "house",
+            "eventType": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::FeeRateUpdated",
+            "bcs": "R6S3BGl8J6oDMcDqeVDOqeAA9qIXlVqSwywey4+MOGgAAPoA",
+            "json": {
+              "house_id": "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868",
+              "new_fee_rate": 250,
+              "old_fee_rate": 0
+            }
+          }
+        ]
+      }
+    },
+    "updateBetLimits": {
+      "$kind": "Transaction",
+      "Transaction": {
+        "digest": "9bD38j9UgbFWGof1xF1VYBTi4Bsk8BF2YiEW3C66ZaHw",
+        "epoch": "0",
+        "timestampMs": 1793779557313,
+        "checkpoint": "278",
+        "status": {
+          "success": true,
+          "error": null
+        },
+        "effects": {
+          "bcs": "AQAAAAAAAAAAAEBCDwAAAAAAcBk6AAAAAADzFzoAAAAAAH0BAAAAAAAAIH+g2lrlsPg8mSQ4PyjP40WWQAHywtuQ+ezTg+Y5z7yqAQAAAAABIM+fLKmbHVfeuyuQofQUJIuzORFJkdNi2u4euLtyrRORAAQAAAAAAAAAAwrmP/2DjKB0+PSN+Gv5r/bkJJe+iCNtG6gLXJ0p30E9AQMAAAAAAAAAIEnx8EQznUqhBnPKDn57FU4c/MZGBqxOC5obuLr7di7EAOEXrkhB80uJzEz8QxEF0KIcii8XyUHAXnfuS2toMm06ASA2v9yJRY5heGI1F5GtZuabQUHNUoV9PIGtsExgC4PZiQDhF65IQfNLicxM/EMRBdCiHIovF8lBwF537ktraDJtOgBHpLcEaXwnqgMxwOp5UM6p4AD2oheVWpLDLB7Lj4w4aAEDAAAAAAAAACCKQSdPEwaB0NGlLGxG/bbgfnDz2Gb+25HgatrVgUidmgICAAAAAAAAAAEgVdvSy18rPnI5vHp/WCckhFQaotb6dAhT5SuKpl6pt7oCAgAAAAAAAAAAt2/S2kL95rcWF1BKavzs5xeODiVDru12KG0ir/jz+lkBAwAAAAAAAAAgjSBYxMbdIvShXjKfoyLLO6dMWc/ORuX/zRges4qInEkA4ReuSEHzS4nMTPxDEQXQohyKLxfJQcBed+5La2gybToBILIRbAeI/nyLhRv5D8Y4eIDvOJkCQTPicZHjZsNhRMP2AOEXrkhB80uJzEz8QxEF0KIcii8XyUHAXnfuS2toMm06AAAA",
+          "version": 2,
+          "status": {
+            "success": true,
+            "error": null
+          },
+          "gasUsed": {
+            "computationCost": "1000000",
+            "storageCost": "3807600",
+            "storageRebate": "3807219",
+            "nonRefundableStorageFee": "381"
+          },
+          "transactionDigest": "9bD38j9UgbFWGof1xF1VYBTi4Bsk8BF2YiEW3C66ZaHw",
+          "gasObject": {
+            "objectId": "0x0ae63ffd838ca074f8f48df86bf9aff6e42497be88236d1ba80b5c9d29df413d",
+            "inputState": "Exists",
+            "inputVersion": "3",
+            "inputDigest": "5yejYromdYuCLRoUbWGr89q1e5TmaHP41D6zbr4KStLb",
+            "inputOwner": {
+              "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+              "$kind": "AddressOwner"
+            },
+            "outputState": "ObjectWrite",
+            "outputVersion": "4",
+            "outputDigest": "4gihYDh7ddmcQVpHXnUKA5ou1Fzped17BtDGHop7FqFn",
+            "outputOwner": {
+              "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+              "$kind": "AddressOwner"
+            },
+            "idOperation": "None"
+          },
+          "eventsDigest": "EyUAkcrHDcn4goJuDDHZ59tVXL3fykthz12WrRBnquPv",
+          "dependencies": [],
+          "lamportVersion": "4",
+          "changedObjects": [
+            {
+              "objectId": "0x0ae63ffd838ca074f8f48df86bf9aff6e42497be88236d1ba80b5c9d29df413d",
+              "inputState": "Exists",
+              "inputVersion": "3",
+              "inputDigest": "5yejYromdYuCLRoUbWGr89q1e5TmaHP41D6zbr4KStLb",
+              "inputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "4",
+              "outputDigest": "4gihYDh7ddmcQVpHXnUKA5ou1Fzped17BtDGHop7FqFn",
+              "outputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868",
+              "inputState": "Exists",
+              "inputVersion": "3",
+              "inputDigest": "AJgtJCCYgfNH4ky5pa2LkSF7u5BW7kTZnoAixbtAiAiu",
+              "inputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "2"
+                }
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "4",
+              "outputDigest": "6nA4uErTpPP1KVba9n2BT8RqiEUQqdvzbZkfzaTmdXU5",
+              "outputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "2"
+                }
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0xb76fd2da42fde6b71617504a6afcece7178e0e2543aeed76286d22aff8f3fa59",
+              "inputState": "Exists",
+              "inputVersion": "3",
+              "inputDigest": "AVu6PubVqS7b7S127x2UmT37aJsuBqTk8pg3YnjPjBc4",
+              "inputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "4",
+              "outputDigest": "Cz6yjzded4nHeyZS2T3Ky2hFbQpt4TpSf3Yzc5edF75f",
+              "outputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "None"
+            }
+          ],
+          "unchangedConsensusObjects": [],
+          "auxiliaryDataDigest": null
+        },
+        "objectTypes": {
+          "0x0ae63ffd838ca074f8f48df86bf9aff6e42497be88236d1ba80b5c9d29df413d": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::House",
+          "0xb76fd2da42fde6b71617504a6afcece7178e0e2543aeed76286d22aff8f3fa59": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::HouseCap"
+        },
+        "events": [
+          {
+            "packageId": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3",
+            "module": "house",
+            "eventType": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::BetLimitsUpdated",
+            "bcs": "R6S3BGl8J6oDMcDqeVDOqeAA9qIXlVqSwywey4+MOGhAQg8AAAAAAAB0O6QLAAAAgIQeAAAAAAAA5AtUAgAAAA==",
+            "json": {
+              "house_id": "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868",
+              "new_max_bet": "10000000000",
+              "new_min_bet": "2000000",
+              "old_max_bet": "50000000000",
+              "old_min_bet": "1000000"
+            }
+          }
+        ]
+      }
+    },
+    "withdrawFees": {
+      "$kind": "Transaction",
+      "Transaction": {
+        "digest": "4QBXE9ZB1fk9dUnebLhYQQoG2c5bvAsQe6EJSSSVzSTi",
+        "epoch": "0",
+        "timestampMs": 1793779592566,
+        "checkpoint": "434",
+        "status": {
+          "success": true,
+          "error": null
+        },
+        "effects": {
+          "bcs": "AQAAAAAAAAAAAEBCDwAAAAAA0CxJAAAAAADzFzoAAAAAAH0BAAAAAAAAIDKDUNEJUszCwku/INUTKMYt93Xlp0vLWa3ssCvzyN2ZAQAAAAABIMn0NwNNKEZhaH/brcQaU1P8YJbXYXENxzEtW+QF1cteAKsAAAAAAAAABArmP/2DjKB0+PSN+Gv5r/bkJJe+iCNtG6gLXJ0p30E9AQQAAAAAAAAAIDa/3IlFjmF4YjUXka1m5ptBQc1ShX08ga2wTGALg9mJAOEXrkhB80uJzEz8QxEF0KIcii8XyUHAXnfuS2toMm06ASDskWEyUlrHR1WbLkYW87UkqhRoufMxgQmBUjR+hVvZYwDhF65IQfNLicxM/EMRBdCiHIovF8lBwF537ktraDJtOgAtXrJCi1h62kUg4w1IgPBtuggepgdT4Y/RnuKPpmGxAgABIBburNIKeWWPQ1+ubIzaSPXAQS+WUNWHi+fohXC8JvYwAOEXrkhB80uJzEz8QxEF0KIcii8XyUHAXnfuS2toMm06AUektwRpfCeqAzHA6nlQzqngAPaiF5VaksMsHsuPjDhoAaoAAAAAAAAAIBQdHaALb70Mkwr8dCXWygEg0qd7OgaghVYZD64kEcfiAgIAAAAAAAAAASDj8+VRY/K/BzQ9W9TLsKc9UpWBDc5ii1Wbf6wmdpufQgICAAAAAAAAAAC3b9LaQv3mtxYXUEpq/OznF44OJUOu7XYobSKv+PP6WQEEAAAAAAAAACCyEWwHiP58i4Ub+Q/GOHiA7ziZAkEz4nGR42bDYUTD9gDhF65IQfNLicxM/EMRBdCiHIovF8lBwF537ktraDJtOgEgMHBeYNWZLIv+46b4/C545abPkfEZxPoKByuBZWYhuFEA4ReuSEHzS4nMTPxDEQXQohyKLxfJQcBed+5La2gybToAAAA=",
+          "version": 2,
+          "status": {
+            "success": true,
+            "error": null
+          },
+          "gasUsed": {
+            "computationCost": "1000000",
+            "storageCost": "4795600",
+            "storageRebate": "3807219",
+            "nonRefundableStorageFee": "381"
+          },
+          "transactionDigest": "4QBXE9ZB1fk9dUnebLhYQQoG2c5bvAsQe6EJSSSVzSTi",
+          "gasObject": {
+            "objectId": "0x0ae63ffd838ca074f8f48df86bf9aff6e42497be88236d1ba80b5c9d29df413d",
+            "inputState": "Exists",
+            "inputVersion": "4",
+            "inputDigest": "4gihYDh7ddmcQVpHXnUKA5ou1Fzped17BtDGHop7FqFn",
+            "inputOwner": {
+              "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+              "$kind": "AddressOwner"
+            },
+            "outputState": "ObjectWrite",
+            "outputVersion": "171",
+            "outputDigest": "GvTnta8mGvH5atJLbPCcX8qgu12hLtsAmBJk6q3uxrXU",
+            "outputOwner": {
+              "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+              "$kind": "AddressOwner"
+            },
+            "idOperation": "None"
+          },
+          "eventsDigest": "EbLw4in2vVfKrC7PNiMzvhCC5yapjMA5mSWxnw3CzgTf",
+          "dependencies": [],
+          "lamportVersion": "171",
+          "changedObjects": [
+            {
+              "objectId": "0x0ae63ffd838ca074f8f48df86bf9aff6e42497be88236d1ba80b5c9d29df413d",
+              "inputState": "Exists",
+              "inputVersion": "4",
+              "inputDigest": "4gihYDh7ddmcQVpHXnUKA5ou1Fzped17BtDGHop7FqFn",
+              "inputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "171",
+              "outputDigest": "GvTnta8mGvH5atJLbPCcX8qgu12hLtsAmBJk6q3uxrXU",
+              "outputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0x2d5eb2428b587ada4520e30d4880f06dba081ea60753e18fd19ee28fa661b102",
+              "inputState": "DoesNotExist",
+              "inputVersion": null,
+              "inputDigest": null,
+              "inputOwner": null,
+              "outputState": "ObjectWrite",
+              "outputVersion": "171",
+              "outputDigest": "2YX4BMQumVWsxswH3gtqg7Y2o6kNQcc1xX1U3qiggqFV",
+              "outputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "Created"
+            },
+            {
+              "objectId": "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868",
+              "inputState": "Exists",
+              "inputVersion": "170",
+              "inputDigest": "2MWuSDijFEHTCPZUA43dK1iAMo7PPB7LcYiyFsNndq1K",
+              "inputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "2"
+                }
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "171",
+              "outputDigest": "GLqFWAkmHtvC4M4iQy5e2oojpra3ijufA9hUY4QGcys7",
+              "outputOwner": {
+                "$kind": "Shared",
+                "Shared": {
+                  "initialSharedVersion": "2"
+                }
+              },
+              "idOperation": "None"
+            },
+            {
+              "objectId": "0xb76fd2da42fde6b71617504a6afcece7178e0e2543aeed76286d22aff8f3fa59",
+              "inputState": "Exists",
+              "inputVersion": "4",
+              "inputDigest": "Cz6yjzded4nHeyZS2T3Ky2hFbQpt4TpSf3Yzc5edF75f",
+              "inputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "outputState": "ObjectWrite",
+              "outputVersion": "171",
+              "outputDigest": "4G5x38eNijaUsYLJ3cesqizZsyqzmS9TV75n8dEKqCLx",
+              "outputOwner": {
+                "AddressOwner": "0xe117ae4841f34b89cc4cfc431105d0a21c8a2f17c941c05e77ee4b6b68326d3a",
+                "$kind": "AddressOwner"
+              },
+              "idOperation": "None"
+            }
+          ],
+          "unchangedConsensusObjects": [],
+          "auxiliaryDataDigest": null
+        },
+        "objectTypes": {
+          "0x0ae63ffd838ca074f8f48df86bf9aff6e42497be88236d1ba80b5c9d29df413d": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x2d5eb2428b587ada4520e30d4880f06dba081ea60753e18fd19ee28fa661b102": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
+          "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::House",
+          "0xb76fd2da42fde6b71617504a6afcece7178e0e2543aeed76286d22aff8f3fa59": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::HouseCap"
+        },
+        "events": [
+          {
+            "packageId": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3",
+            "module": "house",
+            "eventType": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::FeesWithdrawn",
+            "bcs": "R6S3BGl8J6oDMcDqeVDOqeAA9qIXlVqSwywey4+MOGiAlpgAAAAAAA==",
+            "json": {
+              "amount": "10000000",
+              "house_id": "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "house": {
+    "objectId": "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868",
+    "version": "171",
+    "digest": "GLqFWAkmHtvC4M4iQy5e2oojpra3ijufA9hUY4QGcys7",
+    "owner": {
+      "$kind": "Shared",
+      "Shared": {
+        "initialSharedVersion": "2"
+      }
+    },
+    "type": "0x3eee673e8f8b07817630245de3e1519226b1c1081f9709d3cc03256d24c38ee3::house::House",
+    "json": {
+      "fee_rate": 250,
+      "fees_collected": "0",
+      "id": "0x47a4b704697c27aa0331c0ea7950cea9e000f6a217955a92c32c1ecb8f8c3868",
+      "max_bet": "10000000000",
+      "min_bet": "2000000",
+      "version": "1"
+    },
+    "content": "R6S3BGl8J6oDMcDqeVDOqeAA9qIXlVqSwywey4+MOGgBAAAAAAAAAPoAAAAAAAAAAACAhB4AAAAAAADkC1QCAAAA"
+  }
+}

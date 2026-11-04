@@ -127,7 +127,7 @@ export function useExecuteTransaction<T>(view: TxView): UseExecuteTransaction<T>
     if (input.precheck) {
       let stop: TxPrecheckStop | null;
       try {
-        stop = await input.precheck(signal);
+        stop = await input.precheck(signal, sender);
       } catch (error) {
         return failure(isTransientReadError(error) ? PREFLIGHT_NETWORK_MESSAGE : `${PREPARE_FAILED_PREFIX}: ${errorText(error)}`);
       }
@@ -137,7 +137,7 @@ export function useExecuteTransaction<T>(view: TxView): UseExecuteTransaction<T>
       }
     }
     try {
-      await preflightTransaction(client, input.build(), sender, signal);
+      await preflightTransaction(client, input.build(sender), sender, signal);
     } catch (error) {
       if (error instanceof PreflightNetworkError) return failure(PREFLIGHT_NETWORK_MESSAGE);
       if (error instanceof SimulationError) {
@@ -159,7 +159,7 @@ export function useExecuteTransaction<T>(view: TxView): UseExecuteTransaction<T>
     setStage('signing');
     let digest: string;
     try {
-      const result = await dAppKit.signAndExecuteTransaction({ transaction: input.build(), account });
+      const result = await dAppKit.signAndExecuteTransaction({ transaction: input.build(sender), account });
       digest = (result.Transaction ?? result.FailedTransaction).digest;
     } catch (error) {
       const fromError = digestFromError(error);
