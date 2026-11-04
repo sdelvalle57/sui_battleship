@@ -1142,3 +1142,258 @@ per-path smoke close rule to agents.md §3 (M-7, m-1) and the #8 order to
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+---
+
+## TASK-4
+
+## Task completado: HANDOFF_TESTNET_PUBLISH — TASK-4
+
+### Branch (con SHA corto del HEAD)
+
+`feature/issue-8-testnet-publish` @ `7c3ccd5` (TASK-1 a TASK-3 commiteados), con el diff de TASK-4 sin commitear encima.
+Handoff v1.1.
+
+### Archivos modificados/creados
+
+- `documents/SMOKE_TESTNET_PUBLISH.md` (nuevo):
+  - Parte A completa, llenada durante la corrida;
+  - Parte B con su tabla vacía, para TASK-5.
+- `contracts/README.md` → "Uso en testnet": cuatro **valores esperados** corregidos con la evidencia de A7-A10, en los
+  pasos 7, 8, 9 y 10. Ningún comando ni filtro cambió.
+- `documents/STATUS.md`:
+  - una fila de evidencia del ensayo en Baselines;
+  - la fila "#8 🚧" con TASK-3 (`7c3ccd5`), TASK-4 y lo que sigue (G1).
+- `documents/REPORTES_TESTNET_PUBLISH.md`: esta sección.
+
+### Qué se implementó (3 líneas máx)
+
+Ensayo obligatorio en una localnet aislada, variante A, pasos A0-A12, con m-5 (`D` en `ids.env` y `D-OK` antes de A6):
+**13/13 PASA**. El lock repineado no cambia en el dry run ni en la publicación. Corrí cada comando y filtro `jq` de los
+pasos 6-10 del runbook contra la salida real de la CLI 1.83: todos extraen el dato correcto, y corregí cuatro valores
+esperados a su forma exacta.
+
+### Tests y gates (output pegado, por área tocada)
+
+- **Agregados/modificados:** ninguno (smoke y docs). Ningún test lee el README (comprobado en TASK-3).
+
+**Gates al cierre** (Node v26.13.0, desde `contracts/`):
+
+```text
+$ node --version
+v26.13.0
+$ node --test scripts/*.test.mjs
+ℹ tests 104
+ℹ suites 0
+ℹ pass 104
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 309.356898
+$ node --test scripts/deployment.test.mjs  →  ℹ pass 51 ℹ fail 0
+$ node --test scripts/publish.test.mjs     →  ℹ pass 53 ℹ fail 0
+$ node scripts/publish.mjs check; echo "exit=$?"
+0 despliegues
+exit=0
+$ git diff --exit-code -- Move.lock; echo "lock=$?"
+lock=0
+```
+
+El output de `node --test` son 104 líneas `✔` con los mismos nombres que en TASK-2. Aquí van las líneas del resumen.
+
+**Gates del handoff §5** (al cierre):
+- `git diff --exit-code -- contracts/Move.lock` = 0;
+- árbol: ` M contracts/README.md`, ` M documents/STATUS.md` (fila de evidencia) y `?? documents/SMOKE_TESTNET_PUBLISH.md`;
+- `stat`/`ls` de `~/.sui/sui_config/` idénticos a la línea base: `client.yaml` 244 B, mtime
+  `2026-10-30 17:52:52.515735237 -0500`, y solo ese archivo.
+
+```text
+$ git diff --stat
+ contracts/README.md | 15 +++++++++------
+ documents/STATUS.md |  3 ++-
+ 2 files changed, 11 insertions(+), 7 deletions(-)
+```
+
+No corrí los gates `sui move`: el handoff no los pide en TASK-4, y el código Move y el lock no cambiaron desde TASK-2,
+donde dieron 0/0/83.
+
+- **Tablas de contrato y app/src/sui/ sincronizados:** no aplica. **App:** no aplica.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+
+**El smoke completo, con el resultado obtenido por paso, está en `documents/SMOKE_TESTNET_PUBLISH.md`, Parte A.**
+Resumen:
+
+| # | Resultado |
+|---|---|
+| A0 | Partida limpia:<br>• `<SMOKE_DIR>` nuevo y `env.sh` con rutas literales<br>• línea base de `~/.sui` tomada (solo `stat`/`ls`)<br>• head `7c3ccd5`<br>• lock `05ad86a3…` sin delta<br>• puertos libres y ningún proceso `sui` |
+| A1 | GraphQL público: PV **140**, época **1273** |
+| A2 | Génesis `exit=0` en `<SMOKE_DIR>/net`, sin `--force-regenesis` ni faucet. Arranque con `exec` en segundo plano. `chain-identifier` al primer intento: `d68cf064` |
+| A3 | `addresses --json`: 5 cuentas. `ADMIN` = la primera, a `ids.env` sin imprimirla. Sin `new-address` |
+| A4 | Dry run: `Dry run ok. Gas estimado: 47246000 MIST.`, `exit=0`, sin aviso de `Move.lock`, lock sin delta |
+| A5 | Publicación: `exit=0`, digest `C38TVJkwTdvKenjUbkyMkzMSUdpuch53c4dP4cFiAa6`<br>• json de 14 claves, con `frameworkRev` `05ad86a3…` y `suiCliVersion` `1.83.0-16d2dc1e05ed`<br>• resumen con el prefijo guardado y `<bps>`, y la verificación en su línea con `# campo content.fee_rate`<br>• `D` a `ids.env` (m-5) y **`D-OK`** en una llamada nueva<br>• la dirección de `ADMIN` aparece 0 veces en la salida (con y sin `0x`); lock sin delta |
+| A6 | Comisión, digest `BPWSp8zvohq4j14XfH1SGiGnj76xgvsfEerxfjJpL8mn`, `success`; `FeeRateUpdated` `old_fee_rate` `0.0` → `new_fee_rate` `200.0` |
+| A7 | House compartida (`initial_shared_version` 2): `fee_rate` `200.0`, `fees_collected` `"0"`, `min_bet` `"1000000"`, `max_bet` `"50000000000"`, `version` `"1"` |
+| A8 | `HouseCap`, `UpgradeCap` y `Publisher`: `true` ×3; `active-address` == `ADMIN` |
+| A9 | Crear, digest `HiPRPTncpA5hkLp8iCjroMnvcm1YrLH1fZ6eBneJbxUt`: `bet` `"1000000"`, `fee_rate` `200.0`, `opponent` `null` |
+| A10 | Cancelar, digest `5VqgJB3VLuY2Np68dLk3FcGUHag2K7toVMzgDZARw2UA`: `refund` `"1000000"`, `by_creator` `true`; `Game` `{"@variant": "Cancelled"}` con `stake` `"0"` |
+| A11 | Sin `env.sh`: `unset`; `SUI_CONFIG_DIR: exporta tu SUI_CONFIG_DIR`; sin `WOULD-RUN`; `exit=127` |
+| A12 | Cierre:<br>• `kill` del PID guardado; `kill -0` falla; el comando en segundo plano sale con 144 (H14, esperado)<br>• sin procesos `sui` y puertos libres<br>• `<SMOKE_DIR>` borrado<br>• `~/.sui` idéntico a A0<br>• `git diff --exit-code -- contracts/Move.lock contracts/Published.toml` = 0<br>• `loc=0` y `pub=0` (M-7 por ruta) |
+
+**Reglas cumplidas:**
+- Todo `sui client`, también las lecturas, corrió con el prefijo `. env.sh && { . ids.env; } && smoke_guard &&` y con
+  `printf 'n\n' |` (dentro de `suic`).
+- Una sola localnet. Sin `new-address`, faucet, `pkill` ni `--force-regenesis`.
+- Ningún proceso Node leyó `<SMOKE_DIR>/net`: el script lee solo `localnet.json` y su directorio temporal, y Node se
+  usó solo para el script.
+- No se imprimió ninguna clave ni ningún archivo de `net/`, y no se pegaron logs.
+- El camino testnet del script no se tocó.
+- Sobre `~/.sui/`, solo `stat`/`ls`.
+- La línea "Verificación" que imprime el script **no** la ejecuté: invoca `sui` a secas, y B4 exige `"$SUI"` o `suic`.
+  Su lectura equivalente es el paso 7 con `suic`.
+
+### Desviaciones del handoff (o "ninguna")
+
+- **Qué cambió:** en `contracts/README.md` → "Uso en testnet", cuatro valores esperados que el handoff anticipaba que
+  podían diferir ("anotar la forma exacta … y corregir el README si difiere"):
+  1. **Paso 7:** "Dueño `Shared`; `fee_rate` 200 … `fees_collected` 0" → `owner`
+     `{"Shared": {"initial_shared_version": N}}`; en `content`, `fee_rate` `200.0`, … `fees_collected` `"0"`.
+  2. **Paso 8:** `0x2::package::UpgradeCap`/`Publisher` → `0x0000…0002::package::…`. Agregué una nota: `suio object`
+     escribe la dirección `0x2` larga en `objType`, y `objectChanges` usa la forma corta que filtra la línea de `PUB`.
+     El primer tipo pasa de `…::house::HouseCap` a `<PKG>::house::HouseCap`.
+  3. **Paso 9:** `fee_rate` 200 → `fee_rate` `200.0`.
+  4. **Paso 10:** `state` `Cancelled` → `state` `{"@variant": "Cancelled"}`.
+- **Por qué:** es la forma exacta de la salida de la CLI 1.83 (A7, A8, A9, A10). Los filtros extraían el dato correcto,
+  pero el texto esperado no coincidía literalmente; con el texto viejo, el owner podía tomar por fallo una salida
+  correcta. Ningún filtro ni comando cambió, así que el criterio "los comandos y valores se cambian solo con evidencia de
+  TASK-4" se cumple.
+- **Verificación extra realizada:**
+  - repetí A7, A8 y A10 (lectura) con los bloques **extraídos del README ya corregido** (`suio` → `suic`), y las salidas
+    coinciden;
+  - confirmé que `sourceCommit` `null` en A5 viene de `publish.mjs:700` (árbol sucio en localnet);
+  - agregué la fila de evidencia en STATUS, que el handoff permite.
+
+### Riesgos / pendientes (o "ninguno")
+
+- **Pasos 4-5 del runbook (publicación real y archivos esperados).** En localnet el script usa `test-publish`, así que
+  no escribe `Published.toml` y el `git status` del paso 5 (`?? contracts/Published.toml` + `?? contracts/deployments/`)
+  solo se puede ver en testnet. Lo anticipaba el handoff; queda para la corrida del owner y para TASK-5.
+- **Línea `case` del paso 1 y `realpath -m`.** Ya la verifiqué en TASK-3 con un HOME falso. En este ensayo no corre,
+  porque `SUI_CONFIG_DIR` es la red aislada. Sigue el riesgo de macOS/BSD anotado en TASK-3.
+- **Forma de las cifras en testnet.** Puede que `fees_collected`, `u16` y los enums salgan distintos en testnet. No se
+  espera: es la misma CLI 1.83, y la forma la da la CLI, no la red.
+- **Siguiente puerta: G1.** El owner aplica P-2 en `DECISIONES.md`; luego vienen la CI del head con `framework-drift`
+  "lock al día" y el comentario de #8 con el permalink. La branch queda congelada hasta G3 (m-6).
+
+### Documentación
+
+- **READMEs / agents.md:** `contracts/README.md` con las cuatro correcciones de arriba. `agents.md` no aplica.
+- **Snippet para documents/STATUS.md (ya aplicado):**
+  - **Baselines:** fila nueva `localnet aislada @ feature/issue-8-testnet-publish (7c3ccd5, TASK-4 de #8)` → 13/13 PASA,
+    lock sin cambios, `frameworkRev` `05ad86a3…`, resumen guardado, pasos 6-10 contra la CLI 1.83, cuatro valores
+    esperados corregidos y cierre M-7 limpio.
+  - **"#8 🚧":** TASK-3 en `7c3ccd5`; TASK-4 13/13 PASA; siguen G1, la publicación del owner (G2/G3) y TASK-5/6.
+
+**Higiene** (sobre el diff y sobre el SMOKE completo):
+- 0 claves, 0 rutas personales, 0 `0x…` y 0 hex de 40-64;
+- los IDs efímeros van como `<PKG>`/`<houseId>`, y `05ad86a3…` va abreviado;
+- los digests base58 son de una localnet efímera ya borrada;
+- el chain id `d68cf064` es de 8 hex, de esa misma red.
+
+**Mensaje de commit sugerido:** `docs: rehearse the testnet runbook on an isolated localnet (#8)`. No hice commit ni
+push.
+
+## Revisión TASK-4: PASA
+
+> MID · 2026-11-03 · Contra `documents/HANDOFF_TESTNET_PUBLISH.md` v1.1 (TASK-4, m-5), `agents.md` §3 ("Localnet
+> aislada", regla B4 y paso 7 en su versión M-7), `FLUJO_AGENTES.md` §6, `AGENTE_MID.md` §M5 y el diff real sobre
+> `7c3ccd5`: `contracts/README.md` +9/−5, `STATUS.md` (2 filas), `documents/SMOKE_TESTNET_PUBLISH.md` (nuevo) y este
+> archivo. El orquestador confirmó por su cuenta que el cierre quedó limpio: puertos libres, ningún proceso `sui` y
+> `~/.sui/sui_config/` igual a la línea base.
+
+**1. Regla B4 y cierre: ✅**
+- Toda llamada a `sui client`, también las de solo lectura, corrió con el prefijo `PRE` (`env.sh` + `ids.env` + `smoke_guard`) y vía `suic`.
+- Una sola génesis, sin `--force-regenesis`, faucet, `new-address` ni `pkill`.
+- Ningún proceso de Node leyó `<SMOKE_DIR>/net`.
+- `ADMIN` se escribió en `ids.env` sin imprimirla.
+- La variante A dejó la salida dentro de `<SMOKE_DIR>`, y `D` se exportó a `ids.env` y se comprobó en una llamada nueva (`D-OK`, m-5).
+- **Cierre A12:**
+  - `kill` del PID guardado y `kill -0` falla (el 144 es esperado, H14).
+  - `<SMOKE_DIR>` borrado y comprobado.
+  - Sin `env.sh`, `stat` y `ls` de `~/.sui/sui_config/` idénticos a A0.
+  - `git diff --exit-code -- contracts/Move.lock contracts/Published.toml` = 0.
+  - M-7 por ruta: `loc=0` y `pub=0`.
+  - Árbol solo con el README y el smoke.
+- La regla nueva de TASK-3 se ejerció en una corrida real por primera vez y funciona.
+
+**2. Correcciones del README: solo valores esperados ✅**
+- Los cuatro hunks (`contracts/README.md:712-714`, `:724-726`, `:737` y `:748-749`) tocan únicamente la prosa que sigue a cada bloque. Ningún comando ni filtro `jq` cambió, y los bloques `bash` de los pasos 7-10 quedan idénticos a `7c3ccd5`.
+- Las cuatro formas nuevas salen de la salida real (A7-A10):
+  - `fee_rate` `200.0`;
+  - `fees_collected` `"0"`;
+  - dueño `{"Shared": {"initial_shared_version": N}}`;
+  - `objType` con `0x0000…0002` largo;
+  - `state` `{"@variant": "Cancelled"}`.
+- La nota del paso 8 explica por qué `PUB` filtra la forma corta: `objectChanges` usa `0x2::…`, y A8 lo confirma (1 id).
+- A7, A8 y A10 se repitieron con los bloques extraídos del README ya corregido.
+- Lo que el handoff anticipaba ("corregir el README si difiere") está declarado en Desviaciones.
+
+**3. Higiene del SMOKE: ✅**
+- Sin rutas personales: las rutas van como `<SMOKE_DIR>/…`, `<repo>` y `<HOME real>`.
+- Sin direcciones de cuenta: el alias efímero no identifica a nadie.
+- Sin claves ni archivos de `net/`.
+- Sin `0x…` largos: los IDs van como `<PKG>`, `<houseId>` y `0x0000…0002`.
+- Hex de 40-64: solo `05ad86a3…` abreviado.
+- Los digests base58 y el chain id `d68cf064` son de una localnet efímera ya borrada.
+- Formato M5 correcto: precondiciones, pasos con resultado esperado y obtenido llenados durante la corrida, y reporte final.
+- La Parte B queda vacía con ⏳, como pide el handoff.
+
+**4. Decisión de no ejecutar la línea "Verificación" impresa: correcta ✅**
+- Esa línea invoca `sui` a secas y la regla B4 exige `"$SUI"` o `suic`. Ejecutarla tal cual habría sido una violación del procedimiento de la localnet aislada, no una prueba.
+- Lo que la línea aporta está cubierto de tres formas:
+  - su contenido (`object <houseId> --json`) es exactamente la lectura del paso 7, corrida con `suic` (A7) y repetida contra el README corregido;
+  - que se pueda pegar lo prueba el test `bash -n` de TASK-2;
+  - el prefijo `${SUI_CONFIG_DIR:?…}` aborta sin invocar nada (A11, `exit=127`, sin `WOULD-RUN`).
+- Lo mismo vale para el `update_fee_rate` impreso: A6 corrió el comando equivalente del paso 6. El runbook dice que se corre una sola vez, el impreso o el del paso 6, así que no ejecutar el impreso es además lo coherente con el runbook.
+- La única diferencia que queda es que el owner usa el binario `sui` de su `PATH`, y eso ya lo comprueba el paso 1 (`printf 'n\n' | sui --version`).
+
+**5. Resto de la checklist: ✅**
+- 13/13 (A0-A12) con evidencia por paso.
+- A4 y A5: el lock repineado no cambia en el dry run ni en la publicación; `frameworkRev` `05ad86a3…`; el resumen de TASK-2 sale tal cual y sin la dirección (`grep -c` = 0).
+- `sourceCommit` `null` está justificado: el árbol estaba sucio, cosa que localnet admite (`publish.mjs:700`), mientras que en testnet la guarda 5 exige árbol limpio.
+- STATUS (PROY-20): fila de evidencia nueva y fila "#8".
+- Riesgos declarados con acierto: los pasos 4 y 5 solo se ven en testnet y los cubren el owner y TASK-5. La forma JSON no depende de la red, porque es la misma CLI.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Sin hallazgos | — |
+
+### Siguiente paso
+Commitear TASK-4: `contracts/README.md`, `documents/STATUS.md`, `documents/SMOKE_TESTNET_PUBLISH.md` y este archivo,
+con esta revisión incluida. Así se abre **G1** del handoff, en este orden:
+
+1. **P-2, del owner:** aplica en `documents/DECISIONES.md` el texto de S-4 y su línea de autorización, con sus palabras y su fecha (§"Texto propuesto para D-20261103-01" del handoff). El orquestador lo commitea.
+2. **Push y CI:**
+   - En la CI del head tienen que quedar `contracts`, `app` y `framework-drift` en verde, con 0 anotaciones H13.
+   - Ese SHA de 40 caracteres es `<head>`, y desde ese momento la branch queda **congelada** (m-6).
+   - Además, el worktree tiene que quedar limpio: `git status --porcelain --untracked-files=all` vacío. El owner publica en esta máquina, y la guarda 5 rechaza cualquier archivo sin trackear.
+3. **Comentario de #8:** el texto del handoff, con `<head>` completo en el permalink y abreviado en el texto. Antes de publicarlo, comprobar que el permalink resuelve.
+4. **Entrega al owner:** `<head>`, la branch y el enlace al runbook. Desde ahí el owner corre los pasos 0-11 (G2).
+
+### Mensaje de commit propuesto
+```
+docs: rehearse the testnet runbook on an isolated localnet (#8)
+
+Part A of SMOKE_TESTNET_PUBLISH, 13/13: with the repinned lock the script's
+dry run and ephemeral publish leave Move.lock untouched, record frameworkRev
+05ad86a3 and print the guarded fee command without the publisher address.
+Runbook steps 6-10 (fee 0 -> 200, House read, custody of HouseCap,
+UpgradeCap and Publisher, create with fee_rate 200, cancel with a full
+refund) ran against CLI 1.83 output with every jq filter unchanged; four
+expected values now match the CLI's exact forms. Close-out used the
+per-path M-7 rule.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```

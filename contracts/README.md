@@ -709,8 +709,9 @@ suio object "$HOUSE" --json > "$D/house.json"
 jq '{type: .objType, owner: .owner, content: .content}' "$D/house.json"
 ```
 
-Dueño `Shared`; `fee_rate` 200, `min_bet` `"1000000"`, `max_bet` `"50000000000"`, `version` `"1"`, `fees_collected` 0. Es
-la misma lectura que la línea "Verificación" del bloque del script.
+`owner` `{"Shared": {"initial_shared_version": N}}`; en `content`, `fee_rate` `200.0`, `min_bet` `"1000000"`, `max_bet`
+`"50000000000"`, `version` `"1"` y `fees_collected` `"0"` (formas exactas de la CLI 1.83, ensayadas en #8). Es la misma
+lectura que la línea "Verificación" del bloque del script.
 
 #### 8. Custodia, sin pegar la dirección
 
@@ -720,8 +721,9 @@ PUB="$(jq -r '.objectChanges[] | select(.objectType == "0x2::package::Publisher"
 for id in "$CAP" "$UCAP" "$PUB"; do suio object "$id" --json | jq -r --arg a "$A" '[.objType, (.owner.AddressOwner == $a)] | @tsv'; done
 ```
 
-Tres líneas (`…::house::HouseCap`, `0x2::package::UpgradeCap`, `0x2::package::Publisher`), cada una con `true`. Se
-entrega solo "sí/no" por objeto.
+Tres líneas (`<PKG>::house::HouseCap`, `0x0000…0002::package::UpgradeCap`, `0x0000…0002::package::Publisher`), cada una
+con `true`. `suio object` escribe la dirección `0x2` larga (64 hex) en `objType`, mientras que `objectChanges` de la
+publicación usa `0x2::…`, que es la forma que filtra la línea de `PUB`. Se entrega solo "sí/no" por objeto.
 
 #### 9. Smoke: crear con `min_bet`
 
@@ -732,7 +734,7 @@ jq '.events[] | select(.type | endswith("::game::GameCreated")) | .parsedJson | 
 GAME="$(jq -r '.objectChanges[] | select(.type == "created" and (.objectType | endswith("::game::Game"))) | .objectId' "$D/smoke-create.json")"
 ```
 
-`success`; `bet` `"1000000"`, **`fee_rate` 200** (prueba que la partida copió la comisión nueva) y `opponent` `null`.
+`success`; `bet` `"1000000"`, **`fee_rate` `200.0`** (prueba que la partida copió la comisión nueva) y `opponent` `null`.
 
 #### 10. Smoke: cancelar
 
@@ -743,7 +745,8 @@ jq '.events[] | select(.type | endswith("::game::GameCancelled")) | .parsedJson 
 suio object "$GAME" --json | jq '{state: .content.state, stake: .content.stake}'
 ```
 
-`success`; `refund` `"1000000"` y `by_creator` `true`; `state` `Cancelled` y `stake` `"0"`.
+`success`; `refund` `"1000000"` y `by_creator` `true`; `state` `{"@variant": "Cancelled"}` (así escribe la CLI 1.83 un
+enum) y `stake` `"0"`.
 
 #### 11. Entrega al orquestador
 
