@@ -704,3 +704,305 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ### Snippet para STATUS.md
 
 El del reporte del DEV, sin cambios (fila de baseline "localnet aislada @ feature/issue-13-my-games (TASK-1 de #13)").
+
+## TASK-2
+
+## Task completado: HANDOFF_MY_GAMES v1.2 — TASK-2 (capa pura de "mis partidas", `sui/`)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-13-my-games` @ `a62d373`. Sin commits: los cambios están en el árbol de trabajo.
+
+### Archivos modificados/creados
+- **Nuevos:**
+  - `app/src/sui/eventScan.ts`
+  - `app/src/sui/eventScan.test.ts`
+  - `app/src/sui/myGames.ts`
+  - `app/src/sui/myGames.test.ts`
+  - `app/src/test/scanHarness.ts`: cliente falso compartido (Desviación 1).
+- **Modificados:**
+  - `app/src/sui/lobby.ts`
+  - `app/src/sui/lobby.test.ts`
+  - `app/src/sui/explorer.ts`
+  - `app/src/sui/explorer.test.ts`
+  - `app/src/hooks/useLobby.ts`: solo el tipo de la cota.
+- `components/LobbyList.tsx` no se tocó: no nombra el tipo.
+
+### Qué se implementó (3 líneas máx)
+- **`eventScan.ts`:** saqué del lobby, sin cambiar la lógica, la cota (`historyLowerBound`, `HISTORY_FLOOR_MARGIN_CHECKPOINTS`), `requestEvents` (filtro y `limit` como parámetros, `readMask` sin `sender`), `requestOrPruned` y `eventTypeFilter`. `lobby.ts` ahora los usa y se comporta igual.
+- **`myGames.ts`:**
+  - las dos fuentes: `myActivityFilter`, y `fetchMyActivityPage` con el invariante de remitente; `fetchInvitationsPage` con 50/2/20 y `unreadableEvents`;
+  - la agrupación: `naturalSection`, `mergeMyGames` (H-2), `extendPins`, `groupMyGames` y `sectionFooter` (H-1).
+- **`explorer.ts`:** se suma `explorerAccountUrl`.
+
+### Tests y gates (output pegado, por área tocada)
+
+**Tests agregados o modificados, por archivo** (conteo con `vitest --reporter=json` ahora y en `HEAD` con `git stash -u`, restaurado):
+
+| Archivo | Antes → después | Qué |
+|---|---|---|
+| `src/sui/eventScan.test.ts` (nuevo) | 0 → 25 | T2-1 `historyLowerBound` (los 6 casos movidos), `eventTypeFilter` (1), T2-2 `requestEvents` (12: filtro, `limit`, máscara sin `sender`, `before` decodificado, último watermark, cursor de la cota en un `CHECKPOINT_BOUND` vacío (V-9), los 5 `reason`, cursor `null`, 3 malformados) y T2-3 `requestOrPruned` (5) |
+| `src/sui/myGames.test.ts` (nuevo) | 0 → 51 | constantes (1), T2-4 (1), T2-5..T2-8 `fetchMyActivityPage` (8), T2-9/T2-10 `fetchInvitationsPage` (7), T2-11 `naturalSection` (14), T2-12/T2-14 `mergeMyGames` (6), T2-13 `extendPins` (4), T2-15 `groupMyGames` (2), T2-16 `sectionFooter` (8) |
+| `src/sui/explorer.test.ts` | 15 → 24 | T2-17: URL en testnet, `null` en localnet, 6 direcciones inválidas y una inválida en localnet |
+| `src/sui/lobby.test.ts` | 28 → 22 | T2-18: los 6 casos de `lobbyLowerBound` pasaron a `eventScan.test.ts`. Los otros 22 tienen el mismo nombre, siguen en verde y no cambió ningún valor esperado (comparé las listas de nombres de `HEAD` y de ahora: la única diferencia son esos 6) |
+| **Total** | **755 → 834** (52 → 54 archivos) | |
+
+**Diff de `lobby.test.ts`, resumido** (`git diff --stat`: 32 líneas, +7/−25). Solo hay tres tipos de cambio:
+1. **Imports.**
+   - Salen de `./lobby`: `LOBBY_FLOOR_MARGIN_CHECKPOINTS`, `lobbyLowerBound` y `LobbyClient`.
+   - Entra `import { HISTORY_FLOOR_MARGIN_CHECKPOINTS, type EventScanClient } from './eventScan'`.
+2. **Renombres.**
+   - `LobbyClient` → `EventScanClient` (2 lugares: `makeClient` y `fetchPage`).
+   - `LOBBY_FLOOR_MARGIN_CHECKPOINTS` → `HISTORY_FLOOR_MARGIN_CHECKPOINTS` (2 lugares: el test de constantes, que sigue esperando `[50, 2, 20, 16_000n]`, y el ex-`:314`, que sigue esperando `1_000n + margen`).
+3. **El `describe('lobbyLowerBound')`** pasa entero a `eventScan.test.ts` como `describe('historyLowerBound')`, con los mismos 6 casos y valores.
+
+La aserción `not.toContain('sender')` (ex-`:196`) no cambia y sigue en verde.
+
+**Verificación extra (mutaciones).** Rompí `myGames.ts` a propósito, de a una por vez, y siempre falla al menos un test:
+
+| Mutación | Tests que fallan |
+|---|---|
+| Sin el invariante de remitente | 1 |
+| Vacío definitivo con error de "cargar más" | 1 |
+| `mergeTwo` sin comparar `objectVersion` | 1 |
+| Sin el chequeo de cursor que no avanza | 2 |
+| Sin el contador de `unreadableEvents` | 1 |
+| Ilegible gana a legible | 2 |
+| Cancelada ajena va a `finished` | 3 |
+| `extendPins` siempre devuelve un `Map` nuevo | 2 |
+
+Después restauré el archivo (`cmp` igual).
+
+**Contracts:** no aplica. `git diff --exit-code -- contracts/` da 0.
+**App:** el gate completo en forma canónica va abajo. Lo corrí una segunda vez después del último cambio, que fue reemplazar un literal hex de test.
+
+```text
+v26.13.0
+a62d373
+
+added 293 packages, and audited 295 packages in 15s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit=0
+audited 292 packages in 12s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+exit=0
+found 0 vulnerabilities
+exit=0
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  54 passed (54)
+      Tests  834 passed (834)
+   Start at  23:55:17
+   Duration  29.53s (environment 59%, import 11%, setup 11%, tests 11%, transform 7%, worker 1%)
+
+Environment  jsdom was created 54 times · 163.44s total, 59% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 590 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-ClmC8kOI.js   887.14 kB │ gzip: 270.12 kB
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 572ms
+exit=0
+--- git status --porcelain --untracked-files=all
+ M app/src/hooks/useLobby.ts
+ M app/src/sui/explorer.test.ts
+ M app/src/sui/explorer.ts
+ M app/src/sui/lobby.test.ts
+ M app/src/sui/lobby.ts
+?? app/src/sui/eventScan.test.ts
+?? app/src/sui/eventScan.ts
+?? app/src/sui/myGames.test.ts
+?? app/src/sui/myGames.ts
+?? app/src/test/scanHarness.ts
+--- git diff --exit-code -- contracts/
+exit=0
+--- git diff --exit-code -- package.json app/package.json package-lock.json
+exit=0
+```
+- **Delta contra el baseline (TASK-1):** +79 tests y +2 archivos de test (tabla de arriba). Build: 887.10 → 887.14 kB (+0,04 kB; 270.12 kB gzip, sin cambio). Lint, typecheck y auditorías sin delta.
+- **Sin dependencias nuevas:** `package*.json` y el lock sin delta.
+- **Tablas de contrato (`contracts/README.md`) y `app/src/sui/`:** no aplica. No cambian ni el contrato ni los layouts BCS.
+- **Capas:** `eventScan.ts` y `myGames.ts` importan solo `@mysten/sui*` y módulos de `sui/`, sin React (lint en 0). Son funciones puras o reciben el cliente por parámetro (ARQ-3).
+- **Greps sobre `git diff` y los 5 archivos nuevos:**
+  - claves (`suiprivkey|mnemonic|BEGIN .*KEY|private.?key|seed phrase`), rutas personales y hex de 40-64: vacíos;
+  - `console`, `eslint-disable`, `TODO` y `debugger`: vacíos.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica: no hubo localnet ni testnet en este task. Los mocks replican la forma de frames medida en TASK-1 (V-9):
+- con `ITEM_LIMIT`, el `QueryEnd` va en el frame del último evento;
+- con `CHECKPOINT_BOUND`, va en un frame extra;
+- cada frame trae `watermark`.
+
+T2-7 y T2-9 cubren la página vacía tras un `ITEM_LIMIT`. T2-12 usa versiones 4 y 415, y dos partidas con la misma versión (V-10).
+
+### Desviaciones del handoff
+1. **Archivo nuevo `app/src/test/scanHarness.ts`, que §4 no lista.**
+   - **Qué cambió:** el cliente falso de `ListEvents`/`GetServiceInfo`/`getObjects` y los frames con la forma de V-9 están en un solo módulo, que usan `eventScan.test.ts` y `myGames.test.ts`.
+   - **Por qué:** con una copia en cada archivo nuevo, más la de `lobby.test.ts`, serían tres copias, y LIM-5 obliga a extraer. La regla de capas de `src/**` prohíbe `@mysten/*` fuera de `sui/` y `hooks/`, así que el módulo no importa el SDK: el BCS de eventos y objetos lo arma cada test.
+   - **Qué queda:** `lobby.test.ts` conserva su copia, porque el handoff limita sus cambios a imports y renombres. Quedan dos copias.
+   - **Verificación extra:** lint en 0 sobre el módulo. Nada de la app lo importa (el build es el mismo).
+2. **`eventScan.ts` exporta además el tipo `EventsRequest`**, los argumentos comunes de `requestEvents` y `requestOrPruned` (§4 los escribe como "mismos args"). Solo es un tipo.
+3. **Invariante de la actividad.** Un `GameCreated` con `creator` ≠ cuenta, o un `GameResolved` con `acceptor` ≠ cuenta, da directamente un ítem `unreadable` con el `gameId` leído y el rol del tipo, sin lanzar y atrapar un `ReadDataError` `invariant`. El efecto es el mismo y nunca se muestra como `game` (T2-6). Si `mergeMyGames` encuentra esa partida legible en las invitaciones, gana la legible (H-2).
+4. **Caso extra en `naturalSection`.** Un ítem con rol `acceptor` y el objeto en `Pending` (contradice el contrato: aceptar es resolver) da `null`. §3.6 no lo cubre; tiene test.
+5. **Desempate de orden.** Con el mismo checkpoint, el digest mayor va primero: es determinista, porque §3.8 no fija el sentido. `null` va al final. `mergeMyGames` conserva el orden de primera aparición (actividad y después invitaciones).
+6. **El bucle de página no se compartió con el lobby.** En `myGames.ts` es una función privada (`fetchSourcePage`) que usan las dos fuentes, con `target` infinito para la actividad. `lobby.ts` conserva su bucle, para no cambiar su comportamiento ni sus tests (ver Riesgos 1).
+
+### Riesgos / pendientes
+1. **Bucle duplicado (LIM-5, "dos veces = candidata").** El bucle de `fetchLobbyPage` y `fetchSourcePage` es el mismo (~30 líneas: piso, cota, pedidos, `stalled`, `history_pruned`, objetos en lote). Se podría pasar a `eventScan.ts` como un `scanPage` genérico y hacer que el lobby lo use, pero eso cambia `lobby.ts` más de lo que permite este handoff. Lo decide el MID: un issue de limpieza o un punto de TASK-6.
+2. **`fetchInvitationsPage` no verifica `object.opponent`.** Confía en el `opponent` del evento, como pide §3.5; el `opponent` del objeto es inmutable y sale del mismo `create_game`. Si el MID quiere el chequeo defensivo (con el objeto distinto ⇒ ilegible), son 2 líneas y un test.
+3. **El texto de `explorerAccountUrl` es "Dirección inválida: …".** La dirección no se normaliza, igual que en las otras funciones de `explorer.ts`.
+4. Ninguno de estos puntos cambia DL-1..DL-17 ni H-1..H-4.
+
+### Documentación
+- READMEs / `agents.md`: no aplica en este task. El mapa de `sui/` de `app/README.md` es de TASK-6 (`eventScan.ts`, `myGames.ts`, `explorerAccountUrl`).
+- **Snippet propuesto para `documents/STATUS.md`:** `| feature/issue-13-my-games (TASK-2 de #13), 2026-11-03 | capa pura de "mis partidas" | 🟢 sui/eventScan.ts extraído del lobby sin cambio de comportamiento (lobby.test.ts: solo imports, renombres y la cota movida); sui/myGames.ts con las dos fuentes (DNF por remitente con invariante; escaneo de invitaciones 50/2/20 con eventos ilegibles contados), naturalSection, mergeMyGames (H-2), extendPins, groupMyGames y sectionFooter (H-1); explorerAccountUrl. App 834/54 (+79), lint/typecheck 0, build 887.14 kB |`
+=====
+
+---
+
+## Revisión TASK-2: PASA
+
+Revisé el reporte contra el diff real del árbol, partiendo de `a62d373`:
+- 5 archivos modificados: `lobby.ts`, `lobby.test.ts`, `explorer.ts`, `explorer.test.ts` y `useLobby.ts`;
+- 5 nuevos: `eventScan.ts`, `eventScan.test.ts`, `myGames.ts`, `myGames.test.ts` y `test/scanHarness.ts`.
+
+Los revisé contra `HANDOFF_MY_GAMES` v1.2, TASK-2, y `documents/ESTANDARES.md`. Grep del diff y de los archivos nuevos:
+0 hex de 40-64, 0 rutas personales, 0 claves, sin `console`, `eslint-disable`, `debugger` ni `TODO`. Los únicos
+aciertos de `todo` son la palabra "todos" en comentarios.
+
+**Foco DL-2: `lobby.test.ts` sin cambios de valores.** Comprobado en el diff (+7/−25), que solo tiene tres tipos de
+cambio:
+- **imports:** salen `LOBBY_FLOOR_MARGIN_CHECKPOINTS`, `lobbyLowerBound` y `LobbyClient`; entran
+  `HISTORY_FLOOR_MARGIN_CHECKPOINTS` y `EventScanClient`;
+- **renombres:** `LobbyClient` → `EventScanClient` en `makeClient` y en `fetchPage`, y el margen en el test de constantes
+  (sigue esperando `[50, 2, 20, 16_000n]`) y en el ex-`:314` (sigue `1_000n + margen`);
+- **la cota movida:** se quita el `describe('lobbyLowerBound')`, que reaparece en `eventScan.test.ts:27-37` como
+  `historyLowerBound`, con los mismos 6 casos y valores.
+
+La aserción `not.toContain('sender')` no se tocó. Ningún valor esperado de `fetchLobbyPage` cambia.
+
+**Extracción.** `eventScan.ts` es el código de `lobby.ts` movido sin cambiar la lógica:
+- cota, `QueryEnd` → `hasNextPage`, último `watermark.cursor`, `OUT_OF_RANGE`/piso ⇒ `HistoryPrunedError` y relanzar el
+  error original si falla la relectura del piso;
+- `readMask` sin `sender` (MINOR-1);
+- `eventTypeFilter` es el literal que estaba inline en `lobby.ts:82`.
+
+`lobby.ts` conserva su bucle y solo cambia el pedido: `requestOrPruned` con `filter` y `limit: LOBBY_EVENTS_PER_REQUEST`.
+`useLobby.ts` solo cambia el tipo de la cota.
+
+| Revisión | Resultado |
+|---|---|
+| Implementa lo pedido (§3.1-§3.10) | ✅ `requestEvents`/`requestOrPruned`/`historyLowerBound`/`eventTypeFilter`; `myActivityFilter` = la DNF exacta con `sender` normalizado; `fetchMyActivityPage` con el invariante de remitente (`creator`/`acceptor` ≠ cuenta ⇒ `unreadable`, nunca `game`); `fetchInvitationsPage` con 50/2/20, `opponent == cuenta` sin descartar terminadas, y `unreadableEvents` en lugar de filas (MINOR-4); `naturalSection`, `mergeMyGames` (H-2: legible > ilegible; mayor `objectVersion`; rol `acceptor`; evento más nuevo), `extendPins` (misma instancia sin novedades, `Map` nuevo sin mutar), `groupMyGames` y `sectionFooter` (H-1: botón también con error, solo `stalled` lo oculta; alert con cualquier error); `explorerAccountUrl` valida antes de mirar la red |
+| ARQ/PROY (capas, ARQ-3, ARQ-5) | ✅ `sui/` sin React; cliente por parámetro; `myGames → lobby` solo para las constantes (DL-8), sin ciclo; `test/scanHarness.ts` sin `@mysten/*` (regla de capas) |
+| SEG-10 / DL-3 | ✅ Nada ajeno como propio (T2-6); un objeto inexistente se omite; un ilegible nunca se muestra como `Pending`; un `acceptor` con el objeto en `Pending` ⇒ `null` (Desviación 4) |
+| V-9 / V-10 | ✅ Mocks con la forma medida (`scanFrames`: `end` en el último frame con `ITEM_LIMIT`, frame extra con `CHECKPOINT_BOUND`); página vacía tras `ITEM_LIMIT` = fin normal (T2-7: `myGames.test.ts:243`; T2-9: `:328`; `eventScan`: cursor de la cota). Versiones 4/415 y dos partidas con la misma versión (`:402`, `:411`) |
+| MINOR-1 del handoff v1 | ✅ `extendPins` documenta que espera ítems deduplicados, y `myGames.test.ts:462-470` prueba el pin con lecturas distintas, legible contra legible y contra ilegible ⇒ `finished` |
+| LIM | ✅ JSDoc con el porqué; sin código muerto; `mergeTwo`, `compareEvents` y `gameKey` privadas con un solo uso cada una |
+| Tests | ✅ T2-1..T2-18 mapeados por archivo: 755 → 834 (+79), 52 → 54 archivos. Las mutaciones dirigidas (8 casos, cada una con ≥ 1 test que falla) muestran que los tests muerden |
+| Gates | ✅ Completos y en forma canónica: `npm ci`, firmas, auditoría, lint 0, typecheck 0, 834/54, build 887.14 kB (+0,04, gzip igual); `contracts/` y `package*.json` sin delta |
+| Docs | ✅ No aplica (es de TASK-6) |
+
+### Hallazgos
+
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Ninguno bloqueante ni para corregir en este task | — |
+
+**Desviaciones 1-6:** aceptadas.
+1. **`test/scanHarness.ts`:** evita la tercera copia del cliente falso (LIM-5). No importa `@mysten/*`, el lint da 0 y
+   nada de la app lo importa. Se incorpora a la lista de §4 en el próximo cambio del handoff.
+2. **`EventsRequest`:** es el tipo de los "mismos args" de §4.
+3. **Invariante como `unreadable` directo** en lugar de lanzar y atrapar un `ReadDataError`: mismo efecto observable, y
+   T2-6 lo fija.
+4. **`acceptor` con objeto `Pending` ⇒ `null`:** caso fuera de §3.6, con test. Es lo correcto: aceptar es resolver.
+5. **Desempate determinista** por digest; `null` al final; `mergeMyGames` conserva el orden de primera aparición.
+6. **El bucle no se compartió con el lobby:** ver Riesgo 1.
+
+**Riesgos del DEV, decididos:**
+- **Riesgo 1 (bucle duplicado entre `fetchLobbyPage` y `fetchSourcePage`):** va a un **issue de limpieza post-ciclo**, no
+  a TASK-6.
+  - **Por qué no en este ciclo:** LIM-5 lo marca como candidata (dos copias), no como obligatorio (tres). Moverlo cambia
+    `lobby.ts` y sus tests más allá de DL-2. TASK-6 es solo de docs, y ARQ-7 pide no hacer refactors fuera del task.
+  - **Alcance propuesto del issue:**
+    - un `scanPage` genérico en `eventScan.ts` que usen el lobby y "Mis partidas";
+    - migrar el `makeClient` de `lobby.test.ts` a `test/scanHarness.ts` (la segunda copia del cliente falso);
+    - todos los valores esperados de `fetchLobbyPage` intactos.
+  - Lo redacta el MAYOR al cerrar el ciclo y lo crea el orquestador.
+- **Riesgo 2 (`fetchInvitationsPage` no verifica `object.opponent`):** **no se agrega.**
+  - El filtro de invitaciones es del cliente, sobre el BCS exacto de un `GameCreated` del paquete original.
+  - El `opponent` del objeto es inmutable y sale del mismo `create_game`.
+  - No hay que desconfiar de ningún filtro del servidor, que es lo que justifica el invariante de la actividad (DL-3).
+  - La actividad tampoco compara el objeto con el evento: es coherente. Si llegara un objeto inconsistente,
+    `parseGameObject` ya valida tipo, dueño y BCS canónico.
+- **Riesgo 3 (texto "Dirección inválida: …" sin normalizar):** se acepta. Es el mismo patrón que `explorerTxUrl` y
+  `explorerObjectUrl`.
+
+### Siguiente paso: TASK-3 autorizado, con `HANDOFF_MY_GAMES` v1.2
+
+El gate de la app parte de este reporte: 834 tests en 54 archivos, build 887.14 kB.
+
+### Mensaje de commit propuesto
+
+```
+app: add the my-games read layer and extract the event scan (#13)
+
+sui/eventScan.ts takes the raw ListEvents scan out of the lobby without
+changing it (lobby tests only change imports, renames and the moved bound
+cases). sui/myGames.ts adds the two sources: own activity through the
+server-side sender DNF with the creator/acceptor invariant, and the
+invitation scan with unreadable events counted, not shown. It also adds the
+pure grouping (mergeMyGames, extendPins, groupMyGames) and the honest section
+footer (sectionFooter), plus explorerAccountUrl. App 834 tests in 54 files.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+### Snippet para STATUS.md
+
+El del reporte del DEV, sin cambios.

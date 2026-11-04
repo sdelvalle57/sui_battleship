@@ -1,4 +1,4 @@
-import { isValidSuiObjectId, isValidTransactionDigest } from '@mysten/sui/utils';
+import { isValidSuiAddress, isValidSuiObjectId, isValidTransactionDigest } from '@mysten/sui/utils';
 import { NETWORKS, type Network } from './networks';
 
 /**
@@ -23,4 +23,18 @@ export function explorerObjectUrl(network: Network, id: string): string | null {
   }
   const base = NETWORKS[network].explorerBase;
   return base === null ? null : `${base}/object/${id}`;
+}
+
+/**
+ * Link al historial de una cuenta en el explorador ("Ver tu historial completo en el explorador", DL-15 de #13), o
+ * `null` si la red no tiene explorador (localnet). Es la salida para lo que ya no cubre la ventana del fullnode
+ * (D-20261103-03). Lanza si `address` no es una dirección válida; igual que en `explorerTxUrl`, la validación va antes
+ * que la red.
+ */
+export function explorerAccountUrl(network: Network, address: string): string | null {
+  if (!isValidSuiAddress(address)) {
+    throw new Error(`Dirección inválida: ${JSON.stringify(address)}`);
+  }
+  const base = NETWORKS[network].explorerBase;
+  return base === null ? null : `${base}/account/${address}`;
 }

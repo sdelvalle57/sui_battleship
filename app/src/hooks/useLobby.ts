@@ -1,7 +1,8 @@
 import { useCurrentClient } from '@mysten/dapp-kit-react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { HistoryLowerBound } from '../sui/eventScan';
 import { sameAddress } from '../sui/ids';
-import { fetchLobbyPage, type LobbyItem, type LobbyLowerBound, type LobbyPage } from '../sui/lobby';
+import { fetchLobbyPage, type LobbyItem, type LobbyPage } from '../sui/lobby';
 import { PaginationStalledError } from '../sui/readErrors';
 import { deriveReadStatus, type ReadStatus } from '../sui/readStatus';
 import { fetchPublishCheckpoint } from '../sui/transactionInfo';
@@ -22,7 +23,7 @@ export type UseLobbyResult = {
   isFetching: boolean;
   nextPageError: unknown;
   stalled: boolean;
-  lowerBound: LobbyLowerBound | null;
+  lowerBound: HistoryLowerBound | null;
   end: LobbyPage['end'] | null;
   loadMore: () => void;
   refresh: () => void;
