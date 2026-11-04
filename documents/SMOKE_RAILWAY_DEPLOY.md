@@ -1,5 +1,5 @@
 # SMOKE_RAILWAY_DEPLOY, parte A (local, antes de #8)
-> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: 2026-11-04 | Estado: parte 1 PASA (21/21); parte 2 PASA (11/11); parte 3 PASA (7/7)
+> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: 2026-11-04 | Estado: parte 1 PASA (21/21); parte 2 PASA (11/11); parte 3 PASA (7/7); parte B: EN CURSO (T6-7 pendiente); smoke B del owner pendiente (S-7)
 
 ## Precondiciones
 - **Red:** en la parte 1 no hay red local. Solo descargas de imágenes públicas y, en E-6, lecturas públicas de testnet sin claves.
@@ -333,3 +333,69 @@ E-1g da el mismo listado sin `/ctx/contracts/Published.toml` ni `/ctx/contracts/
   - E-6a: no aparecieron los errores de lectura esperados;
   - E-6b/E-6c: 403 de Slush, ícono remoto al smoke B.
 - **Veredicto (parte 1):** PASA.
+
+# SMOKE_RAILWAY_DEPLOY, parte B (después de #8)
+> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: 2026-11-04 | TASK-6 del handoff v1.6.1
+
+> Corrida del 2026-11-04 (16:26-16:45 UTC) sobre `3f510d2` (D-20261104-07), hijo de `5af2fb0` (handoff v1.6.1), que es
+> hijo de `ec359ec`. La puerta de DL-8 de T6-0 la levanta **D-20261104-07** (decisión del owner): TASK-6 arrancó antes
+> de 2026-11-04T16:57:41Z y eso no es STOP. El resto de T6-0 y T6-1 se cumple. Builder clásico (sin buildx).
+
+## Precondiciones (parte B)
+- **Red:** solo lecturas públicas de testnet, sin claves: la app en Chrome headless, `curl` a Docker Hub, al registry y
+  a `api.slush.app`, y `SuiGrpcClient` público para leer el ID de la partida de T6-9b. Sin localnet ni `sui`.
+- **Cuentas:** ninguna. Ningún agente conectó una wallet.
+- **Cliente:**
+  - Docker 29.1.3 con el builder clásico (`docker buildx` da "unknown command"). BuildKit solo en la CI (T6-7);
+  - Chrome headless 156 (`/opt/google/chrome/chrome`) con perfil, `HOME` y `XDG_*` propios en
+    `<scratchpad>/chrome-15-t6/`, depuración en `127.0.0.1:9230`, cerrado por su PID;
+  - Node `v26.13.0` en el host.
+- **Directorios:** `<scratchpad>/n2-15/`, `<scratchpad>/chrome-15-t6/` y `<scratchpad>/docker-base-15-t6/`, borrados en C-4.
+- **Puertos:** 8090, 8092 y 9230, sin filas en `ss -ltn` antes de usarlos.
+
+## Parte B: después de #8 (TASK-6)
+
+| # | Acción | Resultado esperado | Resultado obtenido | Estado |
+|---|--------|--------------------|--------------------|--------|
+| T6-0 | Puerta y línea base: `date -u`, HEAD, `git status`, `ls contracts/deployments`, línea base de Docker en `<scratchpad>/docker-base-15-t6/` con *Build Cache*, `ss -ltn` | Hora ≥ 16:57:41Z (o D-20261104-07); HEAD hijo del handoff v1.6.1; árbol limpio; solo `testnet.json`; línea base; puertos libres | `date -u` **2026-11-04T16:26:19Z**, 31 min 22 s antes de la puerta: se sigue por **D-20261104-07** (no es STOP). Edad de v26.13.0 a esa hora: **167,48 h**. `git log -1 --format='%h %p'`: `3f510d2 5af2fb0`; `5af2fb0` (handoff v1.6.1) tiene padre `ec359ec`. `git status --porcelain --untracked-files=all` vacío. `ls contracts/deployments`: `testnet.json`. Línea base: **2 contenedores, 3 imágenes** (`postgres:17`, `postgres:16-alpine`, `busybox:latest`), *Build Cache* `0B`. 8090, 8092 y 9230 sin filas | ✅ (D-20261104-07) |
+| T6-1 | V-1 de Node y Caddy: Hub, registry con token anónimo, `published_at`, Caddy en Hub, `docker pull` por el digest de §3.1 y `node --version` | Hub = registry = `bc0a2afd…c1d9`; `published_at` 2026-10-28T16:57:41Z con ≥ 168 h; Caddy sin cambios; pull OK; `v26.13.0` | 16:26:28Z. Hub `.digest` = `sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9` (`last_updated` 2026-10-28T23:41:51Z). Registry (token sin imprimir): `HTTP/2 200`, `content-type: application/vnd.oci.image.index.v1+json` y el mismo `docker-content-digest`. `published_at` **2026-10-28T16:57:41Z**. Caddy en Hub: `sha256:e70b164d…4ee5`, sin cambios. `docker pull node:26.13.0-bookworm-slim@<digest de §3.1>` con exit 0, y `docker run --rm --entrypoint node … --version` → **`v26.13.0`**. A las 16:27:01Z la edad es **167,49 h** (< 168 h): se acepta por **D-20261104-07**. DL-8 se vuelve a medir al commitear | ✅ (D-20261104-07) |
+| T6-2 | Aplicar §3.1 y §3.2; `git diff --stat`; `git diff Dockerfile app/scripts/check-deploy-image.sh` | `Dockerfile` con 2 líneas (3-4); script solo con el bloque de N2b | `Dockerfile \| 4 ++--` y `app/scripts/check-deploy-image.sh \| 6 ++++--`. Las líneas 3-4 del `Dockerfile` y 100-106 del script son byte a byte los literales de §3.1 y §3.2 (extraídos del handoff y comparados con `diff`). El diff va en el reporte | ✅ |
+| T6-3 | shellcheck con `rhysd/actionlint:1.7.12@<digest de app/README.md:214>` | `exit=0`, sin output | ShellCheck 0.11.0, `exit=0`, sin hallazgos (solo el log del pull, en stderr). Digest `b1934ee5…5667`, el de `app/README.md:214` | ✅ |
+| T6-4 | Copia sin #8 en `<scratchpad>/n2-15/ctx` (como E-1a), sin `testnet.json` ni `Published.toml`; `publish.mjs check` | `0 despliegues`, `exit=0`; sin `node_modules`, `app/dist` ni `.env.local`; `git status` igual | `check` → `0 despliegues`, `exit=0`. Sin `node_modules`, `app/dist` ni `.env.local`. `Dockerfile` y script iguales a los de T6-2 (`diff -q`). `git status`: ` M Dockerfile`, ` M app/scripts/check-deploy-image.sh` | ✅ |
+| T6-5 | Clásico, verde: `bash app/scripts/check-deploy-image.sh <scratchpad>/n2-15/ctx 8090` | `exit=0`, `Modo negativo…`, `OK (negativo): …` | `Modo negativo: el contexto no tiene contracts/deployments/testnet.json` / `OK (negativo): sin contracts/deployments/testnet.json (#8) la imagen se niega a construirse`, `exit=0`, **2 s**. El patrón nuevo no da un falso rojo | ✅ |
+| T6-6 | Clásico, rojo provocado: la guarda de la copia sin `>&2; exit 1`; (1) el script; (2) `docker build --force-rm` y grep con el patrón de §3.2 | (1) `exit=1` con `FALLO: N2b`; (2) `exit≠0` y 1 línea `Step <k>/<m> : RUN npm ci` | Guarda: `RUN test -f contracts/deployments/testnet.json \|\| echo "ERROR (#15): falta contracts/deployments/testnet.json. … (nunca IDs a mano)."`. (1) `exit=1` en 94 s, con **`FALLO: N2b: el build pasó la guarda y llegó a 'RUN npm ci' (la guarda no corta el build)`**. La cola del log termina en `Step 13/19 : RUN set -eu; …`, con `Error: Cannot find module './contracts/deployments/testnet.json'` (el `require` del bundle): N1 y N2a pasaron. (2) `exit=1`; el grep da **1** línea: `29:Step 9/19 : RUN npm ci`. Observación: el build (2) usó la caché de (1) en los pasos 1-12 (`Using cache` ×11), así que su log no repite el `echo` de la guarda. La línea de salida que exige N2a es la del build (1) | ✅ |
+| T6-7 | BuildKit en la CI, PR desechable (lo corre y lo registra el orquestador) | Run A success con `OK (negativo)`; run B failure con `FALLO: N2b` | ⏳ (T6-7) | ⏳ |
+| T6-8 | Positivo real: `CHECK_KEEP_TAG=battleship-app:ensayo-15 bash app/scripts/check-deploy-image.sh . 8090` | `exit=0`; P1-P13; P7 sobre `/assets/index-B3BeMVQC.js`; P8 `zstd` o `gzip` | `exit=0` en **107 s**: `P1 ok` … `P12 ok` y `OK (positivo): …` (P13). **P7:** `/assets/index-B3BeMVQC.js 200, text/javascript; charset=utf-8, public, max-age=31536000, immutable`, el mismo de la CI. **P8:** `zstd` | ✅ |
+| T6-9a | E-6 con la app real: `deploy-image-e6` en 8092 (`--cap-drop=ALL`); Chrome con `Network`, `Log`, `Runtime` y el listener de `securitypolicyviolation`; abrir `/` | `testnet · nodo OK`; "Conectar wallet" y "Mis partidas", sin "Administrar House"; "Conecta tu wallet para crear una partida"; lobby honesto o partidas (solo ID abreviado y monto) | `/` 200. Listener por `Page.addScriptToEvaluateOnNewDocument` más `Runtime.addBinding`. `.network-badge` = **`testnet · nodo OK`**. Header: "Conectar wallet" y "Mis partidas" presentes, "Administrar House" ausente. "Conecta tu wallet para crear una partida": presente. Lobby: **`No hay partidas abiertas`**, 0 filas. Cada campo se leyó por separado, sin volcado del DOM | ✅ |
+| T6-9b | `#/game/<GAME>` y `Page.reload`; el ID sale del `GameCreated` de la tx "crear" de "Despliegues" | "Cancelada", `2 %` y 0.001 SUI; solo el ID abreviado | `SuiGrpcClient` público, `getTransaction` con eventos: `success`, 1 evento, 1 `GameCreated` del `originalPackageId`. El script imprime solo **`0x6173…6858`**, igual que B10. Contraste sin imprimir: `git show acdc669:documents/HANDOFF_TESTNET_PUBLISH.md \| /usr/bin/grep -c -F -f <archivo con el ID>` → **1**. Después de recargar: estado **"Cancelada"**, comisión **`2 %`**, apuesta **`0.001 SUI`**; `location.hash` es la ruta pedida | ✅ |
+| T6-9c | `#/my-games` y `Page.reload` | "Conecta tu wallet para ver tus partidas e invitaciones", sin listas | Después de recargar: **"Conecta tu wallet para ver tus partidas e invitaciones"**; `main ul, main ol`: 0; hash `#/my-games` | ✅ |
+| T6-9d | Pedido a `https://api.slush.app/api/wallet/metadata` | Sin violación de CSP; CORS con el `console.error` exacto, o el status si responde | 4 `GET` (uno por carga de la app: 4 cargas). Todos con `loadingFailed` `net::ERR_FAILED`, `corsError: MissingAllowOriginHeader` y `blockedReason: null`, sin respuesta visible para la página. En cada carga: `Access to fetch at 'https://api.slush.app/api/wallet/metadata' from origin 'http://127.0.0.1:8092' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.`, `Failed to load resource: net::ERR_FAILED` y el **`console.error` `Error fetching metadata TypeError: Failed to fetch`**, exacto (le sigue el stack del bundle). 0 violaciones de CSP. Status real: 403 (T6-10) | ✅ (CORS/403, SUG-2) |
+| T6-9e | Abrir el modal de `ConnectButton` | "Slush"; ícono `data:`; con violación de `img-src`: STOP | Clic real (`Input.dispatchMouseEvent`) en el botón de `mysten-dapp-kit-connect-button`: `dialog.open = true`, título "Connect a wallet". 1 wallet, **"Slush"**, con 1 `img` `data:` (`alt` "Slush logo", `naturalWidth` 48). 0 violaciones de `img-src`: no hay STOP. Como T6-9d no respondió (CORS/403), **el ícono remoto queda sin medir** y sigue en el smoke B (B-5) | ✅ |
+| T6-9f | Elegir "Slush" | Popup a `https://my.slush.app`; `window.opener !== null` = `true`; sin login; `Target.closeTarget` | Target `page` nuevo con `openerId` = la pestaña de la app (URL inicial vacía), que llega a `https://my.slush.app/dapp-request`: `{ openerNotNull: true, origin: "https://my.slush.app", path: "/dapp-request" }`. Sin login. `Target.closeTarget` → `{"success":true}`. La app sigue en `testnet · nodo OK`, con 0 violaciones | ✅ |
+| T6-9g | Recorrido de toda la sesión | 0 pedidos a MVR; 0 `securitypolicyviolation`; solo los errores de `api.slush.app` | App: 44 pedidos (`127.0.0.1:8092` 14, `fullnode.testnet.sui.io` 22, `api.slush.app` 4, `data:` 4); gRPC `GetServiceInfo`, `GetTransaction`, `ListEvents` y `BatchGetObjects`, sin respuestas ≥ 400. Popup: 23 pedidos desde el *attach* (sitio de Slush, bajo su propia política, fuera de la app) y 9 entradas de error propias, que no se inspeccionaron porque el límite de T6-9g es el de la app, como en E-6e. **MVR: 0**, en la app y en el popup. **`securitypolicyviolation`: 0.** Errores de la app: **16, los 4 mensajes admitidos de T6-9d en cada una de las 4 cargas**; ningún otro (`exceptionThrown`, otros `console.error`, otros `loadingFailed` y respuestas ≥ 400: 0) | ✅ |
+| T6-10 | `curl` público a `api.slush.app/api/wallet/metadata` con `Origin: http://127.0.0.1:8092` y con `Origin: https://example.com` | Status, `server` y ACAO de cada uno; se espera 403, `cloudflare`, sin ACAO | 16:38:39Z. Con `http://127.0.0.1:8092`: `HTTP/2 403`, `server: cloudflare`, sin `access-control-allow-origin`. Con `https://example.com`: lo mismo. Sin cambios respecto de la revisión de PR #48 | ✅ |
+| C-4 | Cierre: Chrome por PID, `deploy-image-e6`, `battleship-app:ensayo-15`, limpieza por la línea base de T6-0 sin `prune`, `docker system df`, directorios, puertos y `git status` | Diferencias vacías; *Build Cache* = T6-0; sin directorios; puertos libres; solo los 5 archivos | `kill <pid de Chrome>`, solo ese PID: `kill -0` falla y no queda ningún proceso con el perfil. `docker rm -f deploy-image-e6` y `docker rmi battleship-app:ensayo-15`. Contenedores nuevos: **0**. Imágenes nuevas: **24**, todas del ensayo, borradas por ID con `docker rmi`: 21 intermedias `<none>` con `Cmd ["node"]` (derivadas de `node@bc0a2afd…c1d9`), `node:26.13.0-bookworm-slim`, `caddy:2.11.7-alpine` y `rhysd/actionlint:1.7.12`. Los padres `<none>` sin etiqueta cayeron con sus hijos en la primera pasada. `comm` repetido: contenedores 0, imágenes 0; faltantes `ps=0 img=0`. `docker system df`: 3 imágenes, 2 contenedores, *Build Cache* `0B` (= T6-0). Se borraron los 3 directorios, más los scripts de la sonda (no existen). 8090, 8092 y 9230 sin filas. `git status`: solo los 5 archivos de TASK-6 | ✅ |
+
+### Reporte final (parte B)
+- **Pasos PASA/TOTAL (T6-0..T6-10 y C-4):** **17/17** sin T6-7, o 17/18 con T6-7 pendiente. Queda abierto hasta T6-7.
+- **T6-7 (runs A y B, PR desechable):** ⏳ (T6-7), lo llena el orquestador.
+- **Hallazgos:** ninguno que haga fallar un paso. Hay tres observaciones:
+  - T6-0/T6-1: se arrancó antes de la puerta por D-20261104-07 (167,48 h y 167,49 h);
+  - T6-6 (2): el build usó la caché de (1);
+  - T6-9d/T6-9e: el 403 de Slush se repite y el ícono remoto pasa al smoke B.
+- **Veredicto:** lo da el MID después del commit de T6-7 (MINOR-1).
+
+### Smoke B del owner (S-7; lo registra TASK-5 de #16, S-8)
+
+Checklist de `app/README.md`, "Conectar Railway (owner, no delegable)", paso 9, en la URL pública (`<URL>`), con la
+wallet de extensión del owner. Lo que vio el owner va como `owner: "<texto>"`, sin direcciones ni capturas de la
+wallet.
+
+| # | Acción | Resultado esperado | Resultado obtenido | Estado |
+|---|--------|--------------------|--------------------|--------|
+| B-1 | Abrir `<URL>` | `testnet · nodo OK` | (lo registra S-8) | ⏳ |
+| B-2 | Conectar la wallet (Slush) | Conecta, sin violación de CSP. Si no conecta por la CSP: el fallback a `Report-Only`, solo para la CSP (D3), y un issue | (lo registra S-8) | ⏳ |
+| B-3 | El lobby | Las partidas reales o el texto honesto | (lo registra S-8) | ⏳ |
+| B-4 | Recargar `#/my-games` y `#/game/<id>` | Las dos rutas cargan después de recargar | (lo registra S-8) | ⏳ |
+| B-5 | Consola | 0 violaciones de CSP, incluido el ícono remoto de Slush. Límite de SUG-2, el mismo que T6-9g (MINOR-4): se admiten **solo** los mensajes del pedido a `https://api.slush.app/api/wallet/metadata` (el bloqueo de CORS y `net::ERR_FAILED`/403) y el `console.error: Error fetching metadata TypeError: Failed to fetch`, con "Slush" en el modal. Cualquier otro error es rojo. Si esos mensajes no aparecen, el ícono remoto se mide acá | (lo registra S-8) | ⏳ |
+| B-6 | `curl -sS -D - -o /dev/null <URL>` (GET) | La CSP idéntica a la del `Caddyfile`, las 5 cabeceras de seguridad y `Cache-Control: no-cache`, sin COOP y sin el `Server` de Caddy. Si el borde de Railway agrega un `Server` propio (o cabeceras `x-railway-*`), se anota su valor y no es rojo (SUG-1) | (lo registra S-8) | ⏳ |

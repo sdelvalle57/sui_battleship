@@ -1534,3 +1534,441 @@ Refs #15
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+---
+
+## TASK-6
+
+> Reporte del DEV (texto plano en el scratchpad, copiado tal cual por el orquestador tras leerlo entero y pasar los 4 greps §R-6).
+
+## Task completado: HANDOFF_RAILWAY_DEPLOY — TASK-6 (v1.6.1)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-15-task6`, HEAD `3f510d2` (D-20261104-07). Es hijo de `5af2fb0` (handoff v1.6.1), que es hijo de
+`ec359ec`. Árbol limpio al arrancar. Sin commits ni pushes.
+
+### Archivos modificados/creados
+Solo los 5 de §4, medidos contra `3f510d2`:
+```
+ Dockerfile                        |  4 +--
+ app/README.md                     | 38 ++++++++++++++--------
+ app/scripts/check-deploy-image.sh |  6 ++--
+ documents/SMOKE_RAILWAY_DEPLOY.md | 68 ++++++++++++++++++++++++++++++++++++++-
+ documents/STATUS.md               |  5 +--
+ 5 files changed, 101 insertions(+), 20 deletions(-)
+```
+`git status --porcelain --untracked-files=all`: ` M` en esos 5 y nada más.
+`git diff --stat -- app/src app/package.json package-lock.json contracts .github .dockerignore app/Caddyfile agents.md README.md documents/DECISIONES.md documents/HANDOFF_RAILWAY_DEPLOY.md documents/PLAN_RAILWAY_DEPLOY.md`: vacío.
+
+### Qué se implementó (3 líneas máx)
+- `Dockerfile:3-4` pasa a Node 26.13.0 por digest (§3.1).
+- N2b del script queda anclado a la cabecera del paso, con una regex de dos ramas (§3.2).
+- Docs de §3.3 en `app/README.md`, `STATUS.md` y la parte B del SMOKE, con T6-0..T6-10 y C-4 corridos. T6-7 queda en ⏳ (T6-7).
+
+### Tests y gates (output pegado, por área tocada)
+- **Agregados/modificados:** ningún test. Lo único de código es el bloque de N2b del script.
+- **Contracts:** no aplica (sin cambios en `contracts/`; `git diff --stat -- contracts/` vacío). No se corrió ningún `sui`.
+- **App:** gate no aplica (§5.1): no cambian `app/src/`, tests ni dependencias (diff vacío, arriba). El build de la app
+  con Node 26.13.0 lo hizo la imagen en T6-8, con el bundle `index-B3BeMVQC.js`, el mismo de la CI.
+- **shellcheck (T6-3):** ShellCheck 0.11.0 (imagen `rhysd/actionlint:1.7.12@sha256:b1934ee5…5667`, el digest de
+  `app/README.md:214`), `exit=0`, sin hallazgos.
+- **Tablas de contrato y `app/src/sui/`:** no aplica.
+
+Diff de código (T6-2):
+```
+diff --git a/Dockerfile b/Dockerfile
+@@ -1,7 +1,7 @@
+ # Imagen de la app para Railway (#15): build estático de testnet + Caddy. Contexto acotado por .dockerignore.
+ # Sin --mount, heredocs ni "# syntax=": sirve con BuildKit (Railway, CI) y con el builder clásico (DL-9).
+-# Node 26.12.1 por la regla de 7 días (DL-8); TASK-6 sube a 26.13.0.
+-FROM node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c AS build
++# Node 26.13.0: la misma versión que el gate local y la CI; fijada por digest con la regla de 7 días (DL-8).
++FROM node:26.13.0-bookworm-slim@sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9 AS build
+ WORKDIR /repo
+diff --git a/app/scripts/check-deploy-image.sh b/app/scripts/check-deploy-image.sh
+@@ -97,8 +97,10 @@ if [ ! -f "$ctx/contracts/deployments/testnet.json" ]; then
+-  # N2b: el build tiene que cortarse en la guarda, sin llegar a npm ci.
+-  if grep -qE 'RUN npm ci' "$log.plain"; then
++  # N2b: el build tiene que cortarse en la guarda, sin llegar a npm ci. Se busca la cabecera del paso y no el extracto
++  # del Dockerfile que BuildKit imprime alrededor del RUN que falla. BuildKit: "#<n> [build <k>/<m>] RUN npm ci", con
++  # <k> alineado con espacios; clásico: "Step <k>/<m> : RUN npm ci".
++  if grep -qE '^(#[0-9]+ \[build +[0-9]+/[0-9]+\] |Step [0-9]+/[0-9]+ : )RUN npm ci' "$log.plain"; then
+     tail_log "docker build" "$log"
+     fail "N2b: el build pasó la guarda y llegó a 'RUN npm ci' (la guarda no corta el build)"
+```
+Comparé `Dockerfile:3-4` y `check-deploy-image.sh:100-106` con los literales de §3.1 y §3.2, extraídos del handoff, con
+`diff`: son idénticos.
+
+### Verificación manual (Anexo A, parte B; la misma tabla que quedó en documents/SMOKE_RAILWAY_DEPLOY.md)
+
+Corrida del 2026-11-04, de 16:26 a 16:45 UTC. Builder clásico. Puertos: 8090, 8092 y 9230, todos libres antes de usarlos.
+
+- **T6-0 ✅ (D-20261104-07).**
+  - `date -u` = 2026-11-04T16:26:19Z, 31 min 22 s antes de la puerta. Se sigue por D-20261104-07 (`3f510d2`), así que no
+    es STOP. La edad de v26.13.0 a esa hora es de 167,48 h.
+  - `git log -1 --format='%h %p'` → `3f510d2 5af2fb0`; `git log -1 --format='%h %p' 5af2fb0` → `5af2fb0 ec359ec`.
+  - `git status` vacío; `ls contracts/deployments` → `testnet.json`.
+  - Línea base en `<scratchpad>/docker-base-15-t6/`: 2 contenedores y 3 imágenes (`postgres:17`, `postgres:16-alpine`,
+    `busybox:latest`), Build Cache `0B`, 2 volúmenes locales (ajenos).
+  - `ss -ltn` sin filas en 8090, 8092 y 9230. `docker buildx` → "unknown command".
+- **T6-1 ✅ (D-20261104-07).** Medido a las 16:26:28Z.
+  - Hub: `.digest` = `sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9`, `last_updated`
+    2026-10-28T23:41:51Z.
+  - Registry, con token anónimo sin imprimir: `HTTP/2 200`, `content-type: application/vnd.oci.image.index.v1+json` y
+    `docker-content-digest` = el mismo.
+  - `published_at` de v26.13.0 = 2026-10-28T16:57:41Z.
+  - Caddy en Hub: `sha256:e70b164d…4ee5`, sin cambios.
+  - `docker pull node:26.13.0-bookworm-slim@<digest de §3.1>`: exit 0, `Digest: sha256:bc0a2afd…c1d9`.
+  - `docker run --rm --entrypoint node …@<el mismo digest> --version` → `v26.13.0`.
+  - A las 16:27:01Z, la edad es de 167,49 h (< 168 h). Se acepta por D-20261104-07.
+- **T6-2 ✅** `Dockerfile | 4 ++--` y el script `| 6 ++++--`. Diff arriba.
+- **T6-3 ✅** shellcheck `exit=0`, sin output (en stderr solo sale el log del pull de la imagen).
+- **T6-4 ✅** Copia de `git ls-files` a `<scratchpad>/n2-15/ctx`, con `rm` de `testnet.json` y `Published.toml`.
+  - `node …/publish.mjs check` → `0 despliegues`, `exit=0`.
+  - La copia no tiene `node_modules`, `app/dist` ni `.env.local`; `Dockerfile` y script son los de T6-2 (`diff -q`).
+  - `git status` → ` M Dockerfile`, ` M app/scripts/check-deploy-image.sh`.
+- **T6-5 ✅** `Modo negativo: el contexto no tiene contracts/deployments/testnet.json` /
+  `OK (negativo): sin contracts/deployments/testnet.json (#8) la imagen se niega a construirse`, `exit=0`, 2 s.
+- **T6-6 ✅** La guarda de la copia queda así:
+  `RUN test -f contracts/deployments/testnet.json || echo "ERROR (#15): falta contracts/deployments/testnet.json. … (nunca IDs a mano)."`,
+  sin `>&2; exit 1`.
+  - (1) `exit=1` en 94 s. Últimas líneas:
+    ```
+    Step 13/19 : RUN set -eu;     for f in packageId originalPackageId houseId publishTxDigest; do …
+    Error: Cannot find module './contracts/deployments/testnet.json'
+    Node.js v26.13.0
+    … returned a non-zero code: 1
+    FALLO: N2b: el build pasó la guarda y llegó a 'RUN npm ci' (la guarda no corta el build)
+    ```
+    N1 y N2a pasaron.
+  - (2) `docker build --force-rm -t battleship-app:n2-15 …` → `exit=1`; `docker rmi battleship-app:n2-15` no tenía nada que
+    borrar. Grep con el patrón literal de §3.2 sobre `red.plain`: 1 línea, `29:Step 9/19 : RUN npm ci`.
+  - Observación: el build (2) usó la caché de (1) en los pasos 1-12 (`Using cache` ×11), así que su log no repite el
+    `echo` de la guarda. La línea de salida que exige N2a es la del build (1).
+- **T6-7 ⏳ (T6-7).** Lo corre y lo registra el orquestador (MINOR-1).
+- **T6-8 ✅** `CHECK_KEEP_TAG=battleship-app:ensayo-15 bash app/scripts/check-deploy-image.sh . 8090` → `exit=0` en 107 s:
+  ```
+  Modo positivo: el contexto tiene contracts/deployments/testnet.json
+  P1 ok: imagen construida
+  P2 ok: el contenedor responde en http://127.0.0.1:8090/
+  P3 ok: corre como 65534 con --cap-drop=ALL
+  P4 ok: / 200 y CSP idéntica a la del Caddyfile
+  P5 ok: cabeceras de seguridad y Cache-Control de / exactas
+  P6 ok: sin Cross-Origin-Opener-Policy ni Server
+  P7 ok: /assets/index-B3BeMVQC.js 200, text/javascript; charset=utf-8, public, max-age=31536000, immutable
+  P8 ok: /assets/index-B3BeMVQC.js comprimido (zstd)
+  P9 ok: /favicon.svg 200, image/svg+xml
+  P10 ok: /no-existe 404
+  P11 ok: /game/0x1 404
+  P12 ok: /assets/no-existe.js 404 sin immutable
+  OK (positivo): la imagen se construye y sirve el build como nobody con --cap-drop=ALL; CSP, cabeceras, caché, compresión, favicon y 404 verificados (P1-P12)
+  ```
+  P7 da el mismo bundle que la CI (`index-B3BeMVQC.js`).
+- **T6-9a ✅**
+  - `docker run -d --name deploy-image-e6 --cap-drop=ALL -e PORT=8092 -p 127.0.0.1:8092:8092 battleship-app:ensayo-15`;
+    `/` da 200.
+  - Chrome headless 156 con perfil, `HOME` y `XDG_*` en `<scratchpad>/chrome-15-t6/` y depuración en `127.0.0.1:9230`.
+    El PID se guardó al lanzarlo.
+  - La sonda CDP (Node 26, `WebSocket` nativo) se conecta a nivel browser con sesiones `flatten`. Habilita `Page`,
+    `Network`, `Log` y `Runtime`. El listener de `securitypolicyviolation` va por `Page.addScriptToEvaluateOnNewDocument`
+    y reporta por `Runtime.addBinding`. Captura `console.error`/`assert`, `exceptionThrown`, `Log` de nivel error,
+    `loadingFailed` no cancelado y respuestas ≥ 400.
+  - Salida (cada campo por separado, sin volcado del DOM):
+    ```
+    9a.badge: testnet · nodo OK
+    9a.header: {"conectarWallet":true,"misPartidas":true,"administrarHouse":false}
+    9a.crearHint: true            ("Conecta tu wallet para crear una partida")
+    9a.lobby: {"filas":[],"texto":["No hay partidas abiertas"]}
+    ```
+- **T6-9b ✅**
+  - El ID sale del `GameCreated` de la tx "crear" de la fila "Despliegues" de STATUS, leído con `SuiGrpcClient` público
+    (`getTransaction` con eventos), con el `@mysten/sui` 2.37.0 ya instalado en el worktree. Salida del script:
+    `status=true eventos=1 GameCreated=1` y `GAME=0x6173…6858`. El ID completo quedó en un archivo con modo 600 en
+    `<scratchpad>/n2-15/`, que después se borró.
+  - Contraste sin imprimir: `git show acdc669:documents/HANDOFF_TESTNET_PUBLISH.md | /usr/bin/grep -c -F -f <archivo>` → 1.
+    La abreviatura es igual a la de B10 (`0x6173…6858`).
+  - Después de `Page.reload`:
+    `9b.campos: {"id":"0x6173…6858","estado":"Cancelada","comision":"2 %","apuesta":"0.001 SUI"}`, y `hashOk: true`.
+- **T6-9c ✅** Después de `Page.reload`: el texto "Conecta tu wallet para ver tus partidas e invitaciones" está presente;
+  `main ul, main ol` = 0; hash `#/my-games`.
+- **T6-9d ✅ (CORS/403, SUG-2)**
+  - Hubo 4 `GET https://api.slush.app/api/wallet/metadata`, uno por carga de la app (4 cargas). La página no ve ninguna
+    respuesta.
+  - Cada uno dejó estas 4 entradas:
+    ```
+    log.javascript  Access to fetch at 'https://api.slush.app/api/wallet/metadata' from origin 'http://127.0.0.1:8092' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+    loadingFailed   net::ERR_FAILED blockedReason=null cors=MissingAllowOriginHeader  (https://api.slush.app/api/wallet/metadata)
+    log.network     Failed to load resource: net::ERR_FAILED  (https://api.slush.app/api/wallet/metadata)
+    console.error   Error fetching metadata TypeError: Failed to fetch   (exacto; le sigue el stack de /assets/index-B3BeMVQC.js)
+    ```
+  - 0 violaciones de CSP.
+- **T6-9e ✅**
+  - Clic real (`Input.dispatchMouseEvent`) en el `button` de `internal-button`, dentro de `mysten-dapp-kit-connect-button`.
+  - `9e.modal: {"titulo":["Connect a wallet"],"botones":["Slush"],"imgs":[{"scheme":"data","naturalWidth":48,"alt":"Slush logo"}]}`,
+    `dialogOpen: true`.
+  - 0 violaciones de `img-src`, así que no hay STOP. Como la metadata no respondió, el ícono remoto queda sin medir y
+    sigue en el smoke B (B-5).
+- **T6-9f ✅**
+  - Hubo 1 target `page` con `openerId` = la pestaña de la app (URL inicial vacía).
+  - En el popup: `{"openerNotNull":true,"origin":"https://my.slush.app","path":"/dapp-request"}`. Sin login.
+  - `Target.closeTarget` → `{"success":true}`. Después, la app sigue en `testnet · nodo OK` con `cspv: 0`.
+- **T6-9g ✅**
+  - Pedidos de la app: 44 (`127.0.0.1:8092` 14, `fullnode.testnet.sui.io` 22, `api.slush.app` 4, `data:` 4).
+  - gRPC: `GetServiceInfo`, `GetTransaction`, `ListEvents` y `BatchGetObjects` (OPTIONS + POST), sin respuestas ≥ 400.
+  - Popup: 23 pedidos desde el attach (sitio de Slush) y 9 entradas de error propias. No las inspeccioné: el límite de
+    T6-9g es el de la app, como en E-6e.
+  - Pedidos a MVR: 0, en la app y en el popup. `securitypolicyviolation`: 0 (`9g.cspv: []`).
+  - Errores de la app: 16, que son las 4 entradas admitidas de T6-9d × 4 cargas. Ninguno más: 0 `exceptionThrown`,
+    ningún otro `console.error`, `loadingFailed` o respuesta ≥ 400.
+- **T6-10 ✅** Medido a las 16:38:39Z:
+  ```
+  == Origin: http://127.0.0.1:8092
+  HTTP/2 403
+  server: cloudflare
+  acao=0
+  == Origin: https://example.com
+  HTTP/2 403
+  server: cloudflare
+  acao=0
+  ```
+  Sin cambios respecto de PR #48.
+- **C-4 ✅**
+  - Chrome: `kill <pid>`, solo el mío. `kill -0` falla, y `pgrep -f "user-data-dir=<perfil>"` da 0.
+  - `docker rm -f deploy-image-e6` y `docker rmi battleship-app:ensayo-15` (Untagged + 5 capas).
+  - Contenedores nuevos respecto de T6-0: 0. Imágenes nuevas: 24, todas mías. Las borré por ID con `docker rmi`: en la
+    pasada 1 borré 15 explícitamente, y las otras 9 cayeron como padres `<none>` sin etiqueta. Eran:
+    - 21 intermedias `<none>` con `Cmd ["node"]`, derivadas de `node@bc0a2afd…c1d9`;
+    - `node:26.13.0-bookworm-slim@…c1d9`, `caddy:2.11.7-alpine@…4ee5` y `rhysd/actionlint@…5667`.
+  - `comm` repetido: contenedores `[]` e imágenes `[]`; faltantes `ps=0 img=0`.
+  - `docker system df`: 3 imágenes, 2 contenedores, Build Cache `0B`, igual que en T6-0. No toqué nada ajeno (`busybox`,
+    `postgres:16-alpine`, `postgres:17` y sus 2 contenedores) y no usé `prune`.
+  - `rm -rf` de `<scratchpad>/n2-15`, `<scratchpad>/chrome-15-t6`, `<scratchpad>/docker-base-15-t6` y de los scripts de la
+    sonda (`<scratchpad>/scripts-15`). Ninguno existe ya.
+  - `ss -ltn` sin filas en 8090, 8092 y 9230. `git status` solo con los 5 archivos.
+
+**Reporte final (parte B):** 18/18 PASA sin T6-7 (18/19 con T6-7 pendiente). Queda abierto hasta T6-7.
+
+**Imágenes descargadas y su estado:**
+| Imagen | Paso | Estado |
+|---|---|---|
+| `node:26.13.0-bookworm-slim@sha256:bc0a2afd…c1d9` | T6-1 | borrada en C-4 |
+| `rhysd/actionlint:1.7.12@sha256:b1934ee5…5667` | T6-3 | borrada en C-4 |
+| `caddy:2.11.7-alpine@sha256:e70b164d…4ee5` | la bajó el builder clásico en el build de T6-6/T6-8 | borrada en C-4 |
+
+Nada de esto estaba en la línea base de T6-0.
+
+### Desviaciones del handoff (o "ninguna")
+1. **T6-0, puerta de DL-8 levantada (ajuste 1 del orquestador, D-20261104-07).** Arranqué a las 16:26:19Z, antes de las
+   16:57:41Z. La edad de v26.13.0 era de 167,48 h en T6-0 y de 167,49 h en T6-1. El resto de T6-0 y T6-1 se cumplió.
+   DL-8 se vuelve a medir al commitear: después de las 16:57:41Z ya cumple las 168 h.
+2. **HEAD (ajuste 2 del orquestador).** HEAD = `3f510d2` (D-07), no el commit del handoff (`5af2fb0`). Los diffs están
+   medidos contra `3f510d2` y tienen solo los 5 archivos.
+3. **La sonda de E-6 corrió 3 veces.** Las corridas 1 y 2 tuvieron bugs de la sonda, no de la app:
+   - en la 1, el selector del botón no veía el texto, que va en el light DOM de `mysten-dapp-kit-connect-button`, y el
+     manejador de `attachedToTarget` tomó el attach de mi propia pestaña como si fuera el popup y la cerró;
+   - en la 2, el auto-attach de la sesión de la página no tomó el popup.
+
+   En la 3 detecto el popup por `Target.targetCreated` con `openerId` y lo adjunto con `Target.attachToTarget`. Por eso
+   los pedidos del popup se cuentan desde ese momento. Las tres corridas dieron lo mismo en T6-9a..T6-9c, 0 violaciones
+   de CSP y 0 pedidos a MVR. Lo reportado es la corrida 3.
+4. **T6-6 (2):** el build reutilizó la caché de (1) en los pasos 1-12 (builder clásico). Su log no tiene el `echo` de la
+   guarda, pero el grep pedido (la cabecera `Step 9/19 : RUN npm ci`) da 1 línea, como se esperaba.
+5. **"Reporte final (parte B)" del SMOKE.** El Anexo dice "Pasos PASA/TOTAL: (lo llena el DEV; queda abierto hasta
+   T6-7)", y la tabla de MINOR-1 se lo asigna al orquestador. Puse PASA/TOTAL (18/18 sin T6-7) y dejé T6-7 y el veredicto
+   como en la plantilla. El `Estado` de la cabecera queda en "parte B: EN CURSO (T6-7 pendiente); smoke B del owner
+   pendiente (S-7)", según §3.3. El orquestador puede sobrescribir los dos.
+6. **`app/README.md`, "Ícono remoto de Slush".** Además del texto literal de "Qué pasó en el ensayo", agregué una oración
+   con el resultado de T6-9: en E-6 de TASK-6 pasó lo mismo, la metadata no respondió y el ícono siguió siendo el
+   `data:`. El handoff pide decir qué pasó "si la metadata respondió". Como no respondió, lo dejé dicho igual, en una sola
+   oración.
+7. **STATUS, fila de baseline.** No puse el ID abreviado de la partida; se pega solo en el SMOKE (T6-9b). `<sha>` queda
+   literal en la fila de #15.
+8. **Chrome:** además de los flags de las reglas comunes, usé `--no-first-run --no-default-browser-check`.
+9. **T6-9b:** usé el `node_modules` del worktree, que ya estaba instalado e ignorado por git (`@mysten/sui` 2.37.0, la
+   versión del lock). No corrí `npm ci`.
+
+### Riesgos / pendientes (o "ninguno")
+- T6-7 (BuildKit, PR desechable): lo hace el orquestador. Hasta ese commit, el MID no da PASA.
+- DL-8: volver a medir la edad de v26.13.0 al commitear (con el commit después de las 16:57:41Z, da ≥ 168 h).
+- `<sha>` de TASK-6 en STATUS `:173`: lo pone el orquestador.
+- El ícono remoto de Slush sigue sin medir (403 de Cloudflare con cualquier origen): queda para B-5 del smoke B (S-7).
+- `app/README.md:71-73` ("URL pública: se completa después de #8") no se tocó: lo reemplaza TASK-5 de #16 (S-8).
+
+### Documentación
+- **READMEs / agents.md:** `app/README.md` actualizado (§3.3: `:80`, Slush, el negativo en una copia, N2b, CI, la
+  precondición, el paso 9 con el límite de SUG-2 y GET, la nota de Node). `agents.md` no se toca (§4).
+- **`documents/STATUS.md`:**
+  - fila de #15: handoff v1.6, TASK-6 (`<sha>`, `Refs #15`) y el Pendiente S-7/S-8;
+  - "Siguiente": arranca en "Railway (S-7, owner)";
+  - fila de baseline nueva arriba, con la celda de runs del PR desechable en "⏳ (T6-7)".
+- **`documents/SMOKE_RAILWAY_DEPLOY.md`:** parte B (T6-0..T6-10 y C-4, T6-7 en ⏳ (T6-7)), "Reporte final (parte B)",
+  la tabla del smoke B (B-1..B-6, idéntica a la del handoff, comprobada con `diff`) y el `Estado` de la cabecera.
+
+### §R-6 de #17 (3 greps) más el cuarto grep de MINOR-2 de PR #48
+Corrí los 4 greps con `/usr/bin/grep` sobre `git diff` (que incluye las filas de la parte B) y sobre este reporte.
+
+**Sobre `git diff` (guardado en `<scratchpad>/task6.diff`):**
+```
+== g1  /usr/bin/grep -nE '[0-9a-fA-F]{40,64}'
+9:-FROM node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c AS build
+11:+FROM node:26.13.0-bookworm-slim@sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9 AS build
+167:+| T6-1 | … Hub `.digest` = `sha256:bc0a2afd3b74ce12222fc8bab99271e66257f021078f5f4a5d687a77d280c1d9` …
+== g2  /usr/bin/grep -nE '0x[0-9a-fA-F]{8,}'
+(vacío)
+== g3  /usr/bin/grep -niE 'suiprivkey|mnemonic|seed phrase|/home/|/Users/'
+(vacío)
+== g4  /usr/bin/grep -nE '[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}'   (con -o)
+167:2afd…c1d9  167:164d…4ee5  169:4ee5…5667  176:6173…6858  183:2afd…c1d9  216:2afd…c1d9  216:164d…4ee5
+```
+Clasificación (comparando prefijo y sufijo):
+- g1 `:9`: el digest viejo del `FROM` de Node 26.12.1 (§2 y §3.2, `88e48077…e28c`, línea quitada). Atribuido.
+- g1 `:11` y `:167`: el digest de Node 26.13.0 de §3.1 y §0 bis (`bc0a2afd…c1d9`). Atribuido.
+- g4 `2afd…c1d9` (`:167`, `:183` y `:216`, de `bc0a2afd…c1d9`): el digest de Node de §3.1. Atribuido.
+- g4 `164d…4ee5` (`:167` y `:216`, de `e70b164d…4ee5`): el digest de Caddy de §3.2 y §0 bis. Atribuido.
+- g4 `4ee5…5667` (`:169`, de `b1934ee5…5667`): el digest de actionlint de §0 bis y `app/README.md:214`. Atribuido.
+- g4 `6173…6858` (`:176`, `0x6173…6858`): el ID de `GAME` (T6-9b), que sale del `GameCreated` y es igual a la abreviatura
+  de B10. Atribuido.
+- Ninguna dirección de cuenta, completa o abreviada. No hubo nada que quitar.
+
+**Sobre este reporte:** el resultado va al final (§R-6 sobre el reporte).
+
+### Snippet propuesto para documents/STATUS.md
+Ya aplicado en el diff: la fila de #15, "Siguiente" y la fila de baseline de TASK-6, con `<sha>` y "⏳ (T6-7)" para el
+orquestador.
+
+### §R-6 sobre el reporte (este archivo, antes de agregar esta sección)
+```
+== g1  líneas 41, 43, 72, 270, 271, 272: los digests completos de Node 26.12.1 (`88e48077…e28c`, línea quitada del
+       Dockerfile) y de Node 26.13.0 (`bc0a2afd…c1d9`, §3.1), en el diff pegado y en T6-1
+== g2  (vacío)
+== g3  275: la línea que transcribe el propio grep 3 (exceptuada)
+== g4  (con -o, conteo por valor)
+      6 164d…4ee5   -> Caddy `e70b164d…4ee5` (§3.2, §0 bis)
+      9 2afd…c1d9   -> Node `bc0a2afd…c1d9` (§3.1)
+      5 4ee5…5667   -> actionlint `b1934ee5…5667` (§0 bis, app/README.md:214)
+      6 6173…6858   -> GAME `0x6173…6858` (T6-9b, = B10)
+      1 8077…e28c   -> Node 26.12.1 viejo `88e48077…e28c` (§2), en la clasificación
+```
+Todas las coincidencias se atribuyen. No hay direcciones de cuenta ni rutas personales: las rutas van como
+`<scratchpad>`, `<repo>` y `<archivo>`. Esta sección solo agrega transcripciones de las mismas abreviaturas, ya
+atribuidas.
+
+### Archivos auxiliares que quedan en el scratchpad
+- `<scratchpad>/task6.diff`: el `git diff` sobre el que corrí los greps. Se puede borrar.
+
+---
+
+## Revisión TASK-6 (paso 1): T6-7 pendiente
+
+> Revisión del MID, paso 1 de la secuencia de §8 (v1.6.1, MINOR-1). Cubre T6-0..T6-6, T6-8..T6-10 y C-4 contra el
+> handoff v1.6.1 (`5af2fb0`) y D-20261104-07 (`3f510d2`). **No es el veredicto:** el PASA de TASK-6 espera el commit
+> del orquestador con T6-7 (BuildKit, PR desechable) y la revisión del MID sobre ese commit.
+
+### Qué verifiqué (sin correr gates)
+- **Árbol:** HEAD `3f510d2`, que solo agrega D-20261104-07 a `documents/DECISIONES.md`, y es hijo de `5af2fb0`
+  (handoff v1.6.1), hijo de `ec359ec`. Sin commitear: los 5 archivos de §4 más este `REPORTES_RAILWAY_DEPLOY.md`. Nada
+  fuera de alcance: `.github/`, `contracts/`, `app/src/`, `app/Caddyfile`, `.dockerignore`, `agents.md` y el handoff
+  quedan sin diff.
+- **Literales:**
+  - `Dockerfile:3-4` contra el bloque de §3.1, con `diff`: idénticos;
+  - `app/scripts/check-deploy-image.sh:100-106` contra §3.2, con `diff`: idénticos;
+  - `bash -n` del script: OK. La línea de `fail` de N2b no cambia, y N2a (`:95-99`) tampoco.
+- **Docs de §3.3:**
+  - `app/README.md` tiene las 8 ubicaciones: `:80`, "Ícono remoto de Slush", el negativo en una copia, N2b, la CI
+    sin ID de run (🔵 1), la precondición sin TASK-3 (🔵 2), el paso 9 con el límite de MINOR-4 y GET, y la nota de
+    Node. `:71-73` no se tocó;
+  - `documents/STATUS.md`: la fila de #15 (`<sha>` literal y el Pendiente S-7/S-8), "Siguiente" (🔵 4) y una fila de
+    baseline con `⏳ (T6-7)`;
+  - `documents/SMOKE_RAILWAY_DEPLOY.md`: la parte B con T6-7 en `⏳ (T6-7)`, "Reporte final (parte B)", el smoke B del
+    owner idéntico al del handoff y el `Estado` "parte B: EN CURSO (T6-7 pendiente)…".
+- **Contenido de las filas:**
+  - **T6-0/T6-1:** arranque a las 16:26:19Z, con 167,48 h y 167,49 h: cubierto por D-20261104-07. El resto de T6-0 y
+    T6-1 se cumple, y los digests de Node y Caddy son los de §0 bis.
+  - **T6-6:** `FALLO: N2b` con el clásico, y la cabecera es `Step 9/19 : RUN npm ci`. Es la prueba de que la rama
+    clásica del patrón funciona.
+  - **T6-8:** P7 sobre `index-B3BeMVQC.js`, el mismo hash que la CI de `ec359ec`: con Node 26.13.0, el bundle no tiene
+    delta.
+  - **T6-9a..g:** coinciden con B10 de #8 y con el límite de SUG-2.
+  - **T6-10:** 403 `cloudflare`, sin ACAO, con los dos orígenes.
+  - **C-4:** Docker volvió a la línea base de T6-0 (2/3/0 B).
+- **§R-6** (los 4 greps con `/usr/bin/grep` sobre el `git diff` completo de los 6 archivos):
+  - **g1:** solo los digests de Node 26.12.1 (`88e48077…e28c`, la línea quitada) y 26.13.0 (`bc0a2afd…c1d9`, §3.1), en
+    el `Dockerfile`, en T6-1 y en las transcripciones del reporte. Atribuidos;
+  - **g2:** vacío;
+  - **g3:** 1 coincidencia, la línea del reporte que transcribe el propio grep 3 (excepción de SUG-2 de v1.6.1);
+  - **g4:** `2afd…c1d9` ×15 (Node, §3.1), `164d…4ee5` ×10 (Caddy, §3.2), `4ee5…5667` ×8 (actionlint,
+    `app/README.md:214`), `8077…e28c` ×4 (Node 26.12.1) y `6173…6858` ×9 (`GAME`). La abreviatura de `GAME` es la
+    misma que B10 (`git show acdc669:documents/SMOKE_TESTNET_PUBLISH.md`, 5 apariciones). **Todas se atribuyen.**
+  - **Ninguna dirección de cuenta ni ruta personal.**
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| H-1 | PROY-19 (el conteo verifica lo que dice) | `documents/SMOKE_RAILWAY_DEPLOY.md:380`; `documents/STATUS.md:49`; este reporte `:1749`, `:1777` | La parte B tiene **18** filas (T6-0..T6-8, T6-9a..g, T6-10 y C-4). Con T6-7 en ⏳ hay **17** ✅ (contadas por la columna Estado). El reporte dice "18/18 sin T6-7, o 18/19 con T6-7 pendiente": el conteo correcto es **17/17 sin T6-7, o 17/18 con T6-7 pendiente** | Corrección mecánica del orquestador antes de commitear (abajo, 1-2). El texto del DEV en este reporte queda como está, y esta revisión lo corrige |
+| H-2 | PROY-20 | `documents/STATUS.md:174` (fila de #15) | Dice "handoff v1.6": §3.3 se escribió antes de la v1.6.1. Además, la fila no nombra D-20261104-07, que es parte del registro de TASK-6 | "handoff v1.6.1", y sumar "D-20261104-07 (excepción a DL-8 para Node 26.13.0)" a la lista de decisiones de la fila (abajo, 3). El error de origen está en el handoff, que no se toca |
+| O-1 | DL-8 | `Dockerfile:3-4` | DL-8 se mide **al commitear**, y D-20261104-07 levanta solo la puerta de arranque (T6-0). A las 16:48:39Z de esta revisión, la versión todavía no tiene 168 h | El commit de TASK-6 va **a partir de las 2026-11-04T16:57:41Z**, con el `date -u` en el cuerpo (abajo, 4). Así no hace falta ampliar D-07 |
+| O-2 | — | T6-9g | El DEV no inspeccionó las 9 entradas de error del popup | Se acepta: el límite de T6-9g es el de la app, y el popup es `https://my.slush.app`, bajo su propia política. Es el mismo criterio que E-6e de TASK-2 |
+
+Sin 🔴 ni 🟠. H-1 y H-2 son de texto y se corrigen mecánicamente en el mismo commit.
+
+### Dictamen de las desviaciones 1-9
+| # | Desviación | Dictamen |
+|---|---|---|
+| 1 | La puerta de DL-8 de T6-0 se levantó (16:26:19Z, 167,48/167,49 h) | ✅ Cubierta por D-20261104-07 (decisión del owner), que deja en pie el resto de T6-0 y T6-1, y se cumplió. Queda O-1: el commit va desde las 16:57:41Z |
+| 2 | HEAD `3f510d2` (D-07) y no `5af2fb0` (handoff) | ✅ `3f510d2` solo toca `DECISIONES.md` y es nieto de `ec359ec`. Los diffs contra `3f510d2` tienen los 5 archivos. Cumple la intención de MINOR-2 |
+| 3 | La sonda de E-6 corrió 3 veces (bugs de la sonda) | ✅ Las fallas fueron del selector y del *attach* del popup, no de la app. Las tres corridas dieron lo mismo en T6-9a..c, 0 violaciones y 0 MVR. Vale la corrida 3. Cerrar la pestaña propia en la corrida 1 no tocó nada ajeno |
+| 4 | T6-6 (2) usó la caché de (1) | ✅ El grep pedido es la cabecera `Step 9/19`, que el log trae igual. La línea de salida de la guarda que exige N2a está probada en (1): N2a se evalúa antes que N2b, y (1) llegó a `FALLO: N2b` |
+| 5 | El DEV llenó PASA/TOTAL del "Reporte final (parte B)" y el `Estado` | ✅ con corrección. El handoff se contradice: el Anexo dice "lo llena el DEV" y la tabla de MINOR-1 se lo da al orquestador. Vale lo que hizo el DEV (el conteo es dato de la corrida), pero con el número de H-1. El `Estado` ("parte B: EN CURSO (T6-7 pendiente); smoke B del owner pendiente (S-7)") es el literal de §3.3, y el veredicto quedó para el MID, como manda MINOR-1. En el commit de T6-7, el orquestador completa la fila T6-7, la línea de T6-7 del reporte final, la celda de runs de STATUS y el `Estado`. El veredicto lo escribe el MID después |
+| 6 | Oración extra en `app/README.md`, "Ícono remoto de Slush" | ✅ Se acepta. §3.3 pedía decir qué pasó si la metadata respondía. La oración dice, con exactitud, que en TASK-6 no respondió y que el ícono siguió siendo `data:`, que es la evidencia de T6-9d/T6-9e/T6-10. Es una sola oración, no contradice la "Conclusión" y evita que el README parezca no haber medido E-6 |
+| 7 | La fila de baseline de STATUS no lleva el ID de `GAME` | ✅ Menos superficie en `master`. El ID abreviado queda en el SMOKE (T6-9b), atribuido |
+| 8 | Chrome con `--no-first-run --no-default-browser-check` | ✅ Flags inocuos que no tocan el aislamiento (perfil, `HOME`/`XDG_*` propios, depuración en `127.0.0.1`) |
+| 9 | T6-9b con el `node_modules` ya instalado del worktree | ✅ Está ignorado por git, es `@mysten/sui` 2.37.0 del lock, y solo hizo lecturas públicas. No hacía falta `npm ci` |
+
+### Cambios mecánicos antes de commitear (orquestador)
+1. `documents/SMOKE_RAILWAY_DEPLOY.md:380`: `**18/18** sin T6-7, o 18/19 con T6-7 pendiente` →
+   `**17/17** sin T6-7, o 17/18 con T6-7 pendiente` (H-1).
+2. `documents/STATUS.md:49`: `🟢 local **18/18** sin T6-7` → `🟢 local **17/17** sin T6-7` (H-1).
+3. `documents/STATUS.md:174`, fila de #15: `plan v1.1 y handoff v1.6; D-20261104-03 (P-1..P-5)` →
+   `plan v1.1 y handoff v1.6.1; D-20261104-03 (P-1..P-5) y D-20261104-07 (excepción a DL-8 para Node 26.13.0)` (H-2).
+4. Commitear **a partir de las 2026-11-04T16:57:41Z** y poner en el cuerpo la línea `DL-8 al commitear: date -u = <hora>`
+   (O-1).
+5. El `<sha>` de "TASK-6 (`<sha>`, `Refs #15`)" en `STATUS.md:174` sale de este commit: se pone en el commit de T6-7,
+   junto con sus celdas.
+6. Opcional, fuera del repo: borrar `<scratchpad>/task6.diff` del DEV.
+
+### Siguiente paso
+1. El orquestador aplica 1-4 y commitea los 6 archivos con el mensaje de abajo.
+2. Corre T6-7 (el PR desechable, con las condiciones de §8) y llena sus celdas, y el `<sha>`, en un commit propio.
+3. El MID revisa ese commit y da el veredicto de TASK-6 (paso 4 de §8). Hasta entonces, **TASK-6 no tiene PASA**.
+
+### Mensaje de commit propuesto (TASK-6: los 5 archivos más este reporte)
+```
+app: bump the image to Node 26.13.0 and anchor N2b to the step header (#15)
+
+TASK-6 of #15 (handoff v1.6.1, S-6 of #17). The build stage moves to
+node:26.13.0-bookworm-slim, pinned by its index digest: the same Node as
+the local gate and CI. The run started before the 7-day mark under
+D-20261104-07; DL-8 is measured again at commit time.
+DL-8 al commitear: date -u = <hora>
+
+N2b now matches only the step header of each builder ("Step k/m : RUN
+npm ci" on the classic builder, "#n [build  k/m] RUN npm ci" on
+BuildKit, which pads k with spaces). The old grep also hit the Dockerfile
+excerpt BuildKit prints around a failing RUN, and a single-space anchor
+would never match BuildKit's padded header.
+
+Local evidence, classic builder (SMOKE_RAILWAY_DEPLOY.md, part B):
+negative path green and induced N2b red on a context copy without
+testnet.json and Published.toml; positive path with the real IDs, P1-P13,
+same bundle as CI (index-B3BeMVQC.js); E-6 on the real app with 0 CSP
+violations, 0 MVR requests and only the known api.slush.app 403. The
+BuildKit runs (T6-7) follow in a separate commit.
+
+Docs: app/README.md (Node, negative path on a copy, N2b, CI without run
+ID, checklist precondition, smoke B console limit and GET), STATUS and
+the DEV report with the MID review (step 1).
+
+Refs #15
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```

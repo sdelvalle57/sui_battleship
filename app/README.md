@@ -77,7 +77,7 @@ pública: se completa después de #8.**
 `Dockerfile` en la raíz, sin `railway.json` (Railway detecta el Dockerfile solo). Tiene dos etapas, cada una con su
 imagen base fijada por digest:
 
-- **build** (`node:26.12.1-bookworm-slim`):
+- **build** (`node:26.13.0-bookworm-slim`):
   1. copia `.nvmrc` y `contracts/`;
   2. corre la guarda de #8 y `publish.mjs check`;
   3. hace `npm ci` y `npm run build -w app`. La red es fija: `ENV VITE_SUI_NETWORK=testnet`, sin `ARG` y sin
@@ -158,9 +158,13 @@ presente, y el script verifica que la cabecera no esté.
   - **Ícono remoto de Slush.**
     - Qué puede pasar: la metadata de `api.slush.app` puede reemplazar el ícono `data:` por uno `https://…`. Si aparece
       una violación de `img-src`, ese origen va **solo** a `img-src`.
-    - Qué pasó en el ensayo: `api.slush.app` respondió 403 de Cloudflare al origen `127.0.0.1` (en el navegador, un
-      error de CORS, no de CSP). El kit se quedó con el ícono `data:` por defecto.
-    - Conclusión: el ícono remoto **quedó sin medir** y pasa al **smoke B** del owner, en la URL pública.
+    - Qué pasó en el ensayo: `api.slush.app` respondió 403 de Cloudflare (en el navegador, un error de CORS, no de
+      CSP). El kit se quedó con el ícono `data:` por defecto. El 403 no depende del origen: con `curl` público sale
+      igual con `Origin: https://example.com` (revisión de PR #48), así que puede repetirse en la URL pública. En E-6
+      de TASK-6 de #15, con la app real y los IDs de testnet, pasó lo mismo: la metadata no respondió y el ícono
+      siguió siendo el `data:`.
+    - Conclusión: el ícono remoto **quedó sin medir** y pasa al **smoke B** del owner, en la URL pública. Si en el
+      smoke B no aparece el error, el ícono remoto se mide ahí.
   - `'unsafe-inline'` solo en `style-src`, y solo si TASK-3 mide una violación real.
 
 **Fallback a `Report-Only`** (P-2, D-20261104-03 (2)):
@@ -177,13 +181,16 @@ presente, y el script verifica que la cabecera no esté.
 - El puerto, entre 1024 y 65535, tiene que estar libre (`ss -ltn 'sport = :<puerto>'` sin filas).
 - El modo sale del contexto:
 
-- **Negativo**, sin `contracts/deployments/testnet.json` (el caso de `master` hasta #8): en local,
-  `bash app/scripts/check-deploy-image.sh . 8090`.
+- **Negativo**, sin `contracts/deployments/testnet.json`. Desde #8, `master` lo tiene, así que en el repo `. 8090`
+  corre el **positivo**. El negativo se ensaya en una copia del contexto sin `testnet.json` **ni** `Published.toml`,
+  como el `master` anterior a #8: `bash app/scripts/check-deploy-image.sh <copia> 8090`.
   - **N1:** el build tiene que fallar.
   - **N2a:** el log, sin códigos ANSI, tiene la línea de **salida** de la guarda,
     `ERROR (#15): falta contracts/deployments/testnet.json…`, con o sin el prefijo `#<n> <segundos> ` de BuildKit. No
     cuenta la línea `RUN …` que imprime el builder.
-  - **N2b:** el log no llega a `RUN npm ci`, es decir, el build se cortó en la guarda.
+  - **N2b:** el log no tiene la cabecera del paso `RUN npm ci` (BuildKit: `#<n> [build  9/12] RUN npm ci`, con el
+    número alineado con espacios; clásico: `Step <k>/<m> : RUN npm ci`), es decir, el build se cortó en la guarda. El
+    extracto del Dockerfile que BuildKit imprime alrededor del `RUN` que falla no cuenta.
   - **N3:** `OK (negativo): sin contracts/deployments/testnet.json (#8) la imagen se niega a construirse`.
 - **Positivo**, con `testnet.json`. Las cabeceras se leen con GET, porque Caddy 2.11.7 tiene un bug de `encode` con
   HEAD.
@@ -207,7 +214,7 @@ presente, y el script verifica que la cabecera no esté.
     Nunca `docker system prune`, que borra imágenes ajenas.
 - **CI:**
   - el job `deploy-image` de `.github/workflows/ci.yml` corre el mismo script (`. 8080`) en cada PR y en cada push a
-    `master`: hasta #8 por el camino negativo (PR #57, run 41802734452), y después por el positivo;
+    `master`; desde #8, por el camino positivo con los IDs reales;
   - **no es check requerido** (N-4 es decisión del owner); Railway lo espera con *Wait for CI*.
 - **Al tocar `ci.yml`:**
   - actionlint en un contenedor desechable, con el archivo explícito:
@@ -221,7 +228,7 @@ Solo el owner, después de #8. **Aviso (N-2):** desde el paso 3, cada merge a `m
 paso 5 **publica el sitio**.
 
 1. **Precondiciones:**
-   - TASK-3 de #15 (si no corrió en #15) y TASK-6 de #15 en PASA;
+   - TASK-6 de #15 en PASA;
    - `deploy-image` del último run de `master` en verde **por el camino positivo**.
 2. Railway → **New Project** → **Deploy from GitHub repo**. La **GitHub App de Railway** se autoriza solo para
    `sdelvalle57/sui_battleship`.
@@ -259,8 +266,13 @@ paso 5 **publica el sitio**.
    solo, **Deploy latest commit**.
 9. Smoke B con la wallet de extensión del owner, en la URL pública:
    - `testnet · nodo OK`, conectar la wallet (Slush), el lobby, y recargar `#/my-games` y `#/game/<id>`;
-   - consola sin violaciones de CSP, incluido el ícono remoto de Slush;
-   - `curl -sSI <URL>` con las cabeceras de la tabla de arriba.
+   - consola sin violaciones de CSP, incluido el ícono remoto de Slush. Por el 403 de Cloudflare de `api.slush.app`,
+     se admiten **solo** los mensajes del pedido a `https://api.slush.app/api/wallet/metadata` (el bloqueo de CORS y
+     `net::ERR_FAILED`/403) y el `console.error: Error fetching metadata TypeError: Failed to fetch` del kit, con
+     "Slush" listado en el modal. Cualquier otro error de consola o de red es rojo. Si esos mensajes no aparecen, el
+     ícono remoto se mide ahí;
+   - `curl -sS -D - -o /dev/null <URL>` (GET: con HEAD, el `encode` de Caddy 2.11.7 falla) con las cabeceras de la
+     tabla de arriba.
 
    Si la wallet no conecta por la CSP, avisar: fallback a `Report-Only`, solo para la CSP. Si algo falla,
    **rollback** desde Deployments **o pausar** el servicio.
@@ -277,8 +289,8 @@ Las dos imágenes base van fijadas por el digest del índice multi-arquitectura.
 - **Sobre qué:** sobre la versión, **no** sobre el digest. Un *rebuild* de docker-library de la misma versión no
   reinicia el plazo (por ejemplo, el índice de `caddy:2.11.7-alpine` del 2026-10-30, observación 1 de TASK-2 de #15).
 
-Node 26.12.1 en la imagen por la regla de 7 días; 26.13.0 en TASK-6 (#15). Mientras tanto, el gate de la app sigue en
-26.13.0: es el mismo major que exigen `.nvmrc`, `engines` y la guarda de `publish.mjs`.
+Node 26.13.0 en la imagen (TASK-6 de #15): la misma versión que el gate local y la CI (`.nvmrc` = 26, `engines`, la
+guarda de `publish.mjs`).
 
 ### Favicon
 
