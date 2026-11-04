@@ -1,9 +1,23 @@
 # HANDOFF_HOUSE_ADMIN
 > Plan: PLAN_HOUSE_ADMIN v1.1 (MAYOR: APPROVE en la ronda corta, 2026-11-04; `0bfd916`) | Issue: #14 | Branch:
-> `feature/issue-14-house-admin` | Versión: v1.1 | Fecha: 2026-11-04
+> `feature/issue-14-house-admin` | Versión: v1.2 | Fecha: 2026-11-04
 
 ## Changelog
 
+- **v1.2 (2026-11-04)**: tras TASK-1 (revisión del MID: PASA; `documents/REPORTES_HOUSE_ADMIN.md`, "Revisión TASK-1").
+  Lo medido no cambia ninguna decisión (D-1..D-7, H-1..H-6): S-1 confirma la detección por tipo en el nodo local, S-2
+  confirma que `getObject` va delante del índice (base de H-3), y S-5 llega como `SimulationError` **sin**
+  `executionError`. Cambian solo §2 (V-10..V-14), un test de TASK-2 (T2-4, forma del cursor), un test nuevo de TASK-4
+  (T4-15) y un punto de TASK-6:
+  - **T4-15 (S-5):** si el `precheck` dice `'owned'` y la preflight igual falla porque el cap cambió de manos entre las dos
+    lecturas, la máquina sigue el camino DL-10 de #12 (`useExecuteTransaction.ts:151`): "No se pudo preparar la
+    transacción: <texto del nodo>", sin abrir la wallet y **sin** invalidar. No se cambia la máquina: la ventana es de
+    milisegundos (las dos lecturas van al store de objetos, V-12) y el siguiente intento lo corta el `precheck`. T4-15 fija
+    ese comportamiento con el error real de la fixture, y TASK-6 lo documenta como límite.
+  - **Desviaciones de TASK-1 aceptadas:** el mensaje de `nonOwnerPreflight` queda **tal cual** (con las direcciones
+    efímeras de `A` y `ADMIN`; la de `ADMIN` ya está en los `owner` de la fixture, y T4-15 necesita el texto real); la
+    tercera copia de `sdkVersion()`/`plain()` se deja para un issue de limpieza de `app/scripts/` (LIM-5, el handoff
+    prohibía tocar los otros scripts).
 - **v1.1 (2026-11-04)**: revisión del MAYOR del handoff v1 (APPROVE con 4 MINOR y 5 SUGGESTION). Cambian solo TASK-1
   (§3.2, §3.4, §3.7), TASK-3 (§3.1, T3-1) y el smoke; TASK-2, TASK-4, TASK-5 y TASK-6 no cambian.
 
@@ -176,6 +190,11 @@ Rutas relativas a `<repo>/node_modules/`; `@mysten/sui` 2.37.0, `@mysten/dapp-ki
 | V-7 | `run` ya captura `sender` (`useExecuteTransaction.ts:116`) y llama a `build` dos veces (`:140`, `:162`); el `precheck` se atrapa con `isTransientReadError ? PREFLIGHT_NETWORK_MESSAGE : PREPARE_FAILED_PREFIX` (`:131-133`) | Código |
 | V-8 | `useTxTarget.ts:60-62` convierte en `create` todo objetivo que no es `game` | Código |
 | V-9 | `transactionInvalidations` y `adoptedStatus` son `switch` exhaustivos con tipo de retorno; `toTxGameEntry` (`txSession.ts:194-198`) supone `gameId` en toda acción que no es `create` | Código |
+| V-10 | (TASK-1, S-1, localnet `sui 1.83.0`) `listOwnedObjects` por dueño y tipo responde: `ADMIN` ⇒ 1 objeto del tipo exacto (forma larga normalizada), `AddressOwner`, `content` = los 32 bytes del UID, `hasNextPage: false`, `cursor: null`; una cuenta sin cap ⇒ `[]`, `false`, `null`. Con `limit: 1` y un solo cap, también `hasNextPage: false` y `cursor: null` | `contracts/fixtures/house-admin.localnet.json` (`houseCapListing`) |
+| V-11 | (S-5) La preflight de una cuenta sin el cap llega como `SimulationError` **sin** `executionError`, `cause.code` `INVALID_ARGUMENT`, mensaje "Error checking transaction input objects: Transaction was not signed by the correct sender: Object <cap> is owned by account address <dueño>, but given owner/signer address is <firmante>". La máquina lo muestra como "No se pudo preparar la transacción: …" (DL-10 de #12) | `simulationErrors.nonOwnerPreflight` |
+| V-12 | (S-2, 10 transferencias) `getObject` ve al dueño nuevo antes que el índice de dueños en 9 de 10 casos (en el décimo, en la misma muestra); atraso del índice 0-452 ms; el índice cambia de forma atómica (nunca el cap en las dos cuentas ni en ninguna) y, respecto del fin de la CLI, ya estaba al día o tardó ≤ 83 ms | `documents/REPORTES_HOUSE_ADMIN.md`, TASK-1 (T1-9) |
+| V-13 | (S-6) Budget de la preflight de `update_fee_rate` y de `update_bet_limits`: **3000282 MIST** con precio de gas 1000; los aborts de `house` llegan con `executionError.$kind` `MoveAbort` y el mensaje en la forma del SDK (`abort code: N, in '<pkg>::house::<fn>'`) | TASK-1 (T1-4, T1-8) |
+| V-14 | Un cursor real de `listOwnedObjects` con `hasNextPage: true` es un string base64 opaco (380 caracteres en la medición) | TASK-1, S-6 extra |
 
 ## 3. Reglas transversales (todos los tasks)
 
@@ -422,7 +441,7 @@ contrato, PTB del retiro) tenga su test contra datos reales.
 - T2-2: `isTransientReadError(new ReadDataError('incomplete', …))` es `false`.
 - T2-3: `fetchHouseCap` con `houseCapListing.admin` de la fixture ⇒ el cap (`id` = `houseCapId`, `owner` = `ADMIN`); con
   `nonOwner` ⇒ `null`; el pedido lleva `type` = `houseCapType(pkg)` normalizado, `limit: 2`, `include.content: true`.
-- T2-4 (H-1): `{ [], hasNextPage: true, cursor: 'c1' }` y luego `{ [], false }` ⇒ `null`, y el segundo pedido usa `cursor:
+- T2-4 (H-1; los cursores de los mocks son strings opacos, como el real de V-14): `{ [], hasNextPage: true, cursor: 'c1' }` y luego `{ [], false }` ⇒ `null`, y el segundo pedido usa `cursor:
   'c1'`.
 - T2-5 (H-1): tres páginas `{ [], true }` ⇒ `ReadDataError('incomplete')`; exactamente 3 pedidos; **nunca** `null`.
 - T2-6 (H-1): `{ [cap], true }` y luego `{ [otroCap], false }` ⇒ `ReadDataError('invariant')`; `{ [cap1, cap2], false }`
@@ -614,6 +633,10 @@ cada camino (cap perdido, abort, éxito, "sin confirmar") esté probado.
 - T4-13 (MINOR-6 del plan): en el retiro, el `recipient` del `TransferObjects` de la transacción que va a la wallet es la
   cuenta capturada en el clic, también si la cuenta conectada cambia antes de la firma.
 - T4-14: éxito sin evento legible ⇒ `success` con `value: null`.
+- T4-15 (v1.2, V-11): `precheck` con `'owned'` y preflight que lanza el `SimulationError` real de
+  `simulationErrors.nonOwnerPreflight` (sin `executionError`) ⇒ `failure` con el prefijo `PREPARE_FAILED_PREFIX` ("No se
+  pudo preparar la transacción: …"), 0 `ExecuteTransaction`, wallet sin abrir; un segundo `execute` con el `getObject` ya
+  en el dueño nuevo ⇒ corte del `precheck` con `HOUSE_CAP_LOST_MESSAGE`. Fija el comportamiento sin cambiar la máquina.
 
 ### 6. Smoke
 
@@ -735,7 +758,9 @@ pasa si se pierde el cap" con la "Nota para #14"; la fila de `version()`; "Lectu
 1. `app/README.md`: sección nueva "Panel de la House (#14)" (detección por tipo y regla de certeza; `CapKnowledge` y los
    estados; "Volver a comprobar"; las tres acciones con el aviso de la comisión copiada y el de los límites; `precheck`
    por `getObject`; retiro total a la cuenta que firma; `migrate`/`transfer_house_cap` solo por CLI; el costo de 1
-   `ListOwnedObjects` por cuenta en el encabezado); filas nuevas en los mapas; tabla de invalidación con H-5 y la nota de
+   `ListOwnedObjects` por cuenta en el encabezado; el límite de T4-15: si el cap cambia de manos entre el `precheck` y la
+   preflight, el texto es "No se pudo preparar la transacción: …" con el del nodo, y el siguiente intento lo corta el
+   `precheck`; lo medido en V-12); filas nuevas en los mapas; tabla de invalidación con H-5 y la nota de
    `build(sender)`/`precheck(signal, sender)`; fixture nueva y su recaptura en "Fixtures de lectura"; texto
    `ReadDataError('incomplete')`.
 2. `contracts/README.md`: fixture nueva en la tabla de rutas y su recaptura (orden de TASK-1) en "Lectura desde la app";
