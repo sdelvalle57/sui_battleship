@@ -1774,3 +1774,359 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 > #14 TASK-4 ✅ (2026-11-04, revisión MID PASA): `useHouseCap` (`CapKnowledge`, política común: un error de red nunca da
 > "Sin permisos"), `precheck` común por `getObject` y los tres hooks de acción (retiro a la cuenta del clic; H-5). App 1101
 > tests en 62 archivos (+33), build 902.36 kB.
+
+## Task completado: HANDOFF_HOUSE_ADMIN — TASK-5
+
+### Branch (con SHA corto del HEAD)
+
+`feature/issue-14-house-admin` @ `9ce0594` (handoff v1.3; sin commits del DEV).
+
+### Archivos modificados/creados
+
+- Nuevos:
+  - `app/src/pages/HouseAdminPage.tsx` y `app/src/pages/HouseAdminPage.test.tsx`;
+  - `app/src/components/HouseAdminPanel.tsx`;
+  - `app/src/components/HouseAdminPanel.test.tsx` (hooks mockeados);
+  - `app/src/components/HouseAdminPanel.machine.test.tsx` (hooks y máquina reales, con el kit y `sui/execution`
+    mockeados, como `GameActions.machine.test.tsx`).
+- Cambiados:
+  - `app/src/App.tsx`: ruta `admin` antes de `*`;
+  - `app/src/components/Header.tsx`: enlace "Administrar House";
+  - `app/src/App.test.tsx` y `app/src/components/Header.test.tsx`: mock de `useHouseCap` y casos nuevos (desviación 4).
+- No cambian: `hooks/`, `sui/`, `GameActions.tsx`, `index.css` (no hizo falta estilo), `contracts/` ni las dependencias
+  (`git diff --exit-code`, abajo).
+
+### Qué se implementó (3 líneas máx)
+
+- `#/admin` monta `HouseAdminPage` con `<HouseAdminView key={address} />`. La vista sigue los estados de H-2: `unknown`
+  muestra solo `ReadState`; `known` + `null` muestra "Sin permisos" con "Volver a comprobar"; con el cap muestra el panel,
+  que una relectura fallida no desmonta.
+- `HouseAdminPanel` tiene la configuración y los tres bloques `[data-house-action]` (validación espejo, resumen "De X a Y"
+  junto al botón, `TransactionStatus` con el texto del evento). Usa una sola fuente de bloqueo y muestra una vez el aviso
+  "en curso", el adoptado y "sin confirmar".
+- El encabezado muestra "Administrar House" solo con `known` + cap.
+
+### Tests y gates (output pegado, por área tocada)
+
+- Agregados: 48 tests (1101 → 1149, 62 → 65 archivos).
+- **`HouseAdminPage.test.tsx`** (7; `useHouseCap` mockeado y el panel sustituido por un stub):
+  - T5-1: sin cuenta, el texto fijo dentro de `section.house-admin` y `useHouseCap` sin llamar.
+  - T5-2:
+    - `unknown` cargando ⇒ solo "Cargando…";
+    - con `ReadDataError` `incomplete` ⇒ "El nodo no completó la búsqueda del HouseCap; reintenta";
+    - con `invariant` ⇒ el texto genérico;
+    - en los dos errores, "Reintentar" llama a `refetch` y nunca aparecen `.house-no-permission` ni el panel.
+  - T5-3:
+    - `known` + `null` ⇒ `.house-no-permission` con el texto fijo, sin `.house-config`, sin `[data-house-action]` y sin
+      panel; "Volver a comprobar" llama a `refetch`;
+    - con `isFetching`, el botón queda deshabilitado y "Reintentando… (intento 2 de 3)" aparece encima.
+  - H-2 a nivel página: con el cap, el panel se monta con su `capId`; con una relectura en error, la alerta va encima y el
+    panel sigue montado.
+- **`HouseAdminPanel.test.tsx`** (27; hooks mockeados):
+  - T5-4: "Comisión: 250 bps (2.5 %)", "Apuesta mínima: 0.002 SUI", "Apuesta máxima: 10 SUI", "Comisiones acumuladas:
+    0.01 SUI", "Versión de la House: 1". "Actualizar" relee la House y el cap. Sin dato de la House se ve solo "Cargando…",
+    sin acciones.
+  - T5-6:
+    - el campo arranca con la comisión actual, " = 2.5 %", el botón deshabilitado y sin error hasta tocarlo, y el aviso
+      fijo;
+    - `''`, `' 250'`, `'-1'`, `'2.5'`, `'1001'` y `'250'` muestran cada uno su texto de §1, sin resumen y con el botón
+      deshabilitado;
+    - con la actual en 0 y `250`: " = 2.5 %", el resumen "De 0 bps (0 %) a 250 bps (2.5 %)", y el envío
+      `{ capId, feeRate: 250 }`.
+  - T5-7:
+    - los campos arrancan con los límites actuales y el botón deshabilitado;
+    - los 8 errores por campo de §1 (incluidos `negative`, `too_many_decimals`, `too_large` y `zero_min`);
+    - los dos de par, `min_above_max` y `unchanged` (`10.0` = `10`);
+    - el resumen "De 0.002–10 SUI a 0.003–20 SUI", el aviso fijo y el envío en MIST.
+  - T5-8: con 0, "Retirar 0 SUI a tu cuenta" deshabilitado y "No hay comisiones para retirar."; con 0.01 SUI, "Retirar
+    0.01 SUI a tu cuenta", la nota fija y `withdraw({ capId })`.
+  - Candado: con `busy`, los tres botones deshabilitados y sin `IN_FLIGHT_TEXT`; con `in_flight`, el texto una sola vez;
+    "sin confirmar" ⇒ una alerta y "Ya la revisé", que llama a `acknowledge`.
+- **`HouseAdminPanel.machine.test.tsx`** (6; `useHouseCap`, `useHouse`, `useTxTarget` y las tres acciones reales, con
+  la House y el cap de la fixture). La House lleva `fees_collected` 0,01 SUI, escrito sobre los bytes reales en el offset
+  del campo:
+  - T5-1: sin cuenta, 0 `listOwnedObjects` y 0 `getObject`.
+  - T5-5: `updateFeeRate` termina en éxito con el evento real y la invalidación de H-5 relee el cap, que esta vez llega
+    con dos caps (`invariant`). Resultado: la alerta aparece encima, `.house-config` sigue montada y el bloque `fee`
+    conserva el texto de éxito, el digest (`code[title=<digest>]`) y "Costo de red:".
+  - T5-9 (H-6): con `deferred` en preflight, firma, confirmación y `waitForCheckpoint`, cada etapa muestra su texto y en
+    ninguna aparece "Comisión actualizada", ni en el bloque ni en la página. Al final aparece "Comisión actualizada: de 0
+    bps (0 %) a 250 bps (2.5 %). Las partidas ya creadas conservan la suya.", del evento real y no del valor escrito (260).
+  - T5-10: dos vistas montadas con los tres botones habilitables. La primera lanza el retiro: en ella, los tres botones
+    deshabilitados y **sin** `IN_FLIGHT_TEXT`; en la otra, los tres deshabilitados e `IN_FLIGHT_TEXT` una vez.
+  - T5-11: un retiro "sin confirmar" ⇒ un solo "Ya la revisé" y una sola alerta "…la red no la confirmó todavía…", con los
+    tres botones deshabilitados. Al pulsarlo desaparece y los tres quedan habilitados.
+  - T5-12: la vista que mira, montada antes, adopta el `updateBetLimits` de la otra con su texto "Límites actualizados:
+    mínimo 0.002 SUI, máximo 10 SUI (antes 0.001–50 SUI)." en su bloque `limits`, sin texto en `fee`.
+- **`Header.test.tsx`** (+6), T5-13: enlace `/admin` con `known` + cap. Sin enlace con `no_account`, `unknown` cargando,
+  `unknown` en error y `known` + `null`; "Mis partidas" sigue en todos. Con el cap conocido y `status` error, el enlace sigue.
+- **`App.test.tsx`** (+2), T5-14: `/admin` monta la página (`h2` y el texto sin cuenta); `/nada` sigue en "Página no
+  encontrada".
+- T5-15: `grep -rn "@mysten/" app/src/components/HouseAdminPanel.tsx app/src/pages/HouseAdminPage.tsx` sale vacío.
+- Verificación extra: probé una mutación temporal en `HouseAdminPanel.tsx`, con `adoptedHouseStatus` devolviendo `null`
+  para `updateBetLimits`, y T5-12 dio rojo (`1 failed | 5 passed`). Restauré el archivo (SHA-1 `OK`).
+- Tests viejos: en `Header.test.tsx` y `App.test.tsx` solo hay setup y casos agregados; la única línea quitada es el import
+  de `vitest`, que ahora suma `beforeEach`. Los 1101 anteriores pasan.
+
+**Gate de la app** (desde `<repo>`, con `export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH`; output completo
+de la corrida final sobre el árbol entregado):
+
+```text
+$ node --version
+v26.13.0
+$ npm --version
+11.20.0
+$ npm ci
+
+added 293 packages, and audited 295 packages in 8s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+11 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+[exit=0]
+$ npm audit signatures
+audited 292 packages in 7s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+[exit=0]
+$ npm audit --omit=dev --audit-level=high
+found 0 vulnerabilities
+[exit=0]
+$ npm run lint -w app
+
+> lint
+> eslint . --max-warnings 0
+
+[exit=0]
+$ npm run typecheck -w app
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+[exit=0]
+$ npm test -w app
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  65 passed (65)
+      Tests  1149 passed (1149)
+   Start at  04:13:39
+   Duration  18.05s (environment 60%, tests 15%, import 10%, setup 9%, transform 5%)
+
+Environment  jsdom was created 65 times · 102.79s total, 60% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+[exit=0]
+$ VITE_SUI_NETWORK=testnet npm run build -w app
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 606 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:   0.27 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-Bu8RVLO7.js   917.01 kB │ gzip: 277.41 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 401ms
+[exit=0]
+$ git status --porcelain --untracked-files=all
+ M app/src/App.test.tsx
+ M app/src/App.tsx
+ M app/src/components/Header.test.tsx
+ M app/src/components/Header.tsx
+?? app/src/components/HouseAdminPanel.machine.test.tsx
+?? app/src/components/HouseAdminPanel.test.tsx
+?? app/src/components/HouseAdminPanel.tsx
+?? app/src/pages/HouseAdminPage.test.tsx
+?? app/src/pages/HouseAdminPage.tsx
+$ git diff --exit-code -- contracts/ app/src/sui/ app/src/hooks/ app/src/components/GameActions.tsx package.json app/package.json package-lock.json
+[exit=0]
+```
+
+- **Build:** `index-*.js` pasa de 902.36 a **917.01 kB** (273.84 → 277.41 kB gzip; +14.65 kB), porque ahora entran al
+  bundle la página, el panel y los hooks de TASK-2..4. El aviso de chunk mayor de 500 kB es el de siempre (#15). Es una
+  referencia, sin umbral.
+- **Lint y typecheck:** lint 0, sin `eslint-disable`, `useRef`, `useEffect` ni `dangerouslySetInnerHTML`. Una corrida
+  previa del gate dio typecheck rojo en el test unitario del panel: la inferencia de `txHook<T>()` daba `T` sin `| null`.
+  Le pasé el genérico explícito, y lo pegado es la corrida final.
+- **Dependencias:** sin delta.
+- **Sincronización:** la tabla de contrato y `app/src/sui/` no aplican.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+
+No aplica: sin localnet (el smoke del ciclo va después de TASK-6). No toqué procesos ni puertos de `-issue15`.
+
+### Desviaciones del handoff
+
+1. - Qué cambió: los campos arrancan con los valores actuales (comisión en bps, límites en SUI con `formatMist`) y los
+     errores aparecen recién al tocar el campo, como en `CreateGameForm`. El " = x %" en vivo se ve con un valor válido o
+     igual al actual. El resumen aparece solo con la validación en verde, en un `<p class="house-summary">`, una clase
+     nueva fuera de la lista de §1.
+   - Por qué: §3 no fija el valor inicial. Con el actual precargado, el botón nace deshabilitado (`unchanged`) y cambiar un
+     solo límite no obliga a reescribir el otro. La clase nueva permite a los tests y al smoke ubicar el resumen.
+   - Verificación extra realizada: T5-6 y T5-7 (estado inicial, cada error y el resumen). Ningún texto ni selector de §1
+     cambió.
+2. - Qué cambió: el resultado adoptado se muestra dentro del bloque `[data-house-action]` de su acción, como un
+     `TransactionStatus` más, y no en un lugar común del panel.
+   - Por qué: así queda junto al botón y al estado de esa acción, igual que el propio.
+   - Verificación extra realizada: T5-12 (adoptado en `limits` y nada en `fee`).
+3. - Qué cambió: "Actualizar" de la configuración llama a `useHouseCap().refetch` desde un segundo observador dentro del
+     panel, como pide §3.3, y relee también la House. El retiro es un `<div data-house-action="withdraw">` con un
+     botón, no un `<form>`, porque no tiene campos.
+   - Por qué: la firma del panel queda `{ capId }` (§4). Con `staleTime` 0, montar ese observador puede sumar un
+     `ListOwnedObjects` al entrar al panel (el paso 3 del smoke ya dice "≥ 1, anotado").
+   - Verificación extra realizada: T5-4 ("Actualizar" llama a los dos `refetch`) y T5-5.
+4. - Qué cambió:
+     - `Header.test.tsx` suma el mock de `useHouseCap`, con `no_account` por defecto en un `beforeEach`, y su import de
+       `vitest` suma `beforeEach`;
+     - `App.test.tsx` suma el mock y el default en su `beforeEach`.
+   - Por qué: `Header` ahora llama a `useHouseCap` (§4 lo prevé: "mockean `useHouseCap`"). Sin el mock, los 7 tests
+     viejos de esos archivos fallaban al no tener cliente.
+   - Verificación extra realizada: ninguna aserción vieja cambió y los 7 tests viejos pasan.
+
+### Riesgos / pendientes
+
+- No hay estilos nuevos en `index.css`: el panel usa las clases de siempre (`hint`, `field-error`, `tx-status`). Si el smoke
+  muestra un problema visual, se ajusta allí.
+- El texto de un fallo de preflight sin el cap (V-11, T4-15) incluye direcciones del nodo. Se muestra tal cual, igual que
+  el resto de "No se pudo preparar la transacción: …".
+
+### Documentación
+
+- READMEs / `agents.md` actualizados: no aplica en TASK-5. TASK-6 documenta en `app/README.md` la ruta `#/admin`, sus
+  estados, los textos y el enlace del encabezado.
+- Snippet propuesto para `documents/STATUS.md` (fila de #14):
+
+  > #14 TASK-5 ✅ (2026-11-04): `#/admin` con `HouseAdminPage` (`key={address}`; `unknown` ⇒ solo `ReadState`, `known` +
+  > `null` ⇒ "Sin permisos" con "Volver a comprobar", con cap ⇒ el panel, que una relectura fallida no desmonta),
+  > `HouseAdminPanel` (configuración, comisión en bps con el % en vivo, límites, retiro total; resumen "De X a Y" y botón
+  > deshabilitado si no cambia; resultado solo del evento confirmado, también el adoptado) y el enlace "Administrar House"
+  > solo con el cap conocido. App 1149 tests en 65 archivos (+48), build 917.01 kB; lint 0.
+
+---
+
+## Revisión TASK-5: PASA
+
+> MID, 2026-11-04. Revisado contra el diff real (`app/src/pages/HouseAdminPage.tsx`, `app/src/components/HouseAdminPanel.tsx`,
+> `App.tsx`, `Header.tsx` y los tests nuevos y cambiados, sin commitear sobre `9ce0594`) y el output pegado. No corrí gates.
+
+**Checklist de §5, con los focos pedidos:**
+
+- **H-2, estados de la página: cumplido.** `HouseAdminView` (`HouseAdminPage.tsx:15-40`): sin cuenta ⇒ el texto fijo;
+  `unknown` ⇒ **solo** `ReadState` (`:20`); `known` + `null` ⇒ `ReadState` encima + `.house-no-permission` con "Volver a
+  comprobar" (`refetch`, deshabilitado con `isFetching`), sin datos de la House (P-1); `known` + cap ⇒ `ReadState` encima +
+  `HouseAdminPanel`. La página monta `<HouseAdminView key={address} />`.
+- **El panel no se desmonta ante una relectura fallida: cumplido.** La rama del panel depende solo de `cap.kind === 'known'`,
+  que `useHouseCap` conserva aunque falle la relectura (T4-4); el error va como `ReadState` encima. T5-5 lo prueba con los
+  hooks y la máquina reales: tras un éxito, la relectura del cap que falla deja el panel montado, el error encima y el
+  `TransactionStatus` con su texto, digest y costo. La House sigue la misma regla dentro del panel
+  (`HouseAdminPanel.tsx:314-336`: `ReadState` solo sin dato; con dato, encima de la configuración).
+- **SEG-10, el texto de éxito sale solo del evento: cumplido.** Los textos de éxito se arman con `tx.outcome.value` (el
+  `interpret` del evento confirmado) o, sin evento, con el texto honesto sin valores (`:67-81`); mientras no hay `outcome`,
+  `TransactionStatus` solo muestra la etapa. El **adoptado** usa las mismas funciones sobre `adopted.outcome.value`
+  (`adoptedHouseStatus`, `:89-103`, un `case` por acción y sin `default`). T5-9 (máquina real): ningún texto de éxito en
+  `preflight`/`signing`/`confirming`/`indexing`, y después el del evento.
+- **Un solo aviso o alerta por vista: cumplido.** Una sola `useTxTarget({ kind: 'house' })` en el panel; `IN_FLIGHT_TEXT` una
+  vez y solo con `notice.kind === 'in_flight'` (nunca por la propia, T5-10); una sola alerta "sin confirmar" con "Ya la
+  revisé" (T5-11); el adoptado se dibuja una vez, en el bloque de su acción (`AdoptedStatus` compara `action`), y la máquina
+  lo descarta en cuanto la vista lanza una propia (T5-12).
+- **Enlace del encabezado: cumplido.** `Header.tsx`: `isAdmin` = `account` + `known` + cap no `null`; no aparece sin cuenta,
+  con `unknown` ni con `known` + `null`, y se mantiene con el cap conocido y una relectura fallida (T5-13). Los cambios de
+  `Header.test.tsx`/`App.test.tsx` solo suman el mock de `useHouseCap` y casos (desviación 4); la única línea quitada es un
+  `import` reescrito.
+- **Capas: cumplido.** `HouseAdminPanel.tsx` y `HouseAdminPage.tsx` no importan `@mysten/*`; `Header.tsx` solo
+  `@mysten/dapp-kit-react/ui`, como antes. Los componentes importan de `sui/` solo funciones puras y tipos (validaciones,
+  formato), como `GameActions`.
+- **Desviación 3: aceptada, con una nota para el smoke.** El panel llama otra vez a `useHouseCap()` para que "Actualizar"
+  relea también el cap: es un segundo observador de la **misma** clave (sin consulta nueva), pero con `staleTime` 0 relee al
+  montarse, así que entrar al panel puede sumar un `ListOwnedObjects`, y "Actualizar" suma otro. Es barato y no cambia
+  ningún estado visible (la relectura con dato no desmonta nada). El smoke los cuenta como informativos (v1.4). El retiro
+  como `div` (sin formulario) es correcto: no tiene campos.
+- **Desviaciones 1, 2 y 4: aceptadas.** La 1 (campos precargados con los valores actuales y `.house-summary`) es mejor UX y
+  hace que el botón arranque deshabilitado (`unchanged`); el error solo aparece al tocar (`touched`). Obliga a un ajuste del
+  smoke: seleccionar el contenido antes de `Input.insertText` (v1.4). La 2 (adoptado en el bloque de su acción) cumple "una
+  vez por vista".
+- **Tests y gates.** +48 (1149 en 65 archivos): T5-1..T5-15 presentes, con un `HouseAdminPanel.machine.test.tsx` sobre la
+  máquina real para T5-5, T5-9..T5-12. Lint 0 y typecheck 0; build 917.01 kB (+14,65 kB: ahora la app importa la capa de
+  #14), con el aviso de chunk de siempre (#15). Sin delta en `contracts/`, `sui/`, `hooks/` ni dependencias.
+
+### Hallazgos
+
+Ninguno de código.
+
+**Cambios del handoff (v1.4), por lo que trae TASK-5:**
+1. Campos precargados: en el smoke, `el.focus(); el.select()` antes de `Input.insertText` (si no, "0" + "250" = "0250").
+2. Conteos de `ListOwnedObjects` del smoke: informativos (encabezado y panel observan el cap).
+3. Orden: el smoke corre **antes** de TASK-6 (abajo). `documents/SMOKE_HOUSE_ADMIN.md` creado con estado "EN CURSO" (copia
+   de la sección del handoff v1.4, con las referencias a §1 apuntando al handoff).
+
+### Siguiente paso
+
+- **Smoke ahora, en la localnet aislada, y después TASK-6.** El código del ciclo está completo con TASK-5: TASK-6 es solo
+  docs y no cambia nada que el smoke ejercite. Correrlo antes tiene dos ventajas: si encuentra algo, la corrección de
+  código va antes de escribir los READMEs (no hay que reescribirlos), y TASK-6 puede citar lo medido (latencias de
+  confirmación, cuántos "Volver a comprobar" hicieron falta, pedidos por acción). Runbook: `documents/SMOKE_HOUSE_ADMIN.md`.
+- **TASK-6 autorizado**, para después del smoke (un DEV a la vez en el mismo árbol, D-20261030-04). Si el owner prefiere el
+  orden del handoff v1.3, TASK-6 puede ir primero sin riesgo: solo se perderían los valores medidos en los READMEs.
+
+### Mensaje de commit propuesto
+
+```
+feat(app): add the House admin page and header link (#14)
+
+TASK-5 of the House admin panel: #/admin with HouseAdminPage (no
+account, unknown cap only shows the read state, no permission with a
+re-check button, the panel otherwise) and HouseAdminPanel (House
+configuration in bps and %, fee and bet-limit forms with mirror
+validation and a from/to summary, full withdraw to the signing
+account). One transaction target for the three actions: one in-flight
+notice, one unconfirmed alert, adopted results with the same event
+texts. A failing reread never unmounts the panel. "Administrar House"
+shows in the header only for a known cap holder.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+Para el handoff v1.4 y el SMOKE, en un commit aparte:
+
+```
+docs: house admin handoff v1.4 and smoke runbook (#14)
+
+Run the smoke after TASK-5 and before TASK-6, select prefilled fields
+before inserting text, and treat ListOwnedObjects counts as
+informative. Add documents/SMOKE_HOUSE_ADMIN.md (EN CURSO).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+### Snippet para STATUS.md
+
+> #14 TASK-5 ✅ (2026-11-04, revisión MID PASA): `#/admin` (`HouseAdminPage` con los estados de H-2, "Volver a comprobar") y
+> `HouseAdminPanel` (configuración, comisión, límites y retiro; un objetivo, un aviso, una alerta, adoptado con el texto del
+> evento); enlace "Administrar House" solo con el cap conocido. App 1149 tests en 65 archivos (+48), build 917.01 kB.
+> Smoke en localnet antes de TASK-6 (handoff v1.4).
