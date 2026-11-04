@@ -1,5 +1,5 @@
 # SMOKE_RAILWAY_DEPLOY, parte A (local, antes de #8)
-> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: 2026-11-04 | Estado: parte 1 PASA (21/21); parte 2 PASA (11/11); parte 3 PASA (7/7); parte B: 18/18, veredicto del MID pendiente; smoke B del owner pendiente (S-7)
+> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: 2026-11-04 | Estado: parte 1 PASA (21/21); parte 2 PASA (11/11); parte 3 PASA (7/7); parte B PASA (18/18); smoke B del owner pendiente (S-7)
 
 ## Precondiciones
 - **Red:** en la parte 1 no hay red local. Solo descargas de imágenes públicas y, en E-6, lecturas públicas de testnet sin claves.
@@ -383,7 +383,7 @@ E-1g da el mismo listado sin `/ctx/contracts/Published.toml` ni `/ctx/contracts/
   - T6-0/T6-1: se arrancó antes de la puerta por D-20261104-07 (167,48 h y 167,49 h);
   - T6-6 (2): el build usó la caché de (1);
   - T6-9d/T6-9e: el 403 de Slush se repite y el ícono remoto pasa al smoke B.
-- **Veredicto:** lo da el MID después del commit de T6-7 (MINOR-1).
+- **Veredicto:** PASA (revisión del MID en `REPORTES_RAILWAY_DEPLOY.md`, "Revisión TASK-6: PASA").
 
 ### Smoke B del owner (S-7; lo registra TASK-5 de #16, S-8)
 

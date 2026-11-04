@@ -1972,3 +1972,108 @@ Refs #15
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+---
+
+## Revisión TASK-6: PASA
+
+> Revisión del MID, paso 4 de la secuencia de §8 (v1.6.1, MINOR-1). Cubre el commit del orquestador con T6-7
+> (`0fef440`) sobre el commit de TASK-6 (`34ba273`), y cierra la revisión del paso 1 (más arriba).
+
+### Qué verifiqué (sin correr gates)
+- **`34ba273` (TASK-6):**
+  - trae los 6 archivos esperados (los 5 de §4 más este reporte);
+  - las correcciones mecánicas 1-3 del paso 1 están aplicadas: 17/17 en el SMOKE y en STATUS, y la fila de #15 con
+    "handoff v1.6.1" y D-20261104-07;
+  - el cuerpo dice `DL-8 at commit time: date -u = 2026-11-04T16:58:15Z`, ≥ 168 h desde el `published_at` de v26.13.0
+    (2026-10-28T16:57:41Z). DL-8 queda cumplida al commitear, y D-20261104-07 cubrió solo el arranque (O-1, cerrada);
+  - `Refs #15`, sin `Closes`.
+- **`0fef440` (T6-7):** toca solo `documents/SMOKE_RAILWAY_DEPLOY.md` y `documents/STATUS.md`:
+  - la fila T6-7, "Reporte final (parte B)" en 18/18, el `Estado` de la cabecera, la celda de runs de la baseline y el
+    `<sha>` = `34ba273` en la fila de #15;
+  - además marca ✅ el paso 12 del runbook de #8 en "Pendientes del usuario", porque el owner borró los directorios
+    temporales. Está fuera del alcance de TASK-6, pero es un hecho del owner en un archivo permitido. Se acepta.
+- **PR desechable #66:** `[no mergear] #15 TASK-6: N2b con BuildKit`, draft, `CLOSED`, sin merge (`mergedAt` nulo). La
+  branch ya no existe en `origin` (`git ls-remote`: 0). Se cumplen las condiciones de §8: draft, antes de S-7, sin merge
+  y branch borrada.
+- **Run A [41872958294](https://github.com/sdelvalle57/sui_battleship/actions/runs/41872958294)** (`pull_request`,
+  `73cd07e`): `deploy-image` success, con `Modo negativo…`, `OK (negativo): …` y `##[notice]`. `contracts`, `app` y
+  `framework-drift` también en success. **Con BuildKit, el patrón anclado no da un falso rojo.**
+- **Run B [41873209711](https://github.com/sdelvalle57/sui_battleship/actions/runs/41873209711)** (`pull_request`,
+  `38680f0`): `deploy-image` failure, con `FALLO: N2b: …` y `##[error]N2b: …`; los otros 3 jobs en success. Leí el log
+  crudo entero (223 líneas):
+  - el build es **BuildKit**: hay líneas `#21 0.172 …` y el resumen ` > [build 12/12] RUN set -eu; …`;
+  - el `[build 12/12]` confirma que la etapa `build` tiene **12** pasos, el `cmdTotal` de la v1.6. Con ancho 2, la
+    cabecera de `npm ci` es `[build  9/12]`, con dos espacios;
+  - el build cayó en `Dockerfile:17`, el `require` de `testnet.json`, y el extracto de BuildKit muestra las líneas
+    16-24. `RUN npm ci`, que está en `:13`, **no** aparece en el extracto, y el resumen ` > [build 12/12] …` empieza con
+    espacio;
+  - N2b se evalúa sobre el log completo del build (no sobre la cola), y su patrón está anclado a `^#[0-9]+ \[build +…`
+    o a `^Step …`. La única línea que podía coincidir es la cabecera `#<n> [build  9/12] RUN npm ci`. El
+    `FALLO: N2b` prueba, por eso, que la rama BuildKit coincide con la cabecera **con relleno**, y que el ` +` era
+    necesario: el literal con un solo espacio habría dado `OK (negativo)`;
+  - N1 y N2a pasaron, porque `fail` de N2b solo se alcanza después de los dos.
+  - En el log no hay claves ni secretos: las únicas rutas son las del runner de Actions, y no se pegan en ningún doc.
+- **CI del PR #65** en el head `0fef440`, [run 41873683751](https://github.com/sdelvalle57/sui_battleship/actions/runs/41873683751)
+  (`pull_request`): los 4 jobs en success.
+  - `deploy-image`: `Modo positivo…`, `P1 ok` … `P12 ok` y `OK (positivo): …` (P13) con `##[notice]`; P7 sobre
+    `/assets/index-B3BeMVQC.js` y P8 `zstd`. Es el **camino positivo con los IDs reales y Node 26.13.0 en la imagen**,
+    ya con BuildKit;
+  - `app`: 292 firmas, `found 0 vulnerabilities`, `Test Files 65 passed`, `Tests 1156 passed`,
+    `dist/assets/index-B3BeMVQC.js   917.80 kB │ gzip: 277.96 kB`. Sin delta contra §0 bis;
+  - `contracts`: 83/83, `node --test` 104/104, `check` = `1 despliegue(s) válidos y coherentes con Published.toml`.
+- **§R-6** sobre las líneas agregadas en `0fef440`:
+  - g1, g2 y g3: vacíos (los run IDs son decimales);
+  - g4: solo `2afd…c1d9` (Node, §3.1) y `164d…4ee5` (Caddy, §3.2), atribuidos;
+  - ninguna cuenta ni ruta personal.
+
+### Revisión TASK-6: PASA
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Sin hallazgos nuevos. H-1 y H-2 del paso 1 quedaron corregidos en `34ba273`, y O-1 se cerró con el commit a las 16:58:15Z | — |
+
+Checklist de M4:
+- **Alcance:** lo que pedía el handoff, ni más ni menos, salvo el ✅ del paso 12 de #8, aceptado. La HU de TASK-6 se
+  cumple.
+- **Seguridad:** sin secretos ni cuentas. La imagen sigue como `nobody`, con `--cap-drop=ALL`, y la CSP no cambia.
+- **Limpieza:** el script cambia solo en el bloque de N2b. Sin código muerto ni debug.
+- **Pruebas de N2b en los dos builders:**
+  - clásico (local): verde en T6-5 y rojo en T6-6;
+  - BuildKit (CI): verde en el run A y rojo en el run B.
+- **Positivo con los IDs reales:** P1-P13, en local (T6-8) y en la CI del PR.
+- **E-6 (T6-9a..g):** 0 violaciones de CSP, 0 pedidos a MVR y solo los errores de SUG-2.
+- **Gates de la CI del PR:** en verde y sin delta.
+- **Desviaciones:** las 9 están declaradas y aceptadas (paso 1).
+- **Docs (PROY-20):** `app/README.md`, STATUS y SMOKE parte B.
+
+**Precondición del checklist de Railway:** con este PASA, la mitad "TASK-6 de #15 en PASA" queda cumplida. La otra,
+"`deploy-image` del último run de `master` en verde por el camino positivo", se cumple con el run `push` del merge del
+PR #65. El orquestador la comprueba y anota el run ID en STATUS. **Recién ahí puede empezar S-7.**
+
+### Cambios mecánicos (orquestador, antes del merge o en el housekeeping)
+1. `documents/SMOKE_RAILWAY_DEPLOY.md:2`, en el `Estado`: `parte B: 18/18, veredicto del MID pendiente` →
+   `parte B PASA (18/18)`.
+2. `documents/SMOKE_RAILWAY_DEPLOY.md:386`: `- **Veredicto:** lo da el MID después del commit de T6-7 (MINOR-1).` →
+   `- **Veredicto:** PASA (revisión del MID en \`REPORTES_RAILWAY_DEPLOY.md\`, "Revisión TASK-6: PASA").`
+3. Commit propuesto para 1-2 y esta revisión, en la misma branch:
+   ```
+   docs: record the MID verdict for TASK-6 (#15)
+
+   TASK-6 passes: the BuildKit runs of the throwaway PR #66 show the
+   anchored N2b green on the negative path (run 41872958294) and red on
+   the induced failure (run 41873209711), and the CI of PR #65 runs the
+   positive path with Node 26.13.0 in the image. Sets the part B verdict
+   of the smoke.
+
+   Refs #15
+
+   Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+   ```
+4. **Después del merge (housekeeping):** anotar en STATUS el run `push` de `master` con `deploy-image` positivo, que es
+   la precondición de S-7. El run ID va en STATUS, no en el README. Este ciclo **no** se cierra: #15 sigue abierto hasta
+   S-8, y los artefactos `*_RAILWAY_DEPLOY.md` los borra el housekeeping de S-8 (o el de #17, TASK-6).
+
+### Siguiente paso
+- El body final del PR #65 está en `<scratchpad>/pr65_body.md`.
+- Después vienen la revisión de integración del MAYOR, publicada en el PR, el ready y el merge con merge commit.
+- El merge no publica nada, porque Railway todavía no está conectado (S-7).
