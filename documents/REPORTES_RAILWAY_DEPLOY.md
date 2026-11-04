@@ -806,3 +806,95 @@ La verificación 5 (rojo en un PR desechable) es opcional y no la hice.
 - **Snippet propuesto para `documents/STATUS.md`:**
   > #15 TASK-4: job `deploy-image` en `ci.yml`. Corre `bash app/scripts/check-deploy-image.sh . 8080`, sin Actions nuevas, sin `permissions`/`secrets`/`if:`, no requerido; actionlint 1.7.12 da 0 hallazgos (con `-no-color`). Además, N2 del script endurecido en N2a (línea de salida de la guarda, sin ANSI, prefijo opcional de BuildKit) y N2b (sin `RUN npm ci`). shellcheck 0; negativo real `exit=0`; rojo provocado `exit=1` por N2b; Docker limpio por línea base. Gate `app` sin delta (915/57, 901.45 kB). Pendiente: run del PR con `deploy-image` verde por el camino negativo y la línea de N2a con BuildKit.
 =====
+
+## Revisión TASK-4: PASA
+
+> Revisor: MID | Fecha: 2026-11-04 | Contra: HANDOFF_RAILWAY_DEPLOY v1.2 (`78b1a50`), TASK-4 §3, §3 bis, §5 y §7, el
+> diff real de `f146097` y la CI del draft PR #57. Sin gates propios (D-20261030-02); las lecturas de la CI son con
+> `gh api`.
+
+### Verificación contra el diff real (`git show f146097`)
+- **`.github/workflows/ci.yml`:** +15/−0, solo el job `deploy-image` entre `app` y `framework-drift`, idéntico al YAML
+  de §3:
+  - `ubuntu-24.04`, 15 min, `bash`;
+  - `actions/checkout@3d3c42e5…0b1 # v7.0.1` (el mismo SHA que los otros jobs) con `persist-credentials: false`;
+  - un solo step `bash app/scripts/check-deploy-image.sh . 8080`;
+  - sin `permissions`, `secrets` ni `if:`, y sin Actions nuevas.
+  - `on:`, `permissions`, `concurrency`, `env` y los otros jobs no cambiaron.
+- **`app/scripts/check-deploy-image.sh`:** +11/−2, solo N2, idéntico al contrato v1.2:
+  - `sed` de los códigos ANSI a `$log.plain` en un paso propio (sin `sed | grep -q`, por `pipefail`);
+  - N2a, con la regex del handoff y el prefijo opcional `#<n> <s> `;
+  - N2b como `if grep -qE 'RUN npm ci' …; then fail`, equivalente a `! grep -qE`;
+  - mensajes literales de §3 bis;
+  - `$log.plain` vive en el `mktemp -d` que borra el trap.
+  - El resto del script no cambió.
+- **Verificaciones de §5:**
+  - **1, actionlint:** exit 0 y 0 hallazgos, con `-no-color` (ver desviación). El `ci.yml` de HEAD también da 0, así
+    que el delta es 0, y shellcheck estuvo activo dentro de actionlint.
+  - **2, diff:** solo el bloque.
+  - **3a, shellcheck:** 0.
+  - **3b, negativo real:** `exit=0`. N2a coincide **solo** con la línea 19, la de salida. Ya no acepta la 17
+    (`Step 5/19 : RUN …`) ni la 21 (`The command …`), y N2b da 0.
+  - **3c, rojo provocado:** `exit=1` por **`FALLO: N2b`**. N1 pasa porque el build cae en el Step 13, y N2a pasa
+    porque la guarda imprime. Es justo la regresión que el N2 viejo dejaba pasar (MINOR-1 de TASK-2: **cerrado**).
+  - **3d, limpieza:** por línea base, 13 imágenes nuevas borradas por ID, sin `prune`. Lo confirmé por mi cuenta:
+    `docker ps -a` muestra solo los 2 contenedores ajenos y `docker images -a` solo `postgres` ×2 y `busybox`.
+- **Verificación 4, la CI.** Lo leí con `gh api`: run **41802734452** (`pull_request` sobre `f146097`, PR #57 en
+  draft) con `contracts`, `app`, `framework-drift` y **`deploy-image` en success**. `deploy-image` duró 10 s: la
+  guarda corta en el primer `RUN`. El log del job dice `Modo negativo…`, después `OK (negativo): …` y la anotación
+  `##[notice]`.
+- **Gate `app`:** `EXIT=0`, 915/57, 0/0, 901.45 kB con el mismo hash. Sin delta. `contracts/` sin cambios.
+- **NIT-1 de TASK-2:** resuelto. Ya no existen los restos de #15 en el scratchpad (perfil de Chrome, `home-15`,
+  `xdg-15`, `cdp*`, PIDs, `v3.*`).
+
+### La línea literal de BuildKit (pregunta del orquestador)
+**Con esto alcanza; no hace falta ajustar el script.** En modo negativo, el script solo llega a `OK (negativo)` si
+**N2a coincidió** y **N2b no**. Con BuildKit `--progress=plain`, las únicas líneas que contienen la subcadena son:
+- la del vértice (`#n [build k/m] RUN test -f … echo "ERROR (#15)…"`), que empieza con `#n [`;
+- la de salida (`#n <s> ERROR (#15): falta …`);
+- el `ERROR: failed to solve: process "… echo \"ERROR (#15)…"`;
+- el extracto del Dockerfile (`  9 | >>> RUN …`).
+
+De esas, solo la de salida cumple el ancla `^(#n <s> )?ERROR \(#15\)`. Por lo tanto el verde del run 41802734452
+**es** la prueba de que BuildKit emitió la línea de salida de la guarda y cortó antes de `npm ci`. Agregar un
+`::debug::` sumaría código a un camino que deja de correr cuando llegue #8; no aporta. Queda registrado en el handoff
+v1.3, en el changelog y en TASK-4 §5.4.
+
+### Desviaciones declaradas
+| # | Desviación | Dictamen |
+|---|---|---|
+| 1 | actionlint con `-no-color` en lugar de `-color=never` | ✅ Error del handoff: en actionlint 1.7.12, `-color` es booleano y `-color=never` sale con exit 2. Se corrige en el **handoff v1.3** (TASK-4 §5.1), y TASK-5 tiene que usar `-no-color` si lo documenta |
+| 2 | `TMPDIR` en el scratchpad y build repetido para mostrar la línea de N2a | ✅ El mismo criterio ya aceptado en TASK-2; el build repetido se limpió en 3d |
+
+### Nota de proceso (no es hallazgo)
+El orquestador commiteó `f146097` antes de esta revisión para obtener la verificación 4, que solo existe con el run
+real del PR. Es razonable: el commit lo dice ("pending MID review"), el PR está en draft y la revisión da PASA, así
+que no hace falta ningún commit de corrección. El PR #57 sigue en draft hasta que terminen TASK-5 y TASK-3.
+
+### Hallazgos
+| # | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|
+| — | — | — | Ninguno en el entregable | — |
+
+### Siguiente paso
+**TASK-5 autorizado** (docs) con el **handoff v1.3**, sin esperar a TASK-3:
+- usar `-no-color` en cualquier mención de actionlint;
+- documentar N2a/N2b como los dos chequeos del modo negativo;
+- incluir el criterio de DL-8 (versión, no digest) que pidió la v1.2;
+- **anotar** (no reescribir) las filas históricas de STATUS con "→ #N".
+
+TASK-3 sigue esperando a que se libere la localnet de #14.
+
+### Mensaje de commit propuesto (handoff v1.3; TASK-4 ya está en `f146097`)
+```
+docs: Railway deploy handoff v1.3 (#15)
+
+From the MID review of TASK-4 (PASA): actionlint 1.7.12 takes -no-color,
+not -color=never; and the green negative path on BuildKit (run
+41802734452) is the N2a evidence, since only the guard's output line can
+satisfy the anchored regex, so no extra debug output is added.
+
+Refs #15
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```

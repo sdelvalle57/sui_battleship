@@ -1,6 +1,6 @@
 # HANDOFF_RAILWAY_DEPLOY
 > Plan: PLAN_RAILWAY_DEPLOY v1.1 (aprobado por el MAYOR en la ronda 2; commit `4e7d1a3`) | Issue: #15 |
-> Branch: `feature/issue-15-pages-deploy` | Versión: v1.2 | Fecha: 2026-11-04
+> Branch: `feature/issue-15-pages-deploy` | Versión: v1.3 | Fecha: 2026-11-04
 > Decisiones: D-20261104-03 (P-1..P-5 de este plan, tomadas por delegación), D-20261104-01 (delegación y hosting en
 > Railway; llega a `master` con #14), D-20261102-02, D-20261030-13.
 > Este handoff es **autocontenido**. El plan v1.1 tiene el porqué de cada decisión (DL-1..DL-13); acá está lo que hay
@@ -8,6 +8,14 @@
 
 ## Changelog
 
+- **v1.3 (2026-11-04):** surge de la revisión del MID de TASK-4 (PASA).
+  - actionlint 1.7.12 no acepta `-color=never`: `-color` es booleano y ese valor sale con exit 2. El flag correcto es
+    **`-no-color`**. Se corrige en TASK-4 §5.1, y TASK-5 tiene que usar `-no-color` si lo documenta.
+  - **Evidencia de N2a con BuildKit:** alcanza con que `deploy-image` haya quedado verde por el camino negativo en el
+    run del PR (41802734452 sobre `f146097`). El script no imprime el log de un build exitoso, y en modo negativo
+    llegar a `OK (negativo)` exige que N2a coincida. Con BuildKit, la única línea que puede coincidir es la de salida
+    de la guarda: el `ERROR: failed to solve …` y el extracto del Dockerfile no empiezan con `ERROR (#15)`. No se
+    agrega ningún `::debug::`.
 - **v1.2 (2026-11-04):** surge de la revisión del MID de TASK-2 (PASA). Afecta solo a TASK-4 y TASK-5; TASK-2 ya está
   aprobado con el contrato v1.1.
   - **MINOR-1 de TASK-2:** N2 se endurece en dos chequeos, N2a y N2b (§3.4).
@@ -520,7 +528,7 @@ Un job nuevo, después de `app` y antes de `framework-drift`:
 
 ### 5. Tests / verificaciones
 1. **actionlint** en un contenedor desechable:
-   `docker run --rm -v <repo>:/repo:ro -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color=never .github/workflows/ci.yml`.
+   `docker run --rm -v <repo>:/repo:ro -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -no-color .github/workflows/ci.yml`.
    Tiene que dar 0 hallazgos en todo el workflow. El archivo va explícito porque en un worktree `.git` es un archivo
    que apunta a un gitdir del host que no está montado, y la detección del proyecto podría fallar. Si aparecen hallazgos en jobs **viejos**, se declaran sin tocarlos y el delta
    tiene que ser 0. Fallback, si no se puede descargar la imagen:
@@ -541,9 +549,8 @@ Un job nuevo, después de `app` y antes de `framework-drift`:
    - **3d, limpieza por línea base,** como C-1: línea base antes de 3b, borrar solo los IDs nuevos (intermedias
      `<none>` y las bases que no estaban), sin `prune`; `rm -rf <scratchpad>/n2-15`; `:8090` libre.
 4. **En el PR**, que el orquestador pushea después de la revisión: el run tiene `deploy-image` verde **por el camino
-   negativo** (el `::notice::` de N3 en el log) y `contracts`/`app` sin cambios. El orquestador anota el run ID y
-   pega del log de BuildKit la línea que cumplió N2a, para que quede probado que el prefijo con BuildKit es el
-   esperado.
+   negativo** (el `::notice::` de N3 en el log) y `contracts`/`app` sin cambios. El orquestador anota el run ID. Que el
+   camino negativo dé verde con BuildKit alcanza como evidencia de N2a (v1.3); no hace falta pegar la línea.
 5. Opcional, recomendado: un rojo provocado en un PR desechable, cerrado sin merge, con el Dockerfile **sin** la
    guarda de §3.2 paso 3. Tiene que fallar en N1 o N2.
 
