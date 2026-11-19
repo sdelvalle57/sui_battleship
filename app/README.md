@@ -68,9 +68,12 @@ testnet. El build de testnet que se publica sale de la CI o de un checkout limpi
 
 ## Despliegue (Railway)
 
-Hosting en Railway (D-20261104-01, D-20261104-03; #15). El repo deja la imagen lista. Crear y conectar el servicio y
-publicar es del owner: el checklist completo está en "Conectar Railway (owner, no delegable)", más abajo. **URL
-pública: se completa después de #8.**
+Hosting en Railway (D-20261104-01, D-20261104-03; #15). Conectado por el owner el 2026-11-19 (S-7). **URL pública:
+[sui-battleship-app-production.up.railway.app](https://sui-battleship-app-production.up.railway.app).** Railway
+publica cada push a `master` que toca las watch paths (paso 5 del checklist), cuando la CI termina en verde (*Wait for
+CI*). D-20261119-02 (N-2) preautoriza esos merges si llevan publicada la revisión de integración del MAYOR. El
+checklist con el que se conectó está en "Conectar Railway (owner, no delegable)", más abajo, para reconectar o para un
+servicio nuevo.
 
 ### La imagen
 
@@ -163,8 +166,10 @@ presente, y el script verifica que la cabecera no esté.
       igual con `Origin: https://example.com` (revisión de PR #48), así que puede repetirse en la URL pública. En E-6
       de TASK-6 de #15, con la app real y los IDs de testnet, pasó lo mismo: la metadata no respondió y el ícono
       siguió siendo el `data:`.
-    - Conclusión: el ícono remoto **quedó sin medir** y pasa al **smoke B** del owner, en la URL pública. Si en el
-      smoke B no aparece el error, el ícono remoto se mide ahí.
+    - Conclusión: el ícono remoto **sigue sin medir**. En el smoke B (S-7) el owner usó la extensión de Slush, y con
+      ella el kit no pide la metadata (`registerSlushWallet`, `@mysten/slush-wallet` 1.3.5). Queda como observación de
+      #17, con un perfil de navegador sin la extensión. Si aparece una violación de `img-src`, se sigue el caso
+      previsto arriba.
   - `'unsafe-inline'` solo en `style-src`, y solo si TASK-3 mide una violación real.
 
 **Fallback a `Report-Only`** (P-2, D-20261104-03 (2)):
@@ -215,7 +220,8 @@ presente, y el script verifica que la cabecera no esté.
 - **CI:**
   - el job `deploy-image` de `.github/workflows/ci.yml` corre el mismo script (`. 8080`) en cada PR y en cada push a
     `master`; desde #8, por el camino positivo con los IDs reales;
-  - **no es check requerido** (N-4 es decisión del owner); Railway lo espera con *Wait for CI*.
+  - **es check requerido** de `master` desde el 2026-11-19, junto a `contracts` y `app` (N-4, D-20261119-02); Railway
+    lo espera con *Wait for CI*.
 - **Al tocar `ci.yml`:**
   - actionlint en un contenedor desechable, con el archivo explícito:
     `docker run --rm -v <repo>:/repo:ro -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -no-color .github/workflows/ci.yml`.
@@ -224,8 +230,9 @@ presente, y el script verifica que la cabecera no esté.
 
 ### Conectar Railway (owner, no delegable)
 
-Solo el owner, después de #8. **Aviso (N-2):** desde el paso 3, cada merge a `master` que toque las watch paths del
-paso 5 **publica el sitio**.
+Solo el owner. **Hecho el 2026-11-19 (S-7)**; se repite para reconectar o para un servicio nuevo. **Aviso (N-2):** desde
+el paso 3, cada merge a `master` que toque las watch paths del paso 5 **publica el sitio**, preautorizado por
+D-20261119-02.
 
 1. **Precondiciones:**
    - TASK-6 de #15 en PASA;
@@ -233,8 +240,8 @@ paso 5 **publica el sitio**.
 2. Railway → **New Project** → **Deploy from GitHub repo**. La **GitHub App de Railway** se autoriza solo para
    `sdelvalle57/sui_battleship`.
 3. Servicio → Settings → Source: rama **`master`**; **Wait for CI: activado**; **entornos de PR: desactivados**.
-4. Build: Railway usa el `Dockerfile` de la raíz ("Using detected Dockerfile!"). **No** definir
-   `RAILWAY_DOCKERFILE_PATH` ni comandos de build o start.
+4. Build: Railway usa el `Dockerfile` de la raíz ("Using detected Dockerfile!"). Settings → Build: builder
+   **Dockerfile**; Start command y Pre-deploy command **vacíos**. **No** definir `RAILWAY_DOCKERFILE_PATH`.
 5. Watch paths, en formato gitignore. Si las negaciones no se respetaran, un cambio de docs o tests solo redespliega
    un `dist` idéntico.
    ```
@@ -264,21 +271,25 @@ paso 5 **publica el sitio**.
 7. Networking → **Generate Domain** (`<servicio>.up.railway.app`), con **el puerto que propone Railway**.
 8. Primer deploy: pasa por `WAITING` (Wait for CI), el build queda verde y el healthcheck da 2xx. Si no arrancó
    solo, **Deploy latest commit**.
+   Si falla en "Create container" con `The executable npm could not be found`, Railway intentó arrancar la imagen de
+   Caddy con `npm`: en Settings, builder **Dockerfile** y **sin** Start command ni Pre-deploy command (paso 4), y
+   redeploy. Pasó en el primer deploy de S-7.
 9. Smoke B con la wallet de extensión del owner, en la URL pública:
    - `testnet · nodo OK`, conectar la wallet (Slush), el lobby, y recargar `#/my-games` y `#/game/<id>`;
    - consola sin violaciones de CSP, incluido el ícono remoto de Slush. Por el 403 de Cloudflare de `api.slush.app`,
      se admiten **solo** los mensajes del pedido a `https://api.slush.app/api/wallet/metadata` (el bloqueo de CORS y
      `net::ERR_FAILED`/403) y el `console.error: Error fetching metadata TypeError: Failed to fetch` del kit, con
-     "Slush" listado en el modal. Cualquier otro error de consola o de red es rojo. Si esos mensajes no aparecen, el
-     ícono remoto se mide ahí;
+     "Slush" listado en el modal. Cualquier otro error de consola o de red es rojo. Si esos mensajes no aparecen y el
+     navegador no tiene la extensión de Slush, el ícono remoto se mide ahí (con la extensión, el kit no pide la
+     metadata);
    - `curl -sS -D - -o /dev/null <URL>` (GET: con HEAD, el `encode` de Caddy 2.11.7 falla) con las cabeceras de la
      tabla de arriba. Si el borde de Railway agrega un `Server` propio (o cabeceras `x-railway-*`), se anota su valor
      y no es rojo: lo que se quita es el `Server` de Caddy.
 
    Si la wallet no conecta por la CSP, avisar: fallback a `Report-Only`, solo para la CSP. Si algo falla,
    **rollback** desde Deployments **o pausar** el servicio.
-10. Dejar registrado (N-2) si los merges a `master` con CI verde quedan preautorizados como publicación del sitio, y
-    opcionalmente (N-4) agregar `deploy-image` a los checks requeridos.
+10. N-2 y N-4: ✅ D-20261119-02 (2026-11-19). Los merges a `master` con la CI en verde y la revisión del MAYOR quedan
+    preautorizados como publicación del sitio, y `deploy-image` es check requerido.
 
 ### Versiones de las imágenes (DL-8)
 
@@ -413,7 +424,10 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
     abiertas en `Pending`; las más recientes primero;
   - **cota inferior** = máx(checkpoint de la **publicación**, piso del nodo + 16 000). La publicación sale de
     `publishTxDigest` de `contracts/deployments/<red>.json`; el piso (`lowestAvailableCheckpoint`) se relee al inicio de
-    **cada** página; el margen solo se suma con piso > 0;
+    **cada** página; el margen solo se suma con piso > 0. Si el nodo ya podó la publicación, `fetchPublishCheckpoint` da
+    `null` y la cota es solo piso + 16 000 (`kind` `node_floor`): las listas muestran la nota o el sufijo
+    `(desde <fecha>)`, salvo «Sin partidas abiertas en lo revisado» con más páginas por revisar. En testnet pasa con
+    la publicación de #8 (checkpoint 402798973; piso 404332001 el 2026-11-19);
   - paginación acotada y calibrada en #10 (sondas P5/P7): **50** eventos por pedido, hasta **2** pedidos por página,
     objetivo de **20** abiertas por página, margen de **16 000** checkpoints (≈ 1 h a ≈ 4,36 checkpoints/s);
   - un cursor que no avanza es un error visible (`PaginationStalledError`, M-2) y solo deja "Actualizar";

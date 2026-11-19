@@ -1,5 +1,5 @@
 # SMOKE_RAILWAY_DEPLOY, parte A (local, antes de #8)
-> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: 2026-11-04 | Estado: parte 1 PASA (21/21); parte 2 PASA (11/11); parte 3 PASA (7/7); parte B PASA (18/18); smoke B del owner pendiente (S-7)
+> Plan: PLAN_RAILWAY_DEPLOY v1.1 | Issue: #15 | Fecha: 2026-11-04 | Estado: parte 1 PASA (21/21); parte 2 PASA (11/11); parte 3 PASA (7/7); parte B PASA (18/18); smoke B del owner PASA (6/6, S-7, 2026-11-19; registrado en S-8)
 
 ## Precondiciones
 - **Red:** en la parte 1 no hay red local. Solo descargas de imágenes públicas y, en E-6, lecturas públicas de testnet sin claves.
@@ -393,9 +393,16 @@ wallet.
 
 | # | Acción | Resultado esperado | Resultado obtenido | Estado |
 |---|--------|--------------------|--------------------|--------|
-| B-1 | Abrir `<URL>` | `testnet · nodo OK` | (lo registra S-8) | ⏳ |
-| B-2 | Conectar la wallet (Slush) | Conecta, sin violación de CSP. Si no conecta por la CSP: el fallback a `Report-Only`, solo para la CSP (D3), y un issue | (lo registra S-8) | ⏳ |
-| B-3 | El lobby | Las partidas reales o el texto honesto | (lo registra S-8) | ⏳ |
-| B-4 | Recargar `#/my-games` y `#/game/<id>` | Las dos rutas cargan después de recargar | (lo registra S-8) | ⏳ |
-| B-5 | Consola | 0 violaciones de CSP, incluido el ícono remoto de Slush. Límite de SUG-2, el mismo que T6-9g (MINOR-4): se admiten **solo** los mensajes del pedido a `https://api.slush.app/api/wallet/metadata` (el bloqueo de CORS y `net::ERR_FAILED`/403) y el `console.error: Error fetching metadata TypeError: Failed to fetch`, con "Slush" en el modal. Cualquier otro error es rojo. Si esos mensajes no aparecen, el ícono remoto se mide acá | (lo registra S-8) | ⏳ |
-| B-6 | `curl -sS -D - -o /dev/null <URL>` (GET) | La CSP idéntica a la del `Caddyfile`, las 5 cabeceras de seguridad y `Cache-Control: no-cache`, sin COOP y sin el `Server` de Caddy. Si el borde de Railway agrega un `Server` propio (o cabeceras `x-railway-*`), se anota su valor y no es rojo (SUG-1) | (lo registra S-8) | ⏳ |
+| B-1 | Abrir `<URL>` | `testnet · nodo OK` | `owner: "veo todo bien"` (comentario de S-7, 2026-11-19). El indicador `testnet · nodo OK` es el de la tabla del comentario, que llenó el orquestador; el owner no copió el texto | ✅ |
+| B-2 | Conectar la wallet (Slush) | Conecta, sin violación de CSP. Si no conecta por la CSP: el fallback a `Report-Only`, solo para la CSP (D3), y un issue | `owner: "veo todo bien"`: Slush conecta, sin violación de CSP (B-5); sin fallback a `Report-Only` | ✅ |
+| B-3 | El lobby | Las partidas reales o el texto honesto | `owner: "veo todo bien"`: el lobby carga. El texto exacto no se registró; con la publicación de #8 podada, lo esperado es `historial disponible del nodo (desde <fecha>)` (lo mide O-5 de #17) | ✅ |
+| B-4 | Recargar `#/my-games` y `#/game/<id>` | Las dos rutas cargan después de recargar | `owner: "veo todo bien"`: `#/my-games` y `#/game/<GAME>` (la partida de #8, la de T6-9b) cargan después de recargar | ✅ |
+| B-5 | Consola | 0 violaciones de CSP, incluido el ícono remoto de Slush. Límite de SUG-2, el mismo que T6-9g (MINOR-4): se admiten **solo** los mensajes del pedido a `https://api.slush.app/api/wallet/metadata` (el bloqueo de CORS y `net::ERR_FAILED`/403) y el `console.error: Error fetching metadata TypeError: Failed to fetch`, con "Slush" en el modal. Cualquier otro error es rojo. Si esos mensajes no aparecen, el ícono remoto se mide acá | `owner: "Ningún error rojo"`: 0 violaciones de CSP y ningún error fuera de lo admitido. Ícono remoto **no concluyente**: con la extensión de Slush, el kit no pide la metadata (`@mysten/slush-wallet` 1.3.5, `registerSlushWallet`), así que la falta del 403 no prueba que haya respondido; `curl` público a `api.slush.app` en 403 (2026-11-19). Seguimiento en #17 (perfil sin la extensión) | ✅ (ícono remoto sin medir) |
+| B-6 | `curl -sS -D - -o /dev/null <URL>` (GET) | La CSP idéntica a la del `Caddyfile`, las 5 cabeceras de seguridad y `Cache-Control: no-cache`, sin COOP y sin el `Server` de Caddy. Si el borde de Railway agrega un `Server` propio (o cabeceras `x-railway-*`), se anota su valor y no es rojo (SUG-1) | `orquestador (2026-11-19 18:53Z):` CSP idéntica a la de `app/Caddyfile`; `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy` y HSTS; `Cache-Control: no-cache` en `/`; sin COOP; `Server: railway-hikari` y `x-railway-*` del borde de Railway, anotados y no rojos (SUG-1); `/assets/index-B3BeMVQC.js` (= CI) 200 `immutable` con `zstd`; `/no-existe` 404 | ✅ |
+
+#### Reporte final (smoke B)
+- **PASA/TOTAL:** **6/6** (B-1..B-6).
+- **Observaciones:** el primer deploy automático falló por la configuración de Railway (`npm`), no por la imagen; se
+  corrigió en Settings y no es paso del smoke. B-5 no mide el ícono remoto de Slush: con la extensión, el kit no pide la
+  metadata, y `api.slush.app` sigue en 403 por `curl`. Queda sin medir, con seguimiento en #17.
+- **Veredicto:** **PASA**. Cierra el criterio de #15 "smoke B registrado" (D-20261104-05 (2)).
