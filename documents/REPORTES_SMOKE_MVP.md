@@ -2210,3 +2210,1398 @@ Refs #17
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+---
+
+## TASK-3 y TASK-4
+
+> Reporte del DEV con los anexos de cada bloque y las revisiones del MID (texto plano en el scratchpad, copiado tal cual por el orquestador tras leerlo y pasar los greps §R-6 y la búsqueda de las cuentas A/B/C: 0 coincidencias). Issues creados por el orquestador: #70, #71, #72 y #73.
+
+## Task completado: HANDOFF_SMOKE_MVP — TASK-3 (precondiciones públicas, paso 0)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-17-mvp-smoke` @ `296c07b` (worktree `<repo>` = Battleship-issue17). `296c07b` es el merge de `master`
+`M` = `77bb49c` en la branch. Árbol limpio al empezar; al terminar, solo `?? documents/SMOKE_MVP.md`. Sin commits ni push.
+
+### Archivos modificados/creados
+- En el repo: `documents/SMOKE_MVP.md` (nuevo, sin commitear), copiado del Anexo A v1.3.1 con `diff` vacío (líneas
+  1108-1181 del handoff) y después llenado: cabecera, Precondiciones y filas 0.1-0.7 y N-a. El resto queda en ⏳.
+- En `<scratchpad>/smoke17-probe/` (no se commitea, DL-2):
+  - `verify-mvp.mjs`: **sobrescrito** con una extracción nueva del Anexo B v1.3.1, `diff` vacío (paso 1). Había una
+    copia de TASK-2c. No se usó: se comparó con `cmp` después de la extracción y era idéntica;
+  - `digests.json`: reescrito con `{}`;
+  - `state.json`: **nuevo**, del `pre` de este task. **Se conserva para TASK-4**;
+  - `out-t3-0.1-check.txt`, `out-t3-pre.txt` (con `exit=` en la última línea, 🔵 1 de la revisión de TASK-2c) y
+    `out-t3-pre.time`;
+  - los crudos de TASK-2c (`out-pre.txt`, `out-c6-*.txt`, `testnet.json`) quedan sin tocar. El `testnet.json` viejo es
+    igual byte por byte al del worktree (`cmp`), pero esta corrida usó `<repo>/contracts/deployments/testnet.json`.
+- `<scratchpad>/bundle17/`: `index.html`, `bundle.js` (lo que sirve Railway), `out-0.2-index.txt`, `out-0.2-bundle.txt`.
+- `<scratchpad>/n17/`: `na.mjs` (script de N-a, no se commitea), `out-na.txt` y `out-na-b.txt`.
+- `<scratchpad>/ci-m17/`: logs de los 4 jobs de la CI de `M` (run 44621915244).
+- Perfiles de Chrome `<scratchpad>/chrome-17a` y `chrome-17b`: borrados al terminar.
+- Este reporte: `<scratchpad>/REPORTE_TASK3_17.txt`.
+
+### Qué se implementó (3 líneas máx)
+Se creó `SMOKE_MVP.md` desde el Anexo A, con las Precondiciones y el paso 0 llenos. 0.1, 0.3-0.6 y N-a quedan en ✅. 0.2
+tiene el `curl` hecho pero espera el commit del deploy, y 0.7 espera al owner. `pre` (DL-12) dio F0 = 0 y K0 = 408454921,
+y su `state.json` queda para TASK-4. Baseline de `M` re-declarado desde su CI. Sin firmas, sin claves y sin `sui`.
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados: ninguno. El task no toca código, así que no corre gates (handoff §0).
+- Contracts y App: no aplica. Tablas de contrato y `app/src/sui/`: no aplica.
+
+#### Baseline de `M` = `77bb49c` (re-declarado desde la CI, `gh api`)
+Run [44621915244](https://github.com/sdelvalle57/sui_battleship/actions/runs/44621915244) (push a `master`, 21:45:13Z).
+Los cuatro jobs dieron `success`: `app`, `contracts`, `deploy-image` y `framework-drift`. Los valores salen de sus logs:
+
+| Área | Valor (log de la CI de `77bb49c`) |
+|---|---|
+| Sui CLI / Node / npm | `sui 1.83.0-16d2dc1e05ed` / `node: v26.13.1` (setup-node con `.nvmrc` = `26`) / npm `11.20.0`. La imagen usa `node:26.13.0` (`Dockerfile:4`) y en local hay v26.13.0 |
+| contracts | `Test result: OK. Total tests: 83; passed: 83; failed: 0`; scripts `ℹ tests 104` / `ℹ fail 0`; `1 despliegue(s) válidos y coherentes con Published.toml` |
+| app | `Test Files  65 passed (65)` / `Tests  1156 passed (1156)`; `found 0 vulnerabilities`; `292 packages have verified registry signatures`; `dist/assets/index-B3BeMVQC.js   917.80 kB │ gzip: 277.96 kB` |
+| imagen | `OK (positivo)`, P1-P12; P7/P8 sobre `/assets/index-B3BeMVQC.js` |
+| `framework-drift` | success, con el aviso H13 informativo `CLI atrasada: testnet en PV 142, la CLI 1.83.0 llega a 140` |
+
+Delta contra el §0 del handoff (`376412f`): **ninguno en gates**. Entre `376412f` y `77bb49c`:
+- `30e1405` (#68) toca `.github/workflows/ci.yml`, solo un comentario;
+- todo lo demás son docs.
+
+`app/src/`, `contracts/`, el lockfile, el `Dockerfile` y `.dockerignore` no cambian. El bundle de PR #68
+(run 44620329979) también es `index-B3BeMVQC.js 917.80 kB`.
+
+Observación para el MID: el §0 del handoff dice `v26.13.0` para la CI. La CI de `376412f` (run 44590519441) ya decía
+`node: v26.13.1`, igual que la de `M`, así que no es un delta nuevo. El texto del §0 mezcla el Node local con el de
+la CI. No afecta a nada.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+Sin localnet y sin transacciones propias. Se leyó, sin firmar, el digest `BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw`
+(`previousTransaction` de la House, podado). Comando base de la sonda, con Node v26.13.0 por ruta absoluta y cwd
+`<repo>/app`:
+
+```
+cd <repo>/app && "$NODE" --input-type=module - --deployment <repo>/contracts/deployments/testnet.json \
+  --url https://fullnode.testnet.sui.io:443 --digests <scratchpad>/smoke17-probe/digests.json \
+  --state <scratchpad>/smoke17-probe/state.json --block pre < <scratchpad>/smoke17-probe/verify-mvp.mjs
+```
+
+#### Paso 1 (punto 3 del pedido). Extracción del Anexo B y `diff` (21:51:08Z)
+
+Desde `## Anexo B` (línea 1184), el bloque entre la apertura ```js (1195) y su cierre (1986), con `sed -n`, a
+`<scratchpad>/smoke17-probe/verify-mvp.mjs`. **Sobrescribe** la copia de TASK-2c:
+
+```
+anexo=1184 open=1195 close=1986
+790 <scratchpad>/smoke17-probe/verify-mvp.mjs
+diff exit=0
+copia previa (TASK-2c) identica al Anexo B
+// verify-mvp.mjs: sonda de verificación del smoke del MVP (#17, HANDOFF_SMOKE_MVP v1.3.1 §Sonda). Solo lecturas gRPC.
+process.exit(failed === 0 ? 0 : 1);
+```
+
+`diff` vacío. La fuente fue solo el Anexo B del handoff de `296c07b`. Igual que en TASK-2c, el SDK cargó por la misma
+vía: `import('@mysten/sui/grpc')` → `ok`, exit 0, con el `node_modules` de la raíz del worktree y sin `npm ci`.
+
+#### 0.1. `check` (`out-t3-0.1-check.txt`)
+
+```
+2026-11-19T21:51:13Z
+v26.13.0
+1 despliegue(s) válidos y coherentes con Published.toml
+exit=0
+```
+
+Se corrió en `296c07b`. `git diff --quiet 77bb49c HEAD -- contracts/ app/ Dockerfile .dockerignore package.json
+package-lock.json` da igual: la branch solo suma docs de #17 sobre `M`. → ✅
+
+#### 0.2. `curl` del bundle servido (`<scratchpad>/bundle17/`)
+
+```
+2026-11-19T21:51:19Z
+index HTTP 200 464B
+curl exit=0
+(ruta en index.html: /assets/index-B3BeMVQC.js, una sola)
+2026-11-19T21:51:26Z
+bundle /assets/index-B3BeMVQC.js
+bundle HTTP 200 917804B content-type text/javascript; charset=utf-8
+curl exit=0
+packageId: 1 lineas, 2 ocurrencias
+houseId: 1 lineas, 1 ocurrencias
+publishTxDigest: 1 lineas, 1 ocurrencias
+```
+
+- Los tres valores se leyeron con `jq -r` de `<repo>/contracts/deployments/testnet.json` a variables y nunca se
+  imprimieron. `grep -c` da ≥ 1 en los tres, y HTTP 2xx en `/` y en el bundle.
+- **Bundle servido contra la CI de `M`:** el nombre es el mismo, `index-B3BeMVQC.js`, en el run 44621915244 de `M` y en el
+  44620329979 de PR #68. El tamaño también: 917804 B = `917.80 kB`. El nombre lleva el hash de contenido de Vite.
+- **Commit del deploy:** los merges de solo docs no redespliegan Railway, porque los docs no están en las watch paths
+  (`app/README.md:245-266`).
+  - Desde `376412f`, el último merge que tocó una watch path (`Dockerfile`), hasta `77bb49c`, lo único que cambia dentro
+    de las watch paths es `app/README.md`, excluido por `!app/README.md`.
+  - Así que el deploy activo puede ser de un commit anterior a `M`, con el mismo `dist`.
+  - El commit lo da el owner: `⏳ owner`.
+- → **⏳** hasta que llegue el commit. El `curl` cumple lo esperado.
+
+#### 0.3-0.6. Sonda `pre` (`out-t3-pre.txt`; **inicio 2026-11-19T21:52:20Z**, fin 21:52:53Z, 33 s)
+
+`state.json` nuevo (no existía ningún `state*.json` antes), `digests.json` = `{}`:
+
+```
+BLOQUE pre · red testnet · paquete 0x8b78…6f51
+CHECK 0.3 PASA chain id 4c78adac, json 4c78adac
+CHECK 0.4.shared PASA House 0x54ee…eb1a Shared y tipo exacto: true
+CHECK 0.4.fee_rate PASA fee_rate 200
+CHECK 0.4.min_bet PASA min_bet 1000000
+CHECK 0.4.max_bet PASA max_bet 50000000000
+CHECK 0.4.version PASA version 1
+INFO F0 = 0 · K0 = 408454921 (altura 408455921 − 1000 leída antes de la House: previousTransaction BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw debajo del piso 404332001 (DL-12))
+CHECK 0.5.cap PASA HouseCap 0xcf08…37fe con dueño AddressOwner (CAP)
+INFO sin dcap: 0.5 solo con el dueño actual
+CHECK 0.6 PASA desde el checkpoint 404348001 (piso + 16000: lo anterior no es visible): 0 GameCreated, 0 GameResolved
+INFO K0 por altura coherente: 0 GameResolved ni mutaciones de la House con checkpoint <= K0 o de P desde 404348001 (0 FeeRateUpdated, 0 BetLimitsUpdated, 0 FeesWithdrawn, 0 HouseMigrated)
+RESUMEN 8 PASA / 0 NO PASA
+exit=0
+```
+
+`state.json` (se conserva para TASK-4):
+
+```
+{
+  "F0": "0",
+  "K0": "408454921"
+}
+```
+
+- **F0 = 0.**
+- **K0 = 408454921**, con origen **DL-12**: la altura 408455921 − 1000, leída antes que la House. Su
+  `previousTransaction` está debajo del piso 404332001. Nadie tocó la House: no aplica DL-9.
+- **Cota de 0.6 = 404348001**, con origen **"piso + 16000"** (la publicación está podada). 0 `GameCreated` y 0
+  `GameResolved`, así que no hay ajenas. La coherencia de DL-12 da 0/0/0/0 en las cuatro mutaciones de admin.
+- 0.3, 0.4, 0.5 y 0.6: ✅.
+- **DL-13:** este `pre` (21:52:20Z) es el que vale si TASK-4 empieza en esta sesión. Es el último antes de `d1c`. El
+  plazo de ≤ 7 días hasta `final` vence el **2026-11-26 21:52Z**.
+  - La sonda bloquea `pre` después de `d1c` (exit 2).
+  - Si TASK-4 no empezara en esta sesión, este `pre` quedaría provisorio y se repetiría como `0.4.r1`/`0.6.r1`.
+
+Lectura extra permitida (`ledgerService.getServiceInfo`, la misma lectura de la sonda; solo números), a las
+21:54:07Z:
+
+```
+epoch 1289 checkpointHeight 408456388 lowestAvailableCheckpoint 404332001
+```
+
+**Observación para DL-13/DL-14:** ya pasó el cambio de época de ≈ 21:24Z (época 1289) y el piso **no saltó**: sigue en
+404332001, el primer checkpoint de la época 1278. A esta hora el nodo conserva 12 épocas (1278..1289), no 11. Puede ser
+que la poda vaya con retraso respecto del cambio de época, o que el operador haya cambiado la retención. Para la
+corrida, el margen solo crece: con `K0` = 408454921 se está muy por encima del piso.
+
+#### N-a. Chrome headless sin wallet, `<URL>/#/`
+
+Reglas de §Navegador:
+- `/usr/bin/google-chrome --headless=new` con un perfil desechable nuevo `<scratchpad>/chrome-17a` (`--user-data-dir`
+  con `HOME`/`XDG_*` aislados dentro del perfil);
+- CDP solo en `127.0.0.1` (`--remote-debugging-port=0`);
+- `--disable-extensions`, sin wallet, una sola pestaña.
+
+El script imprime solo el texto del badge (`.network-badge`), booleanos y conteos. No vuelca el DOM.
+
+```
+2026-11-19T21:53:36Z
+N-a ruta #/
+N-a badge: "testnet · nodo OK"
+N-a "testnet" y "nodo OK" en ≤ 30 s: true (2725 ms desde Page.navigate)
+INFO violaciones de CSP: 0
+INFO errores de consola: 3; hosts de los errores de red: sui-battleship-app-production.up.railway.app, api.slush.app
+INFO Chrome cerrado: true
+exit=0
+```
+
+Una segunda corrida igual, con otro perfil desechable (`chrome-17b`, 21:53:54Z), clasifica los 3 errores. El badge
+apareció en 2342 ms, con los mismos conteos:
+
+```
+ERRCONSOLA log javascript: Access to fetch at 'https://api.slush.app/api/wallet/metadata' from origin 'https://sui-battleship-app-production.up.railway.app' has been blocked by CORS polic [sui-battleship-app-production.up.railway.app/]
+ERRCONSOLA log network: Failed to load resource: net::ERR_FAILED [api.slush.app/api/wallet/metadata]
+ERRCONSOLA console.error: Error fetching metadata
+```
+
+- Los tres errores son el pedido a `api.slush.app/api/wallet/metadata` (CORS/403), conocido por E-6 de #15. No es rojo.
+- El host de Railway del primer resumen es el `url` del mensaje de CORS (el origen de la página), no un fallo de la app.
+- 0 violaciones de CSP.
+- → N-a ✅. N-f entero queda para el bloque 5 de TASK-4; esto es solo un dato adelantado para N-f/O-8.
+
+Procesos de Chrome:
+- antes de lanzar había 3 procesos `google-chrome` del usuario, que no se tocaron;
+- se cerró solo el Chrome propio, con `Browser.close` por CDP;
+- su PID guardado ya no existía (`kill -0` falla) y ningún proceso usa los perfiles `chrome-17a`/`chrome-17b`;
+- los perfiles se borraron (`ls` → No such file or directory);
+- no se usó `pkill`.
+
+#### 0.7
+`⏳ owner`.
+
+#### `~/.sui` (sin cargar ningún env; solo `stat`/`ls`, nunca `cat`)
+```
+antes:   2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml   ls → client.yaml
+después: 2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml   ls → client.yaml
+```
+Idénticos. Comandos prohibidos: ningún `sui` (ni `sui client`, `sui move` o `keytool`). Tampoco publicación, faucet,
+`simulate`/`dryRun`, `pkill` ni el navegador o el perfil del usuario.
+
+#### Resumen del paso 0
+| Fila | Estado |
+|---|---|
+| 0.1 | ✅ |
+| 0.2 | ⏳ (`curl` cumple: HTTP 200 y conteos 1/1/1; falta el commit del deploy del owner) |
+| 0.3 | ✅ |
+| 0.4 | ✅ (F0 0, K0 408454921, DL-12) |
+| 0.5 | ✅ |
+| 0.6 | ✅ (cota 404348001, piso + 16000; 0/0; coherente 0/0/0/0) |
+| 0.7 | ⏳ owner |
+| N-a | ✅ |
+
+Criterio de TASK-3 (0.1-0.7 y N-a en ✅): **pendiente solo de lo que da el owner** (0.2 y 0.7). No hay ningún ❌.
+
+### Desviaciones del handoff (o "ninguna")
+1. **El reporte va como `.txt`** en `<scratchpad>/REPORTE_TASK3_17.txt`, no en `REPORTES_SMOKE_MVP.md`. Es el flujo
+   vigente del orquestador (desviación 1 de TASK-2c, aceptada).
+2. **`SMOKE_MVP.md`:**
+   - las filas 0.2 y 0.7 y los datos de la cuenta A, la wallet y el commit del deploy quedan en `⏳ owner`, por pedido
+     del orquestador, que los pasa después;
+   - la celda "es | no es" de A quedó como `⏳ owner: es | no es`;
+   - la URL va escrita en Precondiciones, como pide el pedido. Es pública y ya está en `app/README.md` desde S-8. §R-1
+     pide `<URL>` como placeholder solo en reportes y handoffs.
+3. **N-a se corrió dos veces**, con perfiles desechables distintos. La segunda suma la impresión del texto de los errores
+   de consola, recortado a 160 caracteres y pasado por el filtro de hex, para clasificarlos. El badge dio ✅ en las dos.
+4. **Una lectura extra de `getServiceInfo`** (época, altura y piso), fuera de la sonda pero dentro de las lecturas
+   permitidas de §Sonda, para dejar anotado que el piso no saltó con el cambio de época.
+
+La sonda no se tocó.
+
+### Riesgos / pendientes (o "ninguno")
+- **Del owner (los pasa el orquestador):**
+  - si A es o no la publicadora;
+  - el nombre de la wallet de extensión;
+  - el commit del deploy activo en Railway (0.2);
+  - 0.7: A, B y C fondeadas en testnet.
+- **DL-13:**
+  - el `pre` vigente es el de 21:52:20Z (`K0` 408454921) y su `state.json` está en `<scratchpad>/smoke17-probe/`;
+  - si TASK-4 empieza en esta sesión, vale tal cual. Si no, se repite antes de `d1c` (`0.4.r1`/`0.6.r1`);
+  - plazo hasta `final`: 2026-11-26 21:52Z.
+- **Piso del nodo sin saltar** después del cambio de época (12 épocas retenidas a las 21:54Z). No afecta a la corrida.
+  Es un dato para DL-14 en TASK-5: la retención cambia.
+- **§0 del handoff:** dice Node `v26.13.0` para la CI, y la CI usa v26.13.1 desde al menos `376412f`. Es un 🔵 de texto,
+  sin efecto.
+
+### Documentación
+- READMEs / `agents.md` actualizados: no aplica.
+- Snippet propuesto para `documents/STATUS.md`:
+  `#17 TASK-3: paso 0 en ✅ salvo lo del owner (DEV). SMOKE_MVP.md creado desde el Anexo A; M = 77bb49c (CI 44621915244:
+  83/104/1 despliegue, app 1156/65, index-B3BeMVQC.js 917.80 kB, deploy-image positivo). Bundle servido = el de la CI de
+  M. pre 8/0 (21:52:20Z): F0 0, K0 408454921 por DL-12, cota 404348001 (piso + 16000), coherente 0/0/0/0. N-a ✅.
+  Pendiente del owner: 0.2 (commit del deploy), 0.7, A ¿publicadora?, wallet. Siguiente: TASK-4.`
+
+### Commit sugerido (no hecho)
+`docs: start the MVP smoke record with the step-0 preconditions (#17)`, con `Refs #17` en el cuerpo y sin palabras de
+cierre.
+
+### Greps de §R-6 (`/usr/bin/grep`)
+Archivos:
+- este reporte;
+- `<repo>/documents/SMOKE_MVP.md`;
+- los crudos `<scratchpad>/smoke17-probe/out-t3-*.txt` y `out-t3-pre.time`;
+- `<scratchpad>/bundle17/out-0.2-*.txt`;
+- `<scratchpad>/n17/out-na*.txt`;
+- `<scratchpad>/smoke17-probe/state.json`.
+
+El `bundle.js` servido no se pega ni se cita, así que no entra en los greps.
+
+Las etiquetas no copian el patrón literal, para que el grep 3 no encuentre su propia línea (lo mismo que en TASK-2c).
+
+**Primera pasada** (sobre el reporte sin esta sección y los demás archivos):
+
+```
+--- grep 1 (patrón de §R-6)
+exit=1
+--- grep 2 (patrón de §R-6)
+exit=1
+--- grep 3 (patrón de §R-6)
+exit=1
+--- grep 4 (patrón de §R-6): líneas
+REPORTE_TASK3_17.txt:130:BLOQUE pre · red testnet · paquete 0x8b78…6f51
+REPORTE_TASK3_17.txt:132:CHECK 0.4.shared PASA House 0x54ee…eb1a Shared y tipo exacto: true
+REPORTE_TASK3_17.txt:138:CHECK 0.5.cap PASA HouseCap 0xcf08…37fe con dueño AddressOwner (CAP)
+<repo>/documents/SMOKE_MVP.md:5:  (Precondiciones: packageId 0x8b78…6f51 y House 0x54ee…eb1a)
+<repo>/documents/SMOKE_MVP.md:19: (fila 0.4: House 0x54ee…eb1a)
+<repo>/documents/SMOKE_MVP.md:20: (fila 0.5: HouseCap 0xcf08…37fe)
+smoke17-probe/out-t3-pre.txt:1:BLOQUE pre · red testnet · paquete 0x8b78…6f51
+smoke17-probe/out-t3-pre.txt:3:CHECK 0.4.shared PASA House 0x54ee…eb1a Shared y tipo exacto: true
+smoke17-probe/out-t3-pre.txt:9:CHECK 0.5.cap PASA HouseCap 0xcf08…37fe con dueño AddressOwner (CAP)
+--- grep 4: valores distintos y conteo
+      4 54ee…eb1a
+      3 8b78…6f51
+      3 cf08…37fe
+```
+
+(Las líneas 5, 19 y 20 de `SMOKE_MVP.md` son largas: aquí van resumidas, con el valor que coincide. El texto exacto está
+en el archivo.)
+
+**Clasificación** (prefijo y sufijo comparados con `jq` contra `<repo>/contracts/deployments/testnet.json`; solo se
+imprimió el nombre del campo):
+- `8b78…6f51` → `packageId` (= `originalPackageId`): **atribuido**.
+- `54ee…eb1a` → `houseId`: **atribuido**.
+- `cf08…37fe` → `houseCapId`: **atribuido**. Es el ID del objeto cap, no la cuenta dueña; la sonda nunca imprime `CAP`.
+- Ninguna coincidencia es una cuenta. 0 sin atribución: no hubo nada que borrar.
+- Grep 1 y grep 2: vacíos. El prefijo de 16 hex del sha256 del bundle (`out-0.2-bundle.txt`) no llega a ningún patrón
+  y no se cita en este reporte.
+- Grep 3: vacío. Las rutas van con placeholders (`<repo>`, `<scratchpad>`, `<HOME real>`).
+- Los digests base58 (`BVQf…Tqw` completo) son públicos (§R-1) y no entran en los patrones hex.
+- **Sin volcados del DOM:** de Chrome solo van el texto del badge, booleanos, conteos y el texto de los 3 errores de
+  consola. Esos errores son del pedido a `api.slush.app`, sin cuentas: sin wallet no hay ninguna.
+- Los SHA de commit (`77bb49c`, `296c07b`, `376412f`, `30e1405`, `b7aa568`) y los IDs de run no llegan a los patrones.
+
+**Segunda pasada** (sobre este reporte final, con esta sección). Las coincidencias nuevas del grep 4 son las mismas
+líneas citadas otra vez, con los mismos tres valores:
+```
+--- grep 1 (final)
+exit=1
+--- grep 2 (final)
+exit=1
+--- grep 3 (final)
+exit=1
+--- grep 4 (final): valores distintos y conteo
+     10 54ee…eb1a
+      8 8b78…6f51
+      8 cf08…37fe
+lineas con coincidencia=24
+```
+
+Los conteos de una nueva corrida del grep 4 sobre este archivo final suben en +1 por valor: es la tabla de arriba, que se cita a sí misma. Siguen siendo los mismos tres valores atribuidos.
+
+==========================================================================================================================
+## Anexo: TASK-4, 0.7 y bloque 1 (pedido del orquestador del 2026-11-19, a continuación de TASK-3)
+
+### Datos del owner (pasados por el orquestador)
+- **0.7:**
+  - A es la publicadora y tiene el `HouseCap`. El orquestador lo comprobó: true;
+  - saldos: A ≈ 0,95 SUI, B 1,00 SUI, C 0 SUI. C sin saldo: no firma, y alcanza para esta corrida;
+  - wallet: Slush, de extensión, en testnet;
+  - → 0.7 ✅. En Precondiciones: "A (crea; es la publicadora)" y "Wallet de extensión Slush".
+- **0.2:** el commit del deploy de Railway sigue pendiente del owner, así que sigue en ⏳.
+- **Bloque 1:**
+  - `d1c` = `Gw4zETm8NNd8CTrCpHd4vqRPmC16oHrRMxxocrFNLT2R`;
+  - `d1a` = `4wjYSac6vJzZKMt6bbVoZhQok8FtVCMrCkiq1TWgzfiu`;
+  - owner: "todo funcionó bien". No copió los textos del resultado.
+  - El orquestador leyó winner == B. Lo comparé solo en memoria y coincide con la sonda.
+- **Observación nueva:** con Slush, el "+" de "Connected accounts" no hace nada, así que hay una sola cuenta conectada a
+  la vez. El owner cambia de cuenta con Disconnect → cambiar la cuenta en Slush → "Conectar wallet". Va como **O-9**
+  (📝, observación, nunca ❌).
+
+### Sonda, bloque `1` (`<scratchpad>/smoke17-probe/out-t4-1.txt`; 2026-11-19T22:47:47Z a 22:47:53Z)
+Antes de correr:
+- la sonda seguía intacta (`diff` contra el Anexo B, líneas 1196-1985, vacío);
+- `digests.json` tenía `d1c` y `d1a`;
+- el `state.json` de TASK-3 seguía con `F0` "0" y `K0` "408454921". C-6 no cortó: `K0` está encima del piso.
+
+```
+BLOQUE 1 · red testnet · paquete 0x8b78…6f51
+CHECK 1.B≠A PASA B ≠ A: true
+INFO gas d1c Gw4zETm8NNd8CTrCpHd4vqRPmC16oHrRMxxocrFNLT2R: 1965299 (computation 1000000, storage 1953200, rebate 987901)
+CHECK 1.d1c.success PASA Gw4zETm8NNd8CTrCpHd4vqRPmC16oHrRMxxocrFNLT2R
+CHECK 1.d1c.sender PASA sender == A: true
+CHECK 1.d1c.creator PASA creator == A: true
+CHECK 1.d1c.bet PASA bet 100000000
+CHECK 1.d1c.opponent PASA opponent none: true
+CHECK 1.d1c.fee_rate PASA fee_rate 200
+CHECK 1.d1c.delta PASA Δ(A) -101965299 == −bet − gas -101965299
+INFO 1.d1c: game_id 0x0c6c…826a
+INFO gas d1a 4wjYSac6vJzZKMt6bbVoZhQok8FtVCMrCkiq1TWgzfiu: 2474748 (computation 1000000, storage 4955200, rebate 3480452)
+CHECK 1.d1a.success PASA 4wjYSac6vJzZKMt6bbVoZhQok8FtVCMrCkiq1TWgzfiu
+CHECK 1.d1a.game_id PASA game_id == 0x0c6c…826a: true
+CHECK 1.d1a.creator PASA creator == A: true
+CHECK 1.d1a.acceptor PASA acceptor == B: true
+CHECK 1.d1a.winner PASA winner == B
+CHECK 1.d1a.pot PASA pot 200000000 (2·bet 200000000)
+CHECK 1.d1a.fee PASA fee 4000000 (⌊pot·200/10000⌋ = 4000000)
+CHECK 1.d1a.payout PASA payout 196000000 (pot − fee 196000000)
+CHECK 1.d1a.delta.B PASA gana B: Δ(B) 93525252 == −bet + payout − gas 93525252
+CHECK 1.d1a.delta.A PASA gana B: Δ(A) 0 == 0
+CHECK 1.d1a.ptb PASA comandos SplitCoins,MoveCall; accept_game último MoveCall: true
+CHECK 1.d1a.object PASA 0x0c6c…826a Resolved, acceptor == B y winner == evento: true, stake 0
+OBS O-7 d1a: gasBudget 3474748, gasPrice 1000, gasBudget ≤ 10000000: true
+RESUMEN 20 PASA / 0 NO PASA
+exit=0
+```
+
+`state.json` sumó `G1`, completo, como pide §Sonda: son IDs públicos y nunca direcciones. No se pega; acá va
+abreviado: `0x0c6c…826a`. `F0`/`K0` no cambiaron.
+
+### Filas de `SMOKE_MVP.md`
+| Fila | Estado | Base |
+|---|---|---|
+| 0.7 | ✅ | owner; nota "C sin saldo: no firma" |
+| 1a | ✅ PASA | sonda: `d1c` 7/7 checks más `B≠A`; `Δ(A) = −bet − gas` exacta |
+| 1b | ✅ PASA | owner: "todo funcionó bien" (B y C vieron G1). N-b no medible: `d1a` ya había pasado cuando llegó el bloque (regla de N-b) |
+| 1c | ✅ PASA | sonda: `d1a` 12/12 checks (winner B, pozo/comisión/pago exactos, Δ(B) y Δ(A) exactos, `Random` último, G1 `Resolved` con stake 0). Los textos de A y B no los copió el owner: la fila se apoya en "todo funcionó bien" |
+| O-7 (`d1a`) | dato tomado | `gasBudget` 3474748 (≤ 10000000: true), `gasPrice` 1000. Es el `gasData` de la transacción que firmó la wallet. `d2a` queda para el bloque 2: la fila sigue ⏳ |
+| O-9 | 📝 | nueva fila de observación (cambio de cuenta con Slush) |
+
+**Por qué N-b no se corrió:** §Navegador dice que, si `d1a` ya pasó, N-b es "no medible". G1 ya estaba `Resolved` y no
+se lanzó Chrome en este bloque. No quedan procesos ni perfiles de Chrome.
+
+### Desviaciones (bloque 1)
+1. **Nueva fila O-9 en "Heredado de #12 y #13"**, para la observación del cambio de cuenta con Slush, por pedido del
+   orquestador ("O-x o nota"). No es un paso y no cuenta en PASA/TOTAL.
+2. **1c en ✅ sin los textos de resultado copiados por el owner.** Todo lo verificable on-chain dio PASA, y el owner dijo
+   "todo funcionó bien". El MID decide si pide los textos (R-3) antes del cierre. No bloquea el bloque 2.
+3. **Corrección propia durante el llenado:** un primer reemplazo automático pisó la columna "Resultado esperado" de 1a,
+   1b, 1c y O-7. Se restauró desde el Anexo A y se verificó con `diff` contra la plantilla: solo cambian cabecera,
+   Precondiciones, las filas llenas y la O-9 nueva.
+
+### Bloqueos para el bloque 2
+**Ninguno.**
+- La sonda dio exit 0 con 20/0;
+- `K0` sigue encima del piso;
+- el plazo de DL-13 vence el 2026-11-26 21:52Z;
+- B queda con ≈ 1,00 − 0,1 − gas + 0,196 ≈ 1,09 SUI, suficiente para aceptar 0,100000001 SUI en 2d.
+
+Recordatorio para el owner: en el bloque 2, A invita a **B** (`d2c`) y B acepta desde "Mis partidas" (`d2a`). C abre G2
+por URL (2b): no firma, así que su saldo 0 no importa. Con Slush, el cambio de cuenta va como en O-9.
+
+### Greps de §R-6 (bloque 1)
+Archivos:
+- este reporte completo;
+- `<repo>/documents/SMOKE_MVP.md`;
+- `<scratchpad>/smoke17-probe/out-t4-1.txt`;
+- `<scratchpad>/smoke17-probe/digests.json`.
+
+`state.json` no se pega: tiene `G1` completo, que está permitido en ese archivo.
+
+```
+--- grep 1: exit=1 (vacío)
+--- grep 2: exit=1 (vacío)
+--- grep 3: exit=1 (vacío)
+--- grep 4: valores distintos y conteo (antes de agregar este bloque)
+     10 0c6c…826a
+     10 54ee…eb1a
+     10 8b78…6f51
+      8 cf08…37fe
+```
+
+Clasificación: prefijo y sufijo comparados en memoria contra `testnet.json` y contra el `G1` de `state.json`. Solo se
+imprimió el nombre.
+- `0c6c…826a` → `G1` (`state.json`): **atribuido**.
+- `54ee…eb1a` → `houseId`: **atribuido**.
+- `8b78…6f51` → `packageId`: **atribuido**.
+- `cf08…37fe` → `houseCapId`: **atribuido**.
+- Ninguna coincidencia es una cuenta, y no hay nada sin atribución.
+- Los digests `d1c`/`d1a` son base58, públicos (§R-1).
+- Sin volcados del DOM: no hubo navegador en este bloque.
+- Al citar la tabla, los conteos suben en +1 por valor.
+
+==========================================================================================================================
+## Revisión MID: TASK-3 y TASK-4, bloque 1 — PASA (GO al bloque 2)
+
+> MID, 2026-11-19, contra HANDOFF_SMOKE_MVP v1.3.1. Leí el reporte, `SMOKE_MVP.md` y los crudos `out-t3-pre.txt` y
+> `out-t4-1.txt` (los dos con `exit=0` al final, como pedía el 🔵 1 de TASK-2c).
+
+### TASK-3 (paso 0)
+
+**Resultado:** sin ❌. 0.1, 0.3-0.6, 0.7 y N-a están en ✅.
+
+**0.2 sigue en ⏳**, solo por el commit del deploy:
+- el `curl` cumple: HTTP 200, conteos 1/1/1 y el mismo `index-B3BeMVQC.js` de 917804 B que la CI de `M`;
+- no bloquea el bloque 2, pero se cierra antes del "Reporte final".
+
+**`pre` y DL-13:** el `pre` de 21:52:20Z es el vigente.
+- `d1c` cayó en la misma sesión, así que DL-13 se cumple.
+- El plazo para correr `final` vence el 2026-11-26 21:52Z.
+
+**Desviaciones:** las 4 de TASK-3 se aceptan.
+- La URL va escrita en `SMOKE_MVP.md`, porque es pública y ya está en `app/README.md`.
+- La lectura extra de `getServiceInfo` sirve como dato para DL-14: el piso no saltó con el cambio de época, así que la
+  retención es de 12 épocas a las 21:54Z.
+
+**🔵 de texto para el handoff:** el §0 dice "Node v26.13.0" para la CI, y la CI usa v26.13.1. No tiene efecto.
+
+### Bloque 1
+
+**1a y 1c:** la sonda dio 20/0 y exit 0.
+- Las igualdades dan exactas: `Δ(A, d1c)` = −101965299 = −bet − gas, y `Δ(B, d1a)` = +93525252 = −bet + payout − gas.
+  `Δ(A, d1a)` es 0 porque ganó B.
+- El PTB de aceptar es `SplitCoins,MoveCall`, con `accept_game` como último `MoveCall`.
+- C-6 no cortó.
+
+**O-7 (`d1a`):** `gasBudget` 3474748 ≤ 10000000, `gasPrice` 1000.
+
+**1b:** ✅ con una corrección de texto (C-1, abajo). Que B aceptó G1 lo prueba `d1a`. Lo de C no se informó por separado.
+
+**1c, textos de resultado (R-3):** se acepta el bloque 1 así.
+- El criterio verificable (montos, `winner`, objeto) está on-chain y en PASA.
+- El "Resultado obtenido" dice explícitamente que los textos de A y B **no se registraron**.
+- Desde el bloque 2, el owner copia los textos tal cual. Sin textos, la fila de texto queda ⏳ y no ✅.
+
+**O-9:** se acepta como observación 📝. Al O-1 del bloque 3 le cambia el procedimiento (ver abajo).
+
+**Desviaciones del bloque 1:** las 3 se aceptan. La 3, el reemplazo restaurado, la verifiqué: las columnas "Resultado
+esperado" de 1a, 1b, 1c y O-7 son las del Anexo A.
+
+### Correcciones a `SMOKE_MVP.md`
+- **C-1 (1b):** reemplazar `owner: "todo funcionó bien" (B y C vieron G1 en el lobby, sin detalle por cuenta)` por
+  `owner: "todo funcionó bien". B llegó a G1 y la aceptó (d1a); que C la vio no se informó por separado`. El paréntesis
+  afirmaba algo que el owner no dijo (§R-4).
+- **C-2 (1c):** al final de "Resultado obtenido", agregar `Textos de A y B: no registrados por el owner; el MID acepta
+  la fila con la evidencia on-chain (revisión del bloque 1). Desde el bloque 2 se copian (R-3)`.
+- **C-3 (O-3):** en "Resultado obtenido", `1c: no medida`.
+- **C-4 (0.2):** al final de "Resultado obtenido", `No bloquea los bloques; se cierra antes del Reporte final`.
+
+### Bloque 2: instrucciones
+
+**Para el owner.** El orden importa: **2b va antes que 2d**. Una vez que B acepta, C ya no puede ver la invitación.
+1. **2a:** A crea una **invitación** a B por exactamente `0.100000001` SUI. Entrega `d2c` y el aviso "Comparte el
+   enlace…" copiado como texto.
+2. **2b:** con C conectada (Disconnect → C en Slush → "Conectar wallet", como en O-9), abrir `<URL>/#/game/<G2>` por URL.
+   Entrega el texto exacto que ve y si aparece un botón "Aceptar" (sí/no). C no firma nada.
+3. **2c:** con B conectada, en "Mis partidas" → "Invitaciones recibidas": ¿aparece G2 con "Aceptar" y "Rechazar"?
+   (sí/no). Si puede, copiar también el texto de la cota ("… (desde <fecha>)") y decir si está el enlace "Ver tu
+   historial completo en el explorador" (O-5).
+4. **2d:** B acepta **desde esa fila de "Mis partidas"**. Entrega:
+   - `d2a`;
+   - el texto del resultado copiado tal cual ("¡Ganaste!…" o "Perdiste…");
+   - O-2: qué mostró la vista previa de Slush;
+   - O-3: aproximado, el tiempo del clic al resultado y cuánto duró "Actualizando datos…".
+5. Sin capturas de la wallet y sin direcciones. B tiene ≈ 1,09 SUI, alcanza.
+6. Cuando pueda, el commit del deploy activo en Railway (Deployments), para 0.2.
+
+**Para el DEV:**
+- sonda bloque `2` con `d2c` y `d2a`, y su crudo `out-t4-2.txt` con `exit=$?` al final;
+- N-c (headless `#/`, sin enlace a G2; vale con G2 en cualquier estado), con su crudo;
+- filas 2a-2d y O-7 (`d2a`) con el texto del owner citado como `owner: "…"`;
+- `previousTransaction(G2) == d2a` sale en la sonda.
+
+**Adelanto para el bloque 3 (O-1):** con Slush, cambiar de cuenta es Disconnect y Connect. La prueba de O-1 queda así:
+con la ventana de aprobación de Slush abierta para el crear de 3a, cambiar la cuenta activa **dentro de Slush** a B, y
+reportar qué pasó. Si Slush no lo permite con la ventana abierta, O-1 se anota como "no ejecutable con Slush"
+(observación, sin ❌), y se lo decido al MID con el reporte del bloque 3.
+
+==========================================================================================================================
+## Anexo: TASK-4, bloque 2 (y correcciones del MID al bloque 1)
+
+### Correcciones del MID en `SMOKE_MVP.md` (revisión del bloque 1: PASA y GO)
+- **C-1 (1b):** dice `owner: "todo funcionó bien". B llegó a G1 y la aceptó (d1a); que C la vio no se informó por
+  separado.`
+- **C-2 (1c):** suma `Textos de A y B: no registrados por el owner; el MID acepta la fila con la evidencia on-chain
+  (revisión del bloque 1). Desde el bloque 2 se copian (R-3)`.
+- **C-3 (O-3):** `1c: no medida`.
+- **C-4 (0.2):** suma `No bloquea los bloques; se cierra antes del Reporte final`.
+
+### Entrega del bloque 2
+- owner: "listo, todo funcionó", sin textos.
+- El orquestador identificó los digests por eventos públicos (GraphQL, solo análisis):
+  - `d2c` = `3FJ5GnVGez2vJhk1gN6dG1hTTgwUyJfeSp8PzqH1ttwy` (22:51:42Z);
+  - `d2a` = `6BQpzAvsQbFyMqAWuYumu9zwfwPRADZumnt7Znen4S9v` (22:52:53Z).
+- La sonda los verifica de forma independiente por gRPC. G2 sale de `d2c`, en la sonda.
+
+### Sonda, bloque `2` (`<scratchpad>/smoke17-probe/out-t4-2.txt`; 22:55:19Z a 22:55:21Z)
+Antes de correr:
+- la sonda seguía intacta (`diff` contra el Anexo B, vacío);
+- `digests.json` tenía `d1c`, `d1a`, `d2c` y `d2a`;
+- `state.json` seguía igual (F0 0, K0 408454921, G1). C-6 no cortó.
+```
+BLOQUE 2 · red testnet · paquete 0x8b78…6f51
+INFO gas d2c 3FJ5GnVGez2vJhk1gN6dG1hTTgwUyJfeSp8PzqH1ttwy: 3196400 (computation 1000000, storage 2196400, rebate 0)
+CHECK 2.d2c.success PASA 3FJ5GnVGez2vJhk1gN6dG1hTTgwUyJfeSp8PzqH1ttwy
+CHECK 2.d2c.sender PASA sender == A: true
+CHECK 2.d2c.creator PASA creator == A: true
+CHECK 2.d2c.bet PASA bet 100000001
+CHECK 2.d2c.opponent PASA opponent == B: true
+CHECK 2.d2c.fee_rate PASA fee_rate 200
+CHECK 2.d2c.delta PASA Δ(A) -103196401 == −bet − gas -103196401
+INFO 2.d2c: game_id 0x143c…ee0e
+CHECK 2.d2a.sender PASA sender == B: true
+INFO gas d2a 6BQpzAvsQbFyMqAWuYumu9zwfwPRADZumnt7Znen4S9v: 1486871 (computation 1000000, storage 5198400, rebate 4711529)
+CHECK 2.d2a.success PASA 6BQpzAvsQbFyMqAWuYumu9zwfwPRADZumnt7Znen4S9v
+CHECK 2.d2a.game_id PASA game_id == 0x143c…ee0e: true
+CHECK 2.d2a.creator PASA creator == A: true
+CHECK 2.d2a.acceptor PASA acceptor == B: true
+CHECK 2.d2a.winner PASA winner == B
+CHECK 2.d2a.pot PASA pot 200000002 (2·bet 200000002)
+CHECK 2.d2a.fee PASA fee 4000000 (⌊pot·200/10000⌋ = 4000000)
+CHECK 2.d2a.payout PASA payout 196000002 (pot − fee 196000002)
+CHECK 2.d2a.delta.B PASA gana B: Δ(B) 94513130 == −bet + payout − gas 94513130
+CHECK 2.d2a.delta.A PASA gana B: Δ(A) 0 == 0
+CHECK 2.d2a.ptb PASA comandos SplitCoins,MoveCall; accept_game último MoveCall: true
+CHECK 2.d2a.object PASA 0x143c…ee0e Resolved, acceptor == B y winner == evento: true, stake 0
+CHECK 2.d2a.previousTransaction PASA previousTransaction == d2a: true
+OBS O-7 d2a: gasBudget 3474772, gasPrice 1000, gasBudget ≤ 10000000: true
+RESUMEN 21 PASA / 0 NO PASA
+exit=0
+```
+
+`state.json` sumó `G2`. Es un ID completo y no se pega; abreviado: `0x143c…ee0e`.
+
+### N-c, Chrome headless sin wallet (`<scratchpad>/n17/nc.mjs`, `<scratchpad>/n17/out-nc.txt`)
+`nc.mjs` es `na.mjs` más el chequeo del lobby:
+- `G2` entra por una variable de entorno y no se imprime;
+- se compara contra `href`/`title` de los enlaces y contra el HTML, y solo se imprimen booleanos y el texto del lobby;
+- usó un perfil desechable nuevo (`chrome-17c`), CDP en 127.0.0.1 y `--disable-extensions`;
+- cerré solo el Chrome propio: el PID ya no existe, ningún proceso usa el perfil y el perfil está borrado.
+```
+2026-11-19T22:55:42Z
+N-c lobby cargado en ≤ 60 s: true (1006 ms tras el badge)
+N-c filas en el lobby: false; enlaces a #/game/: 0
+N-c texto del lobby: "No hay partidas abiertas en el historial disponible del nodo (desde 8 nov 2026, 17:30)"
+N-c enlace a G2 en el lobby: false; G2 en algún lugar de la página: false
+N-a ruta #/
+N-a badge: "testnet · nodo OK"
+N-a "testnet" y "nodo OK" en ≤ 30 s: true (2509 ms desde Page.navigate)
+INFO violaciones de CSP: 0
+INFO errores de consola: 3; hosts de los errores de red: sui-battleship-app-production.up.railway.app, api.slush.app
+ERRCONSOLA log javascript: Access to fetch at 'https://api.slush.app/api/wallet/metadata' from origin 'https://sui-battleship-app-production.up.railway.app' has been blocked by CORS polic [sui-battleship-app-production.up.railway.app/]
+ERRCONSOLA log network: Failed to load resource: net::ERR_FAILED [api.slush.app/api/wallet/metadata]
+ERRCONSOLA console.error: Error fetching metadata
+INFO Chrome cerrado: true
+exit=0
+```
+
+- G2 no está en el lobby: no hay enlace, y su ID no aparece en ninguna parte de la página → **N-c PASA**.
+- El texto vacío con sufijo es el esperado en v1.3 ("desde 8 nov 2026, 17:30": la hora local de `piso + 16000`).
+- Límite: cuando corrió N-c, G2 ya estaba `Resolved`, así que tampoco aparecería si fuera abierta. El orquestador
+  aclaró que cualquier estado de G2 vale. Que las invitaciones no van al lobby también lo cubren los tests de la app.
+- Consola: los mismos 3 errores conocidos de `api.slush.app` (E-6 de #15) y 0 violaciones de CSP.
+
+### Filas de `SMOKE_MVP.md` (regla del MID: lo que depende de textos del owner queda ⏳)
+| Fila | Estado | Base |
+|---|---|---|
+| 2a | ⏳ (on-chain y N-c: PASA) | sonda `d2c` 7/7: `opponent == B`, 100000001, 200 bps, Δ(A) exacta. N-c PASA. Falta el aviso "Comparte el enlace…" copiado por el owner |
+| 2b | ⏳ | **Depende entera del owner:** C no firma y no hay nada on-chain. Falta el texto que vio C y si apareció "Aceptar" (D-20261104-05 (1)). Va marcada para el MID |
+| 2c | ⏳ | On-chain solo se ve que B aceptó G2, no desde qué vista. Falta la fila "Invitaciones recibidas" con "Aceptar"/"Rechazar" |
+| 2d | ⏳ (on-chain: PASA) | sonda `d2a` 13/13 (más `sender == B`): pozo 200000002, comisión 4000000, pago 196000002, ganó B, Δ(B) 94513130 y Δ(A) 0 exactos, `Random` último, G2 `Resolved` con stake 0, `previousTransaction(G2) == d2a`. Tiempos de los digests: `d2c` 22:51:42Z → `d2a` 22:52:53Z. Falta el texto del resultado |
+| O-7 | ✅ | `d1a` 3474748 y `d2a` 3474772 de `gasBudget`, `gasPrice` 1000; los dos ≤ 10000000. Sin issue P2 |
+| O-2 | ⏳ owner | vista previa de la wallet: sin texto en 1c ni en 2d |
+| O-3 | ⏳ owner | 1c no medida; 2d pendiente. Los tiempos de los digests no son la latencia de la app |
+
+Controlé las columnas "Resultado esperado" contra el Anexo A con un script: todas coinciden, salvo 0.1 y 0.2, donde `<M>`
+ya se reemplazó por `77bb49c`.
+
+### Bloqueos para el bloque 3
+**Ninguno on-chain.**
+- La sonda dio 21/0 con exit 0, y K0 sigue encima del piso.
+- B ganó las dos partidas. A quedó con ≈ 0,95 − 0,102 − 0,103 ≈ 0,745 SUI, suficiente para crear 0,001 SUI y cancelar
+  (3a-3c).
+- Los ⏳ de 2a-2d, O-2 y O-3 dependen de textos que el orquestador va a pedir al owner. No impiden firmar el bloque 3.
+- Para el bloque 3, el owner tiene que **copiar los textos** (R-3):
+  - 3b: "La wallet no completó la operación…", sin digest;
+  - 3c: el texto de la cancelación;
+  - O-1, si lo prueba (`dO1`).
+
+### Greps de §R-6 (bloque 2)
+Archivos:
+- este reporte completo;
+- `<repo>/documents/SMOKE_MVP.md`;
+- `<scratchpad>/smoke17-probe/out-t4-2.txt` y `digests.json`;
+- `<scratchpad>/n17/out-nc.txt`.
+
+```
+--- grep 1: exit=1 (vacío)
+--- grep 2: exit=1 (vacío)
+--- grep 3: exit=1 (vacío)
+--- grep 4: valores distintos y conteo (antes de agregar este bloque)
+      9 0c6c…826a
+     10 143c…ee0e
+     12 54ee…eb1a
+     13 8b78…6f51
+     10 cf08…37fe
+```
+
+Clasificación: prefijo y sufijo comparados en memoria contra `testnet.json` y contra `G1`/`G2` de `state.json`. Solo se
+imprimió el nombre.
+- `0c6c…826a` → `G1`;
+- `143c…ee0e` → `G2`;
+- `54ee…eb1a` → `houseId`;
+- `8b78…6f51` → `packageId`;
+- `cf08…37fe` → `houseCapId`.
+
+Todo atribuido, ninguna cuenta y nada que borrar. Los digests son base58 públicos. Sin volcados del DOM: de N-c solo hay
+booleanos, conteos y el texto del lobby. Al citar la tabla, los conteos suben en +1.
+
+==========================================================================================================================
+## Anexo: TASK-4, bloque 2, respuestas del owner (las pasó el orquestador)
+
+| Fila | Antes | Ahora | Base |
+|---|---|---|---|
+| 2a | ⏳ | ⏳ (on-chain y N-c: PASA) | El owner no copió el aviso "Comparte el enlace…". La fila queda ⏳ solo por ese texto; decide el MID |
+| 2b | ⏳ | ✅ | owner: C vio "Esta invitación es para otra dirección." **sin** "Aceptar". Eligió (a) entre dos opciones que le dio el orquestador. No hay parte on-chain: C no firma |
+| 2c | ⏳ | ✅ | owner: "sí", G2 apareció en "Invitaciones recibidas" con "Aceptar" y "Rechazar". On-chain: `d2a` con `sender == B` |
+| 2d | ⏳ (on-chain PASA) | ✅ | owner: la app mostró "ganó B". Coincide con `winner == B` en el evento y en el objeto (sonda bloque `2`, 21/0) |
+| O-2 | ⏳ owner | ⏳ | 1c y 2d: no medida |
+| O-3 | ⏳ owner | ⏳ | 1c y 2d: no medida |
+| 0.2 | ⏳ | ⏳ | Sigue pendiente el commit del deploy de Railway |
+
+Nota para el MID sobre 2b: la respuesta salió de dos opciones cerradas que dio el orquestador. No es un texto que el
+owner haya copiado. Es la única evidencia de la fila (D-20261104-05 (1)), porque C no firma.
+
+Las columnas "Resultado esperado" siguen iguales a las del Anexo A (comprobado con un script).
+
+### Greps de §R-6 (después de la actualización)
+Archivos: este reporte completo y `<repo>/documents/SMOKE_MVP.md`.
+
+```
+--- grep 1: exit=1 (vacío)
+--- grep 2: exit=1 (vacío)
+--- grep 3: exit=1 (vacío)
+--- grep 4: valores distintos y conteo (antes de agregar este bloque)
+     11 0c6c…826a
+      9 143c…ee0e
+     14 54ee…eb1a
+     14 8b78…6f51
+     12 cf08…37fe
+```
+
+Clasificación: `0c6c…826a` → G1, `143c…ee0e` → G2, `54ee…eb1a` → `houseId`, `8b78…6f51` → `packageId` y `cf08…37fe` → `houseCapId`. Todo atribuido, ninguna cuenta y nada que borrar. Sin volcados del DOM. Al citar la tabla, los conteos suben en +1.
+
+==========================================================================================================================
+## Anexo: 0.2 cerrada con el dato del owner, y O-10
+
+- **Dato del owner** (lo pasó el orquestador): el deploy activo de Railway es `30e1405`, el merge de PR #68. El owner
+  mandó el enlace al commit en GitHub.
+- **`git diff --stat 30e1405 77bb49c`:** 8 archivos, 13 inserciones y 7587 borrados, todos en `documents/`:
+  - `HANDOFF_RAILWAY_DEPLOY.md`, `HANDOFF_README.md`, `PLAN_RAILWAY_DEPLOY.md`, `PLAN_README.md`,
+    `REPORTES_RAILWAY_DEPLOY.md`, `REPORTES_README.md` y `SMOKE_RAILWAY_DEPLOY.md`, borrados;
+  - `STATUS.md` (22 ±).
+  - Es el housekeeping de #15/#16 (PR #69).
+- **El bundle servido** es `index-B3BeMVQC.js` (917804 B), el mismo de la CI de M (medido en 0.2).
+- **0.2 → ✅**, con la nota: commit desplegado `30e1405` ≠ M, delta solo de docs, mismo `dist`. En Precondiciones, el
+  commit del deploy es `30e1405`.
+- **O-10 (📝, nunca ❌):**
+  - `git diff --name-only 30e1405^1 30e1405` da `.github/workflows/ci.yml` (solo un comentario), `README.md`, `agents.md`,
+    `app/README.md` (negada en las watch paths) y 4 archivos de `documents/`. Ninguno es watch path.
+  - Aun así, Railway desplegó `30e1405`. O las watch paths no están en efecto, o hubo un redeploy manual del último
+    commit.
+  - El efecto es el mismo `dist`, como prevé `app/README.md`, paso 5 de "Conectar Railway".
+  - No se le pregunta nada al owner: el seguimiento queda en manos del orquestador.
+
+Greps de §R-6 después de esta actualización (reporte y `SMOKE_MVP.md`): 1, 2 y 3 vacíos (exit 1). El grep 4 solo da los mismos cinco valores atribuidos (G1, G2, `houseId`, `packageId`, `houseCapId`). Los SHA `30e1405` y `77bb49c` no llegan a ningún patrón.
+
+==========================================================================================================================
+## Revisión MID: TASK-4, bloque 2 — PASA (GO al bloque 3)
+
+> MID, 2026-11-19. Leí el anexo del bloque 2, `out-t4-2.txt` (que termina en `exit=0`) y el resumen del orquestador
+> con las respuestas del owner.
+
+**Sonda.** 21 PASA / 0 NO PASA.
+- `d2c`: `opponent == B`, apuesta 100000001, comisión 200 bps, `Δ(A)` exacto.
+- `d2a`: `sender == B`, pozo 200000002, comisión 4000000 y pago 196000002 (el redondeo hacia abajo de D2), `Δ(B)` y
+  `Δ(A)` exactos.
+- `previousTransaction(G2) == d2a`.
+- **O-7 cerrado:** `gasBudget` de 3474748 y 3474772, los dos ≤ 10000000. No hace falta issue.
+
+**N-c: PASA.** Acepto la limitación de que G2 ya estaba `Resolved`: el criterio vale con G2 en cualquier estado, y el
+texto vacío con el sufijo "(desde …)" es el esperado de la v1.3.
+
+**Origen de los digests.** El orquestador los sacó por GraphQL. Lo acepto, porque la sonda los verifica por su cuenta
+contra el sender y los montos. El GraphQL no es evidencia del smoke.
+
+### Criterio sobre los textos del owner
+Precisa la regla del bloque 1.
+- **Queda ⏳** solo lo que pide un texto en la columna "Resultado esperado" del Anexo A.
+- **Se acepta con la nota "no registrado"** lo que el plan lista como "Entrega" pero no como criterio.
+
+| Fila | Estado | Motivo |
+|---|---|---|
+| 2a | ✅ | El criterio del Anexo A (`opponent == B`, 100000001, 200 bps, fuera del lobby) se cumple on-chain y con N-c. El aviso "Comparte el enlace…" no es criterio: se anota `aviso: no registrado por el owner` |
+| 2b | ✅ | `owner: eligió (a), "Esta invitación es para otra dirección." sin botón "Aceptar"`. La pregunta fue binaria, con el texto redactado por el orquestador: se anota así. Es D-20261104-05 (1) |
+| 2c | ✅ | `owner: "sí"`: G2 en "Invitaciones recibidas" con "Aceptar" y "Rechazar" |
+| 2d | ✅ | Montos y balances on-chain exactos. `owner: "ganó B"`, que coincide con `winner == B`. El criterio de 2d no pide el texto |
+| O-2 | 📝 no medida | Ya no quedan aceptaciones en la corrida: `no medida (el owner no la reportó en 1c ni en 2d)`. Es una observación (DL-7), nunca ❌ |
+| O-3 | ⏳ hasta el bloque 4 | Se puede medir todavía en 3c y 4b. Si el owner no la da, queda `no medida` al cerrar el bloque 4 |
+
+**Para TASK-5:** sin O-2 y O-3 medidas, los ítems de `app/README.md` que remiten a esas observaciones (`:898-908` en
+`b7aa568`) no pasan a "medido". Quedan como pendiente post-MVP con su issue, y no se borran.
+
+**Formato que funciona con este owner.** El orquestador le arma preguntas cerradas:
+- opción (a) = el texto esperado exacto;
+- opción (b) = "otro: copiarlo".
+
+Se anota como en 2b.
+
+### GO al bloque 3: instrucciones para el owner (todo con la cuenta A, la publicadora)
+
+1. **3a.** Crear una partida **abierta** (sin invitado) de **0.001** SUI y aprobarla en Slush.
+2. **3b.** En esa partida, pulsar **"Cancelar"** y en la ventana de Slush pulsar **Rechazar**. Pregunta cerrada:
+   - (a) la app mostró "La wallet no completó la operación…", sin enlace a ninguna transacción;
+   - (b) otro texto (copiarlo).
+
+   Y además: ¿la partida sigue como pendiente? sí/no.
+3. **3c.** Pulsar **"Cancelar"** de nuevo y esta vez **aprobar**. Pregunta cerrada:
+   - (a) un texto de cancelación que menciona el reembolso de 0.001 SUI (copiarlo si puede);
+   - (b) otro texto (copiarlo).
+
+   Opcional, para O-3: cuánto tardó, aproximado, del clic al resultado.
+4. **O-1, después de 3c.** Con A, empezar a crear **otra** partida abierta de 0.001 SUI. Con la ventana de Slush
+   abierta, intentar cambiar la cuenta activa a **B dentro de Slush**, y después aprobar si se puede. Pregunta cerrada:
+   - (a) Slush no deja cambiar de cuenta con la ventana abierta (en ese caso, rechazar);
+   - (b) la app mostró "La wallet no completó…", sin transacción;
+   - (c) se creó la partida. Decir qué mostró la app y qué cuenta aparece como creadora.
+
+   **Si se creó (c), cancelarla con A** para que no quede abierta.
+5. Sin capturas ni direcciones.
+
+### Para el DEV (bloque 3)
+- Digests: `d3c`, `d3x` y, si O-1 dio (c), `dO1` = el crear de O-1.
+  - Si el orquestador los saca por eventos, `d3c` es el **primer** `GameCreated` de A de 0.001 SUI después de `d2a`.
+  - `dO1` es el que viene después de `d3x`.
+  - El cancel de la partida de O-1 no entra en la sonda. Se anota su digest si lo hay.
+- Sonda bloque `3` con su crudo `out-t4-3.txt`, con `exit=$?` al final. `dO1` va solo si existe.
+- 3b no tiene digest: se completa con la respuesta del owner. "Sigue pendiente: sí" más `G3` `Cancelled` recién por
+  `d3x` (sonda) alcanzan. Si el owner responde (b), STOP al MID.
+- **O-1:**
+  - (a) → 📝 `no ejecutable con Slush (una sola cuenta conectada; O-9)`, sin ❌;
+  - (b) → ✅;
+  - (c) → ✅ solo si `sender(dO1) == A` (sonda) y la app no mostró éxito para B. Si no, ❌ y §R-5.
+- Las correcciones de la tabla de arriba se aplican en `SMOKE_MVP.md`.
+
+==========================================================================================================================
+## Anexo: estados tras la revisión del MID del bloque 2 (aplicados por el DEV)
+- 2a ✅ ("Aviso: no registrado por el owner"); 2b ✅ (pregunta binaria, con el texto redactado por el orquestador); 2c ✅; 2d ✅.
+- O-2 📝 "no medida (el owner no la reportó en 1c ni en 2d)". O-3 ⏳, porque 3c y 4b todavía pueden medirla. 0.2 sigue en ✅.
+- Para el bloque 3 quedan leídas las reglas del MID: cómo se identifican d3c, d3x y dO1; `out-t4-3.txt` con `exit=`; la evidencia de 3b; los resultados (a), (b) y (c) de O-1. Espero la entrega del owner.
+
+==========================================================================================================================
+## Anexo: TASK-4, bloque 3
+
+### Entrega del owner (por el orquestador; todo con A)
+- `d3c` = `CHnfP87qKaka4fBi9c2yomw26iNavv2Zs9gw8mcDGX1A` (23:03:40Z) y `d3x` = `DtAMnVkQDF5zGgrsdhvsJQGfCtXJQRsZL3ycpG55EsHA`
+  (23:04:32Z). Salen de eventos por GraphQL, que es solo análisis; la sonda los verifica.
+- No hay `dO1`: O-1 dio (a).
+- Textos del owner, tal cual:
+  - 3b: "La wallet no completó la operación: User rejected the request."
+  - 3c: "Partida cancelada: se devolvieron 0.001 SUI a tu cuenta Transacción DtAMnV…EsHA · Costo de red: 0.001988195 SUI".
+  - O-1: (a) "Slush no deja cambiar de cuenta con la ventana abierta".
+- Observación nueva, O-11: las watch paths de Railway estaban en solo `/app/**`.
+
+### Sonda, bloque `3` (`<scratchpad>/smoke17-probe/out-t4-3.txt`; 23:06:32Z a 23:06:42Z)
+La sonda sigue intacta (`diff` vacío). `digests.json` tiene d1c, d1a, d2c, d2a, d3c y d3x. C-6 no cortó.
+```
+BLOQUE 3 · red testnet · paquete 0x8b78…6f51
+INFO gas d3c CHnfP87qKaka4fBi9c2yomw26iNavv2Zs9gw8mcDGX1A: 2953200 (computation 1000000, storage 1953200, rebate 0)
+CHECK 3.d3c.success PASA CHnfP87qKaka4fBi9c2yomw26iNavv2Zs9gw8mcDGX1A
+CHECK 3.d3c.sender PASA sender == A: true
+CHECK 3.d3c.creator PASA creator == A: true
+CHECK 3.d3c.bet PASA bet 1000000
+CHECK 3.d3c.opponent PASA opponent none: true
+CHECK 3.d3c.fee_rate PASA fee_rate 200
+CHECK 3.d3c.delta PASA Δ(A) -3953200 == −bet − gas -3953200
+INFO 3.d3c: game_id 0x3bcb…876b
+INFO gas d3x DtAMnVkQDF5zGgrsdhvsJQGfCtXJQRsZL3ycpG55EsHA: 1988195 (computation 1000000, storage 2941200, rebate 1953005)
+CHECK 3.d3x.success PASA DtAMnVkQDF5zGgrsdhvsJQGfCtXJQRsZL3ycpG55EsHA
+CHECK 3.d3x.sender PASA sender == A: true
+CHECK 3.d3x.game_id PASA game_id == 0x3bcb…876b: true
+CHECK 3.d3x.refund PASA refund 1000000
+CHECK 3.d3x.cancelled_by PASA cancelled_by == creator == A: true
+CHECK 3.d3x.delta PASA Δ(A,d3x) -988195 == refund − gas -988195
+CHECK 3.refund_integro PASA Δ(A,d3c) + Δ(A,d3x) -4941395 == −gas(d3c) − gas(d3x) -4941395
+CHECK 3.d3x.sin_house PASA la House no está entre los inputs ni los objetos cambiados: true
+CHECK 3.G3 PASA 0x3bcb…876b Cancelled, stake 0
+RESUMEN 16 PASA / 0 NO PASA
+exit=0
+```
+
+`state.json` sumó `G3`. Es un ID completo y no se pega; abreviado: `0x3bcb…876b`.
+
+### 3b: evidencia de "sigue pendiente" (`<scratchpad>/smoke17-probe/out-t4-3b.txt`)
+El owner no respondió "sigue pendiente". Por la regla del MID, la evidencia es on-chain: que `d3x` sea el primer cambio de
+G3 después de `d3c`.
+- Lecturas: solo `getTransaction` con `effects` y `getObject` con `previousTransaction`, las de §Sonda.
+- Script por stdin, con `G3` en una variable que no se imprime.
+```
+3b d3c crea G3: true (outputState ObjectWrite); versión de salida 199424974
+3b d3x toma G3 en la versión 199424974; G3 en d3x: idOperation None, outputState ObjectWrite
+3b versión de entrada de G3 en d3x == versión de salida en d3c: true
+3b previousTransaction(G3) == d3x: true; versión actual de G3 199424975; == versión de salida de d3x: true
+exit=0
+```
+
+La versión de G3 que toma `d3x` es la misma que dejó `d3c`. Ninguna transacción tocó G3 entre medio: el rechazo de la
+wallet no generó ninguna. Hoy `previousTransaction(G3) == d3x`. → 3b ✅. El texto empieza con el esperado ("La wallet no
+completó la operación…"), y el sufijo es el mensaje de la wallet, sin enlace ni digest.
+
+### 3c: el costo de red que mostró la app contra la cadena
+"Costo de red: 0.001988195 SUI" = 1988195 MIST = `gas(d3x)` de la sonda (computation 1000000 + storage 2941200 − rebate
+1953005). "DtAMnV…EsHA" es la abreviatura base58 de `d3x`. Coinciden.
+
+### Filas
+| Fila | Estado | Base |
+|---|---|---|
+| 3a | ✅ PASA | `d3c` 7/7: 1000000, sin oponente, 200 bps, Δ(A) exacto |
+| 3b | ✅ PASA | owner: texto esperado más el sufijo de la wallet, sin digest. G3 sin cambios entre `d3c` y `d3x` (versiones) |
+| 3c | ✅ PASA | `d3x` 9/9: refund 1000000, `cancelled_by == creator == A`, reembolso íntegro (−4941395 = −gas − gas), sin la House, G3 `Cancelled` con stake 0. owner: texto con el digest y el costo de red iguales a la cadena |
+| O-1 | 📝 | (a) no ejecutable con Slush (una sola cuenta conectada; O-9). No es ❌ |
+| O-3 | ⏳ | 3c sin latencia; queda 4b |
+| O-11 | 📝 | Watch paths en `/app/**`: explica O-10. Pendiente la confirmación del owner de la lista completa |
+
+Controlé las columnas "Resultado esperado" contra el Anexo A con un script: coinciden, salvo `<M>` en 0.1 y 0.2.
+
+### Bloqueos para el bloque 4
+**Ninguno.**
+- K0 sigue encima del piso. El plazo de DL-13 vence el 2026-11-26 21:52Z.
+- Para `4a`, la sonda espera `F4 == F0 + fee(d1a) + fee(d2a) + Σ ajenas` = 0 + 4000000 + 4000000 + ajenas = **8000000**
+  si no hay ajenas.
+- Recordatorio del handoff (TASK-4, "4a antes del retiro"): el owner abre `#/admin` y anota "Comisiones acumuladas", y
+  **espera a que corra la sonda `4a` antes de pulsar "Retirar"**.
+- Después de `d4w`, sonda `4b`. O-3 se puede medir en 4b.
+- O-11 no bloquea: el `dist` servido es el de M.
+
+### Greps de §R-6 (bloque 3)
+Archivos: este reporte completo, `<repo>/documents/SMOKE_MVP.md`, `out-t4-3.txt`, `out-t4-3b.txt` y `digests.json`.
+
+```
+--- grep 1: exit=1 (vacío)
+--- grep 2: exit=1 (vacío)
+--- grep 3: exit=1 (vacío)
+--- grep 4: valores distintos y conteo (antes de agregar este bloque)
+     13 0c6c…826a
+     11 143c…ee0e
+     10 3bcb…876b
+     16 54ee…eb1a
+     18 8b78…6f51
+     14 cf08…37fe
+```
+
+Clasificación: `0c6c…826a` → G1, `143c…ee0e` → G2, `3bcb…876b` → G3, `54ee…eb1a` → `houseId`, `8b78…6f51` → `packageId` y `cf08…37fe` → `houseCapId`. Todo atribuido, ninguna cuenta y nada que borrar. `DtAMnV…EsHA` es base58, un digest público, y no entra en el patrón. Sin volcados del DOM: no hubo navegador en este bloque. Al citar la tabla, los conteos suben en +1.
+
+==========================================================================================================================
+## Anexo: TASK-4, bloque 4a (antes del retiro)
+
+Corrida a pedido del orquestador. El owner tiene indicado no pulsar "Retirar" hasta el OK. La sonda sigue intacta (`diff` vacío). Crudo: `<scratchpad>/smoke17-probe/out-t4-4a.txt`.
+
+```
+BLOQUE 4a · red testnet · paquete 0x8b78…6f51
+INFO F4 = 8000000 · K4 = 408471907
+CHECK 4a.ventana PASA checkpoint(d1a) 408469886 y checkpoint(d2a) 408471907 en (K0 408454921, K4 408471907]: true
+INFO ajenas en (K0, K4]: 0, Σ fee 0
+CHECK 4a.F4 PASA F4 8000000 == F0 0 + fee(d1a) 4000000 + fee(d2a) 4000000 + Σ ajenas 0 = 8000000
+RESUMEN 2 PASA / 0 NO PASA
+exit=0
+```
+
+Resultado:
+- **F4 = 8000000**, **K4 = 408471907** (= checkpoint(d2a): la última mutación de la House es `d2a`).
+- **0 ajenas** en (K0, K4]: Σ fee 0.
+- `state.json` sumó `K4` y `amount4a` = 8000000.
+- **Ok para retirar.**
+- Fila 4a: ⏳ solo por la comparación con el panel ("Comisiones acumuladas"), que tiene que traer el owner. Se espera que el panel muestre 0,008 SUI.
+
+Greps de §R-6 sobre este anexo y `out-t4-4a.txt`: 1, 2 y 3 vacíos; el 4 solo da `8b78…6f51` (`packageId`).
+
+==========================================================================================================================
+## Revisión MID: TASK-4, bloque 3 — PASA (GO condicionado a 4b)
+
+**Bloque 3.**
+- Sonda 16 PASA / 0 NO PASA (`exit=0`).
+- Reembolso íntegro exacto: −4941395 = −gas(d3c) − gas(d3x).
+- `d3x` no toca la House.
+- El "Costo de red" que muestra la app coincide con `gas(d3x)`.
+
+**Filas:**
+- **3a ✅**
+- **3c ✅**
+- **3b ✅.** El texto del owner empieza con el esperado. La evidencia de "sigue pendiente" está en `out-t4-3b.txt`:
+  - G3 pasa de la versión 199424974 de `d3c` a la de `d3x` sin ninguna transacción en medio;
+  - las lecturas son las de §Sonda.
+
+  Lo acepto como desviación: es un script aparte de la sonda, pero solo usa lecturas permitidas.
+- **O-1:** 📝 "no ejecutable con Slush".
+- **O-11:** 📝. Observación para después de la corrida, no bloquea: con watch paths solo en `/app/**`, un cambio en
+  `Dockerfile` o `.dockerignore` de la raíz no redespliega. El owner lo ajusta con el checklist de `app/README.md` y
+  pasa la lista completa.
+
+**Corrección en `SMOKE_MVP.md`:** en 3b y 3c, el "Resultado obtenido" cita el texto literal del owner como
+`owner: "…"`, completo. Hoy 3b dice "texto esperado más el sufijo".
+
+### 4b: GO, condicionado a 4a
+El owner puede pulsar "Retirar" solo si se cumplen las dos cosas:
+- la sonda `4a` salió con exit 0 y `4a.F4` PASA (esperado 8000000 sin ajenas; con ajenas, listadas y sumadas);
+- el owner ya anotó "Comisiones acumuladas" de `#/admin`.
+
+Si `4a` da NO PASA o exit 5, no se retira: STOP al MID.
+
+### Preguntas cerradas para el owner (bloques 4 y H, todo con A salvo H6)
+- **4a.** En `#/admin`, "Comisiones acumuladas": (a) 0.008 SUI; (b) otro valor (cópialo).
+- **4b.** Pulsa "Retirar … SUI a tu cuenta" y aprueba.
+  - La ventana de Slush mostró: (a) un retiro de comisiones de la House que va a esta misma cuenta; (b) otra cosa
+    (descríbela).
+  - Texto del resultado: (a) un retiro de 0.008 SUI (cópialo); (b) otro (cópialo).
+  - Después, el botón quedó deshabilitado con "No hay comisiones para retirar.": sí/no.
+  - Opcional, para O-3: cuánto tardó, aproximado, del clic al resultado.
+- **H1.**
+  - ¿Se ve "Administrar House" en el encabezado? sí/no.
+  - En `#/admin`: (a) comisión 200 bps, límites 0.001 / 50 SUI, acumulado 0, versión 1; (b) algo distinto (cópialo).
+  - ¿Cuántas veces usaste "Volver a comprobar"? (0 si ninguna)
+- **H2.** Cambia la comisión a **201** y aprueba.
+  - Resumen antes de firmar: (a) "De 200 bps (…) a 201 bps (…)"; (b) otro (cópialo).
+  - Resultado: (a) "Comisión actualizada: …" (cópialo); (b) otro.
+- **H3.** **En seguida**, sin crear ni compartir nada entre medio, vuelve a **200**. Las mismas dos preguntas, con
+  "De 201 bps (…) a 200 bps (…)".
+- **H4.** Cambia los límites a **0.002 / 10** y aprueba. Después, de vuelta a **0.001 / 50** y aprueba. En cada uno:
+  - resumen (a) "De … SUI a … SUI"; (b) otro;
+  - resultado (a) "Límites actualizados: …"; (b) otro;
+  - ¿los campos muestran lo nuevo y el botón quedó deshabilitado? sí/no.
+- **H5.** En H2-H4, la ventana de Slush mostró: (a) una llamada de administración de la House; (b) otra cosa
+  (descríbela).
+- **H6.** Con **B** (Disconnect → B en Slush → "Conectar wallet"):
+  - ¿aparece "Administrar House"? (a) no; (b) sí;
+  - abriendo `#/admin` por URL: (a) "Sin permisos: esta cuenta no tiene el HouseCap de esta House."; (b) otro
+    (cópialo).
+- Sin capturas ni direcciones.
+
+### Para el DEV
+- **4b:** sonda `4b` después de `d4w`. Esperado:
+  - `sender == CAP`, con `CAP == A: true`;
+  - dos comandos, `withdraw_fees` + `TransferObjects` a quien firma;
+  - `amount == F4` si no hay `GameResolved` en `(K4, checkpoint(d4w)]`;
+  - `Δ(CAP) == amount − gas`.
+- **H:** los digests `dh1..dh4` se identifican por evento:
+  - `FeeRateUpdated` 200→201 = `dh1` y 201→200 = `dh2`;
+  - `BetLimitsUpdated` a 2000000/10000000000 = `dh3` y de vuelta = `dh4`;
+  - la sonda verifica los valores.
+- **Sonda `h` y después `final`.** Esperado en `final`:
+  - `amount + Ff == F0 + Σ fee` = 8000000, con `Ff` 0 si no hay ajenas;
+  - conservación sobre `{A, B}` (`CAP == A`);
+  - H7 vuelve a 200 bps, 1000000/50000000000 y versión 1.
+- **Crudos:** uno por bloque, cada uno con `exit=$?` al final.
+- **O-3:** si 4b tampoco trae dato, queda 📝 `no medida`.
+
+==========================================================================================================================
+## Anexo: 4a cerrada y corrección del MID en 3b y 3c
+- 4a ✅: owner: "0.008 SUI de comisiones acumuladas" = F4 8000000 (sonda `4a`).
+- 3b y 3c: el "Resultado obtenido" cita el texto literal completo del owner como `owner: "…"`, y se quitó la paráfrasis "texto esperado más el sufijo".
+- Espero la entrega de 4b y H. Después: sonda `4b`, `dh1..dh4` por evento, sonda `h` y sonda `final`, con un crudo por bloque que termina en `exit=`.
+
+==========================================================================================================================
+## Anexo: TASK-4, bloque 4b
+
+`d4w` = `BzPZ2ty8WLBjjXhj98jEL8NFaMZ4xVAbr5qCbt82TPop` (23:12:19Z). Salió de GraphQL, que es solo análisis; la sonda lo verifica. La sonda sigue intacta (`diff` vacío). Crudo: `<scratchpad>/smoke17-probe/out-t4-4b.txt`.
+
+```
+BLOQUE 4b · red testnet · paquete 0x8b78…6f51
+INFO gas d4w BzPZ2ty8WLBjjXhj98jEL8NFaMZ4xVAbr5qCbt82TPop: 1988282 (computation 1000000, storage 3807600, rebate 2819318)
+CHECK 4b.success PASA BzPZ2ty8WLBjjXhj98jEL8NFaMZ4xVAbr5qCbt82TPop
+CHECK 4b.sender PASA sender == CAP: true
+INFO CAP == A: true
+CHECK 4b.ptb PASA comandos MoveCall,TransferObjects; withdraw_fees + TransferObjects a quien firma: true
+CHECK 4b.house_id PASA house_id == houseId: true
+CHECK 4b.amount≥F4 PASA amount 8000000 ≥ F4 8000000
+INFO checkpoint(d4w) = 408477074
+CHECK 4b.amount==F4 PASA sin GameResolved en (K4 408471907, 408477074]: amount 8000000 == F4 8000000
+CHECK 4b.delta PASA Δ(CAP,d4w) 6011718 == amount − gas 6011718
+RESUMEN 7 PASA / 0 NO PASA
+exit=0
+```
+
+- `amount` = F4 = 8000000. No hay `GameResolved` en (K4, checkpoint(d4w) 408477074].
+- `CAP == A: true`. `Δ(CAP)` = amount − gas = 6011718.
+- `state.json` sumó `kd4w`.
+- El costo de red que mostró la app, 0.001988282 SUI, es igual a `gas(d4w)` = 1988282 (1000000 + 3807600 − 2819318).
+- "BzPZ2t…TPop" es `d4w`.
+- **4b ✅**, con los textos literales del owner y "boton con 0 sui ejn comisiones ahora", que confirma en sustancia el
+  botón deshabilitado con "No hay comisiones para retirar.".
+- Siguen pendientes, de la entrega de H: la ventana de Slush (H5) y la latencia (O-3).
+- **O-12 (⚠️, hallazgo provisional):**
+  - antes del retiro, el botón "Retirar 0.008 SUI" estaba deshabilitado sin motivo on-chain y se habilitó al recargar;
+  - causa probable, según el orquestador: `busy = target.busy || target.unconfirmed !== null`
+    (`app/src/components/HouseAdminPanel.tsx:319`, línea comprobada en `296c07b`), puesto por el intento rechazado de
+    O-1;
+  - el MID decide si va como `type:bug` (§R-5). No es ❌ del smoke por sí solo.
+
+Greps de §R-6 sobre este anexo, `SMOKE_MVP.md` y `out-t4-4b.txt`: ver la línea siguiente.
+Greps de §R-6: grep 1 exit=1, grep 2 exit=1, grep 3 exit=1 (los tres vacíos). El grep 4 da 0c6c…826a 143c…ee0e 3bcb…876b 54ee…eb1a 8b78…6f51 cf08…37fe : G1, G2, G3, `houseId`, `packageId` y `houseCapId`, todos atribuidos y ninguna cuenta. `BzPZ2t…TPop` es base58.
+
+==========================================================================================================================
+## Anexo: respuestas del owner sobre 4b y O-12
+- 4b, ventana de Slush, owner: (a) "un retiro de comisiones de la House hacia tu misma cuenta". Es la parte de 4b de H5. 4b sigue ✅.
+- O-12, owner: antes de recargar se veía (a) solo el botón deshabilitado, sin aviso. El bloqueo fue silencioso, sin "sin confirmar" ni "en curso". Sigue ⚠️ hasta que decida el MID.
+- O-3 → 📝 "no medida": el owner no dio la latencia en 1c, 2d, 3c ni 4b.
+
+==========================================================================================================================
+## Anexo: TASK-4, bloque H (sonda `h` y `final`)
+
+Digests (de eventos por GraphQL, solo análisis; la sonda los verifica):
+- `dh1` = `5CwHjyBS1LwMdqeW8YoZQseK1wGmX83U7fJcktWezPzA` (23:14:55Z);
+- `dh2` = `6gDJPuyKuNiccYN3DcfqyUCfRkChZn3rN1xo7DbrpfUZ` (23:15:40Z);
+- `dh3` = `B4mxFdUDsCGKm6fPuPzqg4rPA1SHMDE7bQLfnFVG28rC` (23:16:36Z);
+- `dh4` = `3qdFYcroDnhEtniQeVxn7agWC43TPdkrjUPBRgxZoeiq` (23:18:33Z).
+
+La sonda sigue intacta (`diff` vacío). C-6 no cortó en ninguno de los dos bloques.
+
+### Sonda `h` (`<scratchpad>/smoke17-probe/out-t4-h.txt`)
+```
+BLOQUE h · red testnet · paquete 0x8b78…6f51
+INFO gas dh1 5CwHjyBS1LwMdqeW8YoZQseK1wGmX83U7fJcktWezPzA: 1000282 (computation 1000000, storage 2819600, rebate 2819318)
+CHECK h.dh1.success PASA 5CwHjyBS1LwMdqeW8YoZQseK1wGmX83U7fJcktWezPzA
+CHECK h.dh1.sender PASA sender == CAP: true
+CHECK h.dh1.valores PASA FeeRateUpdated: old_fee_rate 200, new_fee_rate 201; house_id == houseId: true
+CHECK h.dh1.delta PASA Δ(CAP) -1000282 == −gas -1000282
+INFO gas dh2 6gDJPuyKuNiccYN3DcfqyUCfRkChZn3rN1xo7DbrpfUZ: 1000282 (computation 1000000, storage 2819600, rebate 2819318)
+CHECK h.dh2.success PASA 6gDJPuyKuNiccYN3DcfqyUCfRkChZn3rN1xo7DbrpfUZ
+CHECK h.dh2.sender PASA sender == CAP: true
+CHECK h.dh2.valores PASA FeeRateUpdated: old_fee_rate 201, new_fee_rate 200; house_id == houseId: true
+CHECK h.dh2.delta PASA Δ(CAP) -1000282 == −gas -1000282
+INFO GameCreated en [checkpoint(dh1) 408477779, checkpoint(dh2) 408477980]: 0
+INFO gas dh3 B4mxFdUDsCGKm6fPuPzqg4rPA1SHMDE7bQLfnFVG28rC: 1000282 (computation 1000000, storage 2819600, rebate 2819318)
+CHECK h.dh3.success PASA B4mxFdUDsCGKm6fPuPzqg4rPA1SHMDE7bQLfnFVG28rC
+CHECK h.dh3.sender PASA sender == CAP: true
+CHECK h.dh3.valores PASA BetLimitsUpdated: old_min_bet 1000000, old_max_bet 50000000000, new_min_bet 2000000, new_max_bet 10000000000; house_id == houseId: true
+CHECK h.dh3.delta PASA Δ(CAP) -1000282 == −gas -1000282
+INFO gas dh4 3qdFYcroDnhEtniQeVxn7agWC43TPdkrjUPBRgxZoeiq: 1000282 (computation 1000000, storage 2819600, rebate 2819318)
+CHECK h.dh4.success PASA 3qdFYcroDnhEtniQeVxn7agWC43TPdkrjUPBRgxZoeiq
+CHECK h.dh4.sender PASA sender == CAP: true
+CHECK h.dh4.valores PASA BetLimitsUpdated: old_min_bet 2000000, old_max_bet 10000000000, new_min_bet 1000000, new_max_bet 50000000000; house_id == houseId: true
+CHECK h.dh4.delta PASA Δ(CAP) -1000282 == −gas -1000282
+RESUMEN 16 PASA / 0 NO PASA
+exit=0
+```
+
+### Sonda `final` (`<scratchpad>/smoke17-probe/out-t4-final.txt`)
+```
+BLOQUE final · red testnet · paquete 0x8b78…6f51
+CHECK H7.shared PASA House Shared y tipo exacto: true
+CHECK H7.fee_rate PASA fee_rate 200
+CHECK H7.limites PASA 1000000/50000000000
+CHECK H7.version PASA version 1
+INFO Ff = fees_collected 0 · Kf = 408478760
+RESUELTA G1 0x0c6c…826a fee 4000000 checkpoint 408469886
+RESUELTA G2 0x143c…ee0e fee 4000000 checkpoint 408471907
+CHECK H7.comisiones PASA amount 8000000 + Ff 0 = 8000000 == F0 0 + Σ fee 8000000 (2 GameResolved en (K0 408454921, Kf 408478760], 0 ajenas)
+CHECK H7.sin_ajenas PASA sin ajenas: Ff 0 == 0
+CHECK H7.conservacion PASA Σ Δ(A, B (CAP == A)) -16052995 == −Σ gas -16052995 + (amount − fee(d1a) − fee(d2a)) 0 = -16052995
+RESUMEN 7 PASA / 0 NO PASA
+exit=0
+```
+
+**Resultado de `final`:**
+- **Identidad de comisiones:** amount 8000000 + Ff 0 = 8000000 == F0 0 + Σ fee 8000000. Son 2 `GameResolved` en
+  (K0 408454921, Kf 408478760], G1 y G2, con 0 ajenas. PASA.
+- **Conservación**, sobre {A, B} porque CAP == A, con las 7 transacciones: Σ Δ = −16052995 == −Σ gas −16052995 + 0
+  (amount − fee(d1a) − fee(d2a) = 0). Es exacta: PASA.
+- La House volvió al estado de 0.4: 200 bps, 1000000/50000000000, versión 1, `fees_collected` 0.
+- El costo de red de H3 en la app, 0.001000282 SUI, es igual a `gas(dh2)` = 1000282. "6gDJPu…pfUZ" es `dh2`.
+
+### Filas (regla del MID: ⏳ solo donde falta un texto que pide el criterio)
+| Fila | Estado | Base |
+|---|---|---|
+| H1 | ⏳ | El panel pegado coincide (200 bps, 0.001/50, acumulado 0 tras 4b, versión 1). Faltan "Administrar House" en el encabezado y el número de "Volver a comprobar" |
+| H2 | ⏳ (on-chain PASA) | `dh1` 4/4 (200→201). Faltan el resumen "De 200 bps (…) a 201 bps (…)" y "Comisión actualizada: …" |
+| H3 | ✅ | `dh2` 4/4 (201→200). 0 `GameCreated` en [checkpoint(dh1), checkpoint(dh2)]. Texto literal del owner y costo de red = gas |
+| H4 | ⏳ (on-chain PASA) | `dh3`/`dh4` 8/8. Faltan los resúmenes, "Límites actualizados: …" y el botón deshabilitado |
+| H5 | ✅ (para el MID) | Slush no muestra la función, sino "Object Changes" con la House y el HouseCap actualizados. En 4b, (a). Lo firmado es lo esperado. La vista previa con 2000000/50000000000 no se ejecutó (O-13) |
+| H6 | ⏳ | El texto "Sin permisos…" está. Falta "sin enlace" con B; lo está preguntando el orquestador |
+| H7 | ✅ | `final` 7/7: identidad y conservación exactas |
+| O-13 | 📝 | Los campos vuelven a los valores on-chain mientras la wallet pide la firma. Va al issue post-MVP de UI/UX, con la vista previa no ejecutada |
+
+No copié ninguna abreviatura de cuenta de la vista previa de Slush.
+
+### Lo que falta del bloque 5
+- **5a** (badge): owner, más N-a. N-a ya está ✅ desde TASK-3. Lo repito en el bloque 5 si el MID lo pide.
+- **5b** (enlaces al explorador): owner, más **N-d** (headless, `#/game/<Gk>` con k = 1, 2, 3: estado y `href` de
+  Suiscan).
+- **5c** (recarga de rutas profundas): owner con wallet, más **N-e** (recarga de `#/game/<G1>`, `#/my-games` y
+  `#/admin` sin wallet) y **N-f** (CSP y consola; dato de O-8 sobre `api.slush.app`).
+- O-8: opcional, del owner.
+- Además, para el Reporte final: los ⏳ de H1, H2, H4 y H6 (textos del owner), y la decisión del MID sobre O-12.
+- N-d, N-e y N-f son solo lecturas y se pueden correr ya, sin esperar al owner.
+
+Greps de §R-6 (reporte, `SMOKE_MVP.md`, `out-t4-h.txt`, `out-t4-final.txt`, `digests.json`): grep 1 exit=1, grep 2 exit=1, grep 3 exit=1 (los tres vacíos). El grep 4 da 0c6c…826a 143c…ee0e 3bcb…876b 54ee…eb1a 8b78…6f51 cf08…37fe : G1, G2, G3, `houseId`, `packageId` y `houseCapId`, todos atribuidos y ninguna cuenta. Las abreviaturas de digests son base58.
+
+==========================================================================================================================
+## Anexo: TASK-4, bloque 5: N-d, N-e y N-f (headless, sin wallet)
+
+Script `<scratchpad>/n17/nde.mjs`. Usa el mismo lanzamiento que `na.mjs`:
+- perfil desechable nuevo `<scratchpad>/chrome-17d`, con `HOME`/`XDG_*` aislados;
+- CDP en 127.0.0.1, `--disable-extensions`, una pestaña.
+
+G1, G2 y G3 entran por variables de entorno desde `state.json` y no se imprimen. Los errores pasan por un redactor de hex
+largo antes de imprimirse. No hay volcados del DOM. Crudo: `<scratchpad>/n17/out-nde.txt`.
+
+```
+2026-11-19T23:26:50Z
+N-d G1: estado "Resuelta" (esperado "Resuelta"); "Ver en el explorador" con href == suiscan testnet/object/<G1>: true; en 264 ms; true
+N-d G2: estado "Resuelta" (esperado "Resuelta"); "Ver en el explorador" con href == suiscan testnet/object/<G2>: true; en 257 ms; true
+N-d G3: estado "Cancelada" (esperado "Cancelada"); "Ver en el explorador" con href == suiscan testnet/object/<G3>: true; en 258 ms; true
+N-e recarga #/game/<G1>: estado "Resuelta", href ok true, ruta true; true
+N-e #/my-games: "Conecta tu wallet para ver tus partidas e invitaciones" antes de recargar true, después true (776 ms); ruta tras recargar #/my-games; true
+N-e #/admin: "Conecta la wallet que tiene el HouseCap para administrar la House" antes de recargar true, después true (533 ms); ruta tras recargar #/admin; true
+N-f violaciones de CSP (securitypolicyviolation, todas las vistas): 0
+N-f errores de consola: 12
+ERRCONSOLA log javascript: Access to fetch at 'https://api.slush.app/api/wallet/metadata' from origin 'https://sui-battleship-app-production.up.railway.app' has been blocked by CORS policy: No 'Access-Contro [sui-battleship-app-production.up.railway.app/]
+ERRCONSOLA log network: Failed to load resource: net::ERR_FAILED [api.slush.app/api/wallet/metadata]
+ERRCONSOLA console.error: Error fetching metadata
+ERRCONSOLA log javascript: Access to fetch at 'https://api.slush.app/api/wallet/metadata' from origin 'https://sui-battleship-app-production.up.railway.app' has been blocked by CORS policy: No 'Access-Contro [sui-battleship-app-production.up.railway.app/]
+ERRCONSOLA log network: Failed to load resource: net::ERR_FAILED [api.slush.app/api/wallet/metadata]
+ERRCONSOLA console.error: Error fetching metadata
+ERRCONSOLA log javascript: Access to fetch at 'https://api.slush.app/api/wallet/metadata' from origin 'https://sui-battleship-app-production.up.railway.app' has been blocked by CORS policy: No 'Access-Contro [sui-battleship-app-production.up.railway.app/]
+ERRCONSOLA log network: Failed to load resource: net::ERR_FAILED [api.slush.app/api/wallet/metadata]
+ERRCONSOLA console.error: Error fetching metadata
+ERRCONSOLA log javascript: Access to fetch at 'https://api.slush.app/api/wallet/metadata' from origin 'https://sui-battleship-app-production.up.railway.app' has been blocked by CORS policy: No 'Access-Contro [sui-battleship-app-production.up.railway.app/]
+ERRCONSOLA log network: Failed to load resource: net::ERR_FAILED [api.slush.app/api/wallet/metadata]
+ERRCONSOLA console.error: Error fetching metadata
+RED fallo de red (Fetch): net::ERR_FAILED cors MissingAllowOriginHeader
+RED fallo de red (Fetch): net::ERR_ABORTED
+RED fallo de red (Fetch): net::ERR_ABORTED
+RED fallo de red (Fetch): net::ERR_FAILED cors MissingAllowOriginHeader
+RED fallo de red (Fetch): net::ERR_FAILED cors MissingAllowOriginHeader
+RED fallo de red (Fetch): net::ERR_FAILED cors MissingAllowOriginHeader
+INFO Chrome cerrado: true
+exit=0
+```
+
+- **N-d ✅:** G1 y G2 "Resuelta", G3 "Cancelada". El `href` de "Ver en el explorador" es
+  `https://suiscan.xyz/testnet/object/<Gk>` del mismo objeto en los tres. Lo comparé en el script y solo imprimí el
+  booleano.
+- **N-e ✅:** después de recargar, `#/game/<G1>` mantiene la vista y `#/my-games` y `#/admin` mantienen la ruta y su texto
+  "Conecta…".
+- **N-f ✅:** 0 violaciones de CSP en 4 cargas y 3 navegaciones.
+  - 12 errores de consola: 3 por carga, todos del pedido a `api.slush.app/api/wallet/metadata` (CORS
+    `MissingAllowOriginHeader`). Son conocidos (E-6 de #15) y no son rojo.
+  - Dato para O-8: el pedido queda bloqueado por CORS sin respuesta legible, así que el 403 de Cloudflare no se ve desde
+    la página.
+  - Hubo 2 `net::ERR_ABORTED` de fetch durante las recargas. Son pedidos cortados por `Page.reload`; el script no
+    capturó su URL. No son errores de consola ni de la app.
+- Chrome: lo cerré con `Browser.close`, el PID terminó, no queda ningún proceso con el perfil y el perfil está borrado.
+  Los Chrome del usuario no se tocaron.
+- **5a, 5b y 5c** siguen ⏳ solo por la parte del owner.
+
+Greps de §R-6 (reporte, `SMOKE_MVP.md`, `out-nde.txt`): grep 1 exit=1, grep 2 exit=1, grep 3 exit=1 (los tres vacíos). El grep 4 da 0c6c…826a 143c…ee0e 3bcb…876b 54ee…eb1a 8b78…6f51 cf08…37fe : G1, G2, G3, `houseId`, `packageId` y `houseCapId`, todos atribuidos y ninguna cuenta.
+
+==========================================================================================================================
+## Anexo: últimas respuestas del owner, Reporte final y §R-6 sobre todo `SMOKE_MVP.md`
+
+### Filas actualizadas (`owner:`)
+- **H1 ✅:** "Administrar House" aparece con A: sí. El número de usos de "Volver a comprobar" no lo reportó el owner: lo
+  decide el MID.
+- **H2 ⏳ y H4 ⏳:**
+  - lo confirmado por pregunta cerrada:
+    - en H2 y H4, el aviso de éxito apareció después de cada firma: sí;
+    - en H4, el botón "Actualizar" quedó deshabilitado: sí;
+  - la parte on-chain da PASA;
+  - quedan ⏳ solo por los **resúmenes previos a la firma**, que piden las columnas "Resultado esperado" y que el owner
+    no reportó (regla del MID).
+- **H6 ✅:** con B no aparece "Administrar House" ("no"), y el texto "Sin permisos…" ya estaba.
+- **5a, 5b y 5c ✅:** owner sí ×3, además de N-a, N-d, N-e y N-f.
+- **O-5 📝:**
+  - las líneas de "Mis partidas" de B están saneadas: las abreviaturas de cuenta van como `<cuenta A>` y no se copió
+    ninguna;
+  - el sufijo "(desde 8 nov 2026, 17:30)" está presente;
+  - 17:30 en UTC−5 = 2026-11-08T22:30Z, que coincide con `piso + 16000` = 404348001. El handoff lo midió en
+    2026-11-08T22:30:05Z ("Historial podado (v1.3)", lecturas).
+- **O-8 📝:** no realizada.
+- **O-4 📝:** no ocurrió; las 11 transacciones dieron `success`.
+- **O-6 📝:** no aplica (DL-6).
+
+### Reporte final (cerrado en `SMOKE_MVP.md`)
+- **Pasos: 28/30 ✅, 0 ❌, 2 ⏳ (H2 y H4).** Paso 0 8/8, pasos 1-5 15/15, panel 5/7.
+- **Sonda: 97 PASA / 0 NO PASA** en 8 bloques, todos con exit 0. Las identidad de `final` y la conservación son exactas.
+- **Hallazgos:**
+  - O-12 ⚠️: bloqueo silencioso del botón "Retirar"; el MID decide si va como `type:bug`;
+  - O-13 📝: los campos vuelven a los valores on-chain mientras se firma; va al issue post-MVP de UI/UX;
+  - O-9/O-1 📝: Slush con una sola cuenta;
+  - O-10/O-11 📝: watch paths de Railway en solo `/app/**`;
+  - O-2/O-3 no medidas, O-8 no realizada.
+- **Issues abiertos:** ninguno creado; quedan pendientes las decisiones sobre O-12 y O-13.
+- **Veredicto propuesto por el DEV: PASA**, si el MID acepta H2 y H4 sin el resumen previo a la firma, y H1 sin el número
+  de "Volver a comprobar". Si no, se espera ese dato del owner. Ningún ❌.
+- El encabezado de `SMOKE_MVP.md` sigue en "Estado: EN CURSO" hasta que decida el MID.
+- Comprobé con un script las columnas "Resultado esperado" contra el Anexo A: coinciden, salvo `<M>` en 0.1 y 0.2.
+
+### §R-6 sobre todo `<repo>/documents/SMOKE_MVP.md`
+```
+--- grep 1: exit=1 (vacío)
+--- grep 2: exit=1 (vacío)
+--- grep 3: exit=1 (vacío)
+--- grep 4
+      4 0c6c…826a   → G1
+      4 143c…ee0e   → G2
+      3 3bcb…876b   → G3
+      2 54ee…eb1a   → houseId
+      1 8b78…6f51   → packageId
+      1 cf08…37fe   → houseCapId
+```
+
+**Comprobación en memoria de las cuentas.** `A = sender(d1c)` y `B = sender(d1a)` se leyeron por gRPC y quedaron solo en
+memoria. En `SMOKE_MVP.md` y en este reporte busqué:
+- la abreviatura 4+4;
+- el prefijo `0x`+4 con "…";
+- el sufijo "…"+4;
+- un fragmento de 12 hex del principio o del final.
+
+Resultado: **false en los cuatro casos, para A y para B, en los dos archivos.**
+
+C no firmó nunca, así que no se puede derivar on-chain. Aun así, las seis coincidencias del grep 4 son todas IDs de
+objetos atribuidos, así que ninguna es una cuenta, tampoco C. No hubo nada que borrar.
+
+==========================================================================================================================
+## Revisión MID final: TASK-3 y TASK-4 — PASA · Veredicto del smoke: PASA (30/30)
+
+> MID, 2026-11-19, contra HANDOFF_SMOKE_MVP v1.3.1. Revisé `SMOKE_MVP.md` completo, este reporte con todos sus anexos y
+> los crudos `out-t4-*.txt` y `n17/out-*.txt`.
+
+### Sonda
+- **97 PASA / 0 NO PASA** en 8 bloques, todos con `exit=0` en el crudo.
+- **Identidad de `final`:** `amount 8000000 + Ff 0 == F0 0 + Σ fee 8000000`, con 2 `GameResolved` en `(K0, Kf]` y 0
+  ajenas.
+- **Conservación exacta** sobre {A, B} (`CAP == A`): −16052995.
+- **La House vuelve al estado de 0.4.**
+- **Gas:** los "Costo de red" que mostró la app (3c, 4b, H3) son iguales a `gas(tx)`.
+- **DL-12, DL-13 y C-6:**
+  - DL-12 aplicado en `pre`;
+  - DL-13 cumplido: `pre` 21:52:20Z, `final` 23:24:32Z, en la misma sesión;
+  - C-6 no cortó nunca.
+- **§R-6:** limpio y atribuido. La comprobación en memoria de las cuentas da false ×4 para A y para B, en los dos archivos.
+
+### Decisiones del MID
+1. **H2 y H4 pasan a ✅** con la nota "resumen previo a la firma no registrado".
+   - Lo que verifica el criterio (los valores que se firman y se ejecutan) está on-chain y es exacto:
+     - H2: 200→201;
+     - H4: 1000000/50000000000 → 2000000/10000000000 → de vuelta.
+   - El owner confirmó con preguntas cerradas el aviso de éxito y el botón deshabilitado.
+   - El texto del resumen lo cubren los tests de `HouseAdminPanel` (#14).
+   - Lo que vio el owner mientras firmaba va a O-13.
+2. **H1 pasa a ✅** sin el conteo de "Volver a comprobar". Ese conteo solo mide algo justo después de recibir el cap, y en
+   esta corrida no hubo transferencia (custodia "publicadora importada"). Se anota "no aplica: sin `dcap`".
+3. **0.2 pasa a ✅** con el deploy `30e1405` ≠ M. El delta `30e1405..77bb49c` es solo de `documents/`, y el bundle es el
+   mismo (`index-B3BeMVQC.js`, 917804 B, igual al de la CI de M).
+   - DL-8 en TASK-5: STATUS anota M = `77bb49c` como el árbol probado y `30e1405` como el deploy activo, con el mismo
+     `dist`.
+4. **O-12 va a issue `type:bug`, `priority:P2`, no bloqueante.**
+   - La app bloqueó la única acción de la House sin ningún aviso, y solo se destrabó recargando.
+   - No hay riesgo de fondos, y 4b pasó después de recargar.
+   - No es ❌ del smoke: el paso 4b tiene su verificación completa.
+5. **O-13 va a un issue propio** (`type:feature` de UX del panel, P3), enlazado desde el rediseño de UI/UX.
+   - Es un arreglo acotado en `HouseAdminPanel`: conservar el borrador mientras la wallet pide la firma.
+   - Además tiene un costado de seguridad para el usuario: la vista previa puede no coincidir con lo que muestra el
+     formulario. No conviene que espere al rediseño.
+6. **Observaciones sin issue propio** (van al rediseño o a la doc):
+   - O-1 y O-9: limitación de Slush, una sola cuenta;
+   - O-2 y O-3: no medidas;
+   - O-8: no realizada;
+   - O-10 y O-11: watch paths de Railway en `/app/**`, pendiente del owner.
+
+### Veredicto
+**Pasos: 30/30 ✅, 0 ❌.** Sonda 97/0, identidad de comisiones y conservación exactas. Hallazgos: O-12 (bug P2) y
+O-13 (UX P3), los dos no bloqueantes. **SMOKE_MVP: PASA.** TASK-3 y TASK-4: **PASA**.
+
+### Siguiente paso
+- **TASK-5 autorizado.** Además de lo que fija el handoff:
+  - DL-8 con M y el deploy;
+  - DL-14 con el dato de 12 épocas a las 21:54Z;
+  - en `app/README.md`:
+    - `:479`: O-1 y O-9;
+    - `:604`: O-7 (3474748 / 3474772, precio 1000, por debajo de la reserva);
+    - `:898-908`: O-2 y O-3 siguen pendientes y quedan enlazados al issue de UI/UX;
+  - los enlaces a los 4 issues nuevos;
+  - en STATUS, "Pendientes del usuario": O-11 (watch paths), N-5 (tag) y la revisión de D-20261119-03.
+  - Comprobar con `/usr/bin/grep -n 'no requerido\|No es requerido'` que no quedan textos viejos de `deploy-image`.
+  - Nota: con las watch paths en `/app/**`, editar `app/README.md` dispara un redeploy con el mismo `dist`. N-2 lo cubre.
+- **TASK-6 autorizado** cuando TASK-5 pase.
+  - El body lleva solo `Closes #17`; #15 y #16 ya están cerrados.
+  - Enlaza los 4 issues nuevos, D-20261119-03 y lo que vence (D-20261103-01 (2)).
+  - Antes del merge, el regex de D-20261119-01 sobre los commits y el body.
