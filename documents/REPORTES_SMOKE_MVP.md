@@ -3605,3 +3605,267 @@ O-13 (UX P3), los dos no bloqueantes. **SMOKE_MVP: PASA.** TASK-3 y TASK-4: **PA
   - El body lleva solo `Closes #17`; #15 y #16 ya están cerrados.
   - Enlaza los 4 issues nuevos, D-20261119-03 y lo que vence (D-20261103-01 (2)).
   - Antes del merge, el regex de D-20261119-01 sobre los commits y el body.
+
+---
+
+## TASK-5
+
+> Reporte del DEV (texto plano en el scratchpad, copiado tal cual por el orquestador tras leerlo y pasar los greps §R-6 y la búsqueda de las cuentas del owner: 0 coincidencias).
+
+## Task completado: HANDOFF_SMOKE_MVP — TASK-5
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-17-mvp-smoke` @ `d46a503` (worktree `<repo>-issue17`). Cambios sin commitear, sin push.
+
+### Archivos modificados/creados
+- `README.md` (DL-14 en "Jugar en testnet"; roadmap: corte "MVP cerrado", #17 "Hecho", filas post-MVP #70-#73)
+- `app/README.md` (DL-14 ×3; O-8 en el ícono remoto de Slush; O-1/O-9; O-7; "Pendientes conocidos" reescrito)
+- `contracts/README.md` (DL-14, solo las dos líneas que fija el handoff)
+- `agents.md` (DL-14, la línea de `agents.md:251` de `b7aa568`, hoy :252-253)
+- `documents/STATUS.md` (fila 6 en ✅; DL-8 y vencimiento de D-20261103-01 (2) en "Despliegues"; 2 filas de
+  baselines; fila de #17; "Siguiente"; "Pendientes del usuario")
+No tocados: `documents/SMOKE_MVP.md`, `documents/HANDOFF_SMOKE_MVP.md`, `documents/DECISIONES.md`
+(`git diff --quiet` sobre los tres: sin cambios).
+
+### Qué se implementó (3 líneas máx)
+Cierre del MVP en los docs: STATUS con #17 PASA 30/30 sobre M = `77bb49c` (deploy `30e1405`, mismo `dist`), roadmap y
+"Siguiente" con #70-#73, y "Pendientes del usuario" con O-11, N-About y N-5 en ✅ (owner) y D-20261119-03 abierta. El "≈ 14,6 días" pasa a la retención
+medida y fechada (DL-14), y los pendientes de `app/README.md` que remitían a #17 pasan a lo medido o a #70-#72.
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados: ninguno (solo docs).
+- Contracts: no aplica (sin cambios de código; no se corrió `sui`).
+- App: no aplica (sin cambios de código).
+- Tablas de contrato (contracts/README.md) y app/src/sui/ sincronizados: no aplica.
+
+`git diff --stat`:
+```
+ README.md           | 14 +++++++----
+ agents.md           |  3 ++-
+ app/README.md       | 69 +++++++++++++++++++++++++++++++++++------------------
+ contracts/README.md |  6 +++--
+ documents/STATUS.md | 23 ++++++++++++------
+ 5 files changed, 78 insertions(+), 37 deletions(-)
+```
+
+Orden de `documents/DECISIONES.md` (solo lectura, sin editar):
+```
+13: D-20261119-03   19: D-20261119-02   25: D-20261119-01   31: D-20261104-07
+37: D-20261104-06   44: D-20261104-05   51: D-20261104-04
+```
+= 03 > 02 > 01 > 07 > 06 > 05 > 04. OK.
+
+Criterios de TASK-5:
+```
+$ /usr/bin/grep -n '#17' app/README.md
+171  smoke de #17 (... O-8) **no se hizo**; seguimiento en #72
+448  retención ... ≈ 10-12 días, medido en #17
+496  en el smoke de #17 (O-1, O-9) tampoco Slush ...
+626  O-7 del smoke de #17 ... 3 474 748 y 3 474 772 ...
+738  ≈ 10-12 días (#17) ... en el smoke de #17 (O-5) ...
+743  El smoke de #17 no lo pudo ejercer (O-6 ...)
+924  Panel de la House ... **verificado** en el smoke de #17
+932  la latencia **no se midió** en #17 (O-3) ... #72
+934  La vista previa ... (O-2) tampoco se midió en #17: queda en #72
+936  ... no se pudo ejercer en #17 con Slush (O-1, O-9) ... #72
+939  #17 (O-5 ...); el caso del creador no aplicó (O-6)
+940  Con una wallet de extensión real (Slush, #17) ...
+944  smoke de #17 ... (O-4)
+```
+Todas en pasado o con lo medido; ninguna dice "se verifica en #17" ni "queda para #17": sin pendientes vivos.
+
+```
+$ /usr/bin/grep -rn '14,6' README.md app/README.md contracts/README.md agents.md
+README.md:45            ≈ 14,6 días en #10; el 2026-11-19, 11 épocas al medir y 12 a las 21:54Z (poda por época, ≈ 10-12 días)
+app/README.md:447       ≈ **14,6 días** en #10; el 2026-11-19, 11 épocas ... ≈ **10-12 días**, medido en #17
+app/README.md:737       ≈ **14,6 días** en #10; el 2026-11-19, 11 épocas ... ≈ **10-12 días** (#17)
+contracts/README.md:539 ≈ 14,6 días en #10; el 2026-11-19, 11 épocas ... ≈ 10-12 días, #17
+contracts/README.md:562 ≈ 14,6 días en #10, ≈ 10-12 días el 2026-11-19: 11 épocas al medir y 12 a las 21:54Z
+agents.md:253           ≈ 14,6 días en #10; el 2026-11-19, 11 épocas al medir y 12 a las 21:54Z (... ≈ 10-12 días; #17)
+```
+Todas con la medición fechada y "la fija el operador del nodo" (README, app/README ×2, contracts :539, agents).
+El "~14,6 días" del caso del creador (`app/README.md`, antes :729) pasa a "antes de la ventana del nodo (≈ 10-12 días
+... 2026-11-19)". STATUS (:72, :180 de antes, :221, :223) y `DECISIONES.md` quedan como historia (DL-14).
+
+```
+$ /usr/bin/grep -rn 'no requerido\|No es requerido' README.md app/README.md contracts/README.md agents.md .github/workflows/ci.yml documents/STATUS.md
+documents/STATUS.md:64: | docs @ `feature/issue-15-pages-deploy` (TASK-5 de #15), 2026-11-04 | ... job `deploy-image` no requerido ...
+```
+Solo una fila histórica de baselines (2026-11-04), que describe el estado de entonces: se deja como historia, igual que
+las filas de STATUS de DL-14. Los cinco textos del addendum de S-8 ya estaban en "requerido" (los tomó S-8):
+`agents.md:64` ("los tres requeridos"), `:224` ("**Requerido** desde el 2026-11-19"), `:232-234` ("Los tres bloquean
+el merge ... `deploy-image` desde D-20261119-02"), `app/README.md:223` ("**es check requerido**"),
+`.github/workflows/ci.yml:185` ("Requerido desde D-20261119-02"). Nada que cambiar.
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No aplica: solo docs. Lecturas de GitHub por `gh issue view 70..73` (títulos, labels y, de #72, la lista de
+observaciones: O-1, O-2, O-3, O-5, O-8, O-9, O-12, O-13) para redactar las filas del roadmap y los enlaces. Ninguna
+lectura de testnet.
+
+### Desviaciones del handoff (o "ninguna")
+0. **Actualización del orquestador a mitad del task (2026-11-19, dato del owner):** en "Pendientes del usuario" de
+   STATUS, O-11 (watch paths pasadas a la lista del checklist), N-About (settings "About" del repo) y N-5 quedan en
+   "✅ 2026-11-19 (owner)", no como abiertos. N-5 se escribe como decidido: "tag `v0.1.0` sobre el merge de #17, lo
+   crea el orquestador justo después del merge", sin SHA (lo completa el housekeeping). La revisión de D-20261119-03
+   sigue abierta. El párrafo de "Despliegues" dice ahora que las watch paths estaban en `/app/**` durante el smoke y
+   que el owner las corrigió. El handoff (TASK-6, N-5 como pendiente del body) no se edita: lo actualiza el MID.
+1. **Líneas re-ubicadas** sobre el árbol actual (`d46a503`, que trae M por `296c07b`): las `:479`, `:604` y `:898-908`
+   de `app/README.md` son hoy :493, :618 y :906-922; DL-14 en :446, :727, :729 (`app/README.md`), :44 (`README.md`),
+   :539, :561 (`contracts/README.md`) y :252 (`agents.md`).
+2. **O-8 en `app/README.md:171`** (no estaba en la lista de líneas): decía "Queda como observación de #17"; sin tocarla,
+   el criterio "`#17` sin pendientes vivos" fallaba. Ahora dice que O-8 no se hizo y enlaza #72.
+3. **"Pendientes conocidos"**: además de O-2/O-3 (enlazados a #72, como pide el MID), el ítem del panel de la House
+   (checklist en el body de #17) pasa a "verificado" con #70 y #71, el de R-1 de #11 pasa a lo medido en 3b, y el de
+   `runtimeCancellation` a "no ocurrió" (O-4). Mismo criterio del handoff: "se quitan los ítems que remiten a #17 o
+   pasan a lo medido".
+4. **STATUS, "Baselines de gates"**: dos filas nuevas (el smoke de #17 sobre M y este TASK-5 de docs), como hicieron
+   los TASK-5 anteriores. No había fila de #17 en "Ciclo activo": se agregó (estado "✅ 2026-11-19 (smoke PASA; el PR
+   va en TASK-6)"; el SHA de merge lo pone el housekeeping).
+5. **N-2 en "Pendientes del usuario"**: el handoff lo pedía como pendiente, pero ya está resuelto por D-20261119-02; se
+   anota "✅ D-20261119-02, no queda pendiente". También la línea vieja de #16 ("TASK-5 ... completa la URL y cierra
+   #15 y #16") pasa a pasado (PR #68).
+6. **D-20261104-05** suma a la lista "A revisar por el owner" (lo pedía el handoff, no la lista del MID).
+7. **Vencimiento de D-20261103-01 (2)** anotado en "Despliegues" de STATUS (PROY-10 estricto, solo upgrades
+   compatibles). No se repite en la fila de #17.
+
+### Riesgos / pendientes (o "ninguno")
+- **Redeploy de Railway:** con las watch paths de `/app/**` (O-11, como estaban en el smoke), el merge de este cambio
+  de `app/README.md` disparaba un redeploy con el mismo `dist`, cubierto por N-2. Con la lista del checklist que puso
+  el owner, `!app/README.md` lo excluye y no debería redesplegar; si Railway no respetara la negación, es el mismo
+  `dist` y N-2 lo cubre igual. Solo se anota.
+- `app/README.md:73` y :235 y `agents.md:413` ("cada push que toca las watch paths del paso 5") vuelven a ser exactos
+  con la corrección del owner: no se tocan.
+- **Comentario en #51 con la medición** (DL-14): lo publica el orquestador; propuesta de texto: "Retención del fullnode
+  público de testnet medida en #17: 11 épocas al medir y 12 a las 21:54Z del 2026-11-19 (piso 404332001, primer
+  checkpoint de la época 1278). Poda por época, ≈ 10-12 días; la fija el operador del nodo (≈ 14,6 días en #10)."
+- Los greps 3 de §R-6 sobre los archivos **completos** dan 4 líneas de `agents.md` (149, 337, 390, 426), todas
+  preexistentes y de texto de reglas (la ruta de la localnet aislada bajo `<SMOKE_DIR>` y las reglas de "nada de keystores ..."): fuera de este
+  diff. Sobre las líneas agregadas, vacío (abajo).
+
+### Documentación
+- READMEs / agents.md actualizados: sí (`README.md`, `app/README.md`, `contracts/README.md`, `agents.md`).
+- Snippet propuesto para documents/STATUS.md: ya aplicado en este task (fila 6, "Despliegues", 2 baselines, fila de
+  #17, "Siguiente", "Pendientes del usuario").
+
+### Greps de §R-6 (`/usr/bin/grep`) sobre las 78 líneas agregadas del diff (`<scratchpad>/added_t5_17.txt`)
+```
+$ /usr/bin/grep -nE '[0-9a-fA-F]{40,64}' added_t5_17.txt
+exit=1
+$ /usr/bin/grep -nE '0x[0-9a-fA-F]{8,}' added_t5_17.txt
+exit=1
+$ /usr/bin/grep -niE '<patrón 3 de §R-6: claves, frases y rutas personales>' added_t5_17.txt
+exit=1
+$ /usr/bin/grep -nE '[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}' added_t5_17.txt
+exit=1
+$ los seis fragmentos de cuenta que dio el orquestador, -ci cada uno sobre added_t5_17.txt
+0 / 0 / 0 / 0 / 0 / 0
+$ regex de D-20261119-01 sobre added_t5_17.txt
+exit=1
+```
+Los cuatro vacíos: no hay nada que atribuir. Los seis fragmentos de las cuentas del owner dan 0 en las líneas agregadas
+y también 0 en los cinco archivos completos (`README.md`, `app/README.md`, `contracts/README.md`, `agents.md`,
+`documents/STATUS.md`). Sin direcciones de cuenta, ni completas ni abreviadas. Los SHAs (`77bb49c`, `30e1405`) son
+de 7 caracteres y no entran en el grep 1.
+
+### Mensaje de commit propuesto
+```
+docs: close the MVP in the docs after the testnet smoke (#17)
+
+- STATUS: roadmap row 6 done; #17 row with the smoke at 30/30 on M 77bb49c
+  and the active deploy 30e1405 with the same dist (DL-8); smoke and docs
+  baselines; post-MVP "Siguiente" with #70-#73; owner items O-11
+  (Railway watch paths), N-About and N-5 (tag v0.1.0 on the #17 merge, by
+  the orchestrator) done, the review of D-20261119-03 still open;
+  D-20261103-01 (2) expires with #17.
+- README roadmap: #17 done and #70-#73 as post-MVP.
+- Fullnode retention (DL-14): the "~14.6 days" now carries the measurement,
+  11 epochs and 12 at 21:54Z on 2026-11-19, per-epoch pruning, ~10-12 days.
+- app/README: O-1/O-9 (Slush, one account), O-7 gas budget below the
+  reserve, and the known pendings moved to what was measured or to #70-#72.
+
+Refs #17
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+## Revisión TASK-5: PASA
+
+> MID, 2026-11-19, contra `HANDOFF_SMOKE_MVP.md` v1.3.1, TASK-5, y la revisión final del MID de TASK-3/4. Revisé el
+> `git diff` real sobre `d46a503`: 5 archivos de docs más este reporte, 260 líneas agregadas. El MID no corrió gates:
+> el task no toca código.
+
+### Implementa lo pedido
+- **STATUS:**
+  - la fila 6 en ✅ con el MVP cerrado;
+  - DL-8 con M = `77bb49c` como árbol probado y `30e1405` como deploy activo, con el mismo `dist`;
+  - la fila de #17 y "Siguiente" con #70-#73 y el resto de lo post-MVP;
+  - el vencimiento de D-20261103-01 (2), anotado en "Despliegues";
+  - D-20261104-05 en "A revisar por el owner", y la revisión de D-20261119-03 como pendiente.
+- **`README.md`:** roadmap con #17 "Hecho" y #70-#73, y el corte "MVP cerrado".
+- **`app/README.md`:**
+  - O-1/O-9 en el cambio de cuenta;
+  - O-7 en la reserva de aceptar: 3474748 y 3474772, precio 1000, la reserva no cambia;
+  - "Pendientes conocidos": cada ítem pasa a lo medido o a #70/#71/#72.
+- **DL-14:** la retención va fechada y atribuida al operador del nodo, en los 6 lugares y en `agents.md:253`.
+- **Criterios de TASK-5, revisados sobre el árbol de trabajo:**
+  - `/usr/bin/grep -n '#17' app/README.md`: 13 líneas, **todas en pasado** (lo medido o no medido en el smoke). No queda
+    ningún "se verifica en #17";
+  - `/usr/bin/grep -rn '14,6' README.md app/README.md contracts/README.md agents.md`: 6 líneas, todas con la medición
+    fechada ("≈ 14,6 días en #10; … el 2026-11-19 …"). STATUS y `DECISIONES.md` quedan como historia, como fija DL-14;
+  - `no requerido|No es requerido|no es check requerido` en los docs vivos y en `ci.yml`: **0**.
+
+### Higiene (sobre las 260 líneas agregadas, `git diff -U0`)
+- **§R-6:** greps 1, 2, 3 y 4 **vacíos**. No hay abreviaturas de objetos en lo agregado, así que no hay nada que atribuir.
+- **Fragmentos de cuenta:** A = `sender(d1c)` y B = `sender(d1a)` se leyeron por gRPC y quedaron solo en memoria.
+  - Busqué la abreviatura 4+4 (con "…" y con "..."), el prefijo y el sufijo de 8 hex, y los de 12 hex.
+  - Lo hice sobre lo agregado, `SMOKE_MVP.md` y `REPORTES_SMOKE_MVP.md`. Resultado: **false ×6** para A y para B.
+  - C no firmó nunca.
+- **Palabras de cierre:** el regex de D-20261119-01 sobre lo agregado y sobre `git log --format=%B origin/master..HEAD`
+  sale **vacío**.
+
+### Desviaciones del DEV: las 8 se aceptan
+- **0 (actualización del orquestador: O-11, N-About y N-5 como hechos por el owner).** Se acepta. Son datos del owner
+  pasados por el orquestador. N-5 sin SHA, que lo completa el housekeeping.
+- **1 (líneas re-ubicadas).** Se acepta. Es el árbol de `d46a503`.
+- **2 (O-8 en `app/README.md:171`).** Se acepta y era necesaria. Sin ese cambio, el criterio "`#17` sin pendientes vivos"
+  fallaba. Ahora dice que O-8 no se hizo y enlaza #72, que es lo decidido en la revisión final.
+- **3 (más ítems de "Pendientes conocidos").** Se acepta. Aplica el criterio del handoff ("se quitan o pasan a lo
+  medido"), y cada cambio tiene su fila en `SMOKE_MVP.md`: 3b, O-4, H1-H7.
+- **4 (filas extra en STATUS: dos baselines y la fila de #17 en "Ciclo activo").** Se acepta. Sigue el patrón de los
+  TASK-5 anteriores, y el SHA de merge lo pone el housekeeping.
+- **5 (N-2 ya resuelto) y 6 (D-20261104-05 en "A revisar").** Se aceptan.
+- **7 (vencimiento de D-20261103-01 (2) en "Despliegues").** Se acepta.
+- **N-5 en el handoff.** Lo actualiza el MID: es un cambio mecánico de la lista al orquestador, no del DEV.
+
+### Hallazgos
+
+| # | Sev. | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|---|
+| — | — | — | — | Ninguno | — |
+
+### Siguiente paso
+- TASK-5 **PASA**.
+- **TASK-6 autorizado:**
+  - el body del PR está en el scratchpad del MID (`pr63_body.md`);
+  - antes del merge: la revisión de integración del MAYOR publicada, los 3 checks requeridos en verde, el regex de
+    D-20261119-01 sobre los commits y el body, y `closingIssuesReferences` = `[17]`;
+  - merge con merge commit;
+  - después: el tag `v0.1.0` (orquestador) y el housekeeping.
+
+### Mensaje de commit propuesto
+
+```
+docs: close the MVP in STATUS and the READMEs after the testnet smoke (#17)
+
+TASK-5 of HANDOFF_SMOKE_MVP v1.3.1: STATUS marks the MVP closed (M =
+77bb49c tested, 30e1405 deployed with the same dist), the #17 row and the
+post-MVP issues #70-#73; the root README roadmap marks #17 done; app/README
+turns every pending #17 item into what the smoke measured or links it to
+#70-#72; the fullnode retention is dated and attributed to the node
+operator in all live docs (DL-14). MID review: PASS, all deviations
+accepted.
+
+Refs #17
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```

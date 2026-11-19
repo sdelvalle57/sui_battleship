@@ -2,7 +2,7 @@
 > Plan: PLAN_SMOKE_MVP v1 (aprobado por el MAYOR con cambios, 2026-11-04) | Issue: #17 | Branch:
 > `feature/issue-17-mvp-smoke` | Versión: v1.3.1 | Fecha: 2026-11-19 | Autor: MID
 >
-> **Estado:** v1.3.1, aprobada por el MAYOR; STOP-1 = (b) (D-20261119-03); TASK-2c en **PASA**; TASK-3/4 en **PASA** (smoke PASA 30/30); TASK-5 autorizado.
+> **Estado:** v1.3.1, aprobada por el MAYOR; STOP-1 = (b) (D-20261119-03); TASK-2c en **PASA**; TASK-3/4 en **PASA** (smoke PASA 30/30); TASK-5 en **PASA**; TASK-6 autorizado; N-5 decidido (tag `v0.1.0` sobre el merge de #17, lo crea el orquestador).
 
 **Changelog v1.3.1** (revisión del MAYOR de la v1.3: APROBADA CON CAMBIOS, 0 🔴/🟠, 3 🟡, 7 🔵; todos tomados, sin nueva
 ronda). Decisión del owner: STOP-1 = (b) (D-20261119-03).
@@ -173,10 +173,10 @@ corrida, la plantilla de `SMOKE_MVP.md` y el cierre del MVP.
 | TASK-2 | ensayo de la sonda en la localnet aislada | **PASA** (revisión en `REPORTES_SMOKE_MVP.md`) | — |
 | TASK-2b | re-ensayo de la sonda v1.2 (C-1..C-4) | **PASA** (revisión en `REPORTES_SMOKE_MVP.md`) | — |
 | TASK-2c | ensayo de la sonda v1.3.1 (C-5, C-6, guarda DL-13) con lecturas reales de testnet | **PASA** (revisión en `REPORTES_SMOKE_MVP.md`) | la sonda extraída del Anexo B v1.3.1 con `diff` vacío |
-| TASK-3 | precondiciones públicas (paso 0) | **PASA** (revisión final del MID en `REPORTES_SMOKE_MVP.md`) | S-1..S-8 cumplidos (al 2026-11-19 falta S-8); TASK-2c en PASA; la sonda extraída del Anexo B con `diff` vacío |
+| TASK-3 | precondiciones públicas (paso 0) | **PASA** (revisión final del MID en `REPORTES_SMOKE_MVP.md`) | S-1..S-8 cumplidos; TASK-2c en PASA; la sonda extraída del Anexo B con `diff` vacío |
 | TASK-4 | la corrida (owner firma, DEV verifica) | **PASA**: smoke 30/30, 0 ❌ (`SMOKE_MVP.md`) | TASK-3 en PASA |
-| TASK-5 | docs de cierre del MVP | **Autorizado** (revisión final del MID) | TASK-4 con veredicto PASA |
-| TASK-6 | PR, revisión y housekeeping | Especificado, **no empezar** | TASK-5 en PASA |
+| TASK-5 | docs de cierre del MVP | **PASA** (revisión en `REPORTES_SMOKE_MVP.md`) | TASK-4 con veredicto PASA |
+| TASK-6 | PR, revisión y housekeeping | **Autorizado** (body del PR preparado por el MID) | TASK-5 en PASA |
 
 ## 0. Baseline de gates verificado (2026-11-19, `master` `376412f`)
 
@@ -1082,7 +1082,7 @@ final" con PASA/TOTAL y veredicto.
   - el veredicto del smoke (PASA/TOTAL) y los issues abiertos;
   - D-20261104-05;
   - lo que vence (D-20261103-01 (2));
-  - lo que queda pendiente del owner: N-5, el tag `v0.1.0` + Release. Si elige (a), el MID redacta las notas.
+  - N-5 decidido por el owner: tag `v0.1.0` sobre el merge commit de #17, lo crea el orquestador después del merge (sin Release salvo que el owner la pida; si la pide, el MID redacta las notas).
 - **Palabras de cierre (v1.3, punto 7 de la vuelta):**
   - el body lleva **solo** `Closes #17`;
   - #15 y #16 se nombran sin palabra de cierre delante, ni en código: los cierra S-8;

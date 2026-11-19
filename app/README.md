@@ -167,9 +167,10 @@ presente, y el script verifica que la cabecera no esté.
       de TASK-6 de #15, con la app real y los IDs de testnet, pasó lo mismo: la metadata no respondió y el ícono
       siguió siendo el `data:`.
     - Conclusión: el ícono remoto **sigue sin medir**. En el smoke B (S-7) el owner usó la extensión de Slush, y con
-      ella el kit no pide la metadata (`registerSlushWallet`, `@mysten/slush-wallet` 1.3.5). Queda como observación de
-      #17, con un perfil de navegador sin la extensión. Si aparece una violación de `img-src`, se sigue el caso
-      previsto arriba.
+      ella el kit no pide la metadata (`registerSlushWallet`, `@mysten/slush-wallet` 1.3.5). La observación O-8 del
+      smoke de #17 (un perfil de navegador sin la extensión) **no se hizo**; el seguimiento queda en
+      [#72](https://github.com/sdelvalle57/sui_battleship/issues/72). Si aparece una violación de `img-src`, se sigue el
+      caso previsto arriba.
   - `'unsafe-inline'` solo en `style-src`, y solo si TASK-3 mide una violación real.
 
 **Fallback a `Report-Only`** (P-2, D-20261104-03 (2)):
@@ -443,10 +444,12 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
   transacción sin checkpoint), **2 reintentos** a 1 s y 2 s; la UI muestra "Reintentando… (intento n de m)". "No
   existe", datos ilegibles, historial podado y cancelación no se reintentan.
 - **Historial del nodo** (D-20261102-04 (1), P-1 (a)): en testnet el lobby solo cubre lo que conserva el fullnode
-  público (≈ **14,6 días**; piso `lowestAvailableCheckpoint`). Una partida abierta más vieja no aparece en la lista aunque
-  siga `Pending`: se ve por su ID en `#/game/:id`, que lee el objeto. Sin filas, el lobby dice "No hay partidas abiertas
-  en el historial disponible del nodo (desde <fecha>)" y, con filas, deja esa nota al pie; la fecha es la del
-  checkpoint de la cota, una aproximación de hasta ~1 h. La hora de una transacción podada sale como "—".
+  público (piso `lowestAvailableCheckpoint`; la retención la fija el operador del nodo: ≈ **14,6 días** en #10; el
+  2026-11-19, 11 épocas al medir y 12 a las 21:54Z, es decir, poda por época, ≈ **10-12 días**, medido en #17). Una
+  partida abierta más vieja no aparece en la lista aunque siga `Pending`: se ve por su ID en `#/game/:id`, que lee el
+  objeto. Sin filas, el lobby dice "No hay partidas abiertas en el historial disponible del nodo (desde <fecha>)" y,
+  con filas, deja esa nota al pie; la fecha es la del checkpoint de la cota, una aproximación de hasta ~1 h. La hora
+  de una transacción podada sale como "—".
 - **Listas por eventos (lobby y "Mis partidas"):** en el fullnode público de testnet, `client.listEvents` del SDK (sin
   rango de checkpoints) falla con `OUT_OF_RANGE` (sonda P7 de #10). Toda lista por eventos usa el crudo
   `client.ledgerService.listEvents` de `sui/eventScan.ts`, con `startCheckpoint` (la cota de arriba, `historyLowerBound`),
@@ -490,7 +493,11 @@ el texto de red).
   **Límites:** en "Mis partidas" el cambio de cuenta remonta la página (`key={address}`), así que esto rinde en el
   detalle y en el formulario; si después del cambio la **misma** instancia lanza una acción con la otra cuenta, su etapa
   y su `runId` pasan a ser de esa ejecución y, al volver, ya no muestra el resultado anterior (su "sin confirmar" sigue
-  bloqueando el objetivo). La burner no permite reproducirlo; se verifica con una wallet de extensión en #17.
+  bloqueando el objetivo). La burner no permite reproducirlo, y en el smoke de #17 (O-1, O-9) tampoco Slush: conecta
+  una sola cuenta a la vez (el "+" de "Connected accounts" no hace nada) y no deja cambiar de cuenta con la ventana de
+  la wallet abierta. Para cambiar de cuenta: desconectar, cambiar la cuenta en Slush y volver a "Conectar wallet". Sin
+  una wallet que lo permita, el caso queda sin verificar; la guía del cambio de cuenta va al rediseño de UI/UX
+  ([#72](https://github.com/sdelvalle57/sui_battleship/issues/72)).
 - **Resultados:** `success` (digest, valor leído del resultado, `indexed`, costo de red = cómputo + storage − rebate);
   `failure` (mensaje y, si se ejecutó, digest y costo); `unconfirmed` (digest), **solo** cuando el nodo no respondió o
   venció el corte. Un error de la wallet o del SDK con digest, o cualquier error después de tenerlo, nunca es `failure`
@@ -615,7 +622,9 @@ el texto de red).
   localnet con precio de gas 1000): el budget que el nodo elige en la preflight de aceptar fue **3 474 748** MIST con
   una moneda de gas y **4 474 748** con dos; con margen 2× y redondeado hacia arriba a 0,005 SUI, 0,01 SUI (cubre también
   el costo sin ningún rebate, 1 000 000 + 6 186 400 MIST). Es cortesía: entre `bet` + budget y `bet` + reserva la app
-  marca "insuficiente" un saldo que el nodo aceptaría. El budget escala con el precio de gas de la red: se revisa en #17.
+  marca "insuficiente" un saldo que el nodo aceptaría. El budget escala con el precio de gas de la red. **Medido en
+  testnet** (O-7 del smoke de #17, el `gasData` que eligió la wallet del owner): `gasBudget` **3 474 748** y
+  **3 474 772** MIST con precio de gas 1000, por debajo de la reserva de 10 000 000; la reserva no cambia.
 - **Transacción** (`useAcceptGame`, DL-1/DL-3): `splitCoins(gas, [bet])` con la apuesta del `Game` leído y
   `accept_game(game, house, coin, random)` como **último** comando; sin `precheck` (la preflight ya valida estado,
   versión y House). El nodo simula con `Random` (S-1 de #12), así que un abort (`game`/4, 5, 9, 10) sale en la preflight
@@ -724,11 +733,15 @@ vista se remonta (DL-9). Todo sale de `sui/myGames.ts` y `hooks/useMyGames.ts`; 
 #### Límite sin indexador
 
 - **Ventana del nodo:** en testnet, las tres secciones cubren solo el historial que conserva el fullnode público
-  (≈ **14,6 días**, piso `lowestAvailableCheckpoint`; D-20261103-03, como el lobby por D-20261102-04 (1)). Lo dicen con
-  el sufijo o la nota "desde <fecha>".
-- **El caso del creador:** una partida creada hace más de ~14,6 días y resuelta después **no** aparece en "Terminadas"
+  (piso `lowestAvailableCheckpoint`; D-20261103-03, como el lobby por D-20261102-04 (1)). La retención la fija el
+  operador del nodo: ≈ **14,6 días** en #10; el 2026-11-19, 11 épocas al medir y 12 a las 21:54Z, es decir, poda por
+  época, ≈ **10-12 días** (#17). Lo dicen con el sufijo o la nota "desde <fecha>"; en el smoke de #17 (O-5) "Mis
+  partidas" mostró "(desde 8 nov 2026, 17:30)" (hora local; 22:30Z, el checkpoint `piso + 16000`).
+- **El caso del creador:** una partida creada antes de la ventana del nodo (≈ 10-12 días en el fullnode público de
+  testnet, 2026-11-19) y resuelta después **no** aparece en "Terminadas"
   del creador. El `GameResolved` tiene como remitente al aceptante, y el `GameCreated` del creador ya está podado. Se ve
-  por su enlace, por "Abrir partida por ID" o por el explorador.
+  por su enlace, por "Abrir partida por ID" o por el explorador. El smoke de #17 no lo pudo ejercer (O-6: no había una
+  partida `Pending` anterior a la cota).
 - **Costo del escaneo de invitaciones:** (B) recorre **todos** los `GameCreated` del paquete; con muchas partidas ajenas,
   encontrar una invitación vieja puede pedir varios "Buscar más atrás". Está acotado (50 / 2 / 20 por página) y dice
   "en lo revisado" (RM-2).
@@ -908,15 +921,25 @@ habilita ni se ofrece.
 - El build de testnet pesa ≈ 917 kB (≈ 277 kB gzip; desde #11 entra el SDK de transacciones, desde #13 "Mis
   partidas" y desde #14 el panel de la House) y Vite avisa de un chunk mayor de 500 kB: el code-splitting queda para #58
   (issue aparte, P-3 de #15).
-- Panel de la House en testnet con la wallet del owner (cap en la wallet, comisión, límites, retiro): checklist en el
-  body de #17 (P-4, D-20261104-02 (4)).
+- Panel de la House en testnet con la wallet del owner: **verificado** en el smoke de #17 (H1-H7 y 4a-4b, comisión,
+  límites y retiro a la cuenta que firma). Quedan dos hallazgos no bloqueantes:
+  - [#70](https://github.com/sdelvalle57/sui_battleship/issues/70) (`type:bug` P2, O-12): "Retirar" quedó
+    deshabilitado sin aviso después de un pedido a la wallet que no terminó, y solo se destrabó al recargar;
+  - [#71](https://github.com/sdelvalle57/sui_battleship/issues/71) (O-13): los campos de comisión y límites vuelven a
+    los valores on-chain mientras la wallet pide la firma.
 - `done` espera la relectura del lobby y de "Mis partidas" si están montados (DL-6, DL-7): con una red lenta o con
-  muchas páginas cargadas, "Actualizando datos…" puede durar varios segundos (RM-12, H-4). Se mide en los smokes de
-  #11, #12 y #13 (localnet) y en testnet en #17.
-- El cambio de cuenta a mitad de una transacción (DL-11 de #13) y el historial podado de "Mis partidas" ("desde
-  <fecha>", el caso del creador) se verifican con una wallet de extensión en testnet en #17.
-- Lo que no prueba el smoke de localnet (una wallet de extensión real y su texto de error, R-1 de #11; su vista previa de
-  aceptar; la latencia de testnet) queda para el owner en #17.
+  muchas páginas cargadas, "Actualizando datos…" puede durar varios segundos (RM-12, H-4). Medido en los smokes de
+  #11, #12 y #13 (localnet). En testnet, la latencia **no se midió** en #17 (O-3): queda para el rediseño de UI/UX,
+  [#72](https://github.com/sdelvalle57/sui_battleship/issues/72).
+- La vista previa de la wallet al aceptar (O-2) tampoco se midió en #17: queda en
+  [#72](https://github.com/sdelvalle57/sui_battleship/issues/72).
+- El cambio de cuenta a mitad de una transacción (DL-11 de #13) no se pudo ejercer en #17 con Slush (O-1, O-9: una sola
+  cuenta conectada, sin cambio con la ventana abierta); la guía para cambiar de cuenta va a
+  [#72](https://github.com/sdelvalle57/sui_battleship/issues/72). El historial podado de "Mis partidas" se verificó en
+  #17 (O-5: sufijo "desde <fecha>" y enlace al explorador); el caso del creador no aplicó (O-6).
+- Con una wallet de extensión real (Slush, #17), el rechazo de la firma dio "La wallet no completó la operación: User
+  rejected the request." sin digest (R-1 de #11, paso 3b).
 - `runtimeCancellation` lee el error estructurado; con digest, la app lo toma de la confirmación del nodo. Solo una
-  wallet que rechazara **sin** digest ante una cancelación caería en "La wallet no completó…" (no observado; se verifica
-  en #17). R-3: la `description` real de la falta de aleatoriedad no se observó en localnet.
+  wallet que rechazara **sin** digest ante una cancelación caería en "La wallet no completó…". No se observó: en el
+  smoke de #17 ninguna de las 11 transacciones tuvo una cancelación del runtime (O-4). R-3: la `description` real de la
+  falta de aleatoriedad tampoco se observó en localnet.
