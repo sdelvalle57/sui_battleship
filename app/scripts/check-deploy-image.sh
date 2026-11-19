@@ -97,8 +97,10 @@ if [ ! -f "$ctx/contracts/deployments/testnet.json" ]; then
     tail_log "docker build" "$log"
     fail "N2a: el build falló, pero no por la guarda de testnet.json (no está la línea de salida 'ERROR (#15): falta contracts/deployments/testnet.json')"
   fi
-  # N2b: el build tiene que cortarse en la guarda, sin llegar a npm ci.
-  if grep -qE 'RUN npm ci' "$log.plain"; then
+  # N2b: el build tiene que cortarse en la guarda, sin llegar a npm ci. Se busca la cabecera del paso y no el extracto
+  # del Dockerfile que BuildKit imprime alrededor del RUN que falla. BuildKit: "#<n> [build <k>/<m>] RUN npm ci", con
+  # <k> alineado con espacios; clásico: "Step <k>/<m> : RUN npm ci".
+  if grep -qE '^(#[0-9]+ \[build +[0-9]+/[0-9]+\] |Step [0-9]+/[0-9]+ : )RUN npm ci' "$log.plain"; then
     tail_log "docker build" "$log"
     fail "N2b: el build pasó la guarda y llegó a 'RUN npm ci' (la guarda no corta el build)"
   fi

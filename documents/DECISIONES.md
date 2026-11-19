@@ -10,6 +10,12 @@
 
 ---
 
+### D-20261104-07 — Excepción a DL-8 para Node 26.13.0 en la imagen (TASK-6 de #15)
+- **Decisión:** TASK-6 de #15 arranca el 2026-11-04 a las ~16:25 UTC con `node:26.13.0-bookworm-slim@sha256:bc0a2afd…c1d9`, unos 33 minutos antes de que la release v26.13.0 (`published_at` 2026-10-28T16:57:41Z) cumpla los 7 días de la regla DL-8 (plan de #15, `min-release-age`). Se levanta la puerta T6-0 del handoff v1.6.1 solo para esta versión; el resto de T6-0 (línea base, HEAD, árbol limpio) y T6-1 (digest idéntico en Hub, registry y pull) siguen. La regla DL-8 no cambia para otras versiones ni dependencias.
+- **Alternativa descartada:** esperar a las 16:57:41Z (recomendada por el orquestador).
+- **Motivo:** el owner prefirió no esperar los ~33 minutos restantes; la versión lleva casi 7 días publicada sin retiro.
+- **Aprobado por:** usuario ("arranca ya", 2026-11-04, tras la explicación del riesgo y la recomendación de esperar). **Fecha:** 2026-11-04.
+
 ### D-20261104-06 — Custodia del `HouseCap` en testnet (N-3 de #14, decidida en #8)
 - **Decisión:** el `HouseCap` de la publicación en testnet del 2026-11-04 (#8) se queda en la dirección publicadora, que el owner importó en su wallet de navegador y desde la que administra el panel (`#/admin`). No hay `transfer_house_cap`. El `UpgradeCap` y el `Publisher` siguen en la misma dirección (D-20261103-01 (1)).
 - **Riesgo aceptado:** la cuenta que firma en el panel tiene también el `UpgradeCap` y el `Publisher`. Quien la controle puede upgradear el paquete y publicar código que mueva el `stake` de las partidas `Pending` y las comisiones (`contracts/README.md`, "Modelo de confianza"). Se acepta **solo en testnet**. Es reversible con `transfer_house_cap` (checklist de `contracts/README.md`, "Qué pasa si se pierde el cap") y **no vale como precedente para mainnet** (`agents.md` §12, "Mainnet").
