@@ -61,8 +61,8 @@ sui_battleship/
 ├── package-lock.json         # versiones exactas congeladas (D-20261102-02 (3))
 ├── .npmrc                    # save-exact, engine-strict, min-release-age=7, ignore-scripts
 ├── .nvmrc                    # versión de Node (PROY-17)
-└── .github/workflows/        # ci.yml: jobs contracts (#3), app (#9) y deploy-image (#15, no requerido); framework-drift
-                              # informativo
+└── .github/workflows/        # ci.yml: jobs contracts (#3), app (#9) y deploy-image (#15), los tres requeridos;
+                              # framework-drift informativo
 ```
 
 | Área | Carpeta | Stack |
@@ -221,16 +221,17 @@ y al final `git status --porcelain --untracked-files=all` vacío. Desarrollo: `n
 `VITE_SUI_NETWORK` (`app/README.md`). Procedimiento ante un aviso de seguridad: `app/README.md`.
 
 Imagen de Railway (#15):
-- el job `deploy-image` corre `bash app/scripts/check-deploy-image.sh . 8080`. **No es requerido**;
+- el job `deploy-image` corre `bash app/scripts/check-deploy-image.sh . 8080`. **Requerido** desde el 2026-11-19
+  (D-20261119-02);
 - en local, el mismo script con un puerto libre: `bash app/scripts/check-deploy-image.sh . 8090`;
 - el camino depende de que exista `contracts/deployments/testnet.json`: sin él, la imagen tiene que negarse a
   construirse; con él, se construye y se verifican las cabeceras;
 - detalle, actionlint (`-no-color`) y limpieza de Docker por línea base: `app/README.md`, "Despliegue (Railway)".
 
 Gate completo = el del workflow de CI: job `contracts` (build, lint y test con `--warnings-are-errors`,
-`Move.lock` intacto, cero claves, `node --test` y `check` de los scripts) y job `app` (los steps de arriba); ambos
-bloquean el merge (PROY-18). Los jobs `framework-drift` (informativo, H13) y `deploy-image` (#15) no condicionan el
-merge.
+`Move.lock` intacto, cero claves, `node --test` y `check` de los scripts), job `app` (los steps de arriba) y job
+`deploy-image` (la imagen de Railway). Los tres bloquean el merge (PROY-18; `deploy-image` desde D-20261119-02). El
+job `framework-drift` (informativo, H13) no condiciona el merge.
 
 ## 4. Arquitectura de Runtime
 
@@ -407,7 +408,10 @@ testnet con una wallet real.
   La House nace con fee 0 (D-20261030-11): en una republicación, `update_fee_rate` antes de anunciar el juego, o las
   partidas creadas antes quedan con comisión 0 para siempre.
 - **App:** Railway (D-20261104-01, D-20261104-03): imagen del `Dockerfile` de la raíz (build de testnet + Caddy con
-  CSP); el owner conecta el servicio, activa *Wait for CI* y publica; sin `testnet.json` la imagen no se construye.
+  CSP); sin `testnet.json` la imagen no se construye. Conectado por el owner el 2026-11-19 (S-7):
+  `https://sui-battleship-app-production.up.railway.app`. Railway publica cada push a `master` que toca las watch paths,
+  cuando la CI termina en verde (*Wait for CI*); D-20261119-02 (N-2) preautoriza esos merges con la revisión de
+  integración del MAYOR publicada.
 - **Mainnet:** fuera de alcance sin decisión registrada.
 
 ## 13. Checklist pre-entrega

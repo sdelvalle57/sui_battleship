@@ -33,7 +33,7 @@ navegador.
 
 ## Jugar en testnet
 
-- **URL pública:** se completa después de #8.
+- **URL pública:** [sui-battleship-app-production.up.railway.app](https://sui-battleship-app-production.up.railway.app)
 - **Wallet:** Slush (la ofrece la app) o una wallet de navegador compatible con Sui, en la red **testnet**
   ([wallet](app/README.md#wallet)).
 - **SUI de testnet:** el faucet oficial, [faucet.sui.io](https://faucet.sui.io/) (cómo obtenerlos en la
@@ -42,9 +42,11 @@ navegador.
   resultado. "Mis partidas" (`#/my-games`) reúne las propias y las invitaciones recibidas, y deja abrir una partida por
   su ID ([mis partidas](app/README.md#mis-partidas-13)). Cada transacción enlaza al explorador (Suiscan).
 - **Límite:** en testnet las listas cubren la ventana del fullnode (≈ 14,6 días, D-20261103-03; seguimiento en
-  [#51](https://github.com/sdelvalle57/sui_battleship/issues/51)). Una partida más vieja se abre por su enlace o su ID
+  [#51](https://github.com/sdelvalle57/sui_battleship/issues/51)), y lo avisan con la nota
+  `historial disponible del nodo (desde <fecha>)`. Una partida más vieja se abre por su enlace o su ID
   ([límite sin indexador](app/README.md#límite-sin-indexador)).
-- **IDs de testnet** (`packageId`, `houseId`): en `contracts/deployments/testnet.json`; se completa después de #8.
+- **IDs de testnet** (`packageId`, `houseId`): en
+  [`contracts/deployments/testnet.json`](contracts/deployments/testnet.json).
 
 ## Arquitectura
 
@@ -71,7 +73,7 @@ sui_battleship/
 ├── contracts/            # paquete Move battleship: fuentes, tests y scripts de despliegue
 ├── app/                  # cliente web React (Vite + TypeScript)
 ├── documents/            # flujo de trabajo, estándares, decisiones y estado del proyecto
-├── .github/workflows/    # CI: jobs de contratos y de la app
+├── .github/workflows/    # CI: contracts, app y deploy-image (requeridos); framework-drift (informativo)
 ├── agents.md             # guía técnica del repo: layout, comandos, arquitectura y reglas
 ├── Dockerfile            # imagen de la app para Railway: build estático de testnet + Caddy
 ├── .dockerignore         # contexto de esa imagen, como lista blanca
@@ -132,8 +134,10 @@ El procedimiento de los agentes está en [localnet aislada](agents.md#localnet-a
 - **Contratos:** la publicación en testnet la hace solo el owner, con su propia config de la CLI
   ([#8](https://github.com/sdelvalle57/sui_battleship/issues/8);
   [uso en testnet](contracts/README.md#uso-en-testnet-solo-el-owner)).
-- **App:** sitio estático en Railway, construido con el `Dockerfile` de la raíz. Conectar el servicio y publicar es del
-  owner ([despliegue (Railway)](app/README.md#despliegue-railway), con el checklist en
+- **App:** sitio estático en Railway, construido con el `Dockerfile` de la raíz. El owner conectó el servicio el
+  2026-11-19. Desde entonces, cada merge a `master` que cambia la app publica el sitio cuando la CI está en verde
+  (D-20261119-02)
+  ([despliegue (Railway)](app/README.md#despliegue-railway), con el checklist en
   [conectar Railway](app/README.md#conectar-railway-owner-no-delegable)). La URL pública está en "Jugar en testnet".
 
 ## Administración de la House
@@ -156,7 +160,7 @@ y [retiro de comisiones](contracts/README.md#retiro-de-comisiones).
 
 ## Roadmap
 
-Estado al 2026-11-04. El estado vivo está en los issues y en [`documents/STATUS.md`](documents/STATUS.md).
+Estado al 2026-11-19. El estado vivo está en los issues y en [`documents/STATUS.md`](documents/STATUS.md).
 
 | Fase | Issue | Tema | Estado |
 |---|---|---|---|
@@ -174,10 +178,10 @@ Estado al 2026-11-04. El estado vivo está en los issues y en [`documents/STATUS
 | App | [#12](https://github.com/sdelvalle57/sui_battleship/issues/12) | Aceptar, coinflip y resultado | Hecho |
 | App | [#13](https://github.com/sdelvalle57/sui_battleship/issues/13) | Mis partidas e invitaciones recibidas | Hecho |
 | App | [#14](https://github.com/sdelvalle57/sui_battleship/issues/14) | Panel de administración de la House | Hecho |
-| Testnet y cierre | [#8](https://github.com/sdelvalle57/sui_battleship/issues/8) | Publicación del paquete en testnet (owner) y `testnet.json` | Pendiente |
-| Testnet y cierre | [#15](https://github.com/sdelvalle57/sui_battleship/issues/15) | App en Railway: la imagen está lista; falta conectar y publicar | En curso |
-| Testnet y cierre | [#16](https://github.com/sdelvalle57/sui_battleship/issues/16) | Este README | En curso |
-| Testnet y cierre | [#17](https://github.com/sdelvalle57/sui_battleship/issues/17) | Smoke de punta a punta en testnet con wallets reales | Pendiente |
+| Testnet y cierre | [#8](https://github.com/sdelvalle57/sui_battleship/issues/8) | Publicación del paquete en testnet (owner) y `testnet.json` | Hecho |
+| Testnet y cierre | [#15](https://github.com/sdelvalle57/sui_battleship/issues/15) | App en Railway: imagen con CSP y cabeceras, publicada desde `master` | Hecho |
+| Testnet y cierre | [#16](https://github.com/sdelvalle57/sui_battleship/issues/16) | Este README | Hecho |
+| Testnet y cierre | [#17](https://github.com/sdelvalle57/sui_battleship/issues/17) | Smoke de punta a punta en testnet con wallets reales | En curso |
 | Post-MVP | [#18](https://github.com/sdelvalle57/sui_battleship/issues/18) | Mecánica real de batalla naval en lugar del coinflip | Post-MVP |
 | Post-MVP | [#51](https://github.com/sdelvalle57/sui_battleship/issues/51) | Historial completo en las listas de testnet, más allá de la ventana del fullnode | Post-MVP |
 | Post-MVP | [#53](https://github.com/sdelvalle57/sui_battleship/issues/53) | Un solo bucle de páginas de eventos para el lobby y Mis partidas | Post-MVP |

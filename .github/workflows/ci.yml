@@ -182,7 +182,7 @@ jobs:
 
   deploy-image:
     # Imagen de Railway (#15): sin testnet.json (#8) exige que el build se niegue con el mensaje esperado; con él,
-    # construye, levanta y comprueba cabeceras. No es requerido; Railway lo espera vía "Wait for CI".
+    # construye, levanta y comprueba cabeceras. Requerido desde D-20261119-02; Railway lo espera vía "Wait for CI".
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:

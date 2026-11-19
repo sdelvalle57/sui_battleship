@@ -1330,3 +1330,496 @@ TASK-4 report and the MID review.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
+
+---
+
+## TASK-5
+
+> Reporte del DEV (texto plano en el scratchpad, copiado tal cual por el orquestador tras leerlo entero y pasar los 4 greps §R-6).
+
+## Task completado: HANDOFF_README — TASK-5
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-16-task5` @ `7a97374` (el commit del handoff v1.3.1, sobre `master` `b7aa568`). Los cambios de TASK-5 están
+sin commitear en el worktree `<repo>`.
+
+### Archivos modificados/creados
+- `README.md` (A)
+- `app/README.md` (B)
+- `agents.md` (C)
+- `documents/SMOKE_RAILWAY_DEPLOY.md` (D)
+- `documents/STATUS.md` (E)
+- `.github/workflows/ci.yml` (F, solo el comentario de `:185`)
+
+Ningún archivo creado en el repo. Los auxiliares (script de §R-4, líneas agregadas, mensaje de commit propuesto y
+`s7.md`) quedaron en `<scratchpad>` y no se commitean.
+
+```
+$ git diff --stat
+ .github/workflows/ci.yml          |  2 +-
+ README.md                         | 25 ++++++++++++++-----------
+ agents.md                         | 17 ++++++++++-------
+ app/README.md                     | 39 ++++++++++++++++++++++++++-------------
+ documents/SMOKE_RAILWAY_DEPLOY.md | 21 ++++++++++++++-------
+ documents/STATUS.md               | 21 +++++++++++++--------
+ 6 files changed, 78 insertions(+), 47 deletions(-)
+```
+
+### Qué se implementó (3 líneas máx)
+La URL pública de Railway está en `README.md`, `app/README.md` y `agents.md` §12. El README enlaza `testnet.json` en lugar de copiar IDs. Los docs y el comentario de `ci.yml` marcan `deploy-image` como requerido (D-20261119-02).
+El smoke B de S-7 queda registrado como 6/6, con B-5 ✅ y el ícono remoto de Slush sin medir. Se agregan la nota de la publicación podada, la falla del primer deploy en el paso 8, el paso 4 y el paso 10 del checklist.
+También se actualizan el roadmap al 2026-11-19 y STATUS: fila 6, "Despliegues", 2 baselines, #15, #16, "Siguiente" y los pendientes del owner, con N-About.
+
+### Precondición (§2, output)
+```
+$ git fetch origin && git merge-base --is-ancestor origin/master HEAD; echo "exit=$?"
+exit=0
+PR 48 MERGED
+PR 65 MERGED
+PR 62 MERGED
+issue 15 OPEN
+issue 16 OPEN
+$ /usr/bin/grep -c '^### D-20261119-0[12] ' documents/DECISIONES.md
+2
+$ gh api repos/sdelvalle57/sui_battleship/issues/comments/7018981193 --jq .body > <scratchpad>/s7.md
+s7 exit=0 lines=32          (insumo; no se pega)
+origin/master = b7aa568; HEAD = origin/feature/issue-16-task5 = 7a97374
+```
+Todo como se esperaba.
+
+Re-medición del roadmap (A.7), `gh api 'repos/sdelvalle57/sui_battleship/issues?state=all&per_page=100' --paginate`, solo
+issues:
+```
+1 closed 2 closed 3 closed 4 closed 5 closed 6 closed 7 closed 8 closed 9 closed 10 closed 11 closed 12 closed
+13 closed 14 closed 15 open 16 open 17 open 18 open 35 open 39 closed 51 open 53 open 54 open 56 open 58 open 60 open
+total: 26
+```
+Coincide con §3 del handoff: 26 issues, ninguno nuevo desde #60, y los mismos 11 abiertos. #15 y #16 salen `open` y van como
+"Hecho" porque este PR los cierra (A.7). Se declara y no es desviación. #8 pasa a "Hecho" y #17 a "En curso".
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados: ninguno. Sin cambios de código: F es solo un comentario de YAML. No se corrieron gates de código
+  (§0 v1.3). La CI del PR tiene que dar los valores de §0 v1.3 en `contracts`, `app` y `deploy-image`.
+- Contracts: no aplica.
+- App: no aplica.
+- Tablas de contrato (contracts/README.md) y app/src/sui/ sincronizados: no aplica (no se tocaron).
+
+#### §R-2: placeholders (las dos formas por archivo)
+```
+README.md 0 0
+app/README.md 0 0
+agents.md 0 0
+contracts/README.md 0 0
+```
+
+#### URL
+```
+$ curl -sS -o /dev/null -w '%{http_code}\n' https://sui-battleship-app-production.up.railway.app/
+200
+```
+
+#### §R-4: enlaces del README
+Script desechable `<scratchpad>/t5/check-links.mjs` (Node v26.13.0, sin dependencias, con las reglas 1-6 de §R-4: slug de
+GitHub con `\p{L}`/`\p{N}`, `-N` para slugs repetidos, curl `-L` con 2xx y referencias `#N` sueltas). Las anclas se
+re-verificaron contra la branch. `exit=0`:
+```
+OK https://github.com/sdelvalle57/sui_battleship/issues/18 (200)
+OK contracts/README.md#límites-de-apuesta (ancla)
+OK contracts/README.md#flujo-de-fondos (ancla)
+OK contracts/README.md#comisión (ancla)
+OK contracts/README.md#estados (ancla)
+OK contracts/README.md#objeto-terminal-y-storage-d-20261030-15-d3 (ancla)
+OK https://sui-battleship-app-production.up.railway.app (200)
+OK app/README.md#wallet (ancla)
+OK https://faucet.sui.io/ (200)
+OK https://docs.sui.io/guides/developer/getting-started/get-coins (200)
+OK app/README.md#mis-partidas-13 (ancla)
+OK https://github.com/sdelvalle57/sui_battleship/issues/51 (200)
+OK app/README.md#límite-sin-indexador (ancla)
+OK contracts/deployments/testnet.json (existe)
+OK contracts/README.md#battleshiphouse (ancla)
+OK contracts/README.md#battleshipgame (ancla)
+OK app/README.md (existe)
+OK agents.md#4-arquitectura-de-runtime (ancla)
+OK agents.md#2-repositorio-monorepo (ancla)
+OK .github/workflows/ci.yml (existe)
+OK https://github.com/MystenLabs/suiup (200)
+OK app/README.md#verificar-la-imagen-appscriptscheck-deploy-imagesh (ancla)
+OK agents.md#3-comandos-por-área-sin-makefile (ancla)
+OK app/README.md#scripts (ancla)
+OK agents.md#app-app (ancla)
+OK contracts/README.md#uso-en-localnet (ancla)
+OK app/README.md#localnet (ancla)
+OK agents.md#localnet-aislada-smokes (ancla)
+OK https://github.com/sdelvalle57/sui_battleship/issues/8 (200)
+OK contracts/README.md#uso-en-testnet-solo-el-owner (ancla)
+OK app/README.md#despliegue-railway (ancla)
+OK app/README.md#conectar-railway-owner-no-delegable (ancla)
+OK contracts/README.md#qué-pasa-si-se-pierde-el-cap (ancla)
+OK app/README.md#panel-de-la-house-14 (ancla)
+OK contracts/README.md#autorización (ancla)
+OK contracts/README.md#retiro-de-comisiones (ancla)
+OK documents/STATUS.md (existe)
+OK https://github.com/sdelvalle57/sui_battleship/issues/1 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/2 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/3 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/4 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/5 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/6 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/7 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/39 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/9 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/10 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/11 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/12 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/13 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/14 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/8 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/15 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/16 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/17 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/18 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/51 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/53 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/54 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/56 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/58 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/60 (200)
+OK https://github.com/sdelvalle57/sui_battleship/issues/35 (200)
+OK contracts/README.md (existe)
+OK app/README.md (existe)
+OK agents.md (existe)
+OK agents.md#14-mapa-de-documentación (ancla)
+OK documents/FLUJO_AGENTES.md (existe)
+OK documents/ESTANDARES.md (existe)
+OK documents/DECISIONES.md (existe)
+OK documents/STATUS.md (existe)
+OK LICENSE (existe)
+total enlaces: 72; FAIL: 0
+```
+Incluye la URL (200) y `contracts/deployments/testnet.json` (existe). No queda ninguna referencia `#N` suelta (§R-8).
+
+#### §R-5
+```
+OK D-20261103-01
+OK D-20261103-03
+OK D-20261119-02
+```
+Ningún `AUSENTE`.
+
+#### `PR #48` (A.8, no-op)
+```
+$ /usr/bin/grep -c 'PR #48' README.md
+0
+```
+
+#### "Requerido"
+```
+$ /usr/bin/grep -rn 'no requerido\|No es requerido\|no es check requerido\|no condicionan' README.md app/README.md agents.md .github/workflows/ci.yml; echo "exit=$?"
+exit=1          (vacío)
+```
+
+#### "≈ 14,6 días" intacto (R-8)
+```
+$ git diff origin/master -- README.md app/README.md agents.md | /usr/bin/grep -E '^[-+].*14,6'; echo "exit=$?"
+exit=1          (vacío)
+$ /usr/bin/grep -c '14,6' README.md app/README.md agents.md          (branch)
+README.md:1
+app/README.md:3
+agents.md:1
+origin/master:  README.md:1  app/README.md:3  agents.md:1           (iguales)
+```
+
+#### Encabezados intactos
+```
+$ git diff origin/master -- README.md app/README.md agents.md | /usr/bin/grep -E '^[-+]#'; echo "exit=$?"
+exit=1          (vacío)
+```
+
+#### F: `ci.yml` y actionlint
+```
+$ git diff origin/master -- .github/workflows/ci.yml | /usr/bin/grep -E '^[-+][^-+]'
+-    # construye, levanta y comprueba cabeceras. No es requerido; Railway lo espera vía "Wait for CI".
++    # construye, levanta y comprueba cabeceras. Requerido desde D-20261119-02; Railway lo espera vía "Wait for CI".
+$ git diff --numstat origin/master -- .github/workflows/ci.yml
+1	1	.github/workflows/ci.yml
+```
+Hay 1 línea `-` y 1 línea `+`, las dos de comentario. No cambia ningún step, `if`, `needs` ni `env`. `.github/` no es watch path de Railway
+(paso 5), así que este cambio no publica.
+
+actionlint con el comando de `app/README.md:221`: contenedor desechable, `-no-color` y archivo explícito.
+```
+$ docker run --rm -v <repo>:/repo:ro -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5…5667 -no-color .github/workflows/ci.yml; echo "exit=$?"
+exit=0          (0 hallazgos, sin output)
+```
+No hizo falta shellcheck, porque el script no cambia.
+
+Docker se comparó por línea base (`docker ps -aq --no-trunc` y `docker images -aq --no-trunc`, antes y después):
+```
+ps nuevos: 0 faltantes: 0
+img nuevas: 0 faltantes: 0
+docker system df: Images 9 / Containers 6 / Build Cache 0B, igual antes y después
+```
+La imagen `rhysd/actionlint:1.7.12` ya estaba en la línea base, así que no hubo pull. `--rm` borró el contenedor y no
+quedó nada por limpiar. No se usó `prune`.
+
+#### §R-6 de #17 (cuatro greps) sobre las líneas agregadas de los 6 archivos
+```
+$ git diff -U0 origin/master -- README.md app/README.md agents.md documents/SMOKE_RAILWAY_DEPLOY.md documents/STATUS.md \
+    .github/workflows/ci.yml | /usr/bin/grep -E '^\+[^+]' > <scratchpad>/t5/t5-added.txt
+76 líneas
+grep 1  /usr/bin/grep -nE '[0-9a-fA-F]{40,64}'                                 → exit=1 (vacío)
+grep 2  /usr/bin/grep -nE '0x[0-9a-fA-F]{8,}'                                  → exit=1 (vacío)
+grep 3  /usr/bin/grep -niE 'suiprivkey|mnemonic|seed phrase|/home/|/Users/'    → exit=1 (vacío)
+grep 4  /usr/bin/grep -nE '[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}'             → exit=1 (vacío)
+```
+Clasificación: ninguna coincidencia en los cuatro, así que no hubo nada que atribuir. Se corrieron dos veces: después de
+D/E y otra vez después de completar la fila de baseline de STATUS.
+
+Chequeo extra: los IDs de `testnet.json` se sacaron con `jq -r '.packageId, .originalPackageId, .houseId, .houseCapId,
+.upgradeCapId, .publishTxDigest'` a un archivo temporal, sin imprimirlos, y ese archivo se borró después.
+- IDs completos en las líneas agregadas: 0.
+- IDs completos en `README.md`: 0.
+- Abreviaturas 4+4 de cada uno en las líneas agregadas: `0 0 0 0 0 0`.
+
+No hay direcciones de cuenta, ni completas ni abreviadas, ni volcados del DOM. La partida de B-4 va como `<GAME>`. La
+abreviatura del comentario de S-7 no se copió.
+
+Los cuatro greps sobre este reporte se corren antes de entregarlo (ver al final).
+
+#### §R-9: palabras de cierre
+Se usó el patrón de §R-9 del handoff, tal cual, con `/usr/bin/grep -niE`.
+```
+rango origin/master..HEAD (solo 7a97374, el handoff), pasada 1          → exit=1 (vacío)
+rango origin/master..HEAD, pasada 2 (tr -s '\n' ' ')                    → exit=1 (vacío)
+mensaje de commit propuesto de TASK-5 (<scratchpad>/t5/commit-msg.txt), pasada 1  → exit=1 (vacío)
+mensaje de commit propuesto, pasada 2 (sin saltos de línea)             → exit=1 (vacío)
+título propuesto del PR (= asunto del commit)                           → exit=1 (vacío)
+control positivo sintético (palabra de cierre + "#99"; y un "owner/repo#9" en otro renglón, pasada 2) → 1 y 1
+```
+El patrón detecta lo que tiene que detectar, y los mensajes propuestos salen limpios. Después del commit, el orquestador
+re-corre las dos pasadas sobre los commits reales (§5).
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+No hubo transacciones ni localnet. Solo hubo lecturas públicas:
+- `curl` a la URL pública: 200;
+- `curl` de los enlaces del README (§R-4);
+- `gh` de solo lectura: PRs, issues y el comentario de S-7.
+
+### Desviaciones del handoff (o "ninguna")
+- **A.4 (declarada por el handoff, v1.3.1 🟡6).**
+  - Qué cambió: el árbol del README dice "contracts, app y deploy-image (requeridos)". El texto obligatorio de S-8 decía
+    "`deploy-image`, no requerido".
+  - Por qué: D-20261119-02, que es posterior, hizo de `deploy-image` un check requerido.
+  - Verificación extra realizada: el grep de "requerido" del §5 sale vacío.
+- **E.3, fila de baseline "docs".**
+  - Qué cambió: la columna Gate suma "y el comentario de `ci.yml`" a la lista de archivos de E.3, y el resultado suma
+    "URL 200" y "actionlint 0".
+  - Por qué: F se agregó en la v1.3.1 y E.3 no lo nombraba. Sin esto, la fila omitiría un archivo tocado.
+  - Verificación extra realizada: el texto es fiel al output de §5.
+- **Arranque de AGENTE_DEV (paso 2).**
+  - Qué cambió: no se corrió `sui --version`.
+  - Por qué: la consigna del orquestador prohíbe `sui`, y TASK-5 no lleva gates de código.
+  - Verificación extra realizada: Node `v26.13.0` solo para el script de §R-4.
+
+Detalles internos, sin cambio de contenido:
+- Las líneas del handoff coincidieron con `b7aa568`; no hizo falta re-ubicarlas.
+- E.1, E.4, E.5 y E.7 no dan texto literal. Se redactaron con el contenido que pide el handoff, y la fecha de las filas de
+  #15 y #16 pasa de 2026-11-04 a 2026-11-19.
+- E.5 se tomó literal: "handoff v1.3". La versión vigente es la v1.3.1; si el MID prefiere esa cifra, es un cambio de un
+  token.
+
+### Riesgos / pendientes (o "ninguno")
+- **Literales de cierre en STATUS.** E.5 y E.7 dictan textualmente, para la fila de #16 (`documents/STATUS.md:179`) y
+  para el pendiente de #16 (`:229`), la palabra de cierre en inglés delante de #15 y de #16, en código. Quedaron así.
+  - El renglón viejo de "Siguiente" que también la tenía se reemplazó por el texto de E.6.
+  - En la fila de #15 (`:178`) queda la cita histórica de D-20261119-01, que ya estaba en `master`.
+  - El contenido de un archivo no cierra issues, y §R-9 rige sobre los mensajes de commit y el body del PR.
+  - Ningún mensaje propuesto ni este reporte la contiene.
+  - Si el orquestador prefiere que tampoco esté en STATUS, alcanza con reescribir esas dos frases como "con las
+    referencias de cierre de #15 y #16".
+- **Largo de renglón.** `agents.md:224` (C.2) y `README.md:48` (A.3) superan los ~120 caracteres de la columna habitual.
+  Se dejaron así porque el handoff da los textos como reemplazo en el mismo renglón.
+- Las precondiciones de §9 son del orquestador: la revisión del MAYOR publicada, la CI en los tres checks requeridos, el
+  GraphQL de `closingIssuesReferences` = `[15,16]` y la v1.3.1 de `HANDOFF_SMOKE_MVP.md` commiteada.
+
+### Documentación
+- READMEs / agents.md actualizados: sí (`README.md`, `app/README.md`, `agents.md`; además `SMOKE_RAILWAY_DEPLOY.md` y
+  STATUS).
+- Snippet propuesto para documents/STATUS.md: ya aplicado en este task (E.1-E.7), incluida la fila de baseline "docs @
+  `feature/issue-16-task5`" con §R-2 0/0, URL 200, §R-4 72 OK, §R-5 sin `AUSENTE`, §R-6 sin coincidencias y actionlint 0.
+  "Mergeadas" y H13 no se tocaron (E.8); de eso se encarga el housekeeping.
+
+### Commits propuestos (§8; el MID los confirma)
+1. El handoff ya está commiteado en `7a97374`: `docs: add the v1.3.1 addendum for #16 TASK-5 after S-7 (#16)`, con
+   `Refs #15`.
+2. TASK-5 (texto completo en `<scratchpad>/t5/commit-msg.txt`):
+```
+docs: publish the Railway URL, record smoke B and mark deploy-image as required (#16)
+
+TASK-5 of #16 (S-8): the public Railway URL in README.md, app/README.md
+and agents.md; README.md links contracts/deployments/testnet.json
+instead of copying IDs; deploy-image is a required check in the docs and
+in the ci.yml comment (D-20261119-02; comment only, actionlint 0); the
+owner's smoke B from S-7 (6/6, Slush remote icon still unmeasured,
+follow-up in #17) in SMOKE_RAILWAY_DEPLOY.md; the pruned-publication
+note in the lobby docs; the first-deploy npm failure as help in step 8
+of the Railway checklist; roadmap and STATUS.
+
+Refs #15
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+El título del PR es el asunto de ese commit. Las dos líneas de cierre de #15 y #16 van solo en el body del PR, y las
+redacta el MID (§8).
+
+### §R-6 y §R-9 sobre este reporte (antes de entregarlo)
+```
+grep 1 ([0-9a-fA-F]{40,64})    → exit=1 (vacío)
+grep 2 (0x[0-9a-fA-F]{8,})     → exit=1 (vacío)
+grep 3 (claves/rutas)          → 1 coincidencia: el renglón que cita el propio patrón del grep 3 → "el patrón" (🔵13)
+grep 4 (abreviaturas 4+4)      → 2 coincidencias, las dos del mismo valor `b1934ee5…5667`: el comando de actionlint y
+                                 este renglón de clasificación → digest de imagen: `rhysd/actionlint:1.7.12`, el digest
+                                 fijado en `app/README.md:221`. Se comparó el prefijo y el sufijo con ese renglón
+                                 (`sha256:b1934ee5` + 52 hex + `5667`, 1 coincidencia). No es un ID ni una dirección
+§R-9, pasadas 1 y 2            → exit=1 (vacío)
+```
+
+## Revisión TASK-5: PASA
+
+Revisión del MID (2026-11-19) contra `documents/ESTANDARES.md` y el handoff v1.3.1, TASK-5 (`7a97374`). Leí el diff real:
+`git diff HEAD -- README.md app/README.md agents.md documents/SMOKE_RAILWAY_DEPLOY.md documents/STATUS.md
+.github/workflows/ci.yml` (6 archivos, +78/−47). Pasa con 7 cambios mecánicos (M-1..M-7) que aplica el orquestador antes del
+commit. Ninguno cambia el contenido, y no hace falta otra vuelta del DEV.
+
+### Checklist
+- [x] **A, `README.md`:**
+      - la URL como enlace (`:36`);
+      - el aviso `historial disponible del nodo (desde <fecha>)` en código, sin cambiar el renglón `:44`;
+      - el enlace a `testnet.json` sin copiar ningún ID (`:48`);
+      - el árbol con los tres checks requeridos (`:75`);
+      - el despliegue separa el mecanismo de la autorización (`:136-140`);
+      - el roadmap al 2026-11-19, con #8, #15 y #16 "Hecho" y #17 "En curso" (re-medido con `gh api`, 26 issues);
+      - `PR #48` en 0 (A.8, no-op).
+- [x] **B, `app/README.md`:** B.1-B.8 con el texto del handoff:
+      - la URL con el mecanismo y N-2 (`:71-76`);
+      - la "Conclusión" del ícono remoto (`:169-172`);
+      - el check requerido (`:223-224`);
+      - el encabezado del checklist (`:233-235`), el paso 4 (`:243-244`), la ayuda del paso 8 (`:274-276`) y el paso 10
+        (`:290-291`);
+      - la publicación podada (`:426-429`).
+      - No cambió ningún encabezado, y las dos anclas que usa el README raíz siguen igual. No se tocaron `:432`, `:713` ni
+        `:715` (R-8).
+- [x] **C, `agents.md`:** el árbol (`:64-65`), `:224`, el párrafo "Gate completo" entero (`:230-233`, sin el duplicado
+      que temía el 🟡8) y §12 App, con el reemplazo (`:409-413`). No tocó `:251`.
+- [x] **D, `SMOKE_RAILWAY_DEPLOY.md`:**
+      - B-1..B-6 en el formato `owner:` / `orquestador:`. B-1 aclara quién escribió el indicador;
+      - B-5 en `✅ (ícono remoto sin medir)`;
+      - B-4 con `<GAME>`, sin abreviatura;
+      - "Reporte final (smoke B)" 6/6 PASA;
+      - el estado en la cabecera.
+- [x] **E, STATUS:**
+      - la fila 6;
+      - la línea de la App en "Despliegues";
+      - las 2 baselines, con la URL escrita;
+      - #15 con S-7, la falla del primer deploy, D-20261119-02 y D-20261104-05 (2) por `git show 1c2bb2a:`;
+      - #16, "Siguiente" y los pendientes, con N-About;
+      - H13 y "Mergeadas" sin tocar (E.8).
+- [x] **F, `ci.yml:185`:** solo el comentario (numstat 1/1, sin steps), y actionlint con la imagen fijada en
+      `exit=0`. Docker quedó en la línea base, sin pull ni `prune`. No es watch path de Railway.
+- [x] **Verificaciones de §5, con output pegado:**
+      - §R-2 0/0 en los 4 archivos;
+      - URL 200;
+      - §R-4 72 OK / 0 FAIL;
+      - §R-5 sin `AUSENTE`;
+      - grep "requerido" vacío (con `ci.yml`);
+      - "14,6" sin delta (1/3/1 contra `master`);
+      - encabezados intactos.
+- [x] **§R-6, re-corrido por el MID** con `/usr/bin/grep`:
+      - sobre las 76 líneas agregadas de los 6 archivos: los cuatro greps vacíos;
+      - sobre las líneas agregadas a este archivo por el reporte del DEV, grep 1 y grep 2 vacíos;
+      - grep 3: una coincidencia, el renglón que cita su propio patrón (clasificado como "el patrón", 🔵13);
+      - grep 4: dos coincidencias del mismo valor, `b1934ee5…5667`. Es el digest de `rhysd/actionlint:1.7.12` fijado
+        en `app/README.md:221`, con el prefijo y el sufijo comparados. No es un ID ni una dirección;
+      - ninguna dirección de cuenta ni volcado del DOM.
+- [x] **§R-9, re-corrido por el MID:** `origin/master..HEAD` = `7a97374` (el handoff). Las pasadas 1 y 2 dan `exit=1`
+      (vacías). El mensaje propuesto de abajo también da vacío en las dos pasadas.
+- [x] **Sin código (LIM/PROY):** F es un comentario de YAML; no hay IDs nuevos, secretos ni rutas personales.
+- [x] **Desviaciones:**
+      - A.4 ("requeridos"), declarada por el handoff (🟡6, D-20261119-02): aceptada;
+      - E.3 (`ci.yml`, la URL 200 y actionlint en la fila de baseline): aceptada, porque es fiel a F y a §5;
+      - no se corrió `sui --version`: aceptado (consigna sin `sui`, sin gates de código).
+
+### Puntos abiertos del DEV: fallo
+1. **Literales de cierre en STATUS:** de acuerdo con el orquestador.
+   - El contenido de un archivo no cierra issues, pero el repo no debe tener nada que parezca una referencia de cierre
+     (lección de D-20261119-01).
+   - Se reescriben `:179` y `:229` (M-1, M-2) y también la cita histórica de `:178` (M-7).
+   - `DECISIONES.md` conserva su texto: no se toca.
+2. **"handoff v1.3" en E.5:** pasa a "handoff v1.3.1" (M-3). Es la versión vigente; la v1.3 del texto de E.5 la escribió
+   el MID antes de la v1.3.1.
+3. **Largos de renglón:**
+   - `agents.md:224` (129) y `README.md:48` (125) se parten (M-4, M-5): son texto nuevo y se pueden partir sin romper
+     el enlace.
+   - `app/README.md:75` (121) y `:426` (123) se aceptan: no hay regla de ancho en `ESTANDARES.md` y el exceso es mínimo.
+   - Las filas de tabla quedan como están.
+
+### Hallazgo extra del MID (🔵, aplicado como M-6)
+`app/README.md:282-283` (paso 9 del checklist) sigue diciendo "Si esos mensajes no aparecen, el ícono remoto se mide
+ahí", la misma inferencia que corrigió el 🟠2 en `:169-172`. Se acota a un navegador sin la extensión de Slush.
+
+### Cambios mecánicos (los aplica el orquestador antes del commit)
+- **M-1** `documents/STATUS.md:179`: en la frase "TASK-5 (…) en su PR, con …", lo que sigue a "con" (las dos palabras
+  de cierre en código delante de #15 y de #16) pasa a `las referencias de cierre de #15 y #16.`
+- **M-2** `documents/STATUS.md:229`: dentro de "TASK-5 (PR de seguimiento con …) completa la URL y", el contenido del
+  paréntesis después de "con" (las mismas dos palabras de cierre en código) pasa a `las referencias de cierre de #15 y
+  #16`. Queda: `TASK-5 (PR de seguimiento con las referencias de cierre de #15 y #16) completa la URL y`
+- **M-3** `documents/STATUS.md:179`: `plan v1 y handoff v1.3;` → `plan v1 y handoff v1.3.1;`
+- **M-4** `agents.md:224`, en dos renglones:
+  `- el job `deploy-image` corre `bash app/scripts/check-deploy-image.sh . 8080`. **Requerido** desde el 2026-11-19` /
+  `  (D-20261119-02);`
+- **M-5** `README.md:48`, en dos renglones:
+  `- **IDs de testnet** (`packageId`, `houseId`): en` /
+  `  [`contracts/deployments/testnet.json`](contracts/deployments/testnet.json).`
+- **M-6** `app/README.md:282-283`, en tres renglones con la sangría actual (5 espacios):
+  `"Slush" listado en el modal. Cualquier otro error de consola o de red es rojo. Si esos mensajes no aparecen y el` /
+  `navegador no tiene la extensión de Slush, el ícono remoto se mide ahí (con la extensión, el kit no pide la` /
+  `metadata);`
+- **M-7** `documents/STATUS.md:178`: en "El merge cerró #15 por el "…" del mensaje de `5af2fb0`", la cita entre comillas
+  (la palabra de cierre delante de #15) pasa a `la referencia de cierre a #15`. Queda: `El merge cerró #15 por la
+  referencia de cierre a #15 del mensaje de `5af2fb0``
+
+Después de aplicarlos:
+- `/usr/bin/grep -nE '(close[sd]?|fix(e[sd])?|resolve[sd]?):?[[:space:]]+#[0-9]+' -i README.md app/README.md agents.md documents/STATUS.md documents/SMOKE_RAILWAY_DEPLOY.md`
+  → vacío;
+- se repiten §R-2, §R-4 y los cuatro greps de §R-6 sobre las líneas agregadas. Lo esperado es lo mismo de arriba.
+
+### Siguiente paso
+TASK-5 en PASA. El orquestador:
+- aplica M-1..M-7;
+- commitea con el mensaje de abajo;
+- abre el PR con el título = el asunto del commit y el body del MID;
+- sigue §9 del handoff v1.3.1: revisión de integración del MAYOR publicada, los tres checks requeridos en verde, §R-9
+  (las dos pasadas y GraphQL = `[15,16]`), la v1.3.1 de #17 commiteada, y merge commit.
+
+### Mensaje de commit propuesto (TASK-5: los 6 archivos y este reporte)
+```
+docs: publish the Railway URL, record smoke B and mark deploy-image as required (#16)
+
+TASK-5 of #16 (S-8): the public Railway URL in README.md, app/README.md
+and agents.md; README.md links contracts/deployments/testnet.json
+instead of copying IDs; deploy-image is a required check in the docs and
+in the ci.yml comment (D-20261119-02; comment only, actionlint 0); the
+owner's smoke B from S-7 (6/6, Slush remote icon still unmeasured,
+follow-up in #17) in SMOKE_RAILWAY_DEPLOY.md; the pruned-publication
+note in the lobby docs; the first-deploy npm failure as help in step 8
+of the Railway checklist; roadmap and STATUS. The DEV report and the
+MID review are in documents/REPORTES_README.md.
+
+Refs #15
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+### Snippet para STATUS.md
+Ya aplicado por TASK-5 (E.1-E.7) más M-1, M-2, M-3 y M-7. El housekeeping hace el resto (§9 del handoff).
