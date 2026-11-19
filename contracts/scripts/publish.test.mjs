@@ -1,8 +1,10 @@
 // Tests de `publish.mjs`: guardas, envoltorio de la CLI y mensajes, todo con dependencias inyectadas. Ningún test
-// invoca `sui` ni git de verdad ni escribe archivos.
+// invoca `sui` ni git de verdad ni escribe archivos. El único proceso es `bash -n` (solo parsea, no ejecuta) en el test
+// de m-2.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +19,7 @@ import {
   checkDeployments,
   checkLockUnchanged,
   checkNetworkGuard,
+  checkNodeVersion,
   checkOutArg,
   checkPublishArgs,
   checkTestnetPreconditions,
@@ -27,6 +30,7 @@ import {
   formatSummary,
   interpretCliRun,
   isAllowedSuiArgs,
+  isEntryPoint,
   main,
   parseCliArgs,
   publishCliArgs,
@@ -213,7 +217,7 @@ test('parseCliArgs rechaza subcomando inválido, opción desconocida o ajena al 
 });
 
 // Corre main capturando lo que escribe en stderr.
-async function mainCapturingStderr(argv) {
+async function mainCapturingStderr(argv, options) {
   const original = process.stderr.write;
   let stderr = '';
   process.stderr.write = (chunk) => {
@@ -221,7 +225,7 @@ async function mainCapturingStderr(argv) {
     return true;
   };
   try {
-    return { code: await main(argv), stderr };
+    return { code: await main(argv, options), stderr };
   } finally {
     process.stderr.write = original;
   }
@@ -274,7 +278,85 @@ test('main: --out con --network testnet ⇒ exit 1 sin leer la config ni invocar
   }
 });
 
+test('main: con un Node que no es el de .nvmrc ⇒ exit 1 y el mensaje, antes de los argumentos, la config y la CLI', async () => {
+  // Guarda 0 (#8, M-4): corta antes de parseCliArgs (un subcomando inválido da 1, no 2) y antes de la config y la CLI
+  // (sin SUI_CONFIG_DIR y con un SUI_BIN inexistente, el mensaje sigue siendo el de Node).
+  const saved = { SUI_CONFIG_DIR: process.env.SUI_CONFIG_DIR, SUI_BIN: process.env.SUI_BIN };
+  try {
+    delete process.env.SUI_CONFIG_DIR;
+    process.env.SUI_BIN = '/nonexistent/sui-bin-de-test';
+    const cases = [
+      [['check'], '20.20.2'],
+      [['check'], '22.23.4'],
+      [['publish', '--network', 'testnet', '--dry-run'], '20.20.2'],
+      [['deploy'], '20.20.2'],
+    ];
+    for (const [argv, nodeVersion] of cases) {
+      const result = await mainCapturingStderr(argv, { nodeVersion });
+      const label = `${JSON.stringify(argv)} con ${nodeVersion}`;
+      assert.equal(result.code, EXIT.FAILURE, label);
+      assert.match(result.stderr, /^se requiere Node 26 \(\.nvmrc\); este es v/, label);
+      assert.ok(result.stderr.includes(`v${nodeVersion}`), label);
+      assert.ok(!result.stderr.includes('/'), `${label}: sin rutas`);
+    }
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 // ---------- Guardas ----------
+
+test('checkNodeVersion: el major de Node debe ser el de .nvmrc', () => {
+  assert.doesNotThrow(() => checkNodeVersion({ nodeVersion: '26.13.0', nvmrcText: '26\n' }));
+  assert.doesNotThrow(() => checkNodeVersion({ nodeVersion: '26.13.0', nvmrcText: 'v26\n' }));
+  for (const nodeVersion of ['20.20.2', '22.23.4', '27.0.0']) {
+    assert.throws(
+      () => checkNodeVersion({ nodeVersion, nvmrcText: '26\n' }),
+      (error) =>
+        error.message === `se requiere Node 26 (.nvmrc); este es v${nodeVersion}: corre "nvm use" en la raíz del repo`,
+      nodeVersion,
+    );
+  }
+  for (const nvmrcText of ['', '\n', 'lts/*\n', '26.13.0\n', null]) {
+    assert.throws(() => checkNodeVersion({ nodeVersion: '26.13.0', nvmrcText }), /^Error: \.nvmrc sin versión válida$/, String(nvmrcText));
+  }
+});
+
+test('checkNodeVersion: el .nvmrc real del repo acepta el Node que corre los tests (la CI usa .nvmrc)', () => {
+  const nvmrcText = readFileSync(path.join(CONTRACTS_DIR, '..', '.nvmrc'), 'utf8');
+  assert.doesNotThrow(() => checkNodeVersion({ nodeVersion: process.versions.node, nvmrcText }));
+});
+
+test('isEntryPoint: import.meta.main si es boolean; si no, realpath de argv[1] contra el del módulo', () => {
+  // Con un boolean no se mira argv[1]: realpath no se llama (un espía, porque isEntryPoint atrapa lo que lance realpath).
+  const calls = [];
+  const spy = (p) => {
+    calls.push(p);
+    return p;
+  };
+  assert.equal(isEntryPoint({ importMetaMain: true, argv1: '/x/otro.mjs', modulePath: '/x/publish.mjs', realpath: spy }), true);
+  assert.equal(isEntryPoint({ importMetaMain: false, argv1: '/x/publish.mjs', modulePath: '/x/publish.mjs', realpath: spy }), false);
+  assert.deepEqual(calls, []);
+  // Node < 22.18: sin import.meta.main. Un symlink al script resuelve al mismo archivo.
+  const links = { '/repo/link.mjs': '/repo/contracts/scripts/publish.mjs' };
+  const realpath = (p) => links[p] ?? p;
+  const modulePath = '/repo/contracts/scripts/publish.mjs';
+  assert.equal(isEntryPoint({ importMetaMain: undefined, argv1: modulePath, modulePath, realpath }), true);
+  assert.equal(isEntryPoint({ importMetaMain: undefined, argv1: '/repo/link.mjs', modulePath, realpath }), true);
+  assert.equal(isEntryPoint({ importMetaMain: undefined, argv1: '/repo/contracts/scripts/otro.mjs', modulePath, realpath }), false);
+  assert.equal(isEntryPoint({ importMetaMain: undefined, argv1: undefined, modulePath, realpath }), false);
+  assert.equal(isEntryPoint({ importMetaMain: undefined, argv1: '', modulePath, realpath }), false);
+  const throwing = () => {
+    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+  };
+  assert.equal(isEntryPoint({ importMetaMain: undefined, argv1: modulePath, modulePath, realpath: throwing }), false);
+  // Con el fs real: este módulo de publish.mjs contra sí mismo.
+  const real = path.join(CONTRACTS_DIR, 'scripts', 'publish.mjs');
+  assert.equal(isEntryPoint({ importMetaMain: undefined, argv1: real, modulePath: real, realpath: realpathSync }), true);
+});
 
 test('checkPublishArgs: red válida y --pubfile-path obligatorio en localnet y prohibido en testnet', () => {
   assert.throws(() => checkPublishArgs({ network: 'mainnet' }), /--network inválida/);
@@ -647,19 +729,51 @@ test('fixtures/localnet.deployment.json = buildDeployment del fixture con los va
 
 // ---------- Resumen y mensajes ----------
 
-test('formatSummary: los 14 campos y el siguiente paso, sin direcciones de cuentas', () => {
-  const deployment = localnetDeployment();
-  const summary = formatSummary({ deployment, outPath: '/tmp/out/localnet.json', dir: '/tmp/battleship-publish-x' });
-  for (const [key, value] of Object.entries(deployment)) assert.ok(summary.includes(`  ${key}: ${value}`), key);
-  assert.match(summary, /bórralo cuando termines/);
-  assert.ok(
-    summary.includes(
-      `sui client call --package ${deployment.packageId} --module house --function update_fee_rate ` +
-        `--args ${deployment.houseId} ${deployment.houseCapId} <bps>`,
-    ),
-  );
-  assert.ok(summary.includes(`sui client object ${deployment.houseId} --json`));
-  assertNoAccountAddress(summary);
+// Prefijo exacto que debe imprimir el resumen (#8, M-2); string normal: `${SUI_CONFIG_DIR:?…}` es texto literal.
+const OWNER_CLI_PREFIX = 'printf \'n\\n\' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client';
+const commandLines = (summary) => summary.split('\n').map((l) => l.trim()).filter((l) => l.startsWith("printf 'n\\n' |"));
+
+test('formatSummary: los 14 campos y el siguiente paso con el prefijo guardado, sin direcciones de cuentas', () => {
+  assert.equal(OWNER_CLI_PREFIX, `printf 'n\\n' | SUI_CONFIG_DIR="\${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client`);
+  const localnet = localnetDeployment();
+  const testnet = { ...localnet, network: 'testnet', chainId: TESTNET_CHAIN_ID };
+  const fee = (d, bps) =>
+    `  ${OWNER_CLI_PREFIX} call --package ${d.packageId} --module house --function update_fee_rate ` +
+    `--args ${d.houseId} ${d.houseCapId} ${bps}`;
+  const verify = (d) => `  ${OWNER_CLI_PREFIX} object ${d.houseId} --json   # campo content.fee_rate`;
+  const cases = [
+    [testnet, '/tmp/out/testnet.json', '200'],
+    [localnet, '/tmp/out/localnet.json', '<bps>'],
+  ];
+  for (const [deployment, outPath, bps] of cases) {
+    const summary = formatSummary({ deployment, outPath, dir: '/tmp/battleship-publish-x' });
+    const lines = summary.split('\n');
+    const label = deployment.network;
+    for (const [key, value] of Object.entries(deployment)) assert.ok(summary.includes(`  ${key}: ${value}`), `${label}: ${key}`);
+    assert.match(summary, /bórralo cuando termines/);
+    assert.ok(lines.includes(fee(deployment, bps)), `${label}: comando de comisión`);
+    assert.ok(lines.includes(verify(deployment)), `${label}: verificación`);
+    assert.ok(summary.includes('${SUI_CONFIG_DIR:?'), `${label}: el prefijo no se interpoló`);
+    assert.doesNotMatch(summary, /^\s*sui client/m, `${label}: ningún sui client sin el prefijo`);
+    assert.equal(commandLines(summary).length, 2, label);
+    assertNoAccountAddress(summary);
+  }
+  const testnetSummary = formatSummary({ deployment: testnet, outPath: '/tmp/out/testnet.json', dir: null });
+  assert.ok(!testnetSummary.includes('<bps>'));
+});
+
+test('formatSummary (m-2): en testnet las dos líneas de comando se pegan tal cual (bash -n, sin ejecutar)', () => {
+  const testnet = { ...localnetDeployment(), network: 'testnet', chainId: TESTNET_CHAIN_ID };
+  const lines = commandLines(formatSummary({ deployment: testnet, outPath: '/tmp/out/testnet.json', dir: null }));
+  assert.equal(lines.length, 2);
+  for (const line of lines) {
+    // `bash -n` solo parsea: no expande `${SUI_CONFIG_DIR:?…}` ni invoca nada.
+    const result = spawnSync('bash', ['-n', '-c', line], { encoding: 'utf8' });
+    assert.equal(result.status, 0, `${line}\n${result.stderr}`);
+  }
+  // En localnet, `<bps>` no es pegable a propósito: el shell lo toma como redirección y no corre nada.
+  const [localFee] = commandLines(formatSummary({ deployment: localnetDeployment(), outPath: '/tmp/out/localnet.json', dir: null }));
+  assert.notEqual(spawnSync('bash', ['-n', '-c', localFee], { encoding: 'utf8' }).status, 0);
 });
 
 test('formatCliFailure: digest de stderr, stderr redactado con y sin 0x y consejo fijo tras publicar', () => {

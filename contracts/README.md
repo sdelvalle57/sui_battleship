@@ -13,7 +13,7 @@ código discrepan, manda el código y se corrige la tabla en el mismo PR (`agent
 | `scripts/publish.mjs` | Publicación con guardas, `record` y `check` de los despliegues (#7, ver "Despliegues") |
 | `scripts/deployment.mjs` | Formato de `deployments/<red>.json`: funciones puras que usan el script y la CI |
 | `scripts/*.test.mjs`, `scripts/fixtures/` | Tests (`node --test`) y salidas reales de la CLI 1.83.0 en una localnet desechable |
-| `deployments/<red>.json`, `Published.toml` | Datos de cada publicación (los escribe la primera publicación en testnet, #8) |
+| `deployments/<red>.json`, `Published.toml` | Datos de cada publicación (testnet desde #8) |
 | `fixtures/game-reads.localnet.json` | Lecturas gRPC reales de cada variante de `Game` y de sus eventos, capturadas en una localnet desechable con `app/scripts/capture-read-fixtures.mjs` (#10, ver "Lectura desde la app") |
 | `fixtures/game-tx.localnet.json` | Transacciones reales de crear, cancelar, rechazar (#11) y aceptar (#12): éxitos (con cada ganador y sobre una invitación), dos fallos `MoveAbort` ejecutados y 11 `SimulationError` de simulaciones sin firmar, y el objeto House, capturados en una localnet desechable con `app/scripts/capture-tx-fixtures.mjs` (ver "Lectura desde la app") |
 | `fixtures/house-admin.localnet.json` | Panel de la House (#14): listado real del `HouseCap` por tipo (`listOwnedObjects`), su `getObject`, 4 `SimulationError` de `house`/0, 1, 1, 2 y la preflight sin el cap, las transacciones de admin ejecutadas (`update_fee_rate`, `update_bet_limits`, `withdraw_fees` + `TransferObjects`) y la House después del retiro, capturados en una localnet desechable con `app/scripts/capture-house-fixtures.mjs` (ver "Lectura desde la app") |
@@ -120,12 +120,14 @@ cap (N-1): `transfer_house_cap` sigue siendo solo por CLI, igual que `migrate`. 
   (si dice "Sin permisos", "Volver a comprobar": el índice puede ir unos cientos de ms atrás).
 - [ ] La dirección publicadora también tiene el `UpgradeCap` y el `Publisher`: importarla en una wallet de navegador
   los expone a la extensión; la alternativa es `transfer_house_cap` a la wallet del panel. Decisión del owner (N-3).
+  En testnet, D-20261104-06, decidido el 2026-11-04: el cap se queda en la publicadora («lo dejo»).
 
 ### Fee por defecto 0 (D-20261030-11)
 
 La House nace con `fee_rate = 0`. Como el `Game` copia el fee al crearse (D-20261030-06 §3), las partidas
 creadas antes del primer `update_fee_rate` quedan con comisión 0 para siempre.
 **Paso obligatorio post-publicación (#8):** el owner llama `update_fee_rate` antes de anunciar el juego.
+En testnet, 200 bps desde la publicación (D-20261103-01, tx `BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw`).
 
 ### Retiro de comisiones
 
@@ -160,6 +162,14 @@ afecta a las partidas `Pending` existentes, y aceptar solo exige igualar el mont
   upgrade` → `migrate` de inmediato con el `HouseCap` → `deployments/testnet.json` actualizado en el **mismo PR** →
   la app usa el paquete nuevo. Entre el `migrate` y el deploy de la app, crear y aceptar partidas desde la app vieja
   aborta con `EWrongVersion` (cancelar y rechazar siguen funcionando: no leen la versión).
+- **Modelo de confianza del `UpgradeCap` (D-20261103-01 (1)).** Su titular es de confianza total: un upgrade compatible
+  puede agregar funciones que muevan el `stake` de toda partida `Pending` y las comisiones de la House. Las políticas
+  `additive` y `dep_only` no lo impiden (permiten funciones nuevas); solo `make_immutable` lo cierra. Restricciones
+  permanentes desde la primera publicación: (a) `cancel_game` y `reject_game` de la v1 se pueden invocar para siempre
+  (no leen la versión), así que toda versión nueva mantiene `stake` como **única** custodia de fondos del `Game`, porque
+  un fondo guardado en otro lado (p. ej. en dynamic fields) quedaría huérfano al cancelar desde la v1; (b) `Game`,
+  `House` y `HouseCap` nunca podrán tener `store`, ni `GameState` variantes nuevas; (c) la política del cap se revisa
+  antes de cualquier mainnet.
 
 ### Contención
 
@@ -563,9 +573,14 @@ transacción (cómputo + storage − rebate de `effects.gasUsed`).
 
 ## Despliegues (#7)
 
-Un archivo por red en `contracts/deployments/<red>.json`: `localnet.json` (ignorado por git) y `testnet.json` (lo
-commitea #8). Lo escribe **solo** `scripts/publish.mjs` (nunca a mano), con `JSON.stringify(obj, null, 2)` y salto de
-línea final, a partir de la salida de la misma transacción de publicación (D-20261102-01).
+Un archivo por red en `contracts/deployments/<red>.json`: `localnet.json` (ignorado por git) y `testnet.json` (commiteado
+en #8). Lo escribe **solo** `scripts/publish.mjs` (nunca a mano), con `JSON.stringify(obj, null, 2)` y salto de
+línea final, a partir de la salida de la misma transacción de publicación (D-20261102-01). El script exige el Node de
+`.nvmrc` (26): con otra versión sale con 1 y un mensaje (#8).
+
+**Testnet:** publicado el 2026-11-04 (#8) desde `26f2676`,
+`packageId` `0x8b7873ec06f9173d43aa6c1f093040e5237967ad2aaecece0a32070587856f51`.
+IDs completos en `deployments/testnet.json`.
 
 ### Esquema (`schemaVersion: 1`)
 
@@ -586,7 +601,7 @@ Ejemplo con IDs **ficticios**:
   "publishTimestamp": "2026-11-05T14:03:12.345Z",
   "sourceCommit": "5555555555555555555555555555555555555555",
   "suiCliVersion": "1.83.0-16d2dc1e05ed",
-  "frameworkRev": "719fb2960ccfbf9f4d33041f8ea5146d30671696"
+  "frameworkRev": "05ad86a3e86c522deea116f80dc2bf2309a53363"
 }
 ```
 
@@ -662,30 +677,195 @@ su `network`, si una red no-localnet no tiene su `[published.<red>]` (o al revé
 
 ### Uso en testnet (solo el owner)
 
+Publicado el 2026-11-04 (#8). Una republicación sigue este runbook bajo D-20261103-01 (2), con la operación previa
+que registra esa decisión.
+
 Ningún agente corre este camino, ni con `--dry-run` (D-20261102-03). No admite `--out` ni `--pubfile-path`: el json va
-siempre a `deployments/testnet.json`, el que `check` cruza con `[published.testnet]` (con otra ruta, la CI fallaría
-recién en `check`).
+siempre a `deployments/testnet.json`, el que `check` cruza con `[published.testnet]`. Lo corre **solo el owner**, en su
+terminal (bash o zsh, con `jq`), desde su clon del repo. Nada de lo que imprime la CLI se pega en el repo, en issues ni
+en chats, salvo los digests y los IDs públicos que imprime el script. Placeholders: `<repo>` (raíz del clon), `<su dir>`
+(su config propia), `<branch>` y `<head>` (la branch del PR y el SHA con la CI en verde que le pasa el orquestador).
 
-1. **Config propia:** el owner crea, en su terminal, un `SUI_CONFIG_DIR` **fuera de `~/.sui/`** con su clave y el env
-   `testnet`; `~/.sui/sui_config/` queda sin claves para siempre. El script lo exige (absoluto, con `client.yaml`, y su
-   `realpath` fuera de `~/.sui`). Si la guarda no puede inspeccionar una ruta (permisos, symlinks en bucle), aborta con
-   el código del error (`EACCES`, `ELOOP`), nunca con la ruta.
-2. **Pre-vuelo (STATUS H13):** si hace falta, repin con `update-deps -e testnet`, gates re-medidos y lock commiteado
-   **antes**; árbol limpio.
-3. `SUI_CONFIG_DIR=<su dir> node scripts/publish.mjs publish --network testnet --dry-run`: comprueba env activo y
-   chain id, la versión de la CLI contra `ci.yml`, el árbol limpio y que no exista una publicación previa; imprime el
-   gas estimado. Falla si el dry run cambia `Move.lock`.
-4. Lo mismo **sin `--dry-run`**: repite las guardas y el dry run, y pide escribir `testnet` en la terminal (freno
-   contra accidentes; la autorización es la del owner, D-20261030-09). Escribe `deployments/testnet.json`; la CLI
-   escribe `Published.toml`, y el script verifica que coincidan.
-5. **Comisión (#8):** la House nace con `fee_rate` 0; correr el comando `update_fee_rate` que imprime el script
-   (`sui client call --package <packageId> --module house --function update_fee_rate --args <houseId> <houseCapId> <bps>`)
-   y verificarlo con `sui client object <houseId> --json` (campo `fee_rate`).
-6. **Entrega:** `deployments/testnet.json` + `Published.toml` + digest (sin direcciones) en el mismo PR; luego borrar
-   el directorio temporal del script (`battleship-publish-*`, tiene la salida cruda con la dirección del publicador).
+**Modelo de confianza.** La dirección publicadora recibe el `HouseCap`, el `UpgradeCap` y el `Publisher`. Quien tiene el
+`UpgradeCap` es de confianza total: puede publicar código que mueva el `stake` de las partidas `Pending` y las comisiones
+(ver "Versionado" → "Modelo de confianza del `UpgradeCap`"). Ninguno de los tres se usa ni se transfiere fuera de un
+procedimiento documentado; el `HouseCap` solo se mueve con `transfer_house_cap`, nunca con "Send" de la wallet.
 
-El script guarda en la config activa el cache `chain_id` del env (efecto de `chain-identifier`; inocuo y siempre en
-la config propia, nunca en `~/.sui/`).
+#### 0. Config propia (una vez)
+
+- La config vive en un `SUI_CONFIG_DIR` **absoluto y fuera de `~/.sui/`**, con la clave del owner y un env de alias
+  exactamente `testnet` (RPC `https://fullnode.testnet.sui.io:443`) como env activo. La dirección activa es la
+  **publicadora**: recibe el `HouseCap`, el `UpgradeCap` y el `Publisher`. Cómo llega el `HouseCap` a la wallet del
+  navegador del panel admin (#14, `#/admin`) es decisión del owner (N-3): importar la publicadora en esa wallet (expone
+  también el `UpgradeCap` y el `Publisher` a la extensión) o, después de verificar la custodia (paso 8), pasarle el cap
+  con `transfer_house_cap` por CLI, con el checklist de "Qué pasa si se pierde el cap". En la publicación del
+  2026-11-04, el `HouseCap` quedó en la publicadora (N-3: «lo dejo», D-20261104-06). Cómo crea o importa la clave es manejo
+  personal del owner: la frase de recuperación nunca sale de su terminal.
+- **Siempre `export SUI_CONFIG_DIR=<su dir>` antes de cualquier `sui client …` o `sui keytool …`.** Sin ese export la CLI
+  usa `~/.sui/sui_config/`, que queda **sin claves para siempre** (D-20261030-07): un `new-address` o un `import` ahí
+  dejaría una clave al alcance de los agentes.
+- El script exige esa config (absoluta, con `client.yaml`, con su `realpath` fuera de `~/.sui`). Si no puede inspeccionar
+  una ruta (permisos, symlinks en bucle), aborta con el código del error (`EACCES`, `ELOOP`), nunca con la ruta.
+
+#### 1. Shell de publicación
+
+```bash
+cd <repo> && git switch <branch> && git pull --ff-only
+git status --porcelain                  # vacío, también sin archivos sin trackear
+git log -1 --format=%H                  # = <head> (será el sourceCommit del json)
+test ! -e contracts/deployments/localnet.json || rm contracts/deployments/localnet.json   # resto de un smoke viejo
+nvm use && node --version               # v26.x; con otra versión el script sale con 1
+export SUI_CONFIG_DIR=<su dir>          # solo en esta shell
+case "$(realpath -m "$SUI_CONFIG_DIR")/" in "$(realpath -m ~/.sui)"/*) echo "ABORTA: config dentro de ~/.sui";; *) echo "config fuera de ~/.sui";; esac
+suio() { printf 'n\n' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client "$@"; }
+printf 'n\n' | sui --version            # sui 1.83.0-16d2dc1e05ed (= SUI_VERSION/SUI_COMMIT de ci.yml)
+suio active-env                         # testnet
+suio active-address                     # la dirección de su wallet; no se pega
+suio gas                                # saldo; no se pega
+```
+
+`suio` es la única forma de llamar a `sui client` en este runbook: sin el `export` aborta antes de invocar `sui` (nunca
+cae en `~/.sui/`), y en una shell nueva ni siquiera existe. La línea `case` debe imprimir `config fuera de ~/.sui`:
+`suio` solo comprueba que la variable esté definida, y las llamadas de los pasos 6-10 no pasan por la guarda del
+script. Con `ABORTA`, no se sigue. Un `contracts/deployments/localnet.json` que haya quedado de un smoke viejo pertenece
+a una génesis ya borrada y git lo ignora: se borra, porque si no el paso 5 vería otra salida de `git status` y `check`
+contaría 2 despliegues. Saldo necesario: el gas que estime el paso 3 más ≈ 0,05 SUI para la comisión y el smoke. El SUI
+de testnet sale del faucet web vigente.
+
+#### 2. Versión de protocolo, justo antes de publicar (STATUS H13)
+
+```bash
+curl -fsSL -X POST -H 'content-type: application/json' \
+  -d '{"query":"{ epoch { epochId protocolConfigs { protocolVersion } } }"}' \
+  https://graphql.testnet.sui.io/graphql | jq '.data.epoch'
+```
+
+`protocolVersion` debe ser la PV del framework de `Move.lock` (`documents/STATUS.md` → Toolchain → Framework). Si es
+mayor: **no publicar** y avisar al orquestador. Antes hay que subir la CLI a un release `testnet` cuya PV máxima la
+cubra (`ci.yml`, tests y fixtures de `scripts/`), repinear el lock, re-medir los gates y repetir el ensayo en la localnet
+aislada, todo en un PR. El dry run no lo detecta: la CLI solo avisa con más de 2 versiones de diferencia.
+
+#### 3. Dry run
+
+```bash
+cd contracts
+node scripts/publish.mjs publish --network testnet --dry-run; echo "exit=$?"
+```
+
+Éxito = la línea **`Dry run ok. Gas estimado: N MIST.`** y `exit=0`; cualquier otra salida es un fallo y no se sigue.
+Sin `printf` delante de `node`: el script ya le responde `n` a la CLI, y la confirmación del paso 4 necesita la
+terminal. Comprueba el env activo y el chain id, la CLI contra `ci.yml`, el árbol limpio, que no haya una publicación
+previa y que el dry run no cambie `Move.lock`.
+
+#### 4. Publicación
+
+```bash
+node scripts/publish.mjs publish --network testnet
+```
+
+Repite las guardas y el dry run y pide escribir `testnet` (freno contra accidentes; la autorización es la del owner,
+D-20261030-09). Imprime los 14 campos, el directorio temporal (`battleship-publish-*`, `0700`) y el bloque "Siguiente
+paso obligatorio" con dos comandos: el `update_fee_rate` con 200 (paso 6) y la lectura de la House (paso 7), los dos con
+el mismo prefijo que `suio`. Ante cualquier error: "Recuperación" (nunca reintentar sin buscar el digest). Después, en
+la misma shell:
+
+```bash
+D=<directorio temporal que imprimió el script>
+PKG="$(jq -r .packageId deployments/testnet.json)"; HOUSE="$(jq -r .houseId deployments/testnet.json)"
+CAP="$(jq -r .houseCapId deployments/testnet.json)"; UCAP="$(jq -r .upgradeCapId deployments/testnet.json)"
+```
+
+#### 5. Archivos esperados
+
+```bash
+git status --porcelain
+node scripts/publish.mjs check
+```
+
+`git status` debe dar **exactamente** `?? contracts/Published.toml` y `?? contracts/deployments/`, y `check` debe dar
+`1 despliegue(s) válidos y coherentes con Published.toml`. Ante cualquier otro cambio (p. ej. ` M contracts/Move.lock`):
+STOP; se avisa al orquestador sin commitear ni editar nada. Esto vale porque el paso 1 ya borró cualquier
+`localnet.json` viejo. Si aun así aparece, git lista `?? contracts/deployments/testnet.json` en vez de la carpeta y
+`check` cuenta 2: no es un STOP; se borra `contracts/deployments/localnet.json` y se repite este paso.
+
+#### 6. Comisión: 200 bps, antes de cualquier partida (D-20261103-01)
+
+```bash
+suio call --package "$PKG" --module house --function update_fee_rate --args "$HOUSE" "$CAP" 200 --json > "$D/fee.json"; echo "exit=$?"
+jq -r '.digest, .effects.status.status' "$D/fee.json"
+jq '.events[] | select(.type | endswith("::house::FeeRateUpdated")) | .parsedJson' "$D/fee.json"
+```
+
+`exit=0`, digest y `success`; `old_fee_rate` 0 y `new_fee_rate` 200 (la CLI muestra los `u16` como `0.0`/`200.0`). Es el
+primer comando del bloque "Siguiente paso obligatorio" que imprimió el script en el paso 4: el mismo `call`, con el
+prefijo de `suio` escrito entero, los IDs ya puestos y `200`. Aquí va con `suio`, las variables del paso 4 y `--json`,
+para guardar la salida en `$D` y leer el evento. Se corre **una sola vez**, este o el impreso: una segunda corrida
+emitiría otro `FeeRateUpdated` (200 → 200) y el `old_fee_rate` esperado ya no sería 0. Una partida creada antes de este
+paso quedaría con comisión 0 para siempre (D-20261030-11).
+
+#### 7. House
+
+```bash
+suio object "$HOUSE" --json > "$D/house.json"
+jq '{type: .objType, owner: .owner, content: .content}' "$D/house.json"
+```
+
+`owner` `{"Shared": {"initial_shared_version": N}}`; en `content`, `fee_rate` `200.0`, `min_bet` `"1000000"`, `max_bet`
+`"50000000000"`, `version` `"1"` y `fees_collected` `"0"` (formas exactas de la CLI 1.83, ensayadas en #8). Es la misma
+lectura que la línea "Verificación" del bloque del script.
+
+#### 8. Custodia, sin pegar la dirección
+
+```bash
+A="$(suio active-address)"
+PUB="$(jq -r '.objectChanges[] | select(.objectType == "0x2::package::Publisher") | .objectId' "$D/publish-output.json")"
+for id in "$CAP" "$UCAP" "$PUB"; do suio object "$id" --json | jq -r --arg a "$A" '[.objType, (.owner.AddressOwner == $a)] | @tsv'; done
+```
+
+Tres líneas (`<PKG>::house::HouseCap`, `0x0000…0002::package::UpgradeCap`, `0x0000…0002::package::Publisher`), cada una
+con `true`. `suio object` escribe la dirección `0x2` larga (64 hex) en `objType`, mientras que `objectChanges` de la
+publicación usa `0x2::…`, que es la forma que filtra la línea de `PUB`. Se entrega solo "sí/no" por objeto.
+
+#### 9. Smoke: crear con `min_bet`
+
+```bash
+suio ptb --split-coins gas "[1000000]" --assign c --move-call "$PKG::game::create_game" @"$HOUSE" c.0 none --json > "$D/smoke-create.json"; echo "exit=$?"
+jq -r '.digest, .effects.status.status' "$D/smoke-create.json"
+jq '.events[] | select(.type | endswith("::game::GameCreated")) | .parsedJson | {bet, fee_rate, opponent}' "$D/smoke-create.json"
+GAME="$(jq -r '.objectChanges[] | select(.type == "created" and (.objectType | endswith("::game::Game"))) | .objectId' "$D/smoke-create.json")"
+```
+
+`success`; `bet` `"1000000"`, **`fee_rate` `200.0`** (prueba que la partida copió la comisión nueva) y `opponent` `null`.
+
+#### 10. Smoke: cancelar
+
+```bash
+suio call --package "$PKG" --module game --function cancel_game --args "$GAME" --json > "$D/smoke-cancel.json"; echo "exit=$?"
+jq -r '.digest, .effects.status.status' "$D/smoke-cancel.json"
+jq '.events[] | select(.type | endswith("::game::GameCancelled")) | .parsedJson | {refund, by_creator: (.cancelled_by == .creator)}' "$D/smoke-cancel.json"
+suio object "$GAME" --json | jq '{state: .content.state, stake: .content.stake}'
+```
+
+`success`; `refund` `"1000000"` y `by_creator` `true`; `state` `{"@variant": "Cancelled"}` (así escribe la CLI 1.83 un
+enum) y `stake` `"0"`.
+
+#### 11. Entrega al orquestador
+
+- `contracts/deployments/testnet.json` y `contracts/Published.toml` **sin editar ni commitear**: los commitea el
+  orquestador en la branch del PR. Si publicó desde otro clon, se los pasa tal cual.
+- Los digests de publicación (`publishTxDigest`), comisión, crear y cancelar (son públicos).
+- "sí/no" de la custodia (paso 8) y la PV y la época medidas en el paso 2.
+- Nada más: ni la salida de la CLI ni el contenido de `$D`, que traen la dirección.
+
+#### 12. Cierre
+
+- Después de publicar, la branch no se rebasea ni se squashea: el `sourceCommit` del json tiene que seguir existiendo en
+  `master` (merge commit, D-20261030-09).
+- Recién con la CI del PR en verde (`check` incluido): `rm -rf` de los dos `battleship-publish-*`, el del dry run y el de
+  la publicación. Hasta entonces sirven para `record` ("Recuperación").
+
+El script guarda en la config activa el cache `chain_id` del env (efecto de `chain-identifier`; inocuo y siempre en la
+config propia, nunca en `~/.sui/`).
 
 ### Recuperación (nunca reintentar sin mirar el digest)
 

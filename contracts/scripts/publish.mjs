@@ -47,6 +47,11 @@ const RETRY_ADVICE =
   'sui client --json tx-block <digest>` + `record` (README → Recuperación; si falta `Published.toml`, STOP de #8).';
 const MISSING_PUBLISHED_TOML_ADVICE =
   'Si `Published.toml` falta o no coincide con el json (testnet), es STOP de #8: no lo edites a mano.';
+/** Comisión que el owner fija en testnet justo después de publicar (D-20261103-01 (3)). */
+const TESTNET_FEE_BPS = 200;
+// Prefijo de los comandos que imprime el resumen (#8, M-2): sin `SUI_CONFIG_DIR` exportado, `:?` aborta antes de invocar
+// `sui`, así que nunca cae en `~/.sui/`. String normal a propósito: en un template literal, `${…}` se interpolaría.
+const OWNER_CLI_PREFIX = 'printf \'n\\n\' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client';
 
 /** Error de uso (subcomando u opción inválidos): sale con `EXIT.USAGE`. */
 export class UsageError extends Error {}
@@ -317,6 +322,21 @@ export function chainIdFromCli(json) {
 }
 
 /**
+ * Guarda 0 (#8, M-4): el major de Node debe ser el de `.nvmrc` (fuente única, PROY-17). Falla cerrada en todos los
+ * subcomandos: sin ella, con un Node sin `import.meta.main` el script saldría con 0 sin haber corrido.
+ * @param {{ nodeVersion: string, nvmrcText: string|null }} args  p. ej. `process.versions.node` = '26.13.0', `.nvmrc` = '26\n'
+ */
+export function checkNodeVersion({ nodeVersion, nvmrcText }) {
+  const required = /^\s*v?(\d+)\s*$/.exec(nvmrcText ?? '')?.[1];
+  if (!required) throw new Error('.nvmrc sin versión válida');
+  const version = String(nodeVersion).replace(/^v/, '');
+  const major = /^(\d+)\./.exec(version)?.[1];
+  if (major === undefined || Number(major) !== Number(required)) {
+    throw new Error(`se requiere Node ${Number(required)} (.nvmrc); este es v${version}: corre "nvm use" en la raíz del repo`);
+  }
+}
+
+/**
  * Guarda 4: la CLI local es la de `ci.yml` (`SUI_VERSION`/`SUI_COMMIT`, fuente única, PROY-17). En testnet una
  * diferencia es error; en localnet, aviso.
  * @param {{ network: string, versionOutput: string, ciYamlText: string }} args
@@ -488,11 +508,16 @@ export function formatSummary({ deployment, outPath, dir }) {
   const lines = [`Despliegue escrito en ${outPath}:`];
   for (const [key, value] of Object.entries(deployment)) lines.push(`  ${key}: ${value}`);
   if (dir) lines.push(`Directorio temporal con la salida cruda: ${dir} (bórralo cuando termines)`);
+  // En testnet, la comisión decidida; en localnet, `<bps>` (cada smoke elige su valor; el shell no lo ejecuta).
+  const feeBps = deployment.network === 'testnet' ? String(TESTNET_FEE_BPS) : '<bps>';
+  // Cada comando va solo en su línea, pegable tal cual (m-2): la nota del campo es un comentario `#`.
   lines.push(
-    'Siguiente paso obligatorio (#8), no lo ejecuta este script:',
-    `  sui client call --package ${deployment.packageId} --module house --function update_fee_rate ` +
-      `--args ${deployment.houseId} ${deployment.houseCapId} <bps>`,
-    `  Verificación: sui client object ${deployment.houseId} --json (campo fee_rate)`,
+    'Siguiente paso obligatorio (#8), no lo ejecuta este script. En la shell donde exportaste tu SUI_CONFIG_DIR',
+    '(README → "Uso en testnet", pasos 6-10):',
+    `  ${OWNER_CLI_PREFIX} call --package ${deployment.packageId} --module house --function update_fee_rate ` +
+      `--args ${deployment.houseId} ${deployment.houseCapId} ${feeBps}`,
+    'Verificación:',
+    `  ${OWNER_CLI_PREFIX} object ${deployment.houseId} --json   # campo content.fee_rate`,
   );
   return lines.join('\n');
 }
@@ -785,12 +810,15 @@ function commandCheck() {
 }
 
 /**
- * Punto de entrada: solo I/O y despacho; devuelve el exit code.
+ * Punto de entrada: solo I/O y despacho; devuelve el exit code. La guarda de Node va primero, antes de interpretar
+ * los argumentos.
  * @param {string[]} argv
+ * @param {{ nodeVersion?: string }} [options] versión de Node a validar (inyectable en los tests)
  * @returns {Promise<number>}
  */
-export async function main(argv) {
+export async function main(argv, { nodeVersion = process.versions.node } = {}) {
   try {
+    checkNodeVersion({ nodeVersion, nvmrcText: readTextOrNull(path.join(CONTRACTS_DIR, '..', '.nvmrc')) });
     const { command, values } = parseCliArgs(argv);
     if (command === 'publish') await commandPublish(values);
     else if (command === 'record') commandRecord(values);
@@ -802,4 +830,29 @@ export async function main(argv) {
   }
 }
 
-if (import.meta.main) process.exitCode = await main(process.argv.slice(2));
+/**
+ * ¿Este módulo es el punto de entrada? `import.meta.main` si el runtime lo trae (boolean); si no (Node < 22.18),
+ * compara el realpath de `process.argv[1]` con el de este archivo, para que la guarda de Node llegue a correr.
+ * @param {{ importMetaMain: unknown, argv1: unknown, modulePath: string, realpath: (p: string) => string }} args
+ * @returns {boolean}
+ */
+export function isEntryPoint({ importMetaMain, argv1, modulePath, realpath }) {
+  if (typeof importMetaMain === 'boolean') return importMetaMain;
+  if (typeof argv1 !== 'string' || argv1 === '') return false;
+  try {
+    return realpath(path.resolve(argv1)) === realpath(modulePath);
+  } catch {
+    return false;
+  }
+}
+
+if (
+  isEntryPoint({
+    importMetaMain: import.meta.main,
+    argv1: process.argv[1],
+    modulePath: fileURLToPath(import.meta.url),
+    realpath: fs.realpathSync,
+  })
+) {
+  process.exitCode = await main(process.argv.slice(2));
+}
