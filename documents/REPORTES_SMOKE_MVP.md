@@ -1807,3 +1807,406 @@ que es despreciable. El riesgo 1 queda cubierto por la precondición de TASK-3.
 ### Snippet para STATUS.md
 "#17 TASK-2b ✅: sonda v1.2 (Anexo B, `diff` vacío) re-ensayada con el cap en una cuenta que no juega: 96 PASA / 0 NO
 PASA; autoprueba exit 1 / 3 / 3 / 4; C-3 por lectura (piso 0 en localnet). TASK-3 espera a #8 y a S-1..S-8."
+
+---
+
+## TASK-2c
+
+> Reporte del DEV (texto plano en el scratchpad, copiado tal cual por el orquestador tras leerlo entero y pasar los 4 greps §R-6).
+
+## Task completado: HANDOFF_SMOKE_MVP — TASK-2c (ensayo de la sonda v1.3.1 con lecturas de testnet)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-17-mvp-smoke` @ `616ef95` (worktree `<repo>` = Battleship-issue17), árbol limpio antes y después.
+`origin/master` = `b7aa568` (de ahí sale `testnet.json`, ver abajo).
+
+### Archivos modificados/creados
+- En el repo: **ninguno** (`git status --porcelain --untracked-files=all` vacío al cerrar).
+- En `<scratchpad>/smoke17-probe/` (carpeta nueva, no existía; no se commitea, DL-2):
+  - `verify-mvp.mjs`: extraído del Anexo B v1.3.1, `diff` vacío (abajo);
+  - `testnet.json`: `git show origin/master:contracts/deployments/testnet.json` (el worktree no tiene
+    `contracts/deployments/`, TASK-2c §3);
+  - `digests.json` = `{}`;
+  - `out-pre.txt`, `out-c6-4a.txt`, `out-c6-1.txt`, `out-c6-final.txt`: las salidas pegadas abajo.
+  - Borrados al terminar: `state.json` (paso 2), `state-viejo.json` (paso 3), `digests-d1c.json` (paso 5). El
+    `state-dl13.json` del paso 5 y el `state-url.json` de la autoprueba de URL nunca se crearon (las guardas salen antes).
+- Este reporte: `<scratchpad>/REPORTE_TASK2c_17.txt`.
+
+### Qué se implementó (3 líneas máx)
+Se extrajo la sonda del Anexo B v1.3.1 con `diff` vacío y se corrió contra el fullnode público de testnet, solo
+lecturas: `pre` (C-5/DL-12) en exit 0 con 8/0, la guarda C-6 en exit 5 ×3 con su mensaje, la guarda DL-13 en exit 2 y
+las autopruebas en exit 3 ×2 y exit 2. Ninguna firma, ninguna clave, ningún `sui`.
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados: ninguno. El task no toca código (handoff §0: "ninguno corre gates de código").
+- Contracts: no aplica.
+- App: no aplica.
+- Tablas de contrato (contracts/README.md) y app/src/sui/ sincronizados: no aplica.
+
+Entorno: Node `v26.13.0` (ruta absoluta de nvm, sin `nvm use`), cwd `<repo>/app`; `@mysten/sui` resuelto desde el
+`node_modules` de la raíz del worktree (workspaces), sin `npm ci`. Comando base de cada corrida:
+
+```
+cd <repo>/app && "$NODE" --input-type=module - --deployment <scratchpad>/smoke17-probe/testnet.json \
+  --url https://fullnode.testnet.sui.io:443 --digests <json> --state <json> --block <b> \
+  < <scratchpad>/smoke17-probe/verify-mvp.mjs
+```
+
+#### Paso 1. Extracción del Anexo B y `diff`
+
+Extracción con `awk` (desde `## Anexo B`, el primer bloque ```js hasta su ``` de cierre) a
+`<scratchpad>/smoke17-probe/verify-mvp.mjs`. `diff` contra las líneas del bloque tomadas del handoff por número
+(`## Anexo B` en la línea 1184, apertura ```js en la 1195, cierre en la 1986):
+
+```
+790 <scratchpad>/smoke17-probe/verify-mvp.mjs
+anexo=1184 open=1195 close=1986
+diff exit=0
+// verify-mvp.mjs: sonda de verificación del smoke del MVP (#17, HANDOFF_SMOKE_MVP v1.3.1 §Sonda). Solo lecturas gRPC.
+process.exit(failed === 0 ? 0 : 1);
+```
+
+`diff` vacío (sin salida, exit 0). La carpeta `smoke17-probe/` no existía en este scratchpad: no hubo archivo de la
+v1.2.1 que reemplazar. No se usó ninguna otra copia (`probe-v121/`, `probe-v13/`, `probe-v131/`, `extract-v131.mjs`
+del MID quedaron sin tocar ni leer).
+
+Chequeo previo del SDK por la misma vía (stdin, cwd `<repo>/app`):
+
+```
+$ echo "import('@mysten/sui/grpc').then(()=>console.log('ok'))" | "$NODE" --input-type=module -
+ok
+exit=0
+```
+
+#### Paso 2. `pre` con `digests.json` = `{}` y `state.json` nuevo (2026-11-19T19:29:12Z)
+
+```
+BLOQUE pre · red testnet · paquete 0x8b78…6f51
+CHECK 0.3 PASA chain id 4c78adac, json 4c78adac
+CHECK 0.4.shared PASA House 0x54ee…eb1a Shared y tipo exacto: true
+CHECK 0.4.fee_rate PASA fee_rate 200
+CHECK 0.4.min_bet PASA min_bet 1000000
+CHECK 0.4.max_bet PASA max_bet 50000000000
+CHECK 0.4.version PASA version 1
+INFO F0 = 0 · K0 = 408417046 (altura 408418046 − 1000 leída antes de la House: previousTransaction BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw debajo del piso 404332001 (DL-12))
+CHECK 0.5.cap PASA HouseCap 0xcf08…37fe con dueño AddressOwner (CAP)
+INFO sin dcap: 0.5 solo con el dueño actual
+CHECK 0.6 PASA desde el checkpoint 404348001 (piso + 16000: lo anterior no es visible): 0 GameCreated, 0 GameResolved
+INFO K0 por altura coherente: 0 GameResolved ni mutaciones de la House con checkpoint <= K0 o de P desde 404348001 (0 FeeRateUpdated, 0 BetLimitsUpdated, 0 FeesWithdrawn, 0 HouseMigrated)
+RESUMEN 8 PASA / 0 NO PASA
+exit=0
+dur=34s
+```
+
+`state.json` al terminar el bloque (después de la coherencia, como pide C-5):
+
+```
+{
+  "F0": "0",
+  "K0": "408417046"
+}
+```
+
+Contra lo esperado de TASK-2c §3.2:
+- exit 0: sí;
+- `INFO F0 = 0 · K0 = …` con el origen DL-12: sí (`altura 408418046 − 1000`, `previousTransaction` `BVQf…Tqw`
+  debajo del piso 404332001);
+- 0.6 con origen "piso + 16000": sí (cota 404348001 = 404332001 + 16000);
+- `INFO K0 por altura coherente…` con los conteos de las cuatro mutaciones de admin: sí (0/0/0/0);
+- `state.json` con `F0` y `K0`: sí.
+
+Nadie tocó la House antes de la corrida: el origen es DL-12, no DL-9. Los 34 s son los 30 s de C-5 antes de decidir que el
+digest está podado, más las lecturas. Coincide con las corridas del MID (32-33 s; `K0` 408406719 y 408415722, este
+408417046: la altura avanza, el piso sigue en 404332001). `fetch` no falló en ninguna corrida: no hubo reintentos.
+
+#### Paso 3. Guarda C-6: `state-viejo.json` = `{"K0":"402799414","F0":"0"}`, bloques `4a`, `1` y `final`
+
+(con `digests.json` = `{}`: C-6 corta antes de pedir ningún digest)
+
+```
+== bloque 4a
+exit=5
+BLOQUE 4a · red testnet · paquete 0x8b78…6f51
+ERROR historial podado: K0 402799414 quedó debajo del piso 404332001; STOP al MID (regla de ventana v1.3)
+== bloque 1
+exit=5
+BLOQUE 1 · red testnet · paquete 0x8b78…6f51
+ERROR historial podado: K0 402799414 quedó debajo del piso 404332001; STOP al MID (regla de ventana v1.3)
+== bloque final
+exit=5
+BLOQUE final · red testnet · paquete 0x8b78…6f51
+ERROR historial podado: K0 402799414 quedó debajo del piso 404332001; STOP al MID (regla de ventana v1.3)
+```
+
+Exit 5 ×3, los tres **con** `historial podado: K0 402799414 quedó debajo del piso`; ninguno por `Missing` u otra causa.
+`state-viejo.json` quedó igual (`{"K0":"402799414","F0":"0"}`): C-6 no escribe estado.
+
+#### Paso 4. Autopruebas sin red
+
+```
+== selftest filter-0x
+FILTRO: línea cortada (hex de 40 o más caracteres)
+exit=3
+== selftest filter-raw
+FILTRO: línea cortada (hex de 40 o más caracteres)
+exit=3
+== URL fuera de la lista
+URL no permitida: solo https://fullnode.testnet.sui.io:443 o http://127.0.0.1:9000
+exit=2
+```
+
+La URL fuera de la lista fue `https://fullnode.mainnet.sui.io:443`, con `--block pre` y un `--state` nuevo: la guarda
+sale antes de leer archivos ni cargar el SDK, así que no hubo pedido de red y el `state` nunca se creó.
+
+#### Paso 5. Guarda DL-13: `pre` con `--digests` = `{"d1c":"x"}` y un `state` nuevo
+
+```
+BLOQUE pre · red testnet · paquete 0x8b78…6f51
+pre no se repite después de d1c (DL-13): K0 y F0 ya están fijados; STOP al MID
+exit=2
+dur=0s
+```
+
+Exit 2 con su mensaje, antes de pedir nada al nodo (0 s). El `state` nuevo no se creó.
+
+#### Paso 6 (opcional, 🔵 6). Cambio de época
+
+No aplica: la sesión fue de 19:29Z a 19:30Z, lejos del cambio de época (≈ 21:24Z). No se anotó un piso "después".
+
+#### Paso 7. `state.json` del paso 2
+
+Borrado al terminar, junto con `state-viejo.json` y `digests-d1c.json`
+(`ls <scratchpad>/smoke17-probe/state*.json` → "No such file or directory"). No vale para TASK-3 (DL-13).
+
+#### Resumen de criterios de aceptación (TASK-2c §5)
+
+| Criterio | Resultado |
+|---|---|
+| `diff` vacío | PASA (exit 0, sin salida) |
+| `pre` en exit 0 con el origen de `K0` impreso | PASA (8 PASA / 0 NO PASA, origen DL-12) |
+| C-6: exit 5 ×3 con `historial podado: K0 402799414 quedó debajo del piso` | PASA (4a, 1 y final) |
+| Guarda DL-13: exit 2 con su mensaje | PASA |
+| Autopruebas: exit 3 ×2 y exit 2 | PASA |
+| Cuatro greps de §R-6 sobre el reporte, clasificados | PASA (abajo) |
+
+Total: **6/6 criterios PASA**; checks de la sonda en `pre`: **8 PASA / 0 NO PASA**; corridas con el exit esperado:
+**9/9** (pre 0; C-6 5/5/5; filter-0x 3; filter-raw 3; URL 2; DL-13 2; import del SDK 0).
+
+### Verificación manual (localnet / testnet, digests de tx si hubo)
+- Testnet, solo lecturas gRPC de la sonda (`getServiceInfo`, `getObject`, `getTransaction`, `ListEvents` crudo) contra
+  `https://fullnode.testnet.sui.io:443`. Sin localnet, sin firmas, sin transacciones propias.
+- Digest leído (no firmado): `BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw` (`previousTransaction` de la House, podado).
+- `~/.sui` antes y después (sin cargar ningún env, solo `stat`/`ls`, nunca `cat`), idénticos:
+  ```
+  antes:   2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
+           ls <HOME real>/.sui/sui_config/ → client.yaml
+  después: 2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
+           ls <HOME real>/.sui/sui_config/ → client.yaml
+  ```
+- Comandos prohibidos: ningún `sui` (ni `sui client`, `sui keytool`, `sui move`), ni publicación, faucet,
+  `simulate`/`dryRun` o `pkill`.
+- `git status --porcelain --untracked-files=all` vacío al cerrar; HEAD sigue en `616ef95`.
+
+### Desviaciones del handoff (o "ninguna")
+1. **El reporte no se escribe en `documents/REPORTES_SMOKE_MVP.md`** (TASK-2c §4 dice "Tocar"). Se entrega como `.txt`
+   en `<scratchpad>/REPORTE_TASK2c_17.txt`, por instrucción explícita del orquestador (no commitear y no editar docs
+   salvo lo necesario; la convención de este flujo es que el orquestador lee el `.txt` entero, repite §R-6 y lo agrega
+   a `REPORTES_SMOKE_MVP.md`).
+   - Por qué: flujo del orquestador para los reportes del DEV.
+   - Verificación extra: los cuatro greps de §R-6 sobre este archivo, abajo.
+2. **`testnet.json` desde `origin/master`** (`b7aa568`), no desde `<repo>/contracts/deployments/`: el worktree no la tiene.
+   Es la alternativa prevista en TASK-2c §3, no una desviación real; se anota por trazabilidad.
+3. **`@mysten/sui` del `node_modules` de la raíz** del worktree (npm workspaces). `app/node_modules` no existe, pero la
+   resolución desde cwd `<repo>/app` funciona (`ok`). No hizo falta `npm ci`.
+4. **Autoprueba de URL**: TASK-2c no fija con qué URL ni con qué bloque. Se usó la de mainnet con `--block pre`. Antes
+   del exit 2 la sonda no lee archivos ni hace pedidos de red.
+
+La sonda **no** se tocó: no hace falta una v1.3.2.
+
+### Riesgos / pendientes (o "ninguno")
+- El `K0` de este `pre` (408417046) **no vale** para TASK-3 ni TASK-4 (DL-13). El `state.json` está borrado.
+- El piso medido sigue en 404332001 (época 1278). Las 11 épocas retenidas se mantienen. En el próximo cambio de época
+  (≈ 21:24Z) el piso debería saltar a la época 1279. No se observó en esta sesión (paso 6 opcional, no aplicó).
+- Ninguno bloqueante para TASK-3, que sigue esperando a S-8.
+
+### Documentación
+- READMEs / agents.md actualizados: no aplica (sin cambios de arquitectura, comandos, contrato ni tests).
+- Snippet propuesto para documents/STATUS.md:
+  `#17 TASK-2c: PASA (DEV). Sonda v1.3.1 contra testnet, solo lecturas: pre 8/0 exit 0 con K0 por DL-12 (altura − 1000,
+  previousTransaction de la House debajo del piso 404332001), cota de 0.6 en piso + 16000, coherencia 0/0/0/0 de las
+  mutaciones de admin; C-6 exit 5 ×3; DL-13 exit 2; autopruebas 3/3/2. Siguiente: TASK-3 tras S-8.`
+
+### Commit sugerido (no hecho)
+`docs: rehearse the v1.3.1 MVP smoke probe against pruned testnet history (#17)`, con `Refs #17` en el cuerpo.
+
+### Greps de §R-6 sobre este reporte (`/usr/bin/grep`)
+
+Archivos: este reporte y las cuatro salidas crudas de la sonda (`<scratchpad>/smoke17-probe/out-pre.txt`,
+`out-c6-4a.txt`, `out-c6-1.txt`, `out-c6-final.txt`). **Primera pasada**, sobre el reporte sin esta sección:
+
+```
+--- grep 1 (patrón de §R-6)
+exit=1
+--- grep 2 (patrón de §R-6)
+exit=1
+--- grep 3 (patrón de §R-6)
+exit=1
+--- grep 4 (patrón de §R-6)
+REPORTE_TASK2c_17.txt:68:BLOQUE pre · red testnet · paquete 0x8b78…6f51
+REPORTE_TASK2c_17.txt:70:CHECK 0.4.shared PASA House 0x54ee…eb1a Shared y tipo exacto: true
+REPORTE_TASK2c_17.txt:76:CHECK 0.5.cap PASA HouseCap 0xcf08…37fe con dueño AddressOwner (CAP)
+REPORTE_TASK2c_17.txt:113:BLOQUE 4a · red testnet · paquete 0x8b78…6f51
+REPORTE_TASK2c_17.txt:117:BLOQUE 1 · red testnet · paquete 0x8b78…6f51
+REPORTE_TASK2c_17.txt:121:BLOQUE final · red testnet · paquete 0x8b78…6f51
+REPORTE_TASK2c_17.txt:148:BLOQUE pre · red testnet · paquete 0x8b78…6f51
+smoke17-probe/out-pre.txt:1:BLOQUE pre · red testnet · paquete 0x8b78…6f51
+smoke17-probe/out-pre.txt:3:CHECK 0.4.shared PASA House 0x54ee…eb1a Shared y tipo exacto: true
+smoke17-probe/out-pre.txt:9:CHECK 0.5.cap PASA HouseCap 0xcf08…37fe con dueño AddressOwner (CAP)
+smoke17-probe/out-c6-4a.txt:1:BLOQUE 4a · red testnet · paquete 0x8b78…6f51
+smoke17-probe/out-c6-1.txt:1:BLOQUE 1 · red testnet · paquete 0x8b78…6f51
+smoke17-probe/out-c6-final.txt:1:BLOQUE final · red testnet · paquete 0x8b78…6f51
+exit=0
+```
+
+**Clasificación:**
+- Grep 1 y grep 2: vacíos. No hay nada que atribuir.
+- Grep 3: vacío, como se exige. Las rutas van con placeholders (`<repo>`, `<scratchpad>`, `<HOME real>`).
+- Grep 4: tres valores distintos. Se compararon prefijo y sufijo en memoria contra `<scratchpad>/smoke17-probe/testnet.json`
+  (= `contracts/deployments/testnet.json` de `origin/master` `b7aa568`). Solo se imprimió el nombre del campo:
+  - `8b78…6f51` → `packageId` (= `originalPackageId`): **atribuido**;
+  - `54ee…eb1a` → `houseId`: **atribuido**;
+  - `cf08…37fe` → `houseCapId`: **atribuido**. Es el ID del objeto cap, no la cuenta dueña: la sonda nunca imprime la
+    cuenta (`CAP` vive solo en memoria).
+  - Ninguna coincidencia es una cuenta. 0 sin atribución: no hubo nada que borrar.
+- El digest `BVQfjBbaCFw5tnTsY8CrpaCYGrBRHPZJrXFR2ZMX3Tqw` y su abreviatura `BVQf…Tqw` son base58, públicos (§R-1), y no
+  coinciden con ningún grep.
+- Este reporte no tiene volcados del DOM: no hubo navegador en este task.
+- No se pega el hash del archivo de la sonda: un hash de archivo no está en la lista de valores atribuibles. La
+  identidad con el Anexo B la da el `diff` vacío.
+
+**Segunda pasada**, sobre el reporte final con esta sección. Las coincidencias nuevas del grep 4 son solo las líneas de
+arriba citadas otra vez, con los mismos tres valores. La salida está al final del archivo.
+Las etiquetas `--- grep N` no copian el patrón literal: el patrón del grep 3 contiene la cadena de ruta que él mismo
+busca. Con la etiqueta literal, el grep 3 salía con su propia línea (corregido antes de esta pasada). Los patrones
+son los de §R-6 del handoff, sin cambios.
+
+```
+--- grep 1 (final)
+exit=1
+--- grep 2 (final)
+exit=1
+--- grep 3 (final)
+exit=1
+--- grep 4 (final): valores distintos y conteo
+      4 54ee…eb1a
+     15 8b78…6f51
+      4 cf08…37fe
+lineas con coincidencia=23
+```
+
+## Revisión TASK-2c: PASA
+
+> MID, 2026-11-19, contra `HANDOFF_SMOKE_MVP.md` v1.3.1 (`616ef95`).
+>
+> El MID no corrió los bloques con red: revisó el output pegado, comparó con `diff`/`cmp` las salidas crudas de
+> `<scratchpad>/smoke17-probe/` y repitió solo las guardas que no piden nada a la red. Esas son autopruebas `filter-0x`
+> y `filter-raw` (exit 3 ×2), la URL de mainnet (exit 2) y DL-13 con `{"d1c":"x"}` (exit 2). Las corrió con el
+> archivo del DEV, en una carpeta propia que no se reusa.
+
+### 1. El reporte contra los criterios de TASK-2c v1.3.1 (§5): 6/6
+
+| Criterio | Evidencia | Veredicto |
+|---|---|---|
+| `diff` vacío | El reporte trae `diff exit=0` y las líneas 1184/1195/1986. El MID extrajo el Anexo B de `git show 616ef95:documents/HANDOFF_SMOKE_MVP.md` y lo comparó con el `verify-mvp.mjs` del DEV: idénticos, 790 líneas, con el mismo `## Anexo B` en la 1184 y la apertura en la 1195 | ✅ |
+| `pre` en exit 0 con el origen de `K0` | `RESUMEN 8 PASA / 0 NO PASA`, `exit=0`; origen DL-12, `altura 408418046 − 1000`. Además: cota 404348001 = 404332001 + 16000; coherencia con los 4 conteos de admin en 0; `state.json` con `F0` "0" y `K0` "408417046" | ✅ |
+| C-6: exit 5 ×3 con el mensaje | Los tres (`4a`, `1`, `final`) con `historial podado: K0 402799414 quedó debajo del piso 404332001`. Ninguno por `Missing`: el `digests.json` vacío no llegó a leerse, porque C-6 corta antes de `run()` | ✅ |
+| Guarda DL-13: exit 2 con el mensaje | `pre no se repite después de d1c (DL-13)…`, `exit=2`, 0 s. El MID la repitió: mismo mensaje, exit 2, sin crear el `state` | ✅ |
+| Autopruebas: exit 3 ×2 y exit 2 | Están pegadas, y el MID las repitió con el mismo resultado | ✅ |
+| Cuatro greps de §R-6, clasificados | Dos pasadas, con las tres abreviaturas atribuidas a `testnet.json` | ✅ |
+
+Los pasos 5 (DL-13) y 7 (borrar los `state`) se cumplieron. El paso 6, opcional, no aplicaba: la sesión fue de 19:29Z a
+19:30Z, lejos del cambio de época.
+
+### 2. Las salidas crudas contra el reporte
+
+- **`out-pre.txt`:** las 13 líneas son idénticas, carácter por carácter, al bloque del paso 2. Los archivos tienen hora
+  14:29 −0500 = 19:29Z, la que dice el reporte.
+- **`out-c6-4a.txt`, `out-c6-1.txt` y `out-c6-final.txt`:** son idénticos a los del paso 3.
+- **`testnet.json`:** igual byte por byte (`cmp`) al de `origin/master`.
+- **`digests.json`:** es `{}`.
+- **`REPORTES_SMOKE_MVP.md`:** desde "## Task completado…", es idéntica a `<scratchpad>/REPORTE_TASK2c_17.txt` (`diff`
+  vacío). El orquestador la copió sin cambios.
+- **Comparación con lo que vio el MID** (cuatro corridas propias de `pre`, de 18:46Z a 19:10Z, más la del MAYOR):
+  - el piso sigue en 404332001 y la cota en 404348001;
+  - `K0` avanza con la altura: 408406719 → 408415722 → 408417046;
+  - en las dos corridas v1.3.1 (la del MID y esta), los cuatro conteos de admin dan 0.
+- **Limitación (🔵 1):** los crudos guardan solo el stdout de `pre` y de C-6, sin el exit code. Las autopruebas y DL-13 no
+  tienen archivo crudo. Por eso el MID repitió esas guardas, que son las únicas deterministas sin red. Para TASK-3/4: un
+  archivo crudo por corrida, con `exit=$?` en la última línea.
+
+### 3. §R-6 sobre lo agregado a `REPORTES_SMOKE_MVP.md`
+
+Los cuatro greps del handoff, con `/usr/bin/grep`, corridos por el MID sobre las 296 líneas agregadas (`git diff -U0`):
+
+```
+g1  (sin salida)
+g2  (sin salida)
+g3  (sin salida)
+g4        5 54ee…eb1a
+         16 8b78…6f51
+          5 cf08…37fe
+```
+
+- **Atribuidas** contra `testnet.json`: `54ee…eb1a` es `houseId`, `8b78…6f51` es `packageId` (igual a
+  `originalPackageId`) y `cf08…37fe` es `houseCapId`. Ninguna es una cuenta.
+- **Los conteos difieren de la segunda pasada del DEV (4/15/4)** en +1 por valor. Es la propia línea de la tabla final
+  del DEV, que cita cada abreviatura una vez más.
+- **`BVQf…Tqw`** es base58 (digest público, §R-1) y no entra en el patrón hexadecimal.
+- **Sin volcados del DOM:** no hubo navegador.
+- **Rutas:** solo placeholders (`<repo>`, `<scratchpad>`, `<HOME real>`). `~/.sui` se revisó con `stat`/`ls` antes y
+  después, y quedó idéntico.
+
+### 4. Desviaciones: las 4 se aceptan
+
+1. **El reporte va como `.txt` y lo agrega el orquestador.** Es el flujo vigente del orquestador para los reportes del
+   DEV. El orquestador volvió a pasar §R-6 y el MID lo repitió (punto 3). Aceptada.
+2. **`testnet.json` desde `origin/master`.** Es la alternativa que prevé TASK-2c §3, así que no es una desviación.
+   `cmp` igual. Aceptada.
+3. **`@mysten/sui` del `node_modules` de la raíz (workspaces), sin `npm ci`.** El criterio real de §Sonda es que
+   `import('@mysten/sui/grpc')` dé `ok`, y dio `ok`. El MID corrió todo de la misma forma. Aceptada. El texto de §Sonda
+   ("si el worktree no tiene `node_modules`, antes va `npm ci`") queda para ajustar (🔵 2).
+4. **La autoprueba de URL usó mainnet con `--block pre`.** Es la misma elección que el MAYOR en su revisión de la v1.3.
+   La guarda sale antes de leer archivos o cargar el SDK. Aceptada.
+
+### Hallazgos
+
+| # | Sev. | Regla | Archivo:Líneas | Problema | Corrección esperada |
+|---|---|---|---|---|---|
+| 1 | 🔵 | M4, evidencia verificable | `<scratchpad>/smoke17-probe/out-*.txt` | Los crudos no guardan el exit code. Las autopruebas y DL-13 no tienen crudo (el MID las repitió, sin delta) | En TASK-3/4, un crudo por corrida con `exit=$?` al final. No bloquea TASK-2c |
+| 2 | 🔵 | LIM / precisión del handoff | `HANDOFF_SMOKE_MVP.md`, §Sonda, "Dónde y cómo" | "Si el worktree no tiene `node_modules`, antes va `npm ci`" no contempla los workspaces, donde las dependencias están en la raíz | Con la próxima versión del handoff: "si `import('@mysten/sui/grpc')` no da `ok`, antes va `npm ci` con Node 26". Sin nueva ronda |
+
+Nada contra el trabajo del DEV: sin 🔴, 🟠 ni 🟡. La sonda no se tocó y no hace falta una v1.3.2.
+
+### Siguiente paso
+- TASK-2c **PASA**. Con esto, C-5 (DL-12 con las coherencias de 🟡 1), C-6 y la guarda DL-13 quedan ensayadas por el DEV
+  contra la House real de testnet.
+- El `K0` 408417046 de este ensayo **no** vale para TASK-3 (DL-13), y su `state.json` está borrado.
+- TASK-3 espera a S-8 (#16 TASK-5). Su precondición "TASK-2c en PASA" queda cumplida.
+
+### Mensaje de commit propuesto
+
+```
+docs: report and review the v1.3.1 probe rehearsal on testnet (#17)
+
+TASK-2c of HANDOFF_SMOKE_MVP v1.3.1: the Annex B probe, extracted with an
+empty diff, ran read-only against the public testnet fullnode. pre gave
+8 PASS / 0 FAIL with K0 from the node height (DL-12, the House's previous
+transaction is below the floor) and zero admin mutations in the coherence
+scan; C-6 exited 5 three times with the pruned-history message; the DL-13
+guard exited 2; the self-tests exited 3, 3 and 2. MID review: PASS, four
+deviations accepted, two minor notes for TASK-3.
+
+Refs #17
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
