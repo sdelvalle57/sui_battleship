@@ -10,6 +10,12 @@
 
 ---
 
+### D-20261119-02 — Railway conectado: publicación con cada merge preautorizada (N-2) y `deploy-image` requerido (N-4) (#15, S-7)
+- **Decisión:** (1) **N-2:** con Railway conectado (servicio en `master`, Wait for CI, sin entornos de PR, watch paths del checklist de `app/README.md`), cada merge a `master` con la CI en verde y la revisión de integración del MAYOR publicada **queda preautorizado como publicación del sitio**; el owner no tiene que estar presente. (2) **N-4:** `deploy-image` pasa a ser check requerido de `master` junto a `contracts` y `app` (`strict: false` sin cambios), aplicado por el orquestador el 2026-11-19.
+- **Alternativa descartada:** (1) merges que toquen las watch paths solo con el owner presente; (2) dejar `deploy-image` informativo.
+- **Motivo:** S-7 completado por el owner (URL pública `https://sui-battleship-app-production.up.railway.app`, smoke B sin errores de consola). Es testnet, Railway permite rollback desde Deployments, y con `deploy-image` requerido un PR que rompa la imagen no se puede mergear.
+- **Aprobado por:** usuario ("Preautorizado", "Sí, requerido", 2026-11-19). **Fecha:** 2026-11-19.
+
 ### D-20261119-01 — Cierre accidental de #15 por un mensaje de commit: mergear y reabrir (MAJOR-1 de la revisión de integración de PR #65)
 - **Decisión:** el PR #65 (TASK-6 de #15) se mergea con merge commit sin reescribir la historia, aunque el mensaje de `5af2fb0` contiene "Closes #15". GitHub cierra #15 con el merge y el orquestador lo reabre enseguida con un comentario; #15 se cierra de verdad en TASK-5 de #16 (S-8), como manda D-20261104-05 (2). Hecho: merge `376412f`, #15 reabierto el 2026-11-19.
 - **Alternativa descartada:** reescribir los mensajes de los commits del PR (`filter-branch --msg-filter`) y hacer force-push, con ~29 referencias a SHAs para actualizar en STATUS, el smoke y los reportes.
