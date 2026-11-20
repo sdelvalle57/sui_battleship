@@ -8128,3 +8128,1191 @@ Hecha sobre el árbol sin commitear (HEAD `7b8c800`) cuando el DEV entregó el r
 
 **Pendientes que no entran en este commit:** el handoff v1.2.10 (parte TASK-8 en 8a y 8b, corrige los defectos del "Tocar" de TASK-7b y aclara C-13 sobre los rótulos del reporte y sobre acumular IDs con `>>` en un archivo de entorno de la corrida), que escribe el MID y se commitea aparte; las líneas de la sonda del anexo F01 cortadas por la sanitización del DEV (N-3); y que la sonda de solo lectura se borró con la corrida, así que la parte de testnet de `SMOKE_MULTIGAME.md` describe sus comprobaciones como criterios reconstruibles (N-4).
 
+
+
+---
+
+## 27. TASK-8a (reporte del DEV)
+
+> DEV, TASK-8a: plomería de la app para las dos fuentes (detalle por tipo, intérpretes, acciones y hooks enrutados, modelo de fila neutral) y docs del contrato, con smoke sin navegador (la ruta del scratchpad sustituida por <scratchpad>).
+
+~~~~text
+
+## Task completado: HANDOFF_MULTIGAME — TASK-8a (plomería de la app para las dos fuentes de coinflip, docs del contrato y smoke 🧪 sin navegador)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-73-multigame` @ `d674316` (HEAD de partida), árbol limpio al empezar y sin commits, sin `git add`, sin `git stash`. `git merge-base --is-ancestor 8cc35ab HEAD` = 0 (PRE-1 integrado, CLI `1.84.0-9dc25070cf2e`, Node `v26.13.0`). Merge-base con `master` = `b0bbef8`.
+
+### Baseline medido y árbol de partida
+Medido **antes de tocar nada** sobre `d674316` (anexos B01-B03, con `capture.sh`): `npm run lint -w app` = 0, `npm run typecheck -w app` = 0, `npm test -w app` = **1707 tests en 74 archivos**, `VITE_SUI_NETWORK=testnet npm run build -w app` = `dist/assets/index-Bpv6-Qmw.js` **935.94 kB (283.01 kB gzip)** (igual al del orquestador y del MID: sin STOP). `node --test scripts/*.test.mjs` = 173 PASS (al cierre, anexo G08). Guarda de `~/.sui` al inicio: anexo A00 (244 bytes, mtime `2026-10-30 17:52:52.515735237 -0500`, solo `client.yaml`, `ef12fd09615f`).
+
+### Qué se implementó (3 líneas)
+La app queda **funcionalmente completa para las dos fuentes de coinflip con las pantallas de hoy**: detalle por tipo exacto del objeto (`Game` o `Duel`), intérpretes del resultado de la fuente nueva (crear, aceptar, cancelar/rechazar, reclamar por tiempo, reembolsar), `claim`/`refundStalled` en `TxAction` con sus hooks, hooks de crear/aceptar/cancelar/rechazar **enrutados** por `GameDef.createSource` y por la fuente del objeto, y un **modelo de fila neutral a la fuente** (`hooks/gameRow.ts`) que consumen lobby, "Mis partidas", detalle y acciones (se retiró la vista de hoy de 7b). Docs del contrato (`contracts/README.md`: tablas de `duel`/`coinflip`, controles, "Modelo de confianza") y de plomería (`app/README.md`, `agents.md` §5). Smoke 🧪 sin navegador en la localnet aislada (puerto 19000) en PASA.
+
+### Qué se implementó, por archivo
+**`app/src/sui/` (solo aditivo; `git diff --numstat`: gameDetail.ts +50/-0, gameTx.ts +148/-0, ninguna línea borrada, ni siquiera imports):**
+- `gameDetail.ts`: `fetchGameDetail(client, { id, registry, signal? })`, tipos `GameDetailObject` (`{ kind: 'game', game, gameKey, objectVersion }` | `{ kind: 'duel', duel, gameKey, objectVersion }`) y `GameDetailRead`. La fuente la decide el **tipo exacto del objeto** (`objectType` de cada fuente del registro, nada armado a mano); `GameNotFoundError` si no existe o está borrado; `NotAGameError` para otro tipo (también un `Duel` de un `G` que el registro no conoce, o un `Duel` con el registro de `packageVersion` 1); `ReadDataError` ante BCS roto (nunca un `Pending` por defecto). `fetchGame` queda intacto y **sin uso de producción** (se conserva por el permiso aditivo; ver desviación 5).
+- `gameTx.ts`: tipos neutrales `CreatedGame`, `ResolvedGame`, `TimedOutGame` (= `ResolvedGame` + `claimedBy`) y `ExpiredGame` (con `gameId`, no `duelId`; los de la fuente anterior ya los cumplen estructuralmente) e intérpretes `parseCreatedDuel` (único `DuelCreated` del firmante), `duelCancelledRefund` (`DuelCancelled` de ese duelo), `parseResolvedDuel` (único `DuelResolved` de ese duelo con `acceptor` = el firmante; el `DuelActivated` de la misma transacción **no** es el resultado), `parseTimedOutDuel` (único `DuelTimedOut` con `claimed_by` = el firmante) y `parseExpiredDuel`. Los tipos de evento salen de `DuelSource.eventTypes` (registro). Un resultado ilegible, ambiguo, de otro duelo o de otra cuenta es `null`, nunca un éxito inventado.
+
+**`app/src/hooks/`:**
+- `txSession.ts`: `TxAction` suma `{ kind: 'claim'; gameId }` y `{ kind: 'refundStalled'; gameId }` (también en `TX_ACTION_KINDS` y en `actionGameId`, así que el fijado de "Mis partidas" y la adopción las ven); los valores por acción se generalizan **por forma neutral, no por unión**: `CreateGameValue.created: CreatedGame | null`, `accept: ResolvedGame | null`, `claim: TimedOutGame | null`, `refundStalled: ExpiredGame | null`. Los consumidores que leían `created.gameId`/`opponent`/`feeRate` y `pot`/`fee`/`payout`/`winner` no cambian. `toTxGameEntry`, `liveTxGameIds`, el candado y el "sin confirmar" no cambian de forma.
+- `txInvalidation.ts`: se **retira `DuelClockAction`**; `transactionInvalidations(action: TxAction, …)` (la tabla de `claim`/`refundStalled` ya estaba y no cambia).
+- `gameRow.ts` (**nuevo**): el modelo de fila neutral (ver decisiones).
+- `useGame.ts`: `detail: GameDetailObject | null` (la unión) en lugar de `game`; `fetchGameDetail` con el registro; refresco y regla de error definitivo (DL-7) sin cambios.
+- `useCreateGame.ts`: `useCreateGame(view, gameKey?)` enruta por `GameDef.createSource`: `legacy` (`buildCreateGameTx` y `parseCreatedGame`) o `duel` (`buildCreateCoinflipTx` y `parseCreatedDuel` con la fuente del registro); la relectura de la House no cambia. `useAcceptGame(view, fila)`, `useCancelGame(view, fila)` y `useRejectGame(view, fila)` enrutan por `fila.source`/`fila.gameKey` (builders de `game::*` o de `transactions/duel.ts`; `packageId` de la config; `gameTag` y fuente del registro). Ningún hook arma un tag, un target ni un `typeArguments`.
+- `useClaimTimeout.ts` y `useRefundStalled.ts` (**nuevos**): hooks finos sobre la misma máquina (objetivo `{ kind: 'game', gameId }`, `buildClaimTimeoutTx` con la House / `buildRefundStalledTx`, valor leído de `DuelTimedOut` / `DuelExpired`); sin `precheck`: la elegibilidad la decide la cadena en la preflight.
+- `useLobby.ts`: se **retira** el tipo `LobbyRow` filtrado y el filtro de `useLobby()`: `items` = **todas** las filas de las dos fuentes en el modelo neutral (`ListedRow`). `useLobbyEntries(games)` queda como estaba (las filas tal como las leyó `sui/`).
+- `useMyGames.ts`: se **retira** `LegacyMyGamesSections` y el filtro: `sections` = las tres secciones completas en el modelo neutral; `allSections` (las filas de `sui/`) se conserva porque los tests de 7b lo aseveran.
+
+**`app/src/components/` y `pages/` (solo para consumir el modelo y los hooks enrutados; sin rótulos, sin control de tiempo dibujado, sin textos ni estilos nuevos salvo el fallback):** `LobbyList`, `MyGamesSection`, `GameActions` (recibe `GameRow`), `GameDetail` (recibe `GameRow`), `GameDetailPage` (`rowFromDetail(useGame(...).detail)`), `HouseAdminPanel` (2 líneas, ver desviación 3) y el archivo nuevo `components/stateText.ts` (el fallback). `CreateGameForm`, `createdNotice`, `txNotice` y `MyGamesPage` **no cambian**: ya consumían la forma neutral.
+
+**Docs (PROY-20):** `contracts/README.md` (secciones nuevas "`battleship::duel` y `battleship::coinflip` (#73)" y "Modelo de confianza (#73, `duel` y `coinflip`)", más las filas de fuentes y tests de la tabla del encabezado), `app/README.md` (mapa de `sui/` y de hooks: `gameDetail`, `gameTx`, `txSession`, `txInvalidation`, `useCreateGame`/…, `useClaimTimeout`/`useRefundStalled`, `gameRow.ts`, `useMyGames`, `useLobby`, `useGame`, y una frase en `GameActions`, `MyGamesSection`, `GameDetail` y `LobbyList` sobre la fila neutral) y `agents.md` §5 (la fila de la fórmula de comisión extendida a `Duel` y una fila nueva del interpretado de lo que lee la app y de los resultados). `agents.md` §3/§8/§9 no cambian (UI y receta son de 8b o no cambiaron).
+
+### Decisiones declaradas (las que el handoff deja a propósito)
+1. **Modelo de fila neutral: `app/src/hooks/gameRow.ts`.** `GameRow` = `LegacyGameRow | DuelGameRow` con `id`, `gameKey`, `source` (`'legacy'`/`'duel'`), `creator`, `opponent`, `bet`, `feeRate`, `state` (el tipo `DuelState` de `sui/duel.ts`, con las **seis** variantes; las tres de la fuente anterior son un subconjunto) y `control` (`null` en la fuente anterior; `{ id: number | null, turnMs, label }` en la nueva). `ListedRow` = `{ kind: 'game', row, role, txDigest } | { kind: 'unreadable', gameId, role, txDigest }`: la fila del listado separa **la partida** (`GameRow`, la que reciben `GameActions`/`GameDetail` y los hooks) de **lo que sabe el listado** (el rol de la cuenta y la transacción del evento). Constructores `rowFromGame`, `rowFromDuel`, `rowFromDetail`, `rowFromLobbyItem`, `rowFromMyGameEntry`; reglas de acciones `rowAcceptState`/`rowCanCancel`/`rowCanReject`/`rowPlayerResult` (**delegan** en `acceptState`/`canCancel`/`canReject`/`playerResult` de hoy proyectando el estado a "pendiente o no": solo `Pending` se acepta/cancela/rechaza y solo `Resolved` da "ganaste/perdiste"); y las búsquedas en el registro que usan los hooks (`duelSourceOf`, `creatableGameOf`, `legacyGameKey`). `control.id` es `number | null` y no `number`: una fila armada desde el **objeto** (detalle, "Mis partidas") solo tiene `turn_ms`, así que el id sale del espejo por valor y es `null` si la cadena trae un `turn_ms` que el espejo no conoce (regla "la cadena manda": formato genérico, nunca error); en el lobby el id es el del `DuelCreated`. Las funciones de registro reciben `gameKey: string` (no `GameKey`) porque con un solo juego `GameKey` es un literal único y el linter marca la comparación como siempre verdadera.
+2. **Fallback mínimo para `Active`/`TimedOut`/`Expired`: `app/src/components/stateText.ts`** (`active` = "En juego", `timed_out` = "Terminada por tiempo agotado", `expired` = "Terminada: se devolvieron las apuestas"). Una línea neutra, sin ganador ni montos: en el "Estado" del detalle, en la etiqueta de estado de la fila de "Mis partidas" y como `.my-game-result` de las terminadas; esos estados no ofrecen ninguna de las tres acciones. 8b la reemplaza.
+3. **Generalización de `txSession.ts`:** por **forma neutral** (tipos `CreatedGame`/`ResolvedGame`/`TimedOutGame`/`ExpiredGame` definidos en `sui/gameTx.ts`, que `txSession.ts` importa como tipos) y no por unión de eventos de cada fuente: así `GameResolvedEvent` y `GameCreatedEvent` de la fuente anterior siguen valiendo sin mapear (estructuralmente iguales), la fuente nueva se mapea `duelId` → `gameId` en el intérprete y ningún consumidor ramifica por nombres de campo.
+
+### Salidas de comandos pegadas, 1/4: guarda inicial y baseline (anexos A00, B01, B02, B03; `capture.sh`, sustituidas las rutas)
+$ bash -c stat -c '%y %s %n' <HOME real>/.sui/sui_config/client.yaml; ls -la <HOME real>/.sui/sui_config/; sha256sum <HOME real>/.sui/sui_config/client.yaml | cut -c1-12
+2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
+total 12
+drwx------ 2 <user> <group> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <group> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <group>  244 Oct 30 17:52 client.yaml
+ef12fd09615f
+exit=0
+$ npm run lint -w app
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+$ npm run typecheck -w app
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+$ npm test -w app
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  74 passed (74)
+      Tests  1707 passed (1707)
+   Start at  11:42:47
+   Duration  22.68s (environment 63%, tests 15%, import 11%, setup 10%, transform 1%, worker 1%)
+
+Environment  jsdom was created 74 times · 136.23s total, 63% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+$ bash -c VITE_SUI_NETWORK=testnet npm run build -w app
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 611 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.46 kB │ gzip:   0.29 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-Bpv6-Qmw.js   935.94 kB │ gzip: 283.01 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 436ms
+exit=0
+
+### Archivos modificados/creados (anexo D02: control anti-fuga del sandbox, `git diff --exit-code` sobre lo que no es del task, `git stash list`, `git status --porcelain --untracked-files=all` y `git diff --stat`)
+34 archivos modificados (1109 inserciones, 217 borrados) y 8 nuevos: `app/src/components/stateText.ts`, `app/src/hooks/{gameRow,gameRow.test,routedActions.test,useClaimTimeout,useRefundStalled}.ts(x)`, `app/src/sui/{gameDetail.byType.test,gameTx.duel.test}.ts`. Ningún archivo de `contracts/` salvo `contracts/README.md`, ni de `documents/`, `package.json`/lockfile, `.github`, `Dockerfile`, `Caddyfile`, `app/eslint.config.js`, ni de `app/src/sui/{eventScan,lobby,myGames,gameRegistry,events,duel,config,errors}.ts` y `transactions/*` (`git diff --exit-code` = 0).
+$ bash -c cd <repo> && BASE=$(git merge-base master HEAD) && echo base=$BASE && git diff $BASE -U0 -- contracts/sources app/src | /usr/bin/grep '^+' | /usr/bin/grep -n 'SANDBOX\|testgame' | wc -l; git ls-files --others --exclude-standard -- contracts/sources app/src | xargs -r /usr/bin/grep -n 'SANDBOX\|testgame' | wc -l
+base=b0bbef8e55cb3c53416b56c490156c4013d416a1
+0
+0
+exit=0
+$ bash -c cd <repo> && git diff --exit-code --stat -- contracts/sources contracts/tests contracts/Move.lock contracts/Move.toml contracts/Published.toml contracts/deployments contracts/scripts contracts/fixtures documents .github package.json package-lock.json app/package.json app/eslint.config.js app/vite.config.ts app/src/sui/eventScan.ts app/src/sui/lobby.ts app/src/sui/myGames.ts app/src/sui/gameRegistry.ts app/src/sui/events.ts app/src/sui/duel.ts app/src/sui/config.ts app/src/sui/errors.ts app/src/sui/transactions Dockerfile app/Caddyfile; echo diff_exit_no_del_task=$?; git stash list | wc -l
+diff_exit_no_del_task=0
+0
+exit=0
+$ bash -c cd <repo> && git status --porcelain --untracked-files=all && git diff --stat | tail -40
+ M agents.md
+ M app/README.md
+ M app/src/components/GameActions.machine.test.tsx
+ M app/src/components/GameActions.test.tsx
+ M app/src/components/GameActions.tsx
+ M app/src/components/GameDetail.test.tsx
+ M app/src/components/GameDetail.tsx
+ M app/src/components/HouseAdminPanel.tsx
+ M app/src/components/LobbyList.test.tsx
+ M app/src/components/LobbyList.tsx
+ M app/src/components/MyGamesSection.test.tsx
+ M app/src/components/MyGamesSection.tsx
+ M app/src/hooks/txInvalidation.ts
+ M app/src/hooks/txSession.test.ts
+ M app/src/hooks/txSession.ts
+ M app/src/hooks/useAcceptGame.test.tsx
+ M app/src/hooks/useAcceptGame.ts
+ M app/src/hooks/useCancelGame.test.tsx
+ M app/src/hooks/useCancelGame.ts
+ M app/src/hooks/useCreateGame.ts
+ M app/src/hooks/useExecuteTransaction.test.tsx
+ M app/src/hooks/useGame.test.tsx
+ M app/src/hooks/useGame.ts
+ M app/src/hooks/useLobby.test.tsx
+ M app/src/hooks/useLobby.ts
+ M app/src/hooks/useMyGames.test.tsx
+ M app/src/hooks/useMyGames.ts
+ M app/src/hooks/useRejectGame.ts
+ M app/src/pages/GameDetailPage.test.tsx
+ M app/src/pages/GameDetailPage.tsx
+ M app/src/sui/gameDetail.ts
+ M app/src/sui/gameTx.ts
+ M app/src/test/txHarness.tsx
+ M contracts/README.md
+?? app/src/components/stateText.ts
+?? app/src/hooks/gameRow.test.ts
+?? app/src/hooks/gameRow.ts
+?? app/src/hooks/routedActions.test.tsx
+?? app/src/hooks/useClaimTimeout.ts
+?? app/src/hooks/useRefundStalled.ts
+?? app/src/sui/gameDetail.byType.test.ts
+?? app/src/sui/gameTx.duel.test.ts
+ agents.md                                       |   3 +-
+ app/README.md                                   |  25 +--
+ app/src/components/GameActions.machine.test.tsx |  27 +--
+ app/src/components/GameActions.test.tsx         |  74 +++++++-
+ app/src/components/GameActions.tsx              |  26 +--
+ app/src/components/GameDetail.test.tsx          |  34 ++--
+ app/src/components/GameDetail.tsx               |  26 ++-
+ app/src/components/HouseAdminPanel.tsx          |   2 +
+ app/src/components/LobbyList.test.tsx           |  52 +++++-
+ app/src/components/LobbyList.tsx                |  30 ++--
+ app/src/components/MyGamesSection.test.tsx      |  75 +++++++-
+ app/src/components/MyGamesSection.tsx           |  37 ++--
+ app/src/hooks/txInvalidation.ts                 |  18 +-
+ app/src/hooks/txSession.test.ts                 |  37 ++++
+ app/src/hooks/txSession.ts                      |  25 ++-
+ app/src/hooks/useAcceptGame.test.tsx            |   2 +-
+ app/src/hooks/useAcceptGame.ts                  |  40 +++--
+ app/src/hooks/useCancelGame.test.tsx            |   4 +-
+ app/src/hooks/useCancelGame.ts                  |  27 ++-
+ app/src/hooks/useCreateGame.ts                  |  36 +++-
+ app/src/hooks/useExecuteTransaction.test.tsx    |   2 +
+ app/src/hooks/useGame.test.tsx                  |  59 ++++++-
+ app/src/hooks/useGame.ts                        |  20 ++-
+ app/src/hooks/useLobby.test.tsx                 |  29 ++-
+ app/src/hooks/useLobby.ts                       |  27 ++-
+ app/src/hooks/useMyGames.test.tsx               |  36 +++-
+ app/src/hooks/useMyGames.ts                     |  21 +--
+ app/src/hooks/useRejectGame.ts                  |  24 ++-
+ app/src/pages/GameDetailPage.test.tsx           |  63 ++++++-
+ app/src/pages/GameDetailPage.tsx                |   9 +-
+ app/src/sui/gameDetail.ts                       |  50 ++++++
+ app/src/sui/gameTx.ts                           | 148 ++++++++++++++++
+ app/src/test/txHarness.tsx                      |  12 +-
+ contracts/README.md                             | 226 ++++++++++++++++++++++++
+ 34 files changed, 1109 insertions(+), 217 deletions(-)
+exit=0
+
+### Tests y gates (output pegado abajo, anexos con `capture.sh`; rutas sustituidas por `<scratchpad>`, `<repo>` y `<HOME real>`)
+Resultado: `npm ci` (G01), `npm audit signatures` (G02, 143 paquetes con atestaciones verificadas), `npm audit --omit=dev --audit-level=high` = 0 vulnerabilidades (G03), `npm run lint -w app` = 0 (G04), `npm run typecheck -w app` = 0 (G05), `npm test -w app` = **1806 PASS en 78 archivos, 0 fallos** (G06: baseline 1707/74 + **99** tests y +4 archivos), `VITE_SUI_NETWORK=testnet npm run build -w app` válido (G07) con `dist/assets/index-BAqxQ0pD.js` **941.73 kB (284.42 kB gzip)** contra **935.94 kB (283.01 kB gzip)**: **+5.79 kB (+1.41 kB gzip)**; con el `testnet.json` actual (`packageVersion` 1) el registro es solo `legacy` y el build es válido. `node --test scripts/*.test.mjs` = 173 PASS (G08, sin cambio). `contracts/*` no se tocó (salvo `README.md`): no hay gates de `sui move` en este task.
+Incidente de proceso declarado: un primer `npm run lint` dio 1 error (`no-unsafe-assignment` en un test nuevo de `GameActions.test.tsx`, un `expect.objectContaining` asignado a una constante); lo corregí (se pasa inline) y repetí lint, typecheck, test y build; el anexo G04 es el de la corrida limpia (el de la corrida fallida se descartó al repetir; no hay otro delta).
+
+Tests nuevos por archivo (delta medido con el reporter JSON de Vitest, antes en una copia de `HEAD` fuera del worktree y ahora; suma +99 = 1707 → 1806; anexos D03 y D04 con los 101 títulos nuevos completos y los 2 que se reescribieron):
+- `hooks/gameRow.test.ts` (**nuevo**, 22): `rowControlOf` (id del espejo por `turn_ms`, id del evento si se da, `turn_ms` fuera del espejo en formato genérico con id `null`, y el `turn_ms` de la fixture marcada como ensayo **leído por valor** afirmando `_meta.sandbox`), filas de cada fuente (3 estados de la anterior; los **6 estados** del `Duel`), fila del detalle, filas del lobby y de "Mis partidas" de cada fuente (rol, transacción, control del `DuelCreated`, ilegibles), búsquedas en el registro (`legacyGameKey`, `duelSourceOf` con error de configuración, `creatableGameOf` por `createSource` antes y después del upgrade) y las reglas de acciones (Aceptar/Cancelar/Rechazar como para un `Game`, ninguna en `Active`/`Cancelled`/`Resolved`/`TimedOut`/`Expired`, ganaste/perdiste solo en `Resolved`).
+- `hooks/routedActions.test.tsx` (**nuevo**, 20): con la máquina real y las transacciones reales de `duel-tx`, sobre una config de **tres versiones** del paquete (target con el `packageId` vigente y `typeArguments` = el tag del registro con el ID de definición: `definingId ≠ packageId`): crear (`createSource` duel: abierta, invitación, otro firmante, `feeChanged` y no abre la wallet), aceptar (`SplitCoins` primero y `coinflip::accept` con `Random` **último**, el `DuelResolved` real como valor y no el `DuelActivated`, `null` sin el evento o con otro firmante, invalidación idéntica a la fuente anterior), cancelar y rechazar (`describe.each`: target, `typeArguments`, reembolso real, invalidación, `null` sin evento), `claim` y `refund` (target, argumentos —con la House el primero y sin ella el segundo—, valor leído de eventos sintéticos, `null` si reclamó otra cuenta, invalidación sin claves inmutables, candado, "sin confirmar" y su "Ya la revisé") y que una fila **anterior** sigue por `game::*`.
+- `sui/gameTx.duel.test.ts` (**nuevo**, 19): los intérpretes contra las fixtures reales `duel-tx` (crear abierta e invitación, cancelar, rechazar, aceptar con cada ganador y una invitación con `DuelActivated` + `DuelResolved`), cada caso de `null` (otro firmante, otro duelo, dos eventos, sin evento, tipo distinto, otro juego, BCS roto) y los de tiempo con eventos **sintéticos** marcados como tales (el coinflip no persiste `Active`).
+- `sui/gameDetail.byType.test.ts` (**nuevo**, 11): `Game` anterior, `Duel` `Pending`/`Cancelled`/`Resolved` de `duel-reads`, objeto de otro tipo, `Duel` de un `G` desconocido y de un registro con solo la fuente anterior (`NotAGameError`), inexistente/borrado (`GameNotFoundError`), BCS roto (`ReadDataError`), pedido al nodo.
+- `components/GameActions.test.tsx` (+7): la misma pantalla para una fila de la fuente nueva (mismo HTML que la anterior, sin rótulo ni control de tiempo), los hooks reciben la fila para enrutar, los tres botones disparan los hooks, ninguna acción en `Active`/`TimedOut`/`Expired` para ninguna cuenta, el resultado de aceptar con el mismo texto. `components/MyGamesSection.test.tsx` (+4): mismo marcado, los seis estados, la línea neutra de `TimedOut`/`Expired`, "Aceptaste la de" también en `Active`. `components/LobbyList.test.tsx` (+2): fila de la fuente nueva con el mismo HTML y ambas fuentes juntas. `pages/GameDetailPage.test.tsx` (+5): detalle de un `Duel` con las acciones de su fuente, la línea neutra de los tres estados nuevos y "ganaste" en un `Duel` resuelto.
+- `hooks/txSession.test.ts` (+4): `claim`/`refundStalled` reconocidas, `gameId` normalizado y fijado, adopción y candado. `hooks/useGame.test.tsx` (+2): la unión con un `Duel` real y `NotAGameError` definitivo sin refetch. `hooks/useLobby.test.tsx` (+1) y `hooks/useMyGames.test.tsx` (+2): `useLobby()` **no filtra** filas `duel` (test que lo prueba), `sections` completas, rol/control/`gameKey` de cada fila.
+
+Existentes tocados (se **declaran**; ninguna aserción se relajó): los dos tests de 7b que describían la vista de hoy se **reescribieron** (`useLobby keeps showing only the legacy rows…` y `allSections has the rows of both sources while sections… only has the legacy rows`: su afirmación era justo la que el task retira; ahora afirman lo contrario y están en el anexo D04). Los demás cambios son mecánicos por el nuevo tipo de fila/hook: los helpers de `LobbyList.test`, `MyGamesSection.test`, `GameActions.test`, `GameActions.machine.test` y `GameDetail.test` construyen `GameRow`/`ListedRow` (con `rowFromGame`); `GameDetailPage.test` usa `detail`; `useMyGames.test`/`useLobby.test` leen `row.id`/`role` en lugar de `game.id`/`isMine`; `useAcceptGame.test`/`useCancelGame.test`/`txHarness.tsx` pasan la fila (`{ gameKey: 'coinflip', source: 'legacy' }`); `useExecuteTransaction.test.tsx` suma los dos `case` nuevos de su `switch` exhaustivo; y `useGame.test.tsx` agrega `version: '4'` al objeto simulado (el SDK real lo trae siempre; `fetchGameDetail` lo lee para la versión del objeto).
+
+Tablas de contrato (`contracts/README.md`) y `app/src/sui/` sincronizados: **sí** (no cambió ninguna firma, evento ni layout de contrato: se documentó lo existente). `git diff --exit-code` de `house.move`, `game.move`, `duel.move`, `coinflip.move` y `Move.lock`: exit 0 (anexo D02; `contracts/sources` no se tocó).
+
+### Salidas de comandos pegadas, 2/4: gates (anexos G01-G08) y tests nuevos (D03 delta por archivo, D04 títulos)
+$ npm ci
+
+added 293 packages, and audited 295 packages in 17s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+9 moderate severity vulnerabilities
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues, run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit=0
+$ npm audit signatures
+audited 292 packages in 17s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+exit=0
+$ npm audit --omit=dev --audit-level=high
+found 0 vulnerabilities
+exit=0
+$ npm run lint -w app
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+$ npm run typecheck -w app
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+$ npm test -w app
+
+> test
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  78 passed (78)
+      Tests  1806 passed (1806)
+   Start at  12:16:27
+   Duration  33.33s (environment 62%, tests 14%, import 12%, setup 10%, transform 1%, worker 1%)
+
+Environment  jsdom was created 78 times · 193.26s total, 62% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+$ bash -c VITE_SUI_NETWORK=testnet npm run build -w app
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 614 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.46 kB │ gzip:   0.29 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-BAqxQ0pD.js   941.73 kB │ gzip: 284.42 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 569ms
+exit=0
+$ node --test scripts/deployment.test.mjs scripts/publish.test.mjs
+✔ parsePublishOutput extrae IDs, versión, digest y timestamp del fixture real (3.979381ms)
+✔ parsePublishOutput no depende de la posición en objectChanges (0.691475ms)
+✔ parsePublishOutput rechaza una transacción que no terminó en success (0.737287ms)
+✔ parsePublishOutput rechaza una salida sin objeto published (0.470346ms)
+✔ parsePublishOutput rechaza dos Houses creadas (0.64272ms)
+✔ parsePublishOutput rechaza una salida sin HouseCap (0.461971ms)
+✔ parsePublishOutput rechaza una salida sin UpgradeCap (0.451902ms)
+✔ parsePublishOutput rechaza una House de otro paquete (0.415024ms)
+✔ parsePublishOutput rechaza una House no compartida (0.476624ms)
+✔ parseDryRunOutput sobre el fixture real: ok, gas estimado y los cuatro IDs (0.628848ms)
+✔ parseDryRunOutput da ok = false si el status no es success o falta un objeto (0.659477ms)
+✔ buildDeployment arma los 14 campos en orden y validateDeployment lo acepta (1.947307ms)
+✔ SEG-3: ningún valor del json armado es una dirección de cuenta del fixture (1.459914ms)
+✔ validateDeployment: falta schemaVersion (0.31241ms)
+✔ validateDeployment: falta network (0.199304ms)
+✔ validateDeployment: falta chainId (0.197024ms)
+✔ validateDeployment: falta packageId (0.180116ms)
+✔ validateDeployment: falta originalPackageId (0.179605ms)
+✔ validateDeployment: falta packageVersion (0.186979ms)
+✔ validateDeployment: falta upgradeCapId (0.195575ms)
+✔ validateDeployment: falta houseId (0.161999ms)
+✔ validateDeployment: falta houseCapId (0.157615ms)
+✔ validateDeployment: falta publishTxDigest (0.19504ms)
+✔ validateDeployment: falta publishTimestamp (0.163219ms)
+✔ validateDeployment: falta sourceCommit (0.14019ms)
+✔ validateDeployment: falta suiCliVersion (0.143348ms)
+✔ validateDeployment: falta frameworkRev (0.131881ms)
+✔ validateDeployment rechaza: clave desconocida (0.340911ms)
+✔ validateDeployment rechaza: ID corto (0.304067ms)
+✔ validateDeployment rechaza: ID en mayúsculas (0.22177ms)
+✔ validateDeployment rechaza: testnet con chain id ajeno (1.274089ms)
+✔ validateDeployment rechaza: localnet con el chain id de testnet (0.261916ms)
+✔ validateDeployment rechaza: localnet con el chain id de mainnet (0.187601ms)
+✔ validateDeployment rechaza: sourceCommit null en testnet (0.176151ms)
+✔ validateDeployment rechaza: network mainnet (0.210967ms)
+✔ validateDeployment rechaza: publishTimestamp sin milisegundos (0.218551ms)
+✔ validateDeployment rechaza: publishTimestamp sin Z (0.159584ms)
+✔ validateDeployment: opcional registrado ausente es válido y con formato malo es error (0.569319ms)
+✔ parsePublishedToml lee cada campo del fixture real (0.953266ms)
+✔ parsePublishedToml rechaza una línea inesperada con su número (0.334476ms)
+✔ parsePublishedToml rechaza: clave desconocida, con su número de línea (0.333355ms)
+✔ parsePublishedToml rechaza: clave duplicada, con su número de línea (0.2119ms)
+✔ parsePublishedToml rechaza: sección duplicada, con su número de línea (0.219473ms)
+✔ parsePublishedToml rechaza: sección incompleta, con su número de línea (0.203838ms)
+✔ parsePublishedToml rechaza: build-config que no es tabla en línea, con su número de línea (0.200426ms)
+✔ parsePublishedToml rechaza: entero mal formado, con su número de línea (0.235959ms)
+✔ parsePublishedToml rechaza: texto sin comillas, con su número de línea (0.158487ms)
+✔ checkConsistency: igual ⇒ [] y cada campo distinto ⇒ una diferencia (0.711267ms)
+✔ readFrameworkRev lee el rev de [pinned.testnet.Sui] del Move.lock del repo (0.407664ms)
+✔ redactAddresses oculta direcciones y deja intactos digests y texto sin hex (0.237213ms)
+✔ normalizeId rellena, pasa a minúsculas y rechaza lo que no es hex (0.230802ms)
+✔ parseUpgradeOutput_with_the_test_upgrade_shape: ID nuevo, versión, digest, timestamp y UpgradeCap del upgrade real (0.400079ms)
+✔ parseUpgradeOutput_with_the_test_upgrade_shape no depende de la posición en objectChanges ni devuelve cuentas (0.590207ms)
+✔ parseUpgradeOutput rechaza lo que no es un upgrade registrable (sin success, sin published, dos, sin UpgradeCap mutado) (1.454961ms)
+✔ parseUpgradeOutput rechaza la salida de una publicación (versión 1 y sin UpgradeCap mutado) (0.314358ms)
+✔ parseUpgradeDryRunOutput_with_the_test_upgrade_shape: ok, gas estimado y los IDs simulados (1.05892ms)
+✔ parseTypeOriginsOutput (fixture real de object --json): 24 tipos con IDs a 64 hex, house y game en el original (1.251546ms)
+✔ parseTypeOriginsOutput: ordenado por (módulo, nombre) con texto plano y determinista (dos corridas, mismo resultado) (1.378596ms)
+✔ parseTypeOriginsOutput: un ID no normalizado (corto, mayúsculas) se normaliza a 0x + 64 hex (0.530263ms)
+✔ parseTypeOriginsOutput: tabla vacía, ausente, entrada mal formada, par repetido, paquete o versión ajenos ⇒ mensaje claro (1.234395ms)
+✔ parseTypeOriginsOutput: dos tipos del mismo módulo con definingId distintos se conservan (S-2) (0.53085ms)
+✔ buildUpgradeDeployment: el upgrade real sobre el despliegue base da exactamente el json de la fixture (1.43427ms)
+✔ buildUpgradeDeployment: solo cambian los campos de "versión vigente"; la publicación original no se toca (0.305687ms)
+✔ SEG-3: el json del upgrade no trae ninguna dirección de cuenta de la salida de la CLI (1.373447ms)
+✔ buildUpgradeDeployment: un segundo upgrade (v2 → v3) suma una entrada y reemplaza typeOrigins (0.774293ms)
+✔ buildUpgradeDeployment: versión que no es la siguiente (p. ej. registrar dos veces el mismo upgrade) o UpgradeCap ajeno ⇒ error (0.499857ms)
+✔ validateDeployment acepta el testnet.json actual (sin upgrades ni typeOrigins, packageVersion 1) y el json real del upgrade (0.911053ms)
+✔ validateDeployment: con packageVersion > 1, upgrades y typeOrigins son obligatorios (1.002411ms)
+✔ validateDeployment rechaza upgrades mal formado (2.732068ms)
+✔ validateDeployment rechaza typeOrigins mal formado (1.031937ms)
+✔ validateDeployment: un par (módulo, nombre) repetido rechaza; dos entradas del mismo módulo con definingId distintos se aceptan (S-2) (1.140882ms)
+✔ validateDeployment: un definingId ajeno, o un tipo de house/game con otro ID, rechaza (2.73492ms)
+✔ validateDeployment: upgrades no consecutivo, último packageId ≠ packageId o última versión ≠ packageVersion rechazan (1.330201ms)
+✔ checkConsistency_with_the_test_upgrade_shape: Published.toml de un upgrade (versión 2) coincide; el viejo no (0.357413ms)
+✔ parsePubfile_with_the_test_upgrade_shape: el pubfile efímero antes y después de test-upgrade (1.061843ms)
+✔ parsePubfile rechaza una entrada incompleta o una línea que no entiende, con su número (0.974903ms)
+✔ runSui invoca sin shell, con n por stdin, maxBuffer de 64 MiB, cwd contracts/ y el SUI_CONFIG_DIR validado (5.307347ms)
+✔ runSui invoca cada vector permitido (2.946161ms)
+✔ runSui rechaza sin invocar todo vector fuera de la lista blanca (1.231732ms)
+✔ allowlist (#73): los vectores de upgrade y object se aceptan; un vector parecido se rechaza (1.72361ms)
+✔ upgradeCliArgs: testnet = upgrade, localnet = test-upgrade con el pubfile; con y sin dry run; siempre dentro de la lista blanca (0.468716ms)
+✔ runSui no invoca sin un configDir validado (0.368051ms)
+✔ publishCliArgs: ambas redes, con y sin dry run, siempre dentro de la lista blanca (0.443026ms)
+✔ runGit solo admite status --porcelain y rev-parse HEAD, sin shell y en contracts/ (0.57141ms)
+✔ parseCliArgs: subcomandos y opciones válidos (2.222858ms)
+✔ parseCliArgs rechaza subcomando inválido, opción desconocida o ajena al subcomando y --yes/--force/-y (1.379269ms)
+✔ main: uso inválido ⇒ exit 2; guarda de argumentos ⇒ exit 1 (sin invocar la CLI) (2.522223ms)
+✔ main: --out con --network testnet ⇒ exit 1 sin leer la config ni invocar la CLI (0.956424ms)
+✔ main: con un Node que no es el de .nvmrc ⇒ exit 1 y el mensaje, antes de los argumentos, la config y la CLI (0.995666ms)
+✔ checkNodeVersion: el major de Node debe ser el de .nvmrc (1.517345ms)
+✔ checkNodeVersion: el .nvmrc real del repo acepta el Node que corre los tests (la CI usa .nvmrc) (0.363843ms)
+✔ isEntryPoint: import.meta.main si es boolean; si no, realpath de argv[1] contra el del módulo (0.506607ms)
+✔ checkPublishArgs: red válida y --pubfile-path obligatorio en localnet y prohibido en testnet (0.273093ms)
+✔ checkPublishArgs y checkOutArg: --out prohibido en testnet (también vacío) y admitido en localnet (0.265402ms)
+✔ checkConfigDirGuard rechaza config ausente, relativa, inexistente, sin client.yaml o dentro de ~/.sui (1.007727ms)
+✔ checkConfigDirGuard acepta una config propia y devuelve su realpath (0.266277ms)
+✔ checkConfigDirGuard: una excepción de fs ⇒ SUI_CONFIG_DIR inválido con solo su código, sin ruta ni mensaje original (0.833393ms)
+✔ checkNetworkGuard: env activo distinto ⇒ error sin consultar el chain id (0.307548ms)
+✔ checkNetworkGuard: chain id según la red (0.404797ms)
+✔ readCliJson y chainIdFromCli leen la salida --json de active-env y chain-identifier (0.657983ms)
+✔ redactConfigDir: realpath y valor original ⇒ <SUI_CONFIG_DIR>, la ruta más larga primero, sin tocar el resto (0.449421ms)
+✔ readCliJson, formatCliFailure e interpretCliRun: el stderr de la CLI sale sin la ruta de la config ni direcciones (0.794637ms)
+✔ checkCliVersion compara con SUI_VERSION/SUI_COMMIT de ci.yml (0.921093ms)
+✔ checkTestnetPreconditions: árbol sucio, json o entrada existentes ⇒ error (1.227516ms)
+✔ checkLockUnchanged: testnet distinto ⇒ error; localnet distinto ⇒ aviso; igual ⇒ ok (0.237266ms)
+✔ confirmación: solo en testnet sin dry run; sin TTY o sin "testnet" aborta (0.349129ms)
+✔ confirmación: ninguna variable de entorno la omite (0.375291ms)
+✔ resolveRecordMeta: usa meta.json si existe (0.282018ms)
+✔ resolveRecordMeta: sin meta.json exige los flags (0.458798ms)
+✔ resolveRecordMeta: red o chain id incoherentes con --network ⇒ error (0.282519ms)
+✔ checkDeployments: sin archivos ni Published.toml ⇒ 0 despliegues (0.322469ms)
+✔ checkDeployments: localnet válido sin entrada en Published.toml (1.558984ms)
+✔ checkDeployments: testnet sin Published.toml ⇒ error (1.348283ms)
+✔ checkDeployments: entrada de Published.toml sin json ⇒ error (0.338326ms)
+✔ checkDeployments: nombre de archivo distinto de network ⇒ error (0.435747ms)
+✔ checkDeployments: json inválido ⇒ error (0.550702ms)
+✔ checkDeployments: testnet coherente con su [published.testnet]; una diferencia ⇒ error (1.222222ms)
+✔ checkDeployments: json que no es un objeto ⇒ error legible, sin TypeError (H3) (0.445607ms)
+✔ checkDeployments: Published.toml con formato inválido ⇒ error con su línea (0.21717ms)
+✔ fixtures/localnet.deployment.json = buildDeployment del fixture con los valores fijos (0.280497ms)
+✔ formatSummary: los 14 campos y el siguiente paso con el prefijo guardado, sin direcciones de cuentas (1.065448ms)
+✔ formatSummary (m-2): en testnet las dos líneas de comando se pegan tal cual (bash -n, sin ejecutar) (14.436319ms)
+✔ formatCliFailure: digest de stderr, stderr redactado con y sin 0x y consejo fijo tras publicar (0.572845ms)
+✔ formatCliFailure: sin publicación real (dry run, record) no aconseja buscar el digest; sin dir no lo nombra (0.376405ms)
+✔ formatCliFailure (H-1): estado ≠ 0 con el digest solo en stdout ⇒ solo la línea del digest y el motivo (0.416292ms)
+✔ formatCliFailure (H-1): digests distintos en stderr y stdout ⇒ gana el de stderr (0.311828ms)
+✔ formatCliFailure (H-1): estado ≠ 0 sin digest ⇒ sin línea Digest, con la línea del motivo (0.259633ms)
+✔ interpretCliRun (H-1): estado 0 con stdout no JSON ⇒ no se mira el stdout (ni digest ni motivo) (0.501264ms)
+✔ formatPostPublishFailure: directorio temporal, digest y receta de record, sin direcciones (H2) (0.456404ms)
+✔ interpretCliRun: estado ≠ 0, stdout que no parsea o forma inválida ⇒ solo la ruta, nunca el stdout (1.002716ms)
+✔ interpretCliRun: salida real ⇒ el resultado del parser (0.56933ms)
+✔ parseCliArgs: upgrade, record --upgrade y las combinaciones inválidas (2.19164ms)
+✔ checkPublishArgs con command upgrade: mismas reglas de red, --pubfile-path y --out, con el mensaje de la Receta U (0.891059ms)
+✔ main (#73): flags solo-localnet en testnet, pubfile ausente en localnet y record --upgrade sin --type-origins ⇒ exit 1; --type-origins sin --upgrade ⇒ exit 2 (6.495566ms)
+✔ main (#73): upgrade en testnet, con o sin --dry-run, sin SUI_CONFIG_DIR sale con 1 en la guarda de config, antes de cualquier CLI (1.677185ms)
+✔ checkConfirmation: el verbo de la acción cambia el mensaje, no la regla (sin TTY o sin "testnet" aborta) (0.5568ms)
+✔ formatCliFailure con retryAdvice propio: el consejo del upgrade reemplaza al de la publicación (0.229489ms)
+✔ checkUpgradeBase: sin json base, inválido o de otra red ⇒ error claro (el upgrade no inventa ni publica) (2.114965ms)
+✔ checkUpgradePreconditions: testnet exige árbol limpio, [published.testnet] y un json base coherente con él (1.445018ms)
+✔ checkPubfileGuard (Receta U): source.local = contracts/ sigue; otra ruta aborta con el mensaje de la receta y sin editar nada (2.374634ms)
+✔ checkPubfileGuard: el pubfile tiene que ser el del despliegue base (otra génesis o un upgrade que el json no registró) (0.856504ms)
+✔ checkUpgradeChain: el json base y el pubfile son de la cadena del env activo (0.459822ms)
+✔ parseUpgradeRaw: el upgrade real se interpreta; un error de la CLI o una salida sin cambio de paquete ("digest inexistente") fallan claro (2.558971ms)
+✔ formatUpgradeSummary y formatPostUpgradeFailure: IDs y digests públicos, los pasos que siguen y ninguna dirección de cuenta (1.021706ms)
+✔ upgrade en localnet, variante A (--out): escribe solo ahí el json de la fixture, con los vectores previstos y nada prohibido (6.688399ms)
+✔ upgrade en localnet, variante B (sin --out): reescribe contracts/deployments/localnet.json con upgrades y typeOrigins (6.416221ms)
+✔ upgrade en localnet con árbol sucio: sourceCommit null (como publish); los campos base se conservan y solo cambia la versión vigente (3.76742ms)
+✔ upgrade en localnet con --dry-run: dry run ok, sin upgrade real, sin json y sin confirmación (2.236552ms)
+✔ upgrade: sin deployments/<red>.json base aborta con el mensaje claro y sin invocar sui (1.440213ms)
+✔ upgrade: un json base que no es JSON válido o es inválido aborta sin invocar sui (1.172327ms)
+✔ upgrade (Receta U): con un pubfile cuyo source.local apunta a otra ruta aborta con el mensaje de la receta y sin invocar sui (3.893778ms)
+✔ upgrade: un pubfile ya avanzado (el json no registró el upgrade) o de otra génesis aborta antes de pagar gas (1.835195ms)
+✔ upgrade: el despliegue base de otra cadena, o un env activo que no es --network, aborta antes del dry run y del upgrade (3.14083ms)
+✔ upgrade: la guarda de config rechaza una config ausente o dentro de ~/.sui antes de leer nada o invocar la CLI (1.532134ms)
+✔ upgrade: una CLI de otra versión que ci.yml es solo un aviso en localnet y error en testnet (3.409203ms)
+✔ upgrade: un dry run con otra versión (el json base no es el estado de la cadena) o un error de compatibilidad ⇒ STOP, nunca --skip-verify-compatibility (3.852103ms)
+✔ upgrade: una CLI que falla muestra el stderr sin direcciones ni la ruta de la config, con el consejo del upgrade, y no escribe el json (1.473336ms)
+✔ upgrade: si falla la lectura de la tabla de orígenes después del upgrade, el mensaje dice que ya se ejecutó y cómo rearmar con record --upgrade (2.976995ms)
+✔ upgrade: el UpgradeCap que avanzó la transacción real tiene que ser el del json base (si no, no se registra) (1.869783ms)
+✔ upgrade en testnet con TTY y "testnet": dry run → confirmación → upgrade → lectura de orígenes → json coherente con Published.toml (2.860767ms)
+✔ upgrade en testnet: la transacción real va siempre después de la confirmación; sin TTY o con otra respuesta no se envía (10.220439ms)
+✔ upgrade en testnet con --dry-run: no pide confirmación, no envía el upgrade real y no escribe nada (1.210684ms)
+✔ upgrade en testnet: árbol sucio, sin testnet.json, sin [published.testnet] o un json que no coincide con Published.toml abortan sin invocar sui (1.759832ms)
+✔ upgrade en testnet: los flags solo-localnet (--out, --pubfile-path) se rechazan antes de cualquier cosa (0.7518ms)
+✔ upgrade en testnet: si Published.toml no cambió como se espera, el json NO se escribe y el mensaje dice STOP, el digest y record --upgrade (6.484597ms)
+✔ upgrade en testnet: un dry run que cambia Move.lock es error (repin pendiente, H13) y no se envía el upgrade (2.40287ms)
+✔ upgrade en testnet: un error del dry run (p. ej. compatibilidad) corta antes de la confirmación y del upgrade (2.577677ms)
+✔ record --upgrade rearma offline el mismo json que escribió upgrade, sin invocar sui, git ni la red (0.932209ms)
+✔ record --upgrade: el json es idéntico al de upgrade con los mismos datos (variante A y record) (2.071557ms)
+✔ record --upgrade usa el meta.json que dejó upgrade junto a la salida cruda (como record), sin los cuatro flags (1.043443ms)
+✔ record --upgrade: argumentos faltantes, base ausente, salida de error de la CLI o sin cambio de paquete ("digest inexistente") fallan claro y sin escribir (4.494559ms)
+✔ record --upgrade en testnet: solo escribe si el json coincide con el Published.toml ya existente; si no, STOP sin registrar (2.180884ms)
+✔ ningún test ni código de upgrade llega a la CLI real: spawn siempre inyectado y SUI_BIN inexistente en los tests de main (1.765089ms)
+ℹ tests 173
+ℹ suites 0
+ℹ pass 173
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 334.433329
+exit=0
+$ bash -c join -a2 -e0 -o 0,1.2,2.2 <scratchpad>/t8a/base.counts <scratchpad>/t8a/now.counts | awk '$2!=$3 {print $1, "antes="$2, "ahora="$3, "delta="$3-$2}'
+components/GameActions.test.tsx antes=34 ahora=41 delta=7
+components/LobbyList.test.tsx antes=16 ahora=18 delta=2
+components/MyGamesSection.test.tsx antes=14 ahora=18 delta=4
+hooks/gameRow.test.ts antes=0 ahora=22 delta=22
+hooks/routedActions.test.tsx antes=0 ahora=20 delta=20
+hooks/txSession.test.ts antes=24 ahora=28 delta=4
+hooks/useGame.test.tsx antes=10 ahora=12 delta=2
+hooks/useLobby.test.tsx antes=17 ahora=18 delta=1
+hooks/useMyGames.test.tsx antes=27 ahora=29 delta=2
+pages/GameDetailPage.test.tsx antes=11 ahora=16 delta=5
+sui/gameDetail.byType.test.ts antes=0 ahora=11 delta=11
+sui/gameTx.duel.test.ts antes=0 ahora=19 delta=19
+exit=0
+$ bash -c echo '--- tests nuevos (o con titulo nuevo)'; LC_ALL=C comm -13 <scratchpad>/t8a/base.titles <scratchpad>/t8a/now.titles | sed -E 's/\t/  ::  /'; echo '--- tests del baseline que ya no existen con ese titulo (reescritos: la vista de hoy de 7b se retiro)'; LC_ALL=C comm -23 <scratchpad>/t8a/base.titles <scratchpad>/t8a/now.titles | sed -E 's/\t/  ::  /'
+--- tests nuevos (o con titulo nuevo)
+components/GameActions.test.tsx  ::  GameActions with a row of the new source accepts, cancels and rejects a pending new-source game through the same buttons
+components/GameActions.test.tsx  ::  GameActions with a row of the new source draws the same buttons and texts as for a game of the previous source, with no source label or time control
+components/GameActions.test.tsx  ::  GameActions with a row of the new source offers no action on a active new-source game (the time actions are 8b), for any account
+components/GameActions.test.tsx  ::  GameActions with a row of the new source offers no action on a expired new-source game (the time actions are 8b), for any account
+components/GameActions.test.tsx  ::  GameActions with a row of the new source offers no action on a timed out new-source game (the time actions are 8b), for any account
+components/GameActions.test.tsx  ::  GameActions with a row of the new source passes the row (its source and its game) to the three hooks, so each routes to its own builder
+components/GameActions.test.tsx  ::  GameActions with a row of the new source shows the result of an accepted new-source game with the same text (winner, pot, fee, payout)
+components/LobbyList.test.tsx  ::  LobbyList: rows draws a row of the new source with the same markup as one of the previous source, without a source label or a time control
+components/LobbyList.test.tsx  ::  LobbyList: rows draws the rows of both sources together, in the order given
+components/MyGamesSection.test.tsx  ::  MyGamesSection: rows calls the account the acceptor of a new-source game it accepted, also when it is Active
+components/MyGamesSection.test.tsx  ::  MyGamesSection: rows draws a row of the new source with the same markup as one of the previous source (no source label, no time control)
+components/MyGamesSection.test.tsx  ::  MyGamesSection: rows gives a timed-out or expired game one neutral result line, without winner or amounts (8b replaces it)
+components/MyGamesSection.test.tsx  ::  MyGamesSection: rows shows the six states of a new-source game in its section: the three known ones as always and the fallback line for the rest
+hooks/gameRow.test.ts  ::  registry lookups (the tags come from the registry, never from the hook) finds the game that owns the previous source, with and without the new one
+hooks/gameRow.test.ts  ::  registry lookups (the tags come from the registry, never from the hook) gives the new source of a game, and throws a configuration error when there is none (packageVersion 1)
+hooks/gameRow.test.ts  ::  registry lookups (the tags come from the registry, never from the hook) routes "create" by createSource: the previous source before the upgrade and the new one after
+hooks/gameRow.test.ts  ::  rowControlOf keeps the id of the creation event when it is given (the chain says which control was chosen)
+hooks/gameRow.test.ts  ::  rowControlOf shows a turn_ms outside the mirror in the generic format with a null id, never as an error
+hooks/gameRow.test.ts  ::  rowControlOf shows the turn_ms of the rehearsal fixture (marked as sandbox) in the generic format, read by value
+hooks/gameRow.test.ts  ::  rowControlOf takes the id from the mirror by turn_ms: 0 is "sin reloj" and 10 minutes is control 1
+hooks/gameRow.test.ts  ::  rows from each source builds a duel row with every one of the six states and the control it is given
+hooks/gameRow.test.ts  ::  rows from each source builds a legacy row without a time control and with the three states of the previous source
+hooks/gameRow.test.ts  ::  rows from each source builds the detail row of each source from the union that useGame returns
+hooks/gameRow.test.ts  ::  rows of the listings keeps an unreadable lobby row, with its id and its transaction, and no role
+hooks/gameRow.test.ts  ::  rows of the listings maps a "Mis partidas" row of each source with the role and the transaction of the event, and keeps the unreadable ones
+hooks/gameRow.test.ts  ::  rows of the listings maps a lobby row of each source with the creation transaction and the creator role only when it is mine
+hooks/gameRow.test.ts  ::  rows of the listings uses the control that the DuelCreated event brought (not the one derived from the object) for a lobby row
+hooks/gameRow.test.ts  ::  what a row lets the account do finds the acceptor of the four states that have one
+hooks/gameRow.test.ts  ::  what a row lets the account do offers Aceptar, Cancelar and Rechazar on a pending row exactly as for a legacy game
+hooks/gameRow.test.ts  ::  what a row lets the account do offers none of the three actions on a active row (the time actions are 8b)
+hooks/gameRow.test.ts  ::  what a row lets the account do offers none of the three actions on a cancelled row (the time actions are 8b)
+hooks/gameRow.test.ts  ::  what a row lets the account do offers none of the three actions on a expired row (the time actions are 8b)
+hooks/gameRow.test.ts  ::  what a row lets the account do offers none of the three actions on a resolved row (the time actions are 8b)
+hooks/gameRow.test.ts  ::  what a row lets the account do offers none of the three actions on a timed out row (the time actions are 8b)
+hooks/gameRow.test.ts  ::  what a row lets the account do says won or lost only on a resolved row to one of its players; not in TimedOut or Expired (8b)
+hooks/routedActions.test.tsx  ::  the previous source keeps going through game::* (a legacy row never uses the new builders) cancel, reject and accept of a legacy row build game::cancel_game, reject_game and accept_game
+hooks/routedActions.test.tsx  ::  useAcceptGame routed by the source of the object builds the new coinflip accept with the current packageId, the bet of the row and Random LAST
+hooks/routedActions.test.tsx  ::  useAcceptGame routed by the source of the object resets the lobby and invalidates the game, the balance, the House and "Mis partidas" like for the previous source
+hooks/routedActions.test.tsx  ::  useAcceptGame routed by the source of the object returns the real DuelResolved as the value (winner, pot, fee and payout), not the DuelActivated of the same transaction
+hooks/routedActions.test.tsx  ::  useAcceptGame routed by the source of the object succeeds with value null when the confirmation has only the DuelActivated, or when another account signed
+hooks/routedActions.test.tsx  ::  useCancelGame routed by the source of the object builds duel::cancel<G> with the current packageId and the tag of the registry (definingId ≠ packageId), and reads the DuelCancelled refund
+hooks/routedActions.test.tsx  ::  useCancelGame routed by the source of the object succeeds with value null when the confirmation has no DuelCancelled of this duel
+hooks/routedActions.test.tsx  ::  useClaimTimeout and useRefundStalled (the machine, with the target { kind: game, gameId }) "sin confirmar": a refund whose confirmation times out leaves the target unconfirmed with its digest, until acknowledged
+hooks/routedActions.test.tsx  ::  useClaimTimeout and useRefundStalled (the machine, with the target { kind: game, gameId }) claim builds duel::claim_timeout<G>(duel, House) with the current packageId and the tag of the registry, and reads the DuelTimedOut
+hooks/routedActions.test.tsx  ::  useClaimTimeout and useRefundStalled (the machine, with the target { kind: game, gameId }) claim reads null when the DuelTimedOut says another account claimed (the signer is the one who claims)
+hooks/routedActions.test.tsx  ::  useClaimTimeout and useRefundStalled (the machine, with the target { kind: game, gameId }) claim resets the lobby and invalidates the game, the balance of the caller, the House and "Mis partidas", none immutable
+hooks/routedActions.test.tsx  ::  useClaimTimeout and useRefundStalled (the machine, with the target { kind: game, gameId }) refund builds duel::refund_stalled<G>(duel) without the House, and reads the DuelExpired
+hooks/routedActions.test.tsx  ::  useClaimTimeout and useRefundStalled (the machine, with the target { kind: game, gameId }) refund invalidates like accept (the game, the balance, the House, "Mis partidas")
+hooks/routedActions.test.tsx  ::  useClaimTimeout and useRefundStalled (the machine, with the target { kind: game, gameId }) the lock: a claim in flight is busy for the target and not foreign (notice null), and the outcome is read by runId
+hooks/routedActions.test.tsx  ::  useCreateGame routed by createSource reads the invitation of the new source with its opponent, and reports feeChanged against the fee that was shown
+hooks/routedActions.test.tsx  ::  useCreateGame routed by createSource reports feeChanged when the DuelCreated stored another fee than the one shown, and builds nothing before the House reread
+hooks/routedActions.test.tsx  ::  useCreateGame routed by createSource succeeds with created null when the DuelCreated is not from the account that signed (DL-9)
+hooks/routedActions.test.tsx  ::  useCreateGame routed by createSource with upgrades (createSource duel) builds the new coinflip with the current packageId and reads its DuelCreated (open)
+hooks/routedActions.test.tsx  ::  useRejectGame routed by the source of the object builds duel::reject<G> with the current packageId and the tag of the registry (definingId ≠ packageId), and reads the DuelCancelled refund
+hooks/routedActions.test.tsx  ::  useRejectGame routed by the source of the object succeeds with value null when the confirmation has no DuelCancelled of this duel
+hooks/txSession.test.ts  ::  claim and refundStalled in the transaction session (#73, TASK-8a) a foreign finished claim on the game target that started after mounting is adopted with its action
+hooks/txSession.test.ts  ::  claim and refundStalled in the transaction session (#73, TASK-8a) an own refund in flight is busy for its target and never foreign
+hooks/txSession.test.ts  ::  claim and refundStalled in the transaction session (#73, TASK-8a) toTxGameEntry gives the normalized game id of a claim and of a refund, so "Mis partidas" pins that game while it is live
+hooks/txSession.test.ts  ::  claim and refundStalled in the transaction session (#73, TASK-8a) txVariablesOf recognizes both time actions as actions of the app (an own claim is not foreign)
+hooks/useGame.test.tsx  ::  useGame fails definitively with NotAGameError for an object of another type, and does not refetch (DL-7)
+hooks/useGame.test.tsx  ::  useGame returns the Duel of the new source when the object is a Duel of a registered game (the union Game | Duel)
+hooks/useLobby.test.tsx  ::  useLobbyEntries and the registry (#73) gives each row of the new source the control of its DuelCreated and the legacy rows none, and marks the account's own rows with the role creator
+hooks/useLobby.test.tsx  ::  useLobbyEntries and the registry (#73) useLobby does not filter the rows of the new source: both sources come in the neutral model, in the lobby order
+hooks/useMyGames.test.tsx  ::  useMyGames and the two sources (#73) gives the duel rows their role, their event and a time control derived from the object (no clock for the coinflip)
+hooks/useMyGames.test.tsx  ::  useMyGames and the two sources (#73) keeps the legacy rows without a time control and with the game that owns the legacy source
+hooks/useMyGames.test.tsx  ::  useMyGames and the two sources (#73) sections does not filter: it has the rows of both sources in the neutral model, and allSections the same rows as sui/ read them
+pages/GameDetailPage.test.tsx  ::  GameDetailPage draws a Duel detail with the same detail and the actions of its source (new source, neutral row)
+pages/GameDetailPage.test.tsx  ::  GameDetailPage says ganaste to the winner of a resolved Duel as well (same result for both sources)
+pages/GameDetailPage.test.tsx  ::  GameDetailPage shows the neutral fallback line for a active Duel and no winner
+pages/GameDetailPage.test.tsx  ::  GameDetailPage shows the neutral fallback line for a expired Duel and no winner
+pages/GameDetailPage.test.tsx  ::  GameDetailPage shows the neutral fallback line for a timed out Duel and no winner
+sui/gameDetail.byType.test.ts  ::  fetchGameDetail asks the node for the content and the previous transaction of exactly that id
+sui/gameDetail.byType.test.ts  ::  fetchGameDetail reads a Cancelled Duel of production (duel-reads) as a Duel of its game, with the version of the object
+sui/gameDetail.byType.test.ts  ::  fetchGameDetail reads a Game of the previous source by its exact type, with its game, its version and its last transaction
+sui/gameDetail.byType.test.ts  ::  fetchGameDetail reads a Game with the registry of only the previous source (today, with packageVersion 1)
+sui/gameDetail.byType.test.ts  ::  fetchGameDetail reads a Pending Duel of production (duel-reads) as a Duel of its game, with the version of the object
+sui/gameDetail.byType.test.ts  ::  fetchGameDetail reads a Resolved Duel of production (duel-reads) as a Duel of its game, with the version of the object
+sui/gameDetail.byType.test.ts  ::  fetchGameDetail throws GameNotFoundError for a missing or deleted object
+sui/gameDetail.byType.test.ts  ::  fetchGameDetail throws NotAGameError for a Duel of a game the registry does not know (the type must be exactly the registered one)
+sui/gameDetail.byType.test.ts  ::  fetchGameDetail throws NotAGameError for a Game of another package and for a Duel when the registry has only the previous source (packageVersion 1)
+sui/gameDetail.byType.test.ts  ::  fetchGameDetail throws NotAGameError for an object of another type, before parsing it
+sui/gameDetail.byType.test.ts  ::  fetchGameDetail throws ReadDataError for a Duel of the right type with broken bytes (never a default Pending)
+sui/gameTx.duel.test.ts  ::  duelCancelledRefund (cancel and reject) reads the refund of the real cancellation by the creator
+sui/gameTx.duel.test.ts  ::  duelCancelledRefund (cancel and reject) reads the refund to the creator of the real rejection by the invitee
+sui/gameTx.duel.test.ts  ::  duelCancelledRefund (cancel and reject) returns null for another duel, without the event, with two of them or with another type
+sui/gameTx.duel.test.ts  ::  parseCreatedDuel does not take a DuelCreated of another game as the result (the type must be exactly the one of the registry)
+sui/gameTx.duel.test.ts  ::  parseCreatedDuel is not read by the interpreter of the previous source, and the other way around
+sui/gameTx.duel.test.ts  ::  parseCreatedDuel reads the invitation and its opponent, with the sender in another address format
+sui/gameTx.duel.test.ts  ::  parseCreatedDuel reads the open duel created by the real transaction, with the neutral shape (gameId, not duelId)
+sui/gameTx.duel.test.ts  ::  parseCreatedDuel returns null without events, with two DuelCreated, with another creator, with another type or with broken bytes
+sui/gameTx.duel.test.ts  ::  parseExpiredDuel (synthetic events) reads the refund of this duel: each player recovers the bet
+sui/gameTx.duel.test.ts  ::  parseExpiredDuel (synthetic events) returns null for another duel, two events, no event or an event of another type
+sui/gameTx.duel.test.ts  ::  parseResolvedDuel (atomic accept: DuelActivated + DuelResolved in the same transaction) accepts the acceptor in another address format
+sui/gameTx.duel.test.ts  ::  parseResolvedDuel (atomic accept: DuelActivated + DuelResolved in the same transaction) reads the winner, the pot, the fee and the payout of the real accept won by the acceptor
+sui/gameTx.duel.test.ts  ::  parseResolvedDuel (atomic accept: DuelActivated + DuelResolved in the same transaction) reads the winner, the pot, the fee and the payout of the real accept won by the acceptor of an invitation
+sui/gameTx.duel.test.ts  ::  parseResolvedDuel (atomic accept: DuelActivated + DuelResolved in the same transaction) reads the winner, the pot, the fee and the payout of the real accept won by the creator
+sui/gameTx.duel.test.ts  ::  parseResolvedDuel (atomic accept: DuelActivated + DuelResolved in the same transaction) returns null for an event of another account (the signer must be the acceptor), another duel, two events or broken bytes
+sui/gameTx.duel.test.ts  ::  parseResolvedDuel (atomic accept: DuelActivated + DuelResolved in the same transaction) the DuelActivated of the same transaction is not the result: without a DuelResolved it is null
+sui/gameTx.duel.test.ts  ::  parseTimedOutDuel (synthetic events) reads the claim of this duel with the signer as the one who claimed (the winner is the rival, not the caller)
+sui/gameTx.duel.test.ts  ::  parseTimedOutDuel (synthetic events) returns null for another duel, another claimer, two events, no event or an event of another type
+sui/gameTx.duel.test.ts  ::  the registry of the fixture matches the transactions of duel-tx has the exact tag of the game that the transactions emitted (no tag is built by hand)
+--- tests del baseline que ya no existen con ese titulo (reescritos: la vista de hoy de 7b se retiro)
+hooks/useLobby.test.tsx  ::  useLobbyEntries and the registry (#73) useLobby keeps showing only the legacy rows (the components of today); the new rows come in useLobbyEntries
+hooks/useMyGames.test.tsx  ::  useMyGames and the two sources (#73) allSections has the rows of both sources while sections (what the components draw today) only has the legacy rows
+exit=0
+
+### Salidas de comandos pegadas, 3/4: DoD extra de 8a (anexo D01)
+$ bash -c cd <repo> && /usr/bin/grep -rnE 'DuelClockAction|LegacyMyGamesSections' app/src | wc -l
+0
+exit=0
+$ bash -c cd <repo> && /usr/bin/grep -rnE '\bLobbyRow\b|legacyRows' app/src | wc -l; /usr/bin/grep -rn 'does not filter\|does not filter the rows' app/src/hooks/useLobby.test.tsx app/src/hooks/useMyGames.test.tsx | cut -c1-200
+0
+app/src/hooks/useLobby.test.tsx:254:  it('useLobby does not filter the rows of the new source: both sources come in the neutral model, in the lobby order', async () => {
+app/src/hooks/useMyGames.test.tsx:667:  it('sections does not filter: it has the rows of both sources in the neutral model, and allSections the same rows as sui/ read them', async () => {
+exit=0
+$ bash -c cd <repo> && /usr/bin/grep -rn 'transactionErrorMessage(' app/src --exclude='*.test.*'; /usr/bin/grep -rn 'buildGameRegistry(' app/src --exclude='*.test.*'
+app/src/hooks/useExecuteTransaction.ts:149:          return failure(transactionErrorMessage(error, ids));
+app/src/hooks/useExecuteTransaction.ts:154:        return failure(transactionErrorMessage(error, ids));
+app/src/hooks/useExecuteTransaction.ts:171:        return failure(transactionErrorMessage(error, ids));
+app/src/hooks/useExecuteTransaction.ts:191:      return failure(transactionErrorMessage(verdict.error, ids), digest, cost);
+app/src/sui/errors.ts:245:export function transactionErrorMessage(source: unknown, ids: OwnPackageIds): string {
+app/src/hooks/useGameRegistry.ts:12:  return useMemo(() => buildGameRegistry(config), [config]);
+app/src/sui/gameRegistry.ts:329:export function buildGameRegistry(config: RegistryConfig): GameRegistry {
+exit=0
+$ bash -c cd <repo> && /usr/bin/grep -rnE 'typeArguments|::(duel|coinflip)::' app/src/hooks app/src/components app/src/pages --exclude='*.test.*' | wc -l
+0
+exit=0
+$ bash -c cd <repo> && git diff -U0 -- app/src/sui/gameDetail.ts app/src/sui/gameTx.ts | /usr/bin/grep -E '^-[^-]' ; echo lineas_borradas_exit=$?; git diff --numstat -- app/src/sui/gameDetail.ts app/src/sui/gameTx.ts
+lineas_borradas_exit=1
+50	0	app/src/sui/gameDetail.ts
+148	0	app/src/sui/gameTx.ts
+exit=0
+
+### DoD extra de 8a (salida pegada en el anexo D01 de arriba)
+1. `grep -rnE 'DuelClockAction|LegacyMyGamesSections' app/src` = **0** (ningún test que pruebe su retiro: no hizo falta).
+2. `useLobby()` **no filtra** filas `duel`: lo prueba `useLobby does not filter the rows of the new source…` (`hooks/useLobby.test.tsx`) y, para "Mis partidas", `sections does not filter…` (`hooks/useMyGames.test.tsx`); `grep -rnE '\bLobbyRow\b|legacyRows' app/src` = **0** (el tipo `LobbyRow` filtrado y el filtro de `sections` ya no existen).
+3. `transactionErrorMessage(` fuera de tests: 4 llamadas, todas en `hooks/useExecuteTransaction.ts` (149, 154, 171, 191) con `ids` = la **`config` completa**, más la definición en `sui/errors.ts`; `buildGameRegistry(` fuera de tests: `hooks/useGameRegistry.ts:12` con la `config` completa, más la definición. Ningún camino arma `{ packageId, originalPackageId }` ni un tag a mano.
+4. `grep -rnE "typeArguments|::(duel|coinflip)::" app/src/hooks app/src/components app/src/pages --exclude='*.test.*'` = **0**.
+5. `sui/gameDetail.ts` +50/-0 y `sui/gameTx.ts` +148/-0: **0 líneas borradas** (ni imports; los imports nuevos son líneas agregadas). `git diff -U0 … | grep -E '^-[^-]'` sin salida.
+Anti-fuga del sandbox (TASK-5 §7, **sin `-i`**; anexo D02): líneas agregadas de `contracts/sources` y `app/src` contra el merge-base = **0** y archivos nuevos sin trackear = **0**. Los tests que usan `duel-clock` (solo `gameRow.test.ts`) afirman `_meta.sandbox === true`, leen el `turn_ms` de ensayo **por valor** (por el sufijo del nombre de la constante, sin escribir esas cadenas) y no toman constantes de producción de esa fixture; el registro de producción no incluye el juego de ensayo. `git diff --exit-code` sobre lo que no es del task (anexo D02) = 0; `git stash list` = 0.
+
+### Verificación manual / smoke 🧪 (localnet aislada, puerto 19000, **sin navegador**; anexos S01-S14)
+Receta P (génesis sin ningún `suic`, `sui start --fullnode-rpc-port 19000` como comando en segundo plano del harness, recién después `smoke_guard`/`suic`/`publish.mjs`), Receta V1 (binario 1.83.0: **los dos SHA-256 verificados antes de ejecutarlo**: tgz `e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8` y binario `29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa`, iguales a los de `git show 88dd53b:.github/workflows/ci.yml` y al binario de `suiup`; `sui --version` = `1.83.0-16d2dc1e05ed`; la red y el upgrade con `1.84.0-9dc25070cf2e`) y Receta U (copia del pubfile con `source.local` = `<repo>/contracts`, solo dentro de `<SMOKE_DIR>`). Una sola localnet; `kill` por PID. Las partidas se crearon con la **CLI** (`suic ptb`, moneda de gas fijada por `ptb.sh`; adaptados de los wrappers de TASK-5 en `<scratchpad>/t8a/tools/`: `ptb.sh`, `txsum.sh`, `evsum.sh`, `verify_origins.mjs`, más `story_old.sh`, `story_new.sh` y la sonda `readonly.probe.ts` con su config de Vitest, **conservados fuera de `<SMOKE_DIR>`** para que la sonda sea auditable; la sonda aborta si `RPC_URL` no es `http://127.0.0.1:<puerto>` o es el 9000, no usa claves, no firma, nunca usa `config.grpcUrl` y nunca lee `<SMOKE_DIR>/net`; corre el TypeScript real de `app/src` con una config de Vitest propia bajo `<SMOKE_DIR>` sin escribir en el worktree; cada resultado es **una línea** sin `cut`, solo con roles en lugar de direcciones).
+
+| # | Acción | Resultado | Evidencia (digest / estado) |
+|---|---|---|---|
+| 1 | Localnet (Receta P) + v1 = árbol `26f2676` con el 1.83.0 + `record` sin `--out` + `upgrade` variante B + `check` | **PASA**: `typeOrigins` del json = tabla de la cadena (24 tipos, 0 diferencias por gRPC; `house`/`game` con el ID original, `duel`/`coinflip` con el del upgrade); `check` = "2 despliegue(s) válidos"; `git diff --exit-code -- Move.lock Published.toml` = 0 | publicar v1 `3QLsAYfz6kksS8Q2xBWuWoriGjjGn3dWibsLk3REM9Hw` success; `update_fee_rate` a 500 bps `9wyZyX3Kjs1FTWS5PJWi2C4c9fXAAFiH84c8jx8XyEE2`; upgrade `DoUy5YLV2UdCEYtTTr3xXkcjD4bVS9WhVgNqDRxytF9A` (packageVersion 1 → 2) (S05-S10) |
+| 2 | Partidas de las dos fuentes con la CLI | **PASA**, todas `success` | Anterior (antes del upgrade): abierta `BdL6BcXJCSQeuYTWURsDnfD3zN6sBCJwWb775yF9TWDs`, invitación `9PqUYe7imSTovuvNixoBQYf1EPLygeY39iBqBPiifPTN`, cancelada `3qttAR2mCsJpfMXfKLvLHEQWnv9wucEexsJaXdKnuz9d` + cancel `BwaZZXPXVyHLdaZiYsabpLfFDiSymTL55iXxv4sbDttT`, resuelta `2SoTTVr5RsGRu1utRjmJktR1W2o1bLjjhMnAnSRV8qVA` + accept `EHpiAcq1MbkCRYRN8G8NnCBXvW1iGQadtJYeMN4o8TB6`. Nueva: abierta `J9hedKLX2igQNRn1nmUCFsP7zuhRgLJiyiqTRzmPaeKz`, invitación `2j6WKFs65j87HeyejePWeR3bWN7eWQKVS9ZHhc913fxF`, cancelada `6kgifBBH42YbGBro38oX88BUoHnDom24RiWe5k5UmwD3` + `duel::cancel` `GM8SkurQW4vvbx1iQYcpLtFLreZmFNhgiN9nSv38gQVX`, rechazada `HZdHgYn717wKDLg2dw2EerCt6CUuEJ3Na2QTHEfyi8dc` + `duel::reject` por B `9ig4UT2jeDzen9qWMZ9T1xTPQWVtUNRwTm3Xn5juqWKh`, aceptada `BpNH6VyjnsfWzAVLB1f6zJLUBnM7SCuyGFhW4jVSb8dY` + `coinflip::accept` (`splitCoins` antes y `Random` en el último comando) `A2QNczXaAVDfMrEFP4rP3FfK6ou9HJu6TLqV7YrWdNvy` (S08, S11) |
+| 3 | Detalle por tipo | **PASA**: `Game` (pendiente, cancelado, resuelto) → `kind: 'game'`; `Duel` `Pending` (abierta e invitación), `Cancelled` (cancelada y rechazada) y `Resolved` (ganador B) → `kind: 'duel'` con `gameKey` `coinflip`, `turn_ms` 0, control "sin reloj" y la versión del objeto; la House (otro tipo) → `NotAGameError`; un ID inexistente → `GameNotFoundError`; `useGame` real devuelve la unión y para la House queda en error definitivo con `detail: null` | S13, líneas `S3 …` |
+| 4 | Intérpretes con el resultado real de cada digest (`waitForTransaction` con efectos y eventos) | **PASA**: crear abierta e invitación (`gameId`, creador A, rival abierta/B, apuesta 10000000, comisión 500 bps) y con otro firmante `null`; cancelar y rechazar: reembolso 10000000 (y `null` con otro duelo); **aceptar**: eventos de la tx = `DuelActivated` + `DuelResolved`, resultado = el `DuelResolved` (aceptante B, ganador B, pozo 20000000, comisión 1000000, pago 19000000, `pozo == pago + comisión` y `comisión == ⌊pozo × 500 / 10000⌋`) y con otro aceptante `null`; la fuente anterior no cambia (crear, cancelar con reembolso 10000000, aceptar con pozo 20000000 / comisión 1000000 / pago 19000000) | S13, líneas `S4 …` |
+| 5 | Modelo de fila sobre el lobby y "Mis partidas" reales | **PASA**: lobby (cuenta C) = `DO` (nueva, control "sin reloj") y `GO1` (anterior, control `null`), **la misma forma de fila** (`bet, control, creator, feeRate, gameKey, id, opponent, source, state`), 0 ilegibles; A: 4 pendientes (2 nuevas y 2 anteriores) y 5 terminadas (3 nuevas y 2 anteriores), B: 2 invitaciones y 2 terminadas como aceptante, **C sin filas**; `eventos_ilegibles = 0` y `filas_ilegibles = 0` para las tres cuentas; el control de las nuevas es "sin reloj" | S13, líneas `S5 …` |
+| 6 | Hooks enrutados **simulados sin firmar** (el builder del hook con la preflight real contra el nodo; la "wallet" simulada rechaza antes de firmar) | **PASA**: crear abierta e invitación con la fuente nueva (`PK_VIGENTE::coinflip::create`) y con la anterior (config sin upgrades: `PK_ORIGINAL::game::create_game`), aceptar de cada fuente (nueva: `SplitCoins` + `coinflip::accept` con **`MoveCall` último**; anterior: `PK_VIGENTE::game::accept_game`), cancelar y rechazar de cada fuente (nueva: `duel::cancel<tag_del_registro>` / `duel::reject<tag_del_registro>`; anterior: `game::cancel_game` / `game::reject_game`): simulación OK y llegaron a la wallet; `claim_timeout` y `refund_stalled` sobre un `Pending` abortan en la preflight con **`duel/11`** traducido ("La partida no está en juego: todavía no se aceptó o ya terminó. (código duel/11)") sin llegar a la wallet | S13, líneas `S6 …` |
+| 7 | Cierre (`agents.md` §3, paso 7; C-14) | **PASA**: ver "Cierre" (puerto 19000 libre, 9000 ajeno igual, `~/.sui` igual, `git status` sin entradas, nada en segundo plano) | S14 |
+
+Observación del smoke (no cambia ningún task): el depósito de almacenamiento de **crear un `Duel`** es mayor que el del `Game` que mide `GAME_STORAGE_DEPOSIT_MIST` (`sui/createGame.ts:14`, que usa la nota de costo del formulario de crear): `storageCost` de la creación abierta/invitación con la CLI = 2941200 / 3184400 (fuente anterior, igual a la constante + 988000 del cobro de la moneda de gas) y 3397200 / 3640400 (fuente nueva), es decir ≈ 2409200 / 2652400 de depósito del objeto contra 1953200 / 2196400 de la constante (anexo S12). Con `createSource` = `duel` la nota del formulario ("≈ 0,0019532 SUI abierta…") quedará ≈ 0,00046 SUI corta; no es un cambio de 8a (el formulario no cambia de textos) y queda como pendiente para 8b o para el task de textos (ver Riesgos).
+
+### Salidas de comandos pegadas, 4/4: smoke 🧪 (anexos S01-S14; la sonda es S13, una línea por resultado sin cortar; los IDs de objeto de la localnet desechable ya borrada se muestran como `<ID>` en la sonda y completos en los demás anexos)
+$ bash -c ss -ltn | grep ':9000 '; echo libre19000=$(ss -ltn | grep -c ':19000 '); echo docker_ps=$(docker ps -aq | wc -l) docker_images=$(docker images -aq | wc -l)
+LISTEN 0      4096              0.0.0.0:9000       0.0.0.0:*   
+LISTEN 0      4096                 [::]:9000          [::]:*   
+libre19000=0
+docker_ps=5 docker_images=17
+exit=0
+$ bash -c cd <repo> && git show 88dd53b:.github/workflows/ci.yml | sed -n '22,25p'
+  SUI_VERSION: "1.83.0"
+  SUI_COMMIT: "16d2dc1e05ed"
+  SUI_TGZ_SHA256: "e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8"
+  SUI_BIN_SHA256: "29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa"
+exit=0
+$ bash -c cp <HOME real>/.cache/suiup/releases/sui-testnet-v1.83.0-ubuntu-x86_64.tgz <scratchpad>/t8a/smoke/dl183/ && cd <scratchpad>/t8a/smoke/dl183 && sha256sum *.tgz
+e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8  sui-testnet-v1.83.0-ubuntu-x86_64.tgz
+exit=0
+$ bash -c cd <scratchpad>/t8a/smoke/bin183 && tar -xzf <scratchpad>/t8a/smoke/dl183/sui-testnet-v1.83.0-ubuntu-x86_64.tgz ./sui && sha256sum sui <HOME real>/.local/share/suiup/binaries/testnet/sui-v1.83.0
+29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa  sui
+29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa  <HOME real>/.local/share/suiup/binaries/testnet/sui-v1.83.0
+exit=0
+$ bash -c . <scratchpad>/t8a/smoke/env.sh && [ ! -e "$SUI_CONFIG_DIR/client.yaml" ] && printf 'n\n' | "$SUI" genesis --working-dir "$SUI_CONFIG_DIR" > "$SMOKE_DIR/genesis.log" 2>&1; echo genesis_exit=$?
+genesis_exit=0
+exit=0
+$ bash -c stat -c '%y %s %n' <HOME real>/.sui/sui_config/client.yaml; ls -la <HOME real>/.sui/sui_config/; sha256sum <HOME real>/.sui/sui_config/client.yaml | cut -c1-12
+2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
+total 12
+drwx------ 2 <user> <group> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <group> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <group>  244 Oct 30 17:52 client.yaml
+ef12fd09615f
+exit=0
+$ bash -c . <scratchpad>/t8a/smoke/env.sh && smoke_guard && suic chain-identifier && suic active-env && suic --json envs | jq -r '.[1] as $a | .[0][] | select(.alias==$a) | .rpc' && printf 'n\n' | "$SUI" --version && printf 'n\n' | "$SUI_V1" --version
+Base58: 4E6iEDd4xPGeLKNWUrUcny81GzCN2eVfXVqnD3MWT6zR
+Hex: 2fee118c
+localnet
+http://127.0.0.1:19000
+sui 1.84.0-9dc25070cf2e
+sui 1.83.0-16d2dc1e05ed
+exit=0
+$ bash -c cd <repo> && git archive 26f2676 contracts | tar -x -C <scratchpad>/t8a/smoke/v1 && ls <scratchpad>/t8a/smoke/v1/contracts && git rev-parse 26f2676
+Move.lock
+Move.toml
+README.md
+fixtures
+scripts
+sources
+tests
+26f267626d797f3b2b1939c0fec496103b6d135f
+exit=0
+$ bash -c . <scratchpad>/t8a/smoke/env.sh && . <scratchpad>/t8a/smoke/ids.env && smoke_guard && smoke_guard_v1 && act_as "$ADMIN" && cd <scratchpad>/t8a/smoke/v1/contracts && suic_v1 --json test-publish --build-env testnet --pubfile-path <scratchpad>/t8a/smoke/Pub.v1.toml > <scratchpad>/t8a/smoke/v1-publish.json 2> <scratchpad>/t8a/smoke/v1-publish.err; echo publish_exit=$?; tail -c 300 <scratchpad>/t8a/smoke/v1-publish.err | sed -E 's/0x[0-9a-f]{64}/<ID>/g'
+publish_exit=0
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+$ bash <scratchpad>/t8a/tools/txsum.sh file <scratchpad>/t8a/smoke/v1-publish.json
+digest=3QLsAYfz6kksS8Q2xBWuWoriGjjGn3dWibsLk3REM9Hw
+status=success
+gasPaymentObjects=5 gasBudget=48246000
+gas: computationCost=1000000 storageCost=46246000 storageRebate=0 nonRefundableStorageFee=0
+created 0xc084448b01c33c14a0ccdff5544ad0e80a4cda7b71a3399fc4a8c1443e98427f::house::HouseCap 0xb71514966c67746efed3380ffe96b8ed75e6d7a881aa6743111bc1a873fec61f
+created 0xc084448b01c33c14a0ccdff5544ad0e80a4cda7b71a3399fc4a8c1443e98427f::house::House 0xb952e37d14f3c2b3c7ad4679a29c43dfee817701b958bb8a71a914c889088723
+published package v1 0xc084448b01c33c14a0ccdff5544ad0e80a4cda7b71a3399fc4a8c1443e98427f
+created 0x2::package::Publisher 0xcca734ef172c1afa1dd28c05348404667e95822b532a89c8059fb0969969db0c
+created 0x2::package::UpgradeCap 0xcd7116d06ac8b78af53ae8dd43127a44611852fdc1569c105b24db5c5d7248aa
+exit=0
+$ bash -c . <scratchpad>/t8a/smoke/env.sh && . <scratchpad>/t8a/smoke/ids.env && smoke_guard && cd <repo>/contracts && "$NODE" scripts/publish.mjs record --network localnet --from <scratchpad>/t8a/smoke/v1-publish.json --chain-id "$CHAIN_HEX" --source-commit $(git rev-parse 26f2676) --sui-cli-version 1.83.0-16d2dc1e05ed --framework-rev 05ad86a3e86c522deea116f80dc2bf2309a53363 | head -16; ls deployments
+Despliegue escrito en <repo>/contracts/deployments/localnet.json:
+  schemaVersion: 1
+  network: localnet
+  chainId: 2fee118c
+  packageId: 0xc084448b01c33c14a0ccdff5544ad0e80a4cda7b71a3399fc4a8c1443e98427f
+  originalPackageId: 0xc084448b01c33c14a0ccdff5544ad0e80a4cda7b71a3399fc4a8c1443e98427f
+  packageVersion: 1
+  upgradeCapId: 0xcd7116d06ac8b78af53ae8dd43127a44611852fdc1569c105b24db5c5d7248aa
+  houseId: 0xb952e37d14f3c2b3c7ad4679a29c43dfee817701b958bb8a71a914c889088723
+  houseCapId: 0xb71514966c67746efed3380ffe96b8ed75e6d7a881aa6743111bc1a873fec61f
+  publishTxDigest: 3QLsAYfz6kksS8Q2xBWuWoriGjjGn3dWibsLk3REM9Hw
+  publishTimestamp: 2026-11-20T17:08:42.566Z
+  sourceCommit: 26f267626d797f3b2b1939c0fec496103b6d135f
+  suiCliVersion: 1.83.0-16d2dc1e05ed
+  frameworkRev: 05ad86a3e86c522deea116f80dc2bf2309a53363
+Siguiente paso obligatorio (#8), no lo ejecuta este script. En la shell donde exportaste tu SUI_CONFIG_DIR
+localnet.json
+testnet.json
+exit=0
+$ bash -c . <scratchpad>/t8a/smoke/ids.env && ROLE=ADMIN bash <scratchpad>/t8a/tools/ptb.sh --move-call "$PK1::house::update_fee_rate" "@$HOUSE" "@$HOUSECAP" 500
+cli_exit=0
+digest=9wyZyX3Kjs1FTWS5PJWi2C4c9fXAAFiH84c8jx8XyEE2
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=3807600 storageRebate=3807219 nonRefundableStorageFee=381
+event 0xc084448b01c33c14a0ccdff5544ad0e80a4cda7b71a3399fc4a8c1443e98427f::house::FeeRateUpdated
+exit=0
+$ bash <scratchpad>/t8a/tools/story_old.sh
+cli_exit=0 step=GO1 digest=BdL6BcXJCSQeuYTWURsDnfD3zN6sBCJwWb775yF9TWDs status=success game=yes
+cli_exit=0 step=GINV digest=9PqUYe7imSTovuvNixoBQYf1EPLygeY39iBqBPiifPTN status=success game=yes
+cli_exit=0 step=GCAN digest=3qttAR2mCsJpfMXfKLvLHEQWnv9wucEexsJaXdKnuz9d status=success game=yes
+cli_exit=0 step=GCAN_CANCEL digest=BwaZZXPXVyHLdaZiYsabpLfFDiSymTL55iXxv4sbDttT status=success game=
+cli_exit=0 step=GRES digest=2SoTTVr5RsGRu1utRjmJktR1W2o1bLjjhMnAnSRV8qVA status=success game=yes
+cli_exit=0 step=GRES_ACCEPT digest=EHpiAcq1MbkCRYRN8G8NnCBXvW1iGQadtJYeMN4o8TB6 status=success game=
+exit=0
+$ bash -c export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && . <scratchpad>/t8a/smoke/env.sh && . <scratchpad>/t8a/smoke/ids.env && smoke_guard && act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs upgrade --network localnet --pubfile-path <scratchpad>/t8a/smoke/Pub.v1.repo.toml
+Upgrade registrado en <repo>/contracts/deployments/localnet.json:
+  packageVersion: 1 → 2
+  packageId: 0xc084448b01c33c14a0ccdff5544ad0e80a4cda7b71a3399fc4a8c1443e98427f → 0xa260c6db5fbbba797f6a03b552a82bd458564f1f8d0d53f9c997ec64c3cd7501
+  upgrades[0]: version 2, packageId 0xa260c6db5fbbba797f6a03b552a82bd458564f1f8d0d53f9c997ec64c3cd7501, txDigest DoUy5YLV2UdCEYtTTr3xXkcjD4bVS9WhVgNqDRxytF9A
+  typeOrigins: 24 tipos, 11 definidos en un upgrade
+  sourceCommit: null
+  suiCliVersion: 1.84.0-9dc25070cf2e
+  frameworkRev: e6f43880f4b65e2c1f0397583a9690b4b22c9223
+Directorio temporal con la salida cruda: <scratchpad>/t8a/smoke/tmp/battleship-upgrade-Rto75J (bórralo cuando termines)
+Siguiente (no lo ejecuta este script; README → Upgrade, pasos de registro y verificación):
+  git diff -- contracts/Published.toml   # solo published-at, version y toolchain-version; si no, STOP
+  node scripts/publish.mjs check
+  verificación independiente de typeOrigins por gRPC o GraphQL público (no con la CLI que la produjo)
+exit=0
+$ bash -c export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && cd <repo>/contracts && node scripts/publish.mjs check; git diff --exit-code -- Move.lock Published.toml; echo lock_published_diff_exit=$?
+2 despliegue(s) válidos y coherentes con Published.toml
+lock_published_diff_exit=0
+exit=0
+$ bash -c export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && RPC_URL=http://127.0.0.1:19000 node <scratchpad>/t8a/tools/verify_origins.mjs <repo>/contracts/deployments/localnet.json
+json: 24 tipos; cadena (gRPC getObject package): 24 tipos; diferencias: 0
+  modulo house: definingId = original
+  modulo duel: definingId = upgrade-2
+  modulo coinflip: definingId = upgrade-2
+  modulo game: definingId = original
+exit=0
+$ bash <scratchpad>/t8a/tools/story_new.sh
+cli_exit=0 step=DO digest=J9hedKLX2igQNRn1nmUCFsP7zuhRgLJiyiqTRzmPaeKz status=success duel=yes
+cli_exit=0 step=DINV digest=2j6WKFs65j87HeyejePWeR3bWN7eWQKVS9ZHhc913fxF status=success duel=yes
+cli_exit=0 step=DCAN digest=6kgifBBH42YbGBro38oX88BUoHnDom24RiWe5k5UmwD3 status=success duel=yes
+cli_exit=0 step=DCAN_CANCEL digest=GM8SkurQW4vvbx1iQYcpLtFLreZmFNhgiN9nSv38gQVX status=success duel=
+cli_exit=0 step=DREJ digest=HZdHgYn717wKDLg2dw2EerCt6CUuEJ3Na2QTHEfyi8dc status=success duel=yes
+cli_exit=0 step=DREJ_REJECT digest=9ig4UT2jeDzen9qWMZ9T1xTPQWVtUNRwTm3Xn5juqWKh status=success duel=
+cli_exit=0 step=DACC digest=BpNH6VyjnsfWzAVLB1f6zJLUBnM7SCuyGFhW4jVSb8dY status=success duel=yes
+cli_exit=0 step=DACC_ACCEPT digest=A2QNczXaAVDfMrEFP4rP3FfK6ou9HJu6TLqV7YrWdNvy status=success duel=
+exit=0
+$ bash -c . <scratchpad>/t8a/smoke/ids.env && bash <scratchpad>/t8a/tools/txsum.sh digest "$TX_GO1"
+digest=BdL6BcXJCSQeuYTWURsDnfD3zN6sBCJwWb775yF9TWDs
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=2941200 storageRebate=0 nonRefundableStorageFee=0
+created 0xc084448b01c33c14a0ccdff5544ad0e80a4cda7b71a3399fc4a8c1443e98427f::game::Game 0x38ab4af97a65c34042b85a1250368bc51fe239f8a6d0848f9109d2562687fd3a
+event 0xc084448b01c33c14a0ccdff5544ad0e80a4cda7b71a3399fc4a8c1443e98427f::game::GameCreated
+exit=0
+$ bash -c . <scratchpad>/t8a/smoke/ids.env && bash <scratchpad>/t8a/tools/txsum.sh digest "$TX_DO"
+digest=J9hedKLX2igQNRn1nmUCFsP7zuhRgLJiyiqTRzmPaeKz
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=3397200 storageRebate=987901 nonRefundableStorageFee=99
+created 0xa260c6db5fbbba797f6a03b552a82bd458564f1f8d0d53f9c997ec64c3cd7501::duel::Duel<0xa260c6db5fbbba797f6a03b552a82bd458564f1f8d0d53f9c997ec64c3cd7501::coinflip::Coinflip> 0x57076461eca3c2df04b3f4faa926ebc3a12fbed8ec56ddb7c9803ca7a9acf95c
+event 0xa260c6db5fbbba797f6a03b552a82bd458564f1f8d0d53f9c997ec64c3cd7501::duel::DuelCreated<0xa260c6db5fbbba797f6a03b552a82bd458564f1f8d0d53f9c997ec64c3cd7501::coinflip::Coinflip>
+exit=0
+$ bash -c . <scratchpad>/t8a/smoke/ids.env && bash <scratchpad>/t8a/tools/txsum.sh digest "$TX_GINV"
+digest=9PqUYe7imSTovuvNixoBQYf1EPLygeY39iBqBPiifPTN
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=3184400 storageRebate=0 nonRefundableStorageFee=0
+created 0xc084448b01c33c14a0ccdff5544ad0e80a4cda7b71a3399fc4a8c1443e98427f::game::Game 0xa1767b81d3afe14560f72a5bb37570f43508af9deb414fa8c1a8ed369bdb19a5
+event 0xc084448b01c33c14a0ccdff5544ad0e80a4cda7b71a3399fc4a8c1443e98427f::game::GameCreated
+exit=0
+$ bash -c . <scratchpad>/t8a/smoke/ids.env && bash <scratchpad>/t8a/tools/txsum.sh digest "$TX_DINV"
+digest=2j6WKFs65j87HeyejePWeR3bWN7eWQKVS9ZHhc913fxF
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=3640400 storageRebate=987901 nonRefundableStorageFee=99
+created 0xa260c6db5fbbba797f6a03b552a82bd458564f1f8d0d53f9c997ec64c3cd7501::duel::Duel<0xa260c6db5fbbba797f6a03b552a82bd458564f1f8d0d53f9c997ec64c3cd7501::coinflip::Coinflip> 0xafbadbd5357dfc7a8464dd9ed1e8d493bfda679b8ba23feb85500a1e28b09aec
+event 0xa260c6db5fbbba797f6a03b552a82bd458564f1f8d0d53f9c997ec64c3cd7501::duel::DuelCreated<0xa260c6db5fbbba797f6a03b552a82bd458564f1f8d0d53f9c997ec64c3cd7501::coinflip::Coinflip>
+exit=0
+$ bash -c grep -E '✓|×|Test Files|Tests ' <scratchpad>/t8a/smoke/probe/run3.out | sed -E 's#<scratchpad>#<scratchpad>#g'
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+exit=0
+$ bash -c sed -E 's/0x[0-9a-f]{64}/<ID>/g' <scratchpad>/t8a/smoke/probe/results.txt
+S0 RPC=loopback:19000 cadena(hex)=2fee118c chainId_nodo_no_vacio=true
+S0 registro: fuentes=legacy+duel createSource=duel upgrades=1 typeOrigins=24
+S3 GO1: kind=game gameKey=coinflip state=pending creador=A apuesta=10000000 comision_bps=500 version_objeto=4 previousTransaction=si
+S3 GCAN: kind=game gameKey=coinflip state=cancelled creador=A apuesta=10000000 comision_bps=500 version_objeto=5 previousTransaction=si
+S3 GRES: kind=game gameKey=coinflip state=resolved creador=A apuesta=10000000 comision_bps=500 version_objeto=165 previousTransaction=si
+S3 DO: kind=duel gameKey=coinflip state=pending creador=A rival=abierta apuesta=10000000 stake=10000000 comision_bps=500 turn_ms=0 control={"id":0,"turnMs":"0","label":"sin reloj"} version_objeto=166 previousTransaction=si
+S3 DINV: kind=duel gameKey=coinflip state=pending creador=A rival=B apuesta=10000000 stake=10000000 comision_bps=500 turn_ms=0 control={"id":0,"turnMs":"0","label":"sin reloj"} version_objeto=166 previousTransaction=si
+S3 DCAN: kind=duel gameKey=coinflip state=cancelled creador=A rival=abierta apuesta=10000000 stake=0 comision_bps=500 turn_ms=0 control={"id":0,"turnMs":"0","label":"sin reloj"} version_objeto=167 previousTransaction=si
+S3 DREJ: kind=duel gameKey=coinflip state=cancelled creador=A rival=B apuesta=10000000 stake=0 comision_bps=500 turn_ms=0 control={"id":0,"turnMs":"0","label":"sin reloj"} version_objeto=167 previousTransaction=si
+S3 DACC: kind=duel gameKey=coinflip state=resolved ganador=B aceptante=B creador=A rival=abierta apuesta=10000000 stake=0 comision_bps=500 turn_ms=0 control={"id":0,"turnMs":"0","label":"sin reloj"} version_objeto=229 previousTransaction=si
+S3 HOUSE (otro tipo): NotAGameError
+S3 id inexistente: GameNotFoundError
+S3 useGame(DO): detail.kind=duel gameKey=coinflip
+S3 useGame(GO1): detail.kind=game gameKey=coinflip
+S3 useGame(HOUSE): status=error error=NotAGameError detail=null
+S4 crear abierta (TX_DO): gameId=DO creador=A rival=abierta apuesta=10000000 comision_bps=500
+S4 crear invitacion (TX_DINV): gameId=DINV creador=A rival=B apuesta=10000000
+S4 control: la misma creacion con otro firmante (B) => null
+S4 cancelar (TX_DCAN_CANCEL): reembolso=10000000
+S4 rechazar por B (TX_DREJ_REJECT): reembolso=10000000
+S4 control: el DuelCancelled de otro duelo => null
+S4 aceptar (TX_DACC_ACCEPT): eventos de la tx = duel::DuelActivated + duel::DuelResolved
+S4 aceptar: gameId=DACC creador=A aceptante=B ganador=B pozo=20000000 comision=1000000 pago=19000000 pozo==pago+comision:true comision==piso(pozo*500/10000):true
+S4 control: el mismo resultado con otro aceptante (A) => null
+S4 DuelTimedOut / DuelExpired sobre la aceptacion real => null (los eventos de tiempo se cubren con eventos sinteticos en Vitest; el coinflip no persiste Active)
+S4 fuente anterior crear (TX_GO1): gameId=GO1 creador=A apuesta=10000000 comision_bps=500
+S4 fuente anterior cancelar (TX_GCAN_CANCEL): reembolso=10000000
+S4 fuente anterior aceptar (TX_GRES_ACCEPT): ganador=B pozo=20000000 comision=1000000 pago=19000000
+S5 cota del lobby (checkpoint de la publicacion): conocida
+S5 lobby (cuenta C): DO(duel,pending,control=sin reloj,rol=-) GO1(legacy,pending,control=null,rol=-)
+S5 lobby: filas=2 ilegibles=0 fuentes=duel+legacy
+S5 lobby: la misma forma de fila para las dos fuentes (claves: bet,control,creator,feeRate,gameKey,id,opponent,source,state)
+S5 lobby: control de la fila nueva = {"id":0,"turnMs":"0","label":"sin reloj"}; control de la anterior = null
+S5 mis partidas A: invitaciones=[]
+S5 mis partidas A: pendientes=[DINV(duel,pending,control=sin reloj,rol=creator) DO(duel,pending,control=sin reloj,rol=creator) GINV(legacy,pending,control=null,rol=creator) GO1(legacy,pending,control=null,rol=creator)]
+S5 mis partidas A: terminadas=[DACC(duel,resolved,control=sin reloj,rol=creator) DREJ(duel,cancelled,control=sin reloj,rol=creator) DCAN(duel,cancelled,control=sin reloj,rol=creator) GRES(legacy,resolved,control=null,rol=creator) GCAN(legacy,cancelled,control=null,rol=creator)]
+S5 mis partidas A: eventos_ilegibles=0 filas_ilegibles=0
+S5 mis partidas A: la misma forma de fila para las dos fuentes; control de las nuevas = sin reloj
+S5 mis partidas B: invitaciones=[DINV(duel,pending,control=sin reloj,rol=invitee) GINV(legacy,pending,control=null,rol=invitee)]
+S5 mis partidas B: pendientes=[]
+S5 mis partidas B: terminadas=[DACC(duel,resolved,control=sin reloj,rol=acceptor) GRES(legacy,resolved,control=null,rol=acceptor)]
+S5 mis partidas B: eventos_ilegibles=0 filas_ilegibles=0
+S5 mis partidas B: la misma forma de fila para las dos fuentes; control de las nuevas = sin reloj
+S5 mis partidas C: invitaciones=[]
+S5 mis partidas C: pendientes=[]
+S5 mis partidas C: terminadas=[]
+S5 mis partidas C: eventos_ilegibles=0 filas_ilegibles=0
+S5 mis partidas C: sin filas (actividad e invitaciones vacias)
+S6 House vigente: comision_bps=500 min=1000000 max=50000000000
+S6 crear abierta, fuente nueva (createSource duel): simulacion_ok=true llego_a_la_wallet=true comandos=[PK_VIGENTE::coinflip::create] comandos_totales=2 ultimo_comando=MoveCall[]
+S6 crear invitacion a B, fuente nueva (createSource duel): simulacion_ok=true llego_a_la_wallet=true comandos=[PK_VIGENTE::coinflip::create] comandos_totales=2 ultimo_comando=MoveCall[]
+S6 crear abierta, fuente anterior (config sin upgrades, createSource legacy): simulacion_ok=true llego_a_la_wallet=true comandos=[PK_ORIGINAL::game::create_game] comandos_totales=2 ultimo_comando=MoveCall[]
+S6 crear invitacion a B, fuente anterior (config sin upgrades, createSource legacy): simulacion_ok=true llego_a_la_wallet=true comandos=[PK_ORIGINAL::game::create_game] comandos_totales=2 ultimo_comando=MoveCall[]
+S6 aceptar fuente nueva (DO): simulacion_ok=true llego_a_la_wallet=true comandos=[PK_VIGENTE::coinflip::accept] comandos_totales=2 ultimo_comando=MoveCall[]
+S6 aceptar fuente anterior (GO1): simulacion_ok=true llego_a_la_wallet=true comandos=[PK_VIGENTE::game::accept_game] comandos_totales=2 ultimo_comando=MoveCall[]
+S6 cancelar fuente nueva (DO): simulacion_ok=true llego_a_la_wallet=true comandos=[PK_VIGENTE::duel::cancel<tag_del_registro>] comandos_totales=1 ultimo_comando=MoveCall[]
+S6 cancelar fuente anterior (GO1): simulacion_ok=true llego_a_la_wallet=true comandos=[PK_VIGENTE::game::cancel_game] comandos_totales=1 ultimo_comando=MoveCall[]
+S6 rechazar fuente nueva (DINV): simulacion_ok=true llego_a_la_wallet=true comandos=[PK_VIGENTE::duel::reject<tag_del_registro>] comandos_totales=1 ultimo_comando=MoveCall[]
+S6 rechazar fuente anterior (GINV): simulacion_ok=true llego_a_la_wallet=true comandos=[PK_VIGENTE::game::reject_game] comandos_totales=1 ultimo_comando=MoveCall[]
+S6 claim_timeout sobre DO (Pending): simulacion_ok=false llego_a_la_wallet=false comandos=[-] comandos_totales=0 ultimo_comando=-[] mensaje="La partida no está en juego: todavía no se aceptó o ya terminó. (código duel/11)"
+S6 refund_stalled sobre DO (Pending): simulacion_ok=false llego_a_la_wallet=false comandos=[-] comandos_totales=0 ultimo_comando=-[] mensaje="La partida no está en juego: todavía no se aceptó o ya terminó. (código duel/11)"
+FIN
+exit=0
+$ bash -c kill -0 "$(cat <scratchpad>/t8a/smoke/sui.pid)" 2>/dev/null; echo kill0_exit=$? '(esperado distinto de 0: la red ya no existe)'; echo libre19000=$(ss -ltn | grep -c ':19000 '); ss -ltn | grep ':9000 '
+kill0_exit=1 (esperado distinto de 0: la red ya no existe)
+libre19000=0
+LISTEN 0      4096              0.0.0.0:9000       0.0.0.0:*   
+LISTEN 0      4096                 [::]:9000          [::]:*   
+exit=0
+$ bash -c rm -rf <scratchpad>/t8a/smoke; test ! -e <scratchpad>/t8a/smoke; echo smoke_dir_borrado_exit=$?
+smoke_dir_borrado_exit=0
+exit=0
+$ bash -c cd <repo> && rm -f contracts/deployments/localnet.json && test ! -e contracts/deployments/localnet.json; echo localnet_json_ausente_exit=$?; ! compgen -G 'contracts/Pub.*.toml'; echo pub_toml_ausente_exit=$?; git diff --exit-code -- contracts/Move.lock contracts/Published.toml; echo lock_published_diff_exit=$?; ls contracts/deployments
+localnet_json_ausente_exit=0
+pub_toml_ausente_exit=0
+lock_published_diff_exit=0
+testnet.json
+exit=0
+$ bash -c stat -c '%y %s %n' <HOME real>/.sui/sui_config/client.yaml; ls -la <HOME real>/.sui/sui_config/; sha256sum <HOME real>/.sui/sui_config/client.yaml | cut -c1-12; echo docker_ps=$(docker ps -aq | wc -l) docker_images=$(docker images -aq | wc -l); pgrep -af 'sui start' | wc -l
+2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
+total 12
+drwx------ 2 <user> <group> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <group> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <group>  244 Oct 30 17:52 client.yaml
+ef12fd09615f
+docker_ps=5 docker_images=17
+3
+exit=0
+$ bash -c echo procesos_sui=$(pgrep -x sui | wc -l); ps -eo pid,comm | awk '$2=="sui"' | wc -l; ss -ltn | grep -c ':19000 '
+procesos_sui=0
+0
+0
+exit=1
+
+### Desviaciones del handoff (declaradas)
+1. **`useGame` devuelve `detail` y ya no `game`** (el handoff dice "useGame devuelve esa unión"): el campo `game: Game | null` desaparece y los consumidores (`GameDetailPage`) pasan por `rowFromDetail`. Cambia los tests de `useGame` y de la página (declarados arriba).
+2. **`useMyGames().sections` pasa a ser el modelo neutral completo y `allSections` se conserva** (el handoff admite "`allSections` o un `sections` completo"): se conservan las dos vistas porque los tests de 7b aseveran `allSections`. `allSections` queda sin consumidor de producción (solo tests); se puede retirar en 8b si molesta.
+3. **`components/HouseAdminPanel.tsx` (+2 líneas) y `hooks/useExecuteTransaction.test.tsx` (+2)**: no están en la lista de "Tocar", pero sus `switch` sobre `TxAction`/`AdoptedTx` son **exhaustivos y sin `default`** (a propósito, H-4 de #14) y, al sumar `claim` y `refundStalled` a `TxAction`, el `typecheck` se rompía. Solo se agregaron los dos `case` que devuelven `null` / el objetivo `game`; ningún comportamiento del panel de la House cambia.
+4. **`test/txHarness.tsx` (`useGameView`) y los tests de los hooks** pasan la fila (`{ gameKey: 'coinflip', source: 'legacy' }`, por defecto la fuente anterior): cambio mecánico de firma de `useCancelGame`/`useRejectGame`/`useAcceptGame`, que ahora **exigen** la fila (sin parámetro por defecto en los hooks: un `source` implícito sería la fuente equivocada en silencio).
+5. **`fetchGame` (`sui/gameDetail.ts`) queda sin uso de producción**: `useGame` usa `fetchGameDetail`. No se pudo retirar por el permiso **aditivo** de `gameDetail.ts` (y sus tests siguen verdes); se propone retirarlo en 8b o en un housekeeping, junto con `allSections` si no se usa.
+6. **`control.id: number | null`** en el modelo de fila (el handoff escribe `{ id, turnMs, label }`): ver decisión 1.
+7. **El registro de juegos se resuelve en el clic, no en el render** (`duelSourceOf`/`creatableGameOf` dentro de `create`/`accept`/…): un error de configuración (un `duel` sin fuente nueva) se lanza al ejecutar y no rompe el render; con un registro armado de la `config` completa no ocurre.
+8. **Higiene de escritura (C-13), honestidad:** dos veces ejecuté por descuido un `cat >> /dev/null <<'EOF'` (un heredoc **vacío**, sin contenido ni destino real; un no-op) en una llamada de shell, y una vez un `: > /dev/null` inútil; no escribieron ningún archivo ni lanzaron `sui`, pero son exactamente patrones que prohíbe C-13 y el auditor los marcará 🟡 (sin `sui`, sin código ni texto de reporte escrito por esa vía). Ver también la excepción usada: un `echo "CHAIN_HEX=…" >> ids.env` mío (valor de ejemplo ya conocido, **no** de la salida de un comando) que corregí de inmediato (borré la línea con la herramienta de edición y volví a acumular el valor con `suic chain-identifier | grep | sed >> ids.env`, que sí es la excepción (b) de C-13). Todo el código, tests, docs, scripts de la sonda y texto del reporte se escribió con las herramientas de archivos; los rótulos salen de `capture.sh` o de archivos escritos con la herramienta; los IDs se acumularon con `jq`/`grep | sed` (sin `-i`) sobre salidas de comandos; `Pub.v1.repo.toml` con `sed` sin `-i` hacia un archivo nuevo. `sui` solo con `printf 'n\n' |` y dentro del prefijo aislado.
+9. **`npm test` con el `localnet.json` efímero**: los gates se corrieron **después** del cierre (sin `contracts/deployments/localnet.json`), no con él presente.
+10. **`contracts/build/`** (ignorado por git; lo escribe el `sui move build` del `upgrade`) quedó con la salida del smoke; no figura en `git status`. No lo borré (puede pertenecer a corridas anteriores de otros tasks y es regenerable).
+
+### Riesgos / pendientes / hallazgos
+- **Nota de costo del formulario de crear** (arriba, observación del smoke): con la fuente nueva el depósito de almacenamiento es ≈ 2409200 / 2652400 MIST (abierta / invitación) y `GAME_STORAGE_DEPOSIT_MIST` + el texto del formulario dicen 1953200 / 2196400. Es un número que 8b (o un task de textos) debería actualizar (mide con la fuente que corresponda a `createSource`); la reserva de gas (`CREATE_GAS_RESERVE_MIST`) no se tocó ni se midió.
+- Con el `testnet.json` actual (`packageVersion` 1) solo existe la fuente `legacy`: las pantallas se ven y se comportan como antes (mismo HTML para una fila anterior y una nueva, probado) y el registro de producción no incluye el juego de ensayo; la fuente nueva se ejerce con la localnet y las fixtures.
+- Lo de `Active`, `TimedOut` y `Expired` **no se puede ejercer con la producción** (el coinflip no persiste `Active`): los intérpretes de reclamar y reembolsar y los hooks `useClaimTimeout`/`useRefundStalled` se cubren con eventos sintéticos y con la preflight real (`duel/11` sobre un `Pending`); la vista con reloj y los botones son de 8b (smoke con el juego de ensayo y navegador, con el STOP del 9000/#77).
+- La primera lectura de "Mis partidas" y del lobby sigue siendo la ventana del fullnode (D-20261103-03, #51): sin cambios.
+- `GameRow.control` de una fila armada desde el **objeto** deriva el id del espejo por `turn_ms`; si un upgrade futuro agrega un control con el mismo `turn_ms` que uno existente la derivación daría el primero (el id real solo está en el `DuelCreated`). Hoy no pasa y la etiqueta (la que se muestra) no depende del id.
+
+### Documentación (PROY-20)
+- `contracts/README.md`: **sí** (secciones nuevas de `duel`/`coinflip` —objetos, estados, controles de tiempo, funciones con sus aborts en orden, eventos, abort codes 0-25, fondos/comisión/versionado, PTB— y "Modelo de confianza": restricción (d) con (i)-(vi) incluido "(v) tiempo agotado = derrota" y su salvedad, la garantía de `Active`, la regla anti-`Random` con el grep de CI que **excluye `#[test_only]`** y el control de fuga del ensayo **sin `-i`**, las **dos reglas del protocolo** (`PostRandomCommandRestrictions` y el clique caliente) como dependencias con la **PV 142** y "se re-verifican en cada task de toolchain que suba la PV", y `max_bet` < 2^63 MIST).
+- `app/README.md`: **sí**, solo plomería (mapa de `sui/` y de hooks, y una frase en los componentes que consumen la fila). `agents.md`: **sí**, §5 (dos filas). `documents/ESTANDARES.md`, `documents/DECISIONES.md` y `documents/STATUS.md`: **no se tocaron** (H-6); abajo los borradores.
+
+#### Borrador (a): cambios propuestos a `documents/ESTANDARES.md` (el orquestador los aplica con una entrada de `DECISIONES.md` que referencia D-20261119-05, sin duplicar la restricción (d))
+- **ARQ-1:** "Contratos: `coinflip → duel → house` y `game → house` (`duel` y `game` usan la API `public(package)` de `house` —`add_fees`—; `coinflip` solo usa `duel` y la lectura de `house`; `house` no conoce a `game`, `duel` ni `coinflip`). App: `components/pages → hooks → sui/ (…)`. Los componentes **ni los hooks** importan `@mysten/sui` directamente ni arman targets `pkg::mod::fn`, tags de tipo o `typeArguments`: salen de `sui/` y del registro de juegos (`gameRegistry.ts`, con los IDs de definición de `typeOrigins`); los componentes dibujan el modelo de fila neutral a la fuente (`hooks/gameRow.ts`)."
+- **PROY-1:** "Un módulo por archivo en `contracts/sources/<modulo>.move` (`battleship::house`, `battleship::game`, `battleship::duel`, `battleship::coinflip`); tests en `contracts/tests/<modulo>_tests.move`; …". Un juego nuevo es un módulo del mismo paquete con su propio witness (nunca el nombre del módulo en mayúsculas: sería candidato a OTW).
+- **PROY-7:** sumar "`duel`: `DuelCreated`, `DuelCancelled` (con `cancelled_by`), `DuelActivated`, `DuelTurn`, `DuelResolved` (con `acceptor`, `winner`, `pot`, `fee`, `payout`), `DuelTimedOut` (con `claimed_by`) y `DuelExpired` (con `refund_each`), todos `has copy, drop` y con el juego `G` en el tipo".
+- **PROY-8:** "`GameState` = `Pending | Cancelled | Resolved`; `DuelState` = `Pending | Cancelled | Active | Resolved | TimedOut | Expired` **en ese orden, congelado por el primer upgrade**. Un objeto terminal no retiene `Balance` > 0; en `Active`, `stake == 2 × bet` exacto."
+- **PROY-10:** sumar la mecánica de `Duel` (D-20261119-05): `version` fijada al crear y comparada en `activate`/`activate_atomic`/`collect`/`claim_timeout`; `cancel`, `reject` y `refund_stalled` no reciben la House ni leen la versión; un módulo **nuevo** de un upgrade no puede agregar un `init` después (agregar un `init` a un módulo existente rechaza el upgrade con `IncompatibleUpgrade`, V-8); y referencia a la **restricción permanente (d)** del `Duel` (i)-(vi) registrada en `contracts/README.md` "Modelo de confianza" y en `DECISIONES.md` (sin duplicarla).
+- **SEG-5 / regla anti-`Random` (plan §2.7, R.7):** "Reglas de revisión, con un `grep` en CI: ningún `#[allow(lint(public_random))]` en `sources/`; ningún struct con un campo `RandomGenerator`; ninguna `public fun` de `duel` ni de un módulo de juego devuelve `Collected` ni recibe `&mut Duel<G>` (**el grep excluye las funciones `#[test_only]`**: p. ej. `new_collected_for_testing` es `public fun` y devuelve `Collected` pero solo se compila en tests; se comprueba que no entra al bytecode con `strings build/battleship/bytecode_modules/duel.mv | grep -c _for_testing` = 0); toda función con `Random` es `entry` con el generador creado adentro. El control de fuga del ensayo de reloj se corre **sin `-i`**. Dependencias del protocolo (medidas con la PV 142 y **re-verificadas en cada task de toolchain que suba la PV**): tras el comando que usa `Random` solo se admiten `TransferObjects` y `MergeCoins` (el PTB se rechaza en la validación de entrada) y el clique caliente (`FailedTransaction` con gas cobrado)."
+- **Restricción (d):** una línea en PROY-10 o una regla nueva que remita a `contracts/README.md` "Modelo de confianza" (stake única custodia; `Pending` solo con la apuesta del creador; sin valor en dynamic fields; `DuelState` sin cambio de significado; reloj por jugada = tiempo agotado = derrota con la codificación fija de `to_move`/`deadline_ms`; estados terminales sin cambio de significado) y criterio de aceptación de #18.
+
+#### Borrador (b): snippet propuesto para `documents/STATUS.md`
+"TASK-8a de #73 (`feature/issue-73-multigame`, sobre `d674316`): plomería de la app para las dos fuentes de coinflip — detalle por tipo exacto del objeto (`fetchGameDetail`: `Game` o `Duel`), intérpretes del resultado de la fuente nueva (`parseCreatedDuel`, `duelCancelledRefund`, `parseResolvedDuel`, `parseTimedOutDuel`, `parseExpiredDuel`, con formas neutrales), `claim`/`refundStalled` en `TxAction` (se retira `DuelClockAction`) con `useClaimTimeout`/`useRefundStalled`, `create` enrutado por `GameDef.createSource` y `accept`/`cancel`/`reject` por la fuente del objeto, modelo de fila neutral (`hooks/gameRow.ts`) que consumen lobby, \"Mis partidas\", detalle y acciones (se retira la vista de hoy de 7b), y docs del contrato (`contracts/README.md`: `duel`/`coinflip`, controles de tiempo, \"Modelo de confianza\" con la restricción (d), las dos reglas del protocolo con la PV 142, `max_bet` < 2^63). App: 1806 tests en 78 archivos (1707 + 99), lint 0, typecheck 0, bundle de testnet 941.73 kB (284.42 kB gzip; +5.79 kB sobre 935.94 kB). Smoke 🧪 sin navegador en la localnet aislada del puerto 19000 en PASA (v1 con 1.83.0 + `publish.mjs upgrade`, detalle por tipo, intérpretes con el resultado real, filas de lobby y \"Mis partidas\" de las cuentas A/B/C con 0 ilegibles, hooks enrutados simulados sin firmar, `duel/11` en reclamar/reembolsar sobre un `Pending`). Pendiente de 8b: rótulos \"anterior\"/\"nueva\", control de tiempo en pantalla, filtro por juego, selector de controles, vista activa, botones de reclamar/reembolsar, detalle de `TimedOut`/`Expired`, smoke con navegador (STOP del 9000/#77) y la nota de costo del formulario con el depósito de almacenamiento del `Duel`."
+
+### §R-6: los 4 greps (`/usr/bin/grep -nE`) sobre el diff, las altas y este reporte
+Patrones: (1) `[0-9a-fA-F]{40,64}`; (2) `0x[0-9a-fA-F]{8,}`; (3) `suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home-`; (4) `[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}`.
+- **Diff de los archivos modificados** (`git diff`, 2394 líneas) y **altas** (contenido de los 8 archivos nuevos, 1452 líneas): patrones 1, 2 y 3 = **0** coincidencias en ambos (los tests usan direcciones sintéticas armadas con `'ab'.repeat(32)`, `0x${'c'.repeat(64)}` y similares, y todo ID o dirección de una fixture se **lee en tiempo de ejecución**: ninguna dirección ni ID literal se copió a `app/src`). Patrón 4: **1** coincidencia en el diff, `MyGamesSection.test.tsx`: `'Aceptaste la de 0xcdcd…cdcd'`, la forma abreviada (`shortAddress`) de la dirección **sintética** `'cd'.repeat(32)` del propio test, del mismo estilo que las aserciones existentes de ese archivo (`Te invitó 0xcdcd…cdcd`) y de `LobbyList.test.tsx` (`0xabab…abab`): no es una cuenta real. 0 en las altas.
+- **Este reporte**, patrones 1 y 2 (todo ID, hash o commit público; **ninguna dirección de cuenta**): (a) los dos SHA-256 del tgz y del binario 1.83.0 (`e5116805…` y `29e1beb9…`) y su cita de `ci.yml`: hashes públicos de la release; (b) los commits `26f267626d79…` (árbol del v1) y `b0bbef8e55cb…` (merge-base): públicos; (c) el `frameworkRev` de la CLI 1.83 (`05ad86a3e86c…`) y el de la 1.84 (`e6f43880f4b6…`): públicos; (d) los IDs de **paquete** (v1 `c084448b01c3…` y el del upgrade `a260c6db5fbb…`) y de **objeto** (`UpgradeCap`, `Publisher`, `House`, `HouseCap`, y los `Duel`/`Game`/monedas de las líneas `created …` del anexo S12) de la localnet **desechable ya borrada**: IDs de objetos, no direcciones de cuentas. Las cuentas de la génesis se mostraron siempre por **rol** (`A`, `B`, `C`, `ADMIN`) o `<ADDR>`; comprobé además, con los 4 prefijos de esas cuentas, que ninguno aparece en el reporte (0 coincidencias). Las líneas de los anexos que repiten un comando con esos IDs son del propio comando.
+- **Este reporte**, patrón 3: **1** coincidencia, la línea de esta sección que **cita el propio patrón** (ninguna ruta personal: las rutas del scratchpad, del repo y del HOME real están sustituidas por `<scratchpad>`, `<repo>` y `<HOME real>`, y el nombre del usuario del sistema por `<user> <group>`). Patrón 4: **1** coincidencia, la línea de arriba que cita la cadena sintética `0xcdcd` abreviada del diff ya clasificada (no es una cuenta). Patrones 1 y 2: las 33 y 21 líneas de la clasificación (a)-(d).
+- Rastros de ejecución accidental sobre el reporte: el conteo del mensaje de comando inexistente de bash (la frase en inglés que imprime bash) = **0**; `grep -nE 'Cannot run genesis|sui_config|Address already in use'` solo coincide con las líneas de los comandos de la **guarda de `~/.sui`** (`stat`/`ls -la` de `<HOME real>/.sui/sui_config/` y su salida, solo lectura): ningún rastro de un `sui` fuera del prefijo aislado. **Ejecución accidental de `sui`: ninguna.** (Los dos heredocs vacíos de la desviación 8 no ejecutaron nada.)
+
+### Cierre de la localnet
+`sui start` (lanzado como comando en segundo plano del harness con `exec`, PID guardado en `<SMOKE_DIR>/sui.pid`) se cerró con `kill` **por PID** (nunca `pkill`); el harness marcó el comando como fallido con **exit 144** (esperado ante SIGTERM) y `kill -0` falla (anexo S14: `kill0_exit=1`); `ss -ltn` filtrando `:19000` = **0** (queda libre) y el 9000 ajeno **igual que al empezar** (los mismos dos `LISTEN`, anexos S01 y S14); `<SMOKE_DIR>` (red, binario 1.83.0, árboles, sonda, ids.env) borrado con `rm -rf` y verificado con `test ! -e` (exit 0); `contracts/deployments/localnet.json` y `Pub.*.toml` ausentes (`test ! -e` y `! compgen -G`, ambos exit 0); `git diff --exit-code -- contracts/Move.lock contracts/Published.toml` = 0 (también tras el upgrade variante B, anexo S10); `git status --porcelain --untracked-files=all` solo con los archivos del task (anexo D02). Docker: `docker ps -aq | wc -l` / `docker images -aq | wc -l` = **5 / 17** antes (S01) y después (S14): sin diferencia, no se tocó Docker.
+**C-14 (nada en segundo plano al devolver el control):** lo único lanzado en segundo plano fue la localnet (tarea del harness `bcw1ey5t0`), terminada por PID y **verificada** (`kill -0` falla; `ps -eo pid,comm` y `pgrep -x sui` = 0 procesos `sui`; `ss -ltn` de `:19000` = 0). Un `pgrep -af 'sui start' | wc -l` dio 3 justo al cerrar: eran las líneas de comando del propio `bash -c`/`capture.sh`/`pgrep` que contienen ese texto (lo comprobé con `pgrep -x sui` = 0 en el anexo S14). No usé `Monitor`, ni servidor de desarrollo, ni Chrome; los gates, la sonda y los tests corrieron en primer plano. La verificación final (después de escribir este reporte) está al final, en el anexo S15.
+
+### Guarda de ~/.sui (C-13, R-12)
+`stat`/`ls -la`/primeros 12 hex del `sha256sum` de `client.yaml`: **igual a la línea base** (244 bytes, mtime `2026-10-30 17:52:52.515735237 -0500`, solo `client.yaml`, `ef12fd09615f`) al inicio (A00), tras la génesis (S03_guard), tras el cierre (S14) y tras escribir este reporte (S15, al final). Nunca hice `cat` de nada de `~/.sui` ni de `<SMOKE_DIR>/net`. `sui` solo se invocó con `printf 'n\n' |` y siempre dentro del prefijo aislado (`smoke_guard`, y `smoke_guard_v1` para el 1.83.0). Todo texto de este reporte, del código, de los tests, de los docs y de los scripts se escribió con las herramientas de archivos (con las salvedades honestas de la desviación 8); los anexos se agregaron con `cat … >> reporte` tras sustituir rutas con `sed` **sin `-i`** hacia archivos nuevos.
+
+### Resumen de lo que queda para quien revise
+Ningún STOP. Dudas/hallazgos: (1) la nota de costo del formulario con el depósito de almacenamiento del `Duel` (≈ 2409200 / 2652400 MIST contra 1953200 / 2196400): para 8b; (2) `fetchGame` y `allSections` quedan sin uso de producción (retirables en 8b); (3) la solución de `GameRow` (envoltorio `ListedRow` + `GameRow`) y el `control.id: number | null` son decisiones de diseño de TypeScript declaradas, no de contrato.
+
+### Verificación final (anexo S15, después de escribir el reporte)
+Guarda de `~/.sui` igual a la línea base (244 bytes, `2026-10-30 17:52:52.515735237 -0500`, solo `client.yaml`, `ef12fd09615f`); **0** procesos `sui`; `:19000` libre (0) y el 9000 ajeno con los mismos dos `LISTEN`; `<SMOKE_DIR>` inexistente; Docker 5 / 17 (igual que al empezar); `git status` con las 42 entradas del task (34 modificados + 8 nuevos), `git stash list` = 0, `localnet.json` y `Pub.*.toml` ausentes, `git diff --exit-code` de `Move.lock`, `Published.toml` y `contracts/sources` = 0. Sobre el reporte: el conteo del mensaje de comando inexistente de bash = 0 salvo la **1** línea que es el propio comando `grep` citado en el anexo S15 (ninguna salida de bash lo contiene) y la búsqueda de `Cannot run genesis|Address already in use` coincide solo con **1** línea, la que **cita el propio patrón** en la sección §R-6 (ninguna ejecución accidental). Nada en segundo plano (C-14).
+$ bash -c stat -c '%y %s %n' <HOME real>/.sui/sui_config/client.yaml; ls -la <HOME real>/.sui/sui_config/; sha256sum <HOME real>/.sui/sui_config/client.yaml | cut -c1-12; echo procesos_sui=$(pgrep -x sui | wc -l); echo libre19000=$(ss -ltn | grep -c ':19000 '); ss -ltn | grep ':9000 '; echo smoke_dir_existe=$(test -e <scratchpad>/t8a/smoke && echo si || echo no); echo docker_ps=$(docker ps -aq | wc -l) docker_images=$(docker images -aq | wc -l)
+2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
+total 12
+drwx------ 2 <user> <group> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <group> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <group>  244 Oct 30 17:52 client.yaml
+ef12fd09615f
+procesos_sui=0
+libre19000=0
+LISTEN 0      4096              0.0.0.0:9000       0.0.0.0:*   
+LISTEN 0      4096                 [::]:9000          [::]:*   
+smoke_dir_existe=no
+docker_ps=5 docker_images=17
+exit=0
+$ bash -c cd <repo> && git status --porcelain --untracked-files=all | wc -l; git stash list | wc -l; test ! -e contracts/deployments/localnet.json; echo localnet_json_ausente_exit=$?; ! compgen -G 'contracts/Pub.*.toml'; echo pub_toml_ausente_exit=$?; git diff --exit-code -- contracts/Move.lock contracts/Published.toml contracts/sources; echo diff_exit=$?; /usr/bin/grep -c 'command not found' <scratchpad>/REPORTE_MULTIGAME_TASK-8a.txt; /usr/bin/grep -nE 'Cannot run genesis|Address already in use' <scratchpad>/REPORTE_MULTIGAME_TASK-8a.txt | wc -l
+42
+0
+localnet_json_ausente_exit=0
+pub_toml_ausente_exit=0
+diff_exit=0
+0
+1
+exit=0
+
+~~~~
+
+
+---
+
+## 28. TASK-8a (revisión del MID)
+
+> MID, TASK-8a: PASA CON CAMBIOS (un retoque de texto en un borrador de ESTANDARES; sin 🔴 ni 🟠 de código).
+
+PASA CON CAMBIOS
+
+# Revisión del MID: TASK-8a de #73 (plomería de la app, docs del contrato, smoke sin navegador)
+
+Rama `feature/issue-73-multigame` sobre `d674316` (handoff v1.2.10), árbol de trabajo del DEV sin commitear: 34 modificados y 8 nuevos. Revisado contra `HANDOFF_MULTIGAME.md` v1.2.10 TASK-8a §1-§8 y su DoD extra, y FLUJO §5. Solo lecturas: no corrí gates ni `sui` (los corrió el orquestador); leí el reporte completo (988 líneas, anexos incluidos), el diff de código y de docs, los 8 archivos nuevos de lógica (`gameRow.ts`, `stateText.ts`, `useClaimTimeout.ts`, `useRefundStalled.ts`) y los títulos de los tests nuevos, y contrasté los docs del contrato con `duel.move`.
+
+## Veredicto
+
+**PASA CON CAMBIOS.** Sin 🔴 ni 🟠 de código. El código, los tests, el smoke y los docs de `contracts/README.md`, `app/README.md` y `agents.md` están bien y se pueden commitear tal cual. El único cambio que pido es **de texto en un borrador** (el borrador de ARQ-1 para `ESTANDARES.md` afirma algo falso sobre los hooks, ver N-1) y se corrige al aplicar el borrador, no en el árbol del DEV. Por eso el veredicto es "con cambios" y no "PASA": si el orquestador aplica el borrador tal cual al repo, `ESTANDARES.md` quedaría con una regla que `app/eslint.config.js` desmiente. Con la corrección de N-1 (la dejo escrita abajo) todo lo demás se commitea sin esperar al DEV.
+
+## Controles del orquestador: coinciden
+
+Verifiqué lo que se puede verificar leyendo: HEAD `d674316`, stash vacío; `git diff --exit-code` sobre `contracts/{sources,tests,scripts,Move.lock,Published.toml,deployments}`, `.github`, `package*.json`, `app/eslint.config.js`, `documents/` y los archivos de `sui/` que dejaron 7a/7b (`eventScan, lobby, myGames, gameRegistry, events, duel, config, errors, transactions/*`) = exit 0; aditividad `git diff --numstat`: `gameDetail.ts` 50/0 y `gameTx.ts` 148/0 (ninguna línea borrada, ni imports); anti-fuga `SANDBOX|testgame` (sin `-i`) = 0 en lo agregado de `app/src` y `contracts/sources` y 0 en cada uno de los 8 archivos nuevos; `contracts/deployments/` solo con `testnet.json`; mis greps del DoD extra: `DuelClockAction|LegacyMyGamesSections` en `app/src` ahora = 0 en el árbol del DEV (en `d674316` daba 5 coincidencias, las que 8a retira), `typeArguments|::(duel|coinflip)::` en hooks, componentes y páginas sin tests = 0. Los números del DEV (1707 → 1806 tests en 78 archivos; bundle 935.94 → 941.73 kB, +5.79) coinciden con los del orquestador.
+
+## 1. Conformidad con §3, §5 y el DoD extra
+
+| Punto | Veredicto | Evidencia |
+|---|---|---|
+| Detalle por tipo exacto (`fetchGameDetail`) | OK | Recorre el registro y decide por `isExactType(object.type, source.objectType)`; `GameNotFoundError` si no existe o está borrado; `NotAGameError` solo si no es de ninguna fuente (también un `Duel` de un `G` desconocido y un `Duel` con el registro de `packageVersion` 1); el parser de la fuente da `ReadDataError` ante BCS roto. 11 tests (`gameDetail.byType.test.ts`) con los tres estados reales de `duel-reads`, otro tipo, `G` desconocido, registro solo legado, inexistente y borrado. |
+| `useGame` con la unión | OK | `detail: GameDetailObject \| null`; el `queryKey`, `gameRefetchInterval` y la regla de error definitivo (DL-7) no cambian; tests: unión con un `Duel` real y `NotAGameError` definitivo sin refetch. |
+| Intérpretes de `gameTx.ts` | OK | `parseCreatedDuel` (único `DuelCreated` con creador = el firmante; cuenta los eventos del tipo antes de parsear, así uno ilegible no deja pasar a otro), `duelCancelledRefund`, `parseResolvedDuel` (el `DuelResolved` de ese duelo con aceptante = el firmante; el `DuelActivated` no es el resultado), `parseTimedOutDuel` (`claimed_by` = el firmante), `parseExpiredDuel`; un resultado ilegible, ambiguo, de otro duelo o de otra cuenta es `null`. Los tipos de evento salen de `DuelSource.eventTypes`. Tests (`gameTx.duel.test.ts`, 19) contra las transacciones reales de `duel-tx` (abierta, invitación, cancelar, rechazar, aceptar con cada ganador) y cada caso de `null`; los de tiempo con eventos sintéticos **marcados como tales** (el coinflip no persiste `Active`). Lo existente de la fuente anterior no cambió. |
+| `txSession.ts` | OK | `claim` y `refundStalled` en `TxAction`, en `TX_ACTION_KINDS` y en `actionGameId` (el fijado de "Mis partidas" y la adopción las ven); valores neutrales por **forma** (`CreatedGame`, `ResolvedGame`, `TimedOutGame`, `ExpiredGame` definidos en `sui/gameTx.ts`), así `GameCreatedEvent`/`GameResolvedEvent` de la fuente anterior valen estructuralmente sin mapear. Candado, "sin confirmar" y `toTxGameEntry`/`liveTxGameIds` sin cambio de forma; `DuelClockAction` retirada y `transactionInvalidations(action: TxAction, …)`. |
+| Hooks enrutados | OK | `useCreateGame(view, gameKey?)` por `GameDef.createSource` (`legacy`: `buildCreateGameTx` + `parseCreatedGame`; `duel`: `buildCreateCoinflipTx` + `parseCreatedDuel`; la relectura de la House no cambia); `useAcceptGame`/`useCancelGame`/`useRejectGame` **exigen** la fila (sin valor por defecto: un `source` implícito sería la fuente equivocada en silencio) y enrutan por `fila.source`: legado ⇒ builders e intérpretes de `game::*` con `config.packageId` y `originalPackageId`; nueva ⇒ `buildAcceptCoinflipTx`/`buildCancelDuelTx`/`buildRejectDuelTx` con `config.packageId` y `source.gameTag` del **registro**. `useClaimTimeout` (con la House) y `useRefundStalled` (sin ella) sobre la misma máquina, objetivo `{ kind: 'game', gameId }`, sin `precheck` (la elegibilidad la decide la cadena en la preflight). **Ningún hook arma tags, targets ni `typeArguments`**: mi grep da 0 y los tests de enrutado usan un paquete de tres versiones con `definingId ≠ packageId` (target con el vigente, `typeArguments` con el de definición). El registro se resuelve en el clic y no en el render (desviación 7): un error de configuración se lanza al ejecutar y no rompe el render; aceptable. |
+| Mutaciones mentales | OK | Cambiar la fuente en un hook de acción: lo atrapa `routedActions.test.tsx` (20 tests con la máquina real y las transacciones de `duel-tx`, incluido "una fila legada nunca usa los builders nuevos"). Devolver el `DuelActivated` como resultado de aceptar: atrapado (test que exige el `DuelResolved` real, y otro que da `null` con solo el `DuelActivated`). `packageId` por `definingId` en `typeArguments`: atrapado. Un reclamo de otra cuenta tomado como propio: atrapado (`claim reads null when … another account claimed`). `Random` no último: atrapado. Quitar el candado/"sin confirmar" a `claim`/`refund`: atrapado (tests de candado por `runId` y de "sin confirmar" con digest). |
+| Modelo de fila (`gameRow.ts`) | OK | `GameRow` = `LegacyGameRow \| DuelGameRow` con `state: DuelState` (las seis variantes; las tres de la fuente anterior son un subconjunto), `control: null` en la anterior y `{ id, turnMs, label }` en la nueva; `ListedRow` separa la partida (lo que reciben `GameActions`/`GameDetail`) de lo que sabe el listado (rol y transacción del evento). Las reglas de acciones **delegan** en las de hoy proyectando el estado a pendiente o no (`rowAcceptState`, `rowCanCancel`, `rowCanReject`, `rowPlayerResult`: solo `Pending` se acepta/cancela/rechaza y solo `Resolved` da ganaste/perdiste), y así no se duplica ninguna regla. 22 tests con los seis estados, ambos listados y las búsquedas de registro. |
+| `control.id: number \| null` | OK (ver 2) | El id del espejo se deriva del `turn_ms` cuando la fila sale del objeto (que solo guarda `turn_ms`) y es `null` si la cadena trae un valor fuera del espejo: regla "la cadena manda", ya acordada en 7a. En el lobby el id es el del `DuelCreated`. |
+| Retiro de la vista de hoy | OK | `LobbyRow` filtrado y `LegacyMyGamesSections` ya no existen; `useLobby()` ya no filtra filas `duel` (test: orden `['legacy','duel','duel']` y control de cada fila); `useMyGames().sections` = las tres secciones completas en el modelo neutral. |
+| Fallback `stateText.ts` | OK | Una línea neutra por estado ("En juego", "Terminada por tiempo agotado", "Terminada: se devolvieron las apuestas"), sin ganador ni montos; se usa en el "Estado" del detalle, en la etiqueta de la fila de "Mis partidas" y como `.my-game-result` de las terminadas; esos estados no ofrecen ninguna de las tres acciones (test para toda cuenta). 8b lo reemplaza. |
+| Con el `testnet.json` actual las pantallas se ven y se comportan como hoy | OK | Con `packageVersion` 1 el registro solo tiene la fuente legada: `createSource` = `legacy`, ninguna fila es `duel`, y los tests nuevos de componentes prueban "mismo HTML para una fila de cada fuente". Los componentes solo cambian el tipo de la fila (`GameRow`/`ListedRow` en vez de `Game`/`MyGameItem`/`LobbyRow`) y los hooks que llaman; el marcado de `LobbyList`, `MyGamesSection`, `GameDetail` y `GameActions` no cambia fuera del fallback. En el diff de los tests de componentes las líneas **borradas** son solo las que construían un `Game`/`MyGameItem`/`LobbyRow` a mano (ahora `GameRow`/`ListedRow` con `rowFromGame`); no se borró ninguna aserción sobre el HTML. |
+| Los 2 tests de 7b reescritos | **Correcto** | `useLobby keeps showing only the legacy rows…` y `allSections has the rows of both sources while sections… only has the legacy rows` afirmaban justo el filtro que el DoD extra §2 de 8a manda retirar. Ahora afirman lo contrario (`['legacy','duel','duel']` con sus IDs, y `sections` con las dos fuentes mientras `allSections` conserva las filas como las leyó `sui/`). No es una aserción relajada: es el cambio de contrato pedido, declarado en el reporte y en el anexo D04. |
+| DoD extra | OK | (1) = 0; (2) test que lo prueba y tipos retirados (`\bLobbyRow\b\|legacyRows` = 0); (3) `transactionErrorMessage(`: 4 llamadas, todas en `hooks/useExecuteTransaction.ts` con la `config` completa; `buildGameRegistry(`: solo `hooks/useGameRegistry.ts`; más las definiciones; (4) = 0; (5) aditividad 50/0 y 148/0. |
+
+Lo que no encontré: ningún camino de producción que arme un tag, target o `typeArguments` a mano; ninguna aserción relajada; ningún cambio en `lobby.ts`, `myGames.ts`, `eventScan.ts`, `gameRegistry.ts`, `transactions/*` (el diff vacío lo confirma).
+
+## 2. Desviaciones declaradas
+
+1. **Archivos fuera de la lista literal (`HouseAdminPanel.tsx` +2, `useExecuteTransaction.test.tsx` +2, `test/txHarness.tsx`).** **Defecto del handoff, aceptable.** Mi "Tocar" de 8a no podía prever que `TxAction` entra en `switch` exhaustivos sin `default` (a propósito, H-4 de #14): sumar `claim` y `refundStalled` rompía el typecheck. El DEV agregó solo los dos `case` que devuelven `null`/el objetivo `game` y no cambió ningún comportamiento del panel de la House. `txHarness.tsx` pasa la fila por el cambio de firma de los tres hooks (mecánico). Lo agrego a la lista del "Tocar" en v1.2.11 (de 8b también: los `case` de `claim`/`refundStalled` de `adoptedStatus` los llena 8b).
+2. **`allSections` y `fetchGame` quedan sin consumidor de producción.** **Defecto del handoff, aceptable por ahora.** El permiso sobre `sui/gameDetail.ts` era **aditivo**, así que `fetchGame` no se podía retirar en 8a; `allSections` se conserva porque los tests de 7b lo afirman. Es código sin uso de producción (LIM-3), documentado en `app/README.md` ("ya no lo usa la app"). Se retiran en 8b (limpieza chica) con permiso explícito en v1.2.11 (🔵 N-3).
+3. **`control.id: number | null`.** **Decisión de TypeScript correcta** (ver arriba). El handoff escribía `{ id, turnMs, label }` sin distinguir de dónde sale el id; la regla "la cadena manda" ya exigía formato genérico para un `turn_ms` fuera del espejo. Riesgo residual, declarado: si un upgrade futuro agrega un control con el mismo `turn_ms` que otro, el id derivado del objeto daría el primero; la etiqueta (lo que se muestra) no depende del id y el lobby usa el id real del evento. 🔵.
+4. Las otras (`useGame` devuelve `detail` y no `game`, `sections` completas, hooks que exigen la fila, registro resuelto en el clic, gates después del cierre, `contracts/build/` ignorado y sin tocar) son decisiones de TypeScript o de orden dentro de lo que el handoff deja al DEV, declaradas y aceptables.
+
+## 3. Smoke (7 pasos)
+
+Respaldado y bien rotulado: el baseline (anexos B01-B03), los gates (G01-G08), el control anti-fuga (D01-D02) y cada comando del smoke pasan por `capture.sh` (en el anexo cada uno lleva su línea `$ …` y `exit=`), a diferencia del DEV de 7b que dejó dos sin rotular. Los pasos tienen evidencia:
+
+- Paso 1: v1 con el 1.83.0 (los dos SHA-256 comparados con `ci.yml` de `88dd53b` y mostrados **antes** de ejecutar), `record` sin `--out`, `upgrade` variante B (PV de paquete 1 → 2), `check` en verde, `typeOrigins` del json = tabla de la cadena (24/24), `git diff --exit-code` de `Move.lock`/`Published.toml` = 0.
+- Paso 3 (detalle por tipo, líneas `S3`): `Game` pendiente, cancelado y resuelto como `kind: 'game'`; `Duel` `Pending` (abierta e invitación), `Cancelled` (cancelada y rechazada) y `Resolved` (ganador B) como `kind: 'duel'` con control "sin reloj"; la House como `NotAGameError`; un ID inexistente como `GameNotFoundError`; `useGame` real devuelve la unión y para la House queda en error definitivo con `detail: null`.
+- Paso 4 (intérpretes con el **resultado real**, líneas `S4`): crear abierta e invitación, cancelar y rechazar con reembolso 10 000 000; **aceptar: eventos de la transacción = `DuelActivated` + `DuelResolved`, resultado = el `DuelResolved` con aceptante B, pozo 20 000 000 = pago 19 000 000 + comisión 1 000 000** (`pozo == pago + comisión: true` y `comisión == ⌊pozo × 500 / 10 000⌋: true`); controles negativos con otro firmante, otro duelo y otro aceptante ⇒ `null`; la fuente anterior no cambia (pozo 20 000 000, comisión 1 000 000, pago 19 000 000).
+- Paso 5 (filas, líneas `S5`): lobby de C = una fila `duel` y una `legacy` con la **misma forma de fila** (claves `bet, control, creator, feeRate, gameKey, id, opponent, source, state`), control "sin reloj" en la nueva y `null` en la anterior, 0 ilegibles; A, B, C como se esperaba, C sin filas, 0 eventos y 0 filas ilegibles.
+- Paso 6 (hooks enrutados **simulados sin firmar**, líneas `S6`): crear abierta e invitación con la fuente nueva (`PK_VIGENTE::coinflip::create`) y con la anterior (config sin upgrades: `PK_ORIGINAL::game::create_game`), aceptar de cada fuente (nueva: `SplitCoins` + `coinflip::accept` con el `MoveCall` último; anterior: `PK_VIGENTE::game::accept_game`), cancelar y rechazar de cada fuente (`duel::cancel<tag_del_registro>`, `duel::reject<tag_del_registro>`); `claim_timeout` y `refund_stalled` sobre un `Pending` ⇒ `duel/11` traducido, sin llegar a la wallet.
+- **Las líneas de resultado de la sonda NO están cortadas con `cut` (N-3 cumplido):** cada resultado es una línea completa, se ven hasta las listas de los tres roles en `S5` (las que en 7b habían quedado truncadas).
+- Cierre y C-14: `kill` por PID (el harness marcó 144, esperado), `kill -0` falla, `ss -ltn` de `:19000` = 0 y el 9000 ajeno igual, `~/.sui` idéntico (244 bytes, mismo hash, solo `client.yaml`), Docker 5/17 antes y después, `<SMOKE_DIR>` borrado y verificado, sin `localnet.json` ni `Pub.*.toml`, 0 procesos `sui`; lo único lanzado en segundo plano fue la localnet (tarea del harness) y se cerró por PID; sin `Monitor`, servidor de desarrollo ni Chrome. El `pgrep -af` que dio 3 lo explica el propio comando (lo comprobó con `pgrep -x sui` = 0). Cumple C-14.
+- La sonda y los wrappers quedan **fuera de `<SMOKE_DIR>`**, en `<scratchpad>/t8a/tools/`: el MID de 7b la había pedido reconstruible y ahora es auditable (mejora respecto de 7b).
+
+## 4. Docs (PROY-20)
+
+- **`contracts/README.md` (+226):** contrasté con `duel.move` lo que se puede contrastar leyendo: los **26 abort codes** (0-25) y sus nombres coinciden uno a uno con las constantes de `duel.move:24-49`; los **7 eventos** con sus campos y su orden coinciden con las `struct` (`DuelCreated` con `control` y `turn_ms`, `DuelCancelled` con `cancelled_by` y `refund`, `DuelActivated`, `DuelTurn`, `DuelResolved`, `DuelTimedOut` con `claimed_by`, `DuelExpired` con `refund_each`); el **orden de los aborts** de `create`, `cancel`, `reject`, `activate`, `activate_atomic`, `collect`, `record_move`, `claim_timeout` y `refund_stalled` coincide con el de los `assert!` del código; las visibilidades (`public(package)` frente a las cuatro `entry` genéricas) y el `coinflip` con solo `entry create` y `entry accept` coinciden; la tabla de controles (ids 0-7, `MAX_TURN_MS` 604 800 000) y `CLAIM_GRACE_MS` coinciden. Estados, "Modelo de confianza" con la restricción (d) en seis puntos (incluido (v) "tiempo agotado = derrota" y su salvedad de que el reclamo lee la House con versión), la **garantía de `Active`**, las **dos reglas del protocolo con la PV 142** y la regla de re-verificación en cada task de toolchain que suba la PV, `max_bet` < 2^63 MIST, el grep de CI que **excluye `#[test_only]`** y el control de fuga **sin `-i`**: todo presente y coherente con D-20261119-05 (P-13 y P-14), sin duplicarlo de más. Sin rutas ni cuentas.
+- **`app/README.md` y `agents.md` §5:** exactos contra el código (firmas, nombres, qué consume cada hook y componente; `fetchGame` declarado "ya no lo usa la app"; la fila de §5 sobre el interpretado de lo que lee la app y los resultados, con "se revisa si cambia un evento de `duel` o de `game`"). `agents.md` §3/§8/§9 sin cambios: correcto.
+- Falta una línea que 8a no podía saber: el costo de storage de crear un `Duel` (ver 6).
+
+## 5. Borradores de `ESTANDARES.md` y snippet de STATUS (los aplica el orquestador)
+
+**Veredicto: bien con una corrección de fondo (N-1) y dos retoques de redacción.**
+
+- **ARQ-1 (🟡 N-1, corregir antes de aplicar):** el borrador dice "Los componentes **ni los hooks** importan `@mysten/sui` directamente ni arman targets…". **Es falso para los hooks:** `app/eslint.config.js` (`HOOKS_LAYER_MESSAGE`) les permite `@mysten/sui` y `@mysten/dapp-kit-react`, y de hecho `queryKeys.ts`, `txSession.ts`, `useExecuteTransaction.ts`, `useTxTarget.ts`, `useHouseCap.ts` y `houseAdminTx.ts` importan de `@mysten/sui`; la regla de ESLint que sí existe es "los componentes no importan `@mysten/*`" (salvo `dapp-kit-react/ui`). La regla que el DEV quiere fijar es otra y es verdadera y verificable: **ni los componentes ni los hooks arman targets `pkg::mod::fn`, tags de tipo o `typeArguments`** (mi grep del punto 4 del DoD extra da 0). Redacción propuesta para ARQ-1: "Contratos: `coinflip → duel → house` y `game → house` (`duel` y `game` usan la API `public(package)` de `house`; `coinflip` usa `duel` y recibe la House solo para pasársela; `house` no conoce a `game`, `duel` ni `coinflip`). App: `components/pages → hooks → sui/ (config, registro de juegos, builders de transacción, parsers de eventos, errores)`. Los componentes no importan `@mysten/sui` directamente; **ni los componentes ni los hooks arman targets `pkg::mod::fn`, tags de tipo o argumentos de tipo (`typeArguments`)**: salen de `sui/` y del registro de juegos (`gameRegistry.ts`, con los IDs de definición de `typeOrigins`). Los componentes dibujan el modelo de fila neutral a la fuente (`hooks/gameRow.ts`)." (El último punto es de #73-app y puede ir también solo en `app/README.md`: pertenece más a la arquitectura de la app que al estándar.)
+- **Retoque en el mismo ARQ-1:** "coinflip solo usa duel y la lectura de house" no es exacto (el módulo importa `House` solo para pasarla a `duel`; no la lee). Queda corregido arriba.
+- **PROY-1, PROY-7, PROY-8, PROY-10, SEG-5/PROY-5 y restricción (d):** correctos y coherentes con el código y con D-20261119-05. Nota para PROY-7: conservar "Cambiar un evento = cambio de contrato" del texto actual. Para PROY-10: el borrador es correcto en que un `init` agregado a un módulo existente rechaza el upgrade (`IncompatibleUpgrade`, medido en TASK-1a V-8) y que `claim_timeout` lee la House con versión mientras `cancel`, `reject` y `refund_stalled` no. Para SEG-5/PROY-5: el borrador mantiene "`Random` en el último `MoveCall`" y la regla real es "después del comando con `Random` solo `TransferObjects` y `MergeCoins`" (un `splitCoins` antes es válido): vale para PROY-5, donde conviene escribir la regla completa en vez de la abreviada.
+- **Restricción (d):** remitir a `contracts/README.md` "Modelo de confianza" y a D-20261119-05 sin copiarla es lo correcto (la entrada de `DECISIONES.md` de abajo hace exactamente eso).
+- **Versión del documento:** `ESTANDARES.md` está en v1.8 (2026-11-02): al aplicar sube a v1.9 y su cabecera cita la entrada nueva de `DECISIONES.md`.
+- **Snippet de STATUS (b):** correcto en lo que dice (1806 tests en 78 archivos, bundle 941.73 kB, +5.79 kB). Mi versión final está en la sección de commits, con el pendiente de 8b y de la nota de costo.
+
+**Entrada de `DECISIONES.md`** (la redacté aparte): `<scratchpad>/DECISIONES_ENTRADA_MULTIGAME.md`. Es una **aplicación documental** de D-20261119-05 y lo dice: no registra una decisión nueva del owner y no reabre nada (el propio registro de D-20261119-05 anticipa esta entrada: "provisional hasta TASK-8, que la lleva a `contracts/README.md` y a `ESTANDARES.md` con su propia entrada si cambian reglas"). La referencia a la restricción (d) es solo un puntero.
+
+## 6. Hallazgo del DEV: el depósito de almacenamiento de crear un `Duel`
+
+**Verificado y es real.** El reporte mide `storageCost` de crear con la CLI: fuente anterior 2 941 200 / 3 184 400 (abierta / invitación), que menos 988 000 del cobro de la moneda de gas da exactamente `GAME_STORAGE_DEPOSIT_MIST` (1 953 200 / 2 196 400, `app/src/sui/createGame.ts:14`), y fuente nueva 3 397 200 / 3 640 400, o sea **2 409 200 / 2 652 400** de depósito del objeto (+456 000 en las dos). Es coherente: el `Duel` tiene más campos (`turn_ms` y un `DuelState` más grande), no es un error de medición. Con `createSource` = `duel`, la nota del formulario ("≈ 0,0019532 SUI abierta, ≈ 0,0021964 SUI con invitación") queda ≈ 0,00046 SUI corta. **No es un riesgo de fondos**: es solo la cifra de un texto de ayuda y no toca ningún contrato ni invariante.
+
+- **Va a 8b** (formulario y su test), con el valor medido, no a 8a: 8a no cambia ningún texto del formulario y el `testnet.json` actual sigue usando la fuente anterior.
+- **Pero 8b hoy no puede hacerlo:** `GAME_STORAGE_DEPOSIT_MIST` vive en `sui/createGame.ts` y el "NO tocar" de 8b incluye `sui/*`. Hay que ampliar el permiso en v1.2.11 (ver 7): un permiso **aditivo** sobre `sui/createGame.ts` para una constante por fuente (`DUEL_STORAGE_DEPOSIT_MIST` = 2 409 200 / 2 652 400) y un selector según `GameDef.createSource`, con su test. Aviso para 8b: `CREATE_GAS_RESERVE_MIST` (10 000 000) no se midió con el `Duel` en 8a; `ACCEPT_GAS_RESERVE_MIST` (10 000 000) sigue sobrado (el umbral del barrido de TASK-5 fue 2 474 892 MIST).
+- **Documento donde también debe quedar:** `contracts/README.md` ya tiene el párrafo del costo de storage del `Game` (líneas ~417-423: "storageRebate del `Game` = 1953200 MIST abierta, 2196400…"). El del `Duel` va junto, con el mismo formato y "medido en la localnet aislada con el precio de storage de testnet". Eso toca `contracts/README.md`, que 8b no puede editar: lo incluyo en v1.2.11 como una línea permitida para 8b.
+- No es un hallazgo de contrato que deba ir a `DECISIONES.md` ni al plan (no cambia ninguna regla ni ninguna cifra de seguridad), pero sí es dato para el §G punto 12 (medidas de `gasUsed` del coinflip): conviene citarlo allí como "depósito de storage de `Duel` medido".
+
+## 7. Qué cambia para 8b y propuesta de v1.2.11 (PENDIENTE: no aplicada)
+
+**Baselines nuevos para 8b:** **1806 tests en 78 archivos** y bundle de testnet **941.73 kB (284.42 kB gzip)**, lint 0 y typecheck 0.
+
+**Lo que 8a deja provisorio y 8b retira o llena:**
+- `components/stateText.ts` (el fallback de `Active`/`TimedOut`/`Expired`): lo reemplazan la vista activa y el detalle de los tres terminales; 8b borra el archivo (o lo vuelve el texto real) y su uso en `GameDetail` y `MyGamesSection`.
+- Los `case 'claim'`/`'refundStalled'` de `adoptedStatus` (en `GameActions`) devuelven `null` y los de `HouseAdminPanel` también: 8b da su texto al resultado adoptado de un reclamo o reembolso en la fila y el detalle.
+- `useClaimTimeout`/`useRefundStalled` existen sin botón: 8b los conecta.
+- `allSections` y `fetchGame`: sin uso de producción, retirables.
+- El modelo de fila trae `control` y las seis variantes de estado (`deadline`, `toMove` y `acceptor` en `state`), de modo que 8b no necesita tocar `sui/` ni los hooks para dibujar el reloj.
+
+**¿Hace falta v1.2.11 antes de lanzar 8b? Sí, es chica. NO la aplico todavía** (el orquestador commitea 8a primero; queda **pendiente**; la escribo con las herramientas de archivos recién cuando me lo pidas, en un commit de docs aparte). Cambios propuestos:
+1. **§0:** baselines tras 8a (1806/78; 941.73 kB) en la nota de baselines vigentes.
+2. **TASK-8b "Tocar" (aditivo, nombrado):** (a) `app/src/sui/createGame.ts` y su test, para la constante de depósito de storage del `Duel` y su selector por `createSource` (hallazgo de 8a; "solo agregar" + la nota del formulario que lo usa); (b) retirar `fetchGame` de `sui/gameDetail.ts` (con su test) y `allSections` de `useMyGames` (con las aserciones de 7b que la usan), declarados; (c) `contracts/README.md`: **una** línea/párrafo del depósito de storage del `Duel` junto al del `Game`; (d) los `case` de `claim`/`refundStalled` en `GameActions.adoptedStatus` y en `HouseAdminPanel.adoptedHouseStatus`.
+3. **TASK-8b §3:** el formulario muestra la nota de costo con el depósito de la fuente que corresponde a `createSource`; el texto real reemplaza el fallback; los resultados adoptados de `claim` y `refundStalled`; mantener "sin cambios en `sui/` salvo (a) y (b)".
+4. **DoD extra de 8b (con salida pegada):** `grep -rn 'stateText\|FALLBACK_STATE_TEXT' app/src` sin coincidencias de producción; `grep -rn 'allSections' app/src` = 0; `grep -rn 'fetchGame\b' app/src` sin el export retirado; y el DoD de 8a (hooks/components/pages sin `typeArguments` ni `::duel::`/`::coinflip::`) sigue en 0.
+5. **Reglas comunes (C-13), una aclaración de 8a:** los dos heredocs vacíos y el `: > /dev/null` del DEV de 8a repitieron el patrón que C-13 prohíbe aunque no escribían nada; v1.2.11 agrega "ningún comando con heredoc, ni vacío ni a `/dev/null`" a la lista de lo prohibido para que el auditor mecánico y el DEV hablen de lo mismo.
+6. **"NO tocar" y lista de archivos:** sumar a la lista de 8a/8b lo que 8a necesitó y no estaba (`HouseAdminPanel.tsx`, `useExecuteTransaction.test.tsx`, `test/txHarness.tsx`) para que un task que sume una variante a `TxAction` sepa que toca los `switch` exhaustivos.
+
+## 8. Hallazgos con severidad
+
+- 🔴/🟠: **ninguno.**
+- **N-1 🟡 (borrador, bloquea aplicarlo tal cual):** ARQ-1 del borrador de `ESTANDARES.md` dice que los hooks no importan `@mysten/sui`; los hooks sí lo hacen y ESLint lo permite. La regla correcta es "ni componentes ni hooks arman targets, tags ni `typeArguments`". Corrección en la sección 5. No toca el árbol del DEV.
+- **N-2 🟡 (proceso, C-13, declarado por el DEV):** dos heredocs vacíos (`cat >> /dev/null <<'EOF'`), un `: > /dev/null` y un `echo "CHAIN_HEX=…" >> ids.env` con un valor que **no** salía de un comando (lo corrigió de inmediato: borró la línea con la herramienta de edición y volvió a acumular con `suic chain-identifier | grep | sed >> ids.env`, la excepción (b) de v1.2.10). Mi lectura del auditor mecánico (202 líneas Bash, 0 `sed -i`, 0 `tee`, 0 `printf` ajeno a `sui`, 146 Edit y 32 Write) coincide con la del orquestador: **🟡**, no 🟠, porque no hubo `sui`, código, tests, docs ni texto de reporte por esas vías y el guarda de `~/.sui` quedó igual a la línea base en los cuatro puntos. Aceptado; v1.2.11 aclara el patrón.
+- **N-3 🔵 (código sin uso de producción):** `fetchGame` y `allSections`, por el permiso aditivo de 8a; se retiran en 8b (v1.2.11).
+- **N-4 🔵:** `useLobby()` y `useMyGames()` rearman las filas neutrales (`rowFrom*`) en cada render sin memoizar. Es un map sobre las filas de la página, barato; no hay efectos ni consultas colgando de la identidad de esas filas. Sin acción.
+- **N-5 🔵:** `control.id` derivado del `turn_ms` del objeto (ver 2, punto 3): hoy no puede dar un id equivocado; declarado.
+- **N-6 🟡 (§R-6, grep 4):** la única coincidencia es la aserción abreviada de `MyGamesSection.test.tsx` ("Aceptaste la de …"): la forma que imprime `shortAddress` de la dirección **sintética** del propio test (`'cd'.repeat(32)`), del mismo estilo que las que el repo ya trae en tests de `HEAD`. **La acepto como "dirección de prueba conocida"; no hace falta cambiarla** (cambiarla obligaría a retocar también las 12 abreviaturas sintéticas existentes sin ganar nada). Verifiqué además que ninguna de las tres cuentas efímeras de las fixtures aparece en el diff ni en el reporte, y mis tres greps restantes sobre el diff y los nuevos dan 0.
+- **N-7 🟡 (hallazgo de 8b):** la nota de costo del formulario quedaría ≈ 0,00046 SUI corta con `createSource` = `duel` (ver 6); sin riesgo de fondos; va a 8b por v1.2.11.
+
+## Commits, agrupación y STATUS
+
+Sin palabras de cierre; todos con `Refs #73`. Cuatro commits (lo que va del DEV, los docs, lo que aplica el orquestador y los reportes), más el commit de v1.2.11 después:
+
+1. **Código y tests** (31 de `app/src` modificados + los 8 nuevos):
+   `app: route the coinflip actions, the detail and the lists by source with a source-neutral row model, and add the claim and refund hooks (Refs #73)`
+   Incluye `app/src/sui/{gameDetail,gameTx}.ts`; `app/src/hooks/{txSession,txInvalidation,useGame,useCreateGame,useAcceptGame,useCancelGame,useRejectGame,useLobby,useMyGames}.ts` y sus tests, `gameRow.ts`, `useClaimTimeout.ts`, `useRefundStalled.ts`, `gameRow.test.ts`, `routedActions.test.tsx`; `app/src/components/{LobbyList,MyGamesSection,GameActions,GameDetail,HouseAdminPanel}.tsx`, `stateText.ts` y los tests de componentes y de la página; `app/src/pages/GameDetailPage.tsx`; `app/src/test/txHarness.tsx`; `app/src/hooks/useExecuteTransaction.test.tsx`; `app/src/sui/{gameDetail.byType,gameTx.duel}.test.ts`.
+2. **Docs del contrato y de la app:**
+   `docs: document the duel and coinflip modules and the trust model in contracts/README.md, and the 8a plumbing in app/README.md and agents.md (Refs #73)`
+   Incluye `contracts/README.md`, `app/README.md` y `agents.md`.
+3. **Estándares y decisión (los aplica el orquestador, con la corrección de N-1):**
+   `docs: apply D-20261119-05 to ESTANDARES (ARQ-1, PROY-1, PROY-5, PROY-7, PROY-8, PROY-10, SEG-5) and record the application in DECISIONES (Refs #73)`
+   Incluye `documents/ESTANDARES.md` (v1.9) y `documents/DECISIONES.md` (entrada nueva).
+4. **Reportes y estado:**
+   `docs: add the TASK-8a DEV report and MID review and record TASK-8a in STATUS (Refs #73)`
+   Incluye el reporte del DEV (leído completo y con §R-6 hecho antes de agregarlo a REPORTES), esta revisión y `documents/STATUS.md`.
+5. **Después:** v1.2.11 (si decidís aplicarla), en su propio commit.
+
+**Snippet de STATUS (con el bundle del orquestador):**
+"TASK-8a de #73 (`feature/issue-73-multigame`, sobre `d674316`): plomería de la app para las dos fuentes del coinflip. Detalle por tipo exacto del objeto (`fetchGameDetail`: `Game` o `Duel<G>`, `NotAGameError` solo si no es de ninguna fuente); intérpretes del resultado de la fuente nueva (`parseCreatedDuel`, `duelCancelledRefund`, `parseResolvedDuel` con el `DuelResolved` y no el `DuelActivated`, `parseTimedOutDuel`, `parseExpiredDuel`, con formas neutrales a la fuente); `claim` y `refundStalled` en `TxAction` (se retira `DuelClockAction`) con `useClaimTimeout` y `useRefundStalled`; `create` enrutado por `GameDef.createSource` y `accept`/`cancel`/`reject` por la fuente del objeto, sin que ningún hook arme tags, targets ni `typeArguments`; modelo de fila neutral (`hooks/gameRow.ts`) que consumen lobby, "Mis partidas", detalle y acciones (se retira la vista de hoy de 7b: `useLobby()` ya no filtra filas `duel`); con el `testnet.json` actual (`packageVersion` 1) las pantallas son las de siempre. Docs del contrato (`contracts/README.md`: `duel`, `coinflip`, controles, abort codes 0-25, eventos, "Modelo de confianza" con la restricción (d), la garantía de `Active` y las dos reglas del protocolo con la PV 142). App 1806 tests en 78 archivos (1707 + 99), lint 0, typecheck 0, bundle de testnet 941.73 kB (+5.79 kB sobre 935.94). Smoke sin navegador en la localnet aislada (puerto 19000) en PASA: detalle por tipo, intérpretes con el resultado real (pozo 20 000 000 = pago 19 000 000 + comisión 1 000 000), filas de lobby y "Mis partidas" de A/B/C con 0 ilegibles, hooks enrutados simulados sin firmar, `duel/11` en reclamar y reembolsar sobre un `Pending`. Pendiente de 8b: rótulos "anterior"/"nueva", control de tiempo en pantalla, filtro por juego, selector de controles, vista activa, botones de reclamar y reembolsar, detalle de `TimedOut`/`Expired` (reemplaza el fallback de 8a), la nota de costo del formulario con el depósito de storage del `Duel` (≈ 2 409 200 / 2 652 400 MIST medido, contra 1 953 200 / 2 196 400 del `Game`) y el smoke con navegador (STOP del 9000 / #77)."
+
+## Qué entra a §G después de 8a
+
+- **Punto 8 (gates de app):** 8a suma 1806 tests en 78 archivos (de 1707/74), lint 0, typecheck 0, `npm audit --omit=dev` = 0, build de testnet válido con el `testnet.json` actual (solo `legacy`), bundle 941.73 kB, `node --test scripts/*.test.mjs` 173, anti-fuga en 0, `git diff --exit-code` sobre lo que no es del task, **DoD extra de 8a** (los greps con su salida) y aditividad de `gameDetail.ts` y `gameTx.ts` (50/0 y 148/0).
+- **Punto 5 (smoke localnet de lectura):** se suma la tabla de 7 pasos de 8a (detalle por tipo, intérpretes con el resultado real, filas, hooks simulados).
+- **Punto 6 (`upgrades` y `typeOrigins` reales de la localnet):** una tercera reconstrucción: `typeOrigins` del json = tabla de la cadena (24/24) y `check` en verde.
+- **Punto 12 (medidas de gas):** el **depósito de storage de crear un `Duel`**: 2 409 200 (abierta) / 2 652 400 (invitación) MIST, contra 1 953 200 / 2 196 400 del `Game` (+456 000).
+- **Punto 16 (las dos reglas del protocolo):** `contracts/README.md` ya las lista como dependencias del protocolo con la PV 142 y la regla "se re-verifican en cada task de toolchain que suba la PV"; a la cuenta de la cota de 10 literales y el prefijo de `ListEvents` (nodo, `agents.md` §5) de 7b.
+- **Punto 10 (revisiones del MID):** esta revisión (PASA CON CAMBIOS: un texto de borrador, ningún 🔴/🟠).
+- **El MAYOR en la integración:** revisa `ESTANDARES.md` v1.9 y la entrada de `DECISIONES.md`; el `contracts/README.md` (+226) está contrastado por mí contra `duel.move` en abort codes, eventos, orden de aborts y visibilidades.
+- **Artefactos congelados:** nada nuevo (8a no cambia contrato, eventos ni layout; las fixtures no se recapturaron).
+
+## §R-6 de esta salida
+
+Los cuatro greps (`/usr/bin/grep -nE`, el patrón 3 con las rutas de sesión y su slug) sobre este archivo y sobre `DECISIONES_ENTRADA_MULTIGAME.md`: 0 coincidencias en cada uno. Sin direcciones de cuenta ni rutas personales (`<scratchpad>`), y sin nombrar el servicio ajeno del 9000.
+
+
+
+---
+
+## 29. TASK-8a (verificación del orquestador)
+
+> Controles independientes de gates, DoD extra, aditividad, anti-fuga y cierre; estándares y decisión aplicados.
+
+## Verificación independiente del orquestador (TASK-8a)
+
+Hecha sobre el árbol sin commitear (HEAD `d674316`) cuando el DEV entregó el reporte, antes de pasarlo al MID.
+
+| Control | Resultado |
+|---|---|
+| Estado del DEV al entregar | `completed`, sin monitores ni procesos en segundo plano (cumple C-14); una sola entrega |
+| `git status --porcelain --untracked-files=all` | 42 entradas: 34 modificadas y 8 nuevas (`components/stateText.ts`, `hooks/{gameRow,gameRow.test,routedActions.test,useClaimTimeout,useRefundStalled}`, `sui/{gameDetail.byType,gameTx.duel}.test.ts`), todas de `app/src`, `contracts/README.md`, `app/README.md` y `agents.md` |
+| `git diff --exit-code` sobre `contracts/{sources,tests,scripts,Move.lock,Published.toml,deployments}`, `.github`, `package*.json`, `app/eslint.config.js`, `documents/` y los archivos de `sui/` que dejaron 7a y 7b | 0 |
+| Aditividad de `sui/gameDetail.ts` y `sui/gameTx.ts` (`git diff --numstat`) | +50/−0 y +148/−0 |
+| Control anti-fuga del sandbox (`SANDBOX\|testgame`, sin `-i`) sobre lo agregado y los 8 archivos nuevos | 0 y 0 |
+| DoD extra de 8a (greps del orquestador) | `DuelClockAction\|LegacyMyGamesSections` en `app/src` = 0; `transactionErrorMessage(` y `buildGameRegistry(` sin tests: solo `hooks/useExecuteTransaction.ts` y `hooks/useGameRegistry.ts`, con la `config` completa, más sus definiciones; `typeArguments\|::(duel\|coinflip)::` en hooks, componentes y páginas sin tests = 0 |
+| `npm run lint -w app`; `npm run typecheck -w app`; `npm test -w app` | 0; 0; **1806 tests en 78 archivos, 0 fallos** (1707 + 99) |
+| `node --test scripts/*.test.mjs` | 173 PASS |
+| `VITE_SUI_NETWORK=testnet npm run build -w app` | válido: `index-BAqxQ0pD.js` **941,73 kB** (gzip 284,42 kB), +5,79 kB sobre 935,94 |
+| §R-6 (4 greps, grep 3 con `claude-[0-9]+\|-home-`) sobre el diff y los 8 archivos nuevos | grep 1, 2 y 3 = 0; el grep 4 da 1: `toHaveTextContent('Aceptaste la de 0xcdcd…cdcd')` en un test, la forma abreviada (`shortAddress`) de la dirección sintética `'cd'.repeat(32)`; el repo ya trae 12 abreviaturas sintéticas en los tests de `HEAD`; el MID la acepta como dirección de prueba conocida |
+| Cuentas efímeras de las fixtures de TASK-5 | ninguna aparece en el diff ni en el reporte |
+| Cierre | `contracts/deployments/` sin `localnet.json`, sin `Pub.*.toml`; 0 procesos `sui`; puerto 19000 libre y el de otro proyecto igual; `~/.sui` idéntico (244 bytes, mtime 2026-10-30 17:52:52, solo `client.yaml`, `ef12fd09615f`); Docker 5 contenedores / 17 imágenes |
+| Auditoría mecánica de la transcripción (`audit_dev.sh`, P-2) | 202 líneas Bash; 0 `sed -i`, 0 `tee`, 0 `printf` ajeno a `sui`; 2 heredocs vacíos hacia `/dev/null`, un `: > /dev/null` inútil y un `echo >> ids.env` que el DEV corrigió al instante (reacumuló el valor desde la salida de un comando); `echo` de diagnóstico y el `echo $$ > sui.pid` de la Receta P; 146 `Edit` y 32 `Write`. Lo juzga el MID como 🟡 |
+| Código de producción leído por el orquestador | `hooks/useClaimTimeout.ts` entero y las altas de `sui/gameDetail.ts`. El resto (intérpretes, `txSession`, hooks enrutados, `gameRow.ts`, componentes y tests) lo leyó el MID, que lo cruzó con el reporte |
+
+**Aplicado por el orquestador antes del commit de estándares:** `ESTANDARES.md` v1.9 con los cambios del borrador del DEV y la corrección de ARQ-1 que pidió el MID (los hooks sí pueden importar `@mysten/sui` según `app/eslint.config.js`; lo que ni componentes ni hooks hacen es armar targets, tags de tipo o `typeArguments`), PROY-5 con la regla completa (tras el comando con `Random` solo `TransferObjects` y `MergeCoins`; un `splitCoins` antes es válido) y PROY-10 con un puntero a la restricción (d) sin duplicarla; `DECISIONES.md` con **D-20261120-01** (redactada por el MID: aplicación documental de D-20261119-05, sin decisión nueva del owner y sin autorizar publicar ni upgradear).
+
+**Pendientes que no entran en estos commits:** el handoff v1.2.11 (permisos aditivos de 8b: `sui/createGame.ts` con el depósito del `Duel`, retiro de `fetchGame` y `allSections`, los `case` de `claim`/`refundStalled` en `GameActions` y `HouseAdminPanel`, y la línea del depósito en `contracts/README.md`; C-13 también prohíbe el heredoc vacío o a `/dev/null` y `: > /dev/null`), que escribe el MID y se commitea aparte; y la revisión del MAYOR de `ESTANDARES.md` v1.9 y de D-20261120-01 en la integración.
+
