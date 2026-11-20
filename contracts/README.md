@@ -826,7 +826,9 @@ Las `entry` genéricas (`cancel<G>`, `reject<G>`, `claim_timeout<G>`, `refund_st
    versión**, así que un corte por `VERSION` lo bloquea; no se puede cortar nunca la salida mínima `refund_stalled`.
 6. Los estados terminales `Resolved`, `TimedOut` y `Expired` no cambian de significado.
 
-Es criterio de aceptación de #18.
+Es criterio de aceptación de #18. **También lo es** (S-1 de la compuerta de pre-upgrade del MAYOR): **ningún juego deja un
+`Active` persistente con `stake ≠ 2 × bet`** (si no, el `refund_stalled` de v2 abortaría: `stake.split(duel.bet)` aborta si
+`stake < bet`; con el código actual no puede pasar, porque el invariante INV-D1 garantiza `2 × bet` en todo `Active`).
 
 ### Garantía de `Active`
 
@@ -1265,8 +1267,19 @@ reintenta sin buscar antes el digest** (en el mensaje o en el explorador): una s
 > **Sin una autorización explícita del owner registrada en `DECISIONES.md` no se ejecuta ningún paso de testnet de
 > esta sección.** Todos los comandos de testnet los corre **solo el owner, con su wallet y su `SUI_CONFIG_DIR`**: nunca
 > un agente, ni el script bajo un agente, ni con `--dry-run` (D-20261102-03). La autorización del upgrade (D-20261119-05,
-> D14) es una entrada propia de `DECISIONES.md`, con la fecha y el head autorizado, posterior a la compuerta de
-> pre-upgrade del MAYOR.
+> D14) es una entrada propia de `DECISIONES.md`, con la fecha y el **head de contrato `C`** (ver "Head autorizado", abajo),
+> posterior a la compuerta de pre-upgrade del MAYOR.
+
+**Head autorizado (`C` y `H`).** La entrada de autorización es **un commit** en la misma branch, así que el head de la branch
+**cambia al registrarla** (y con cada commit de docs posterior). Por eso la entrada no nombra "el head de la branch" sino el
+**head de contrato `C`**: el commit cuyo árbol (todo lo que no es `documents/`: `contracts/`, `app/`, `.github/`,
+`package*.json`, etc.) revisó la compuerta del MAYOR. El owner corre el upgrade desde el **head `H`** de la branch que
+**contiene** esa entrada, con **dos condiciones**: (1) `git diff C..H -- . ':(exclude)documents' ':(exclude,glob)**/*.md'` **vacío** (H solo agrega o
+cambia documentación —`documents/` y archivos Markdown, p. ej. este README— respecto de `C`; el código, los tests, la
+configuración y las fixtures no cambian), con el comando y su salida pegados al entregar (U1); (2) la **CI en verde sobre `H`**
+(la comprueba el orquestador, que le pasa `H`). El `sourceCommit` del json será **`H`** (lo registra el script con
+`git rev-parse HEAD`; el script solo exige el árbol limpio y no exige que `H = C`) y existirá en `master` tras el merge
+commit.
 
 El upgrade agrega los módulos nuevos (`duel`, `coinflip`) a la misma `House`, con política `compatible` y **sin subir
 `house::VERSION`** (D5-D7): nada se corta y las partidas `Pending` existentes siguen jugables (plan §4). Es **un solo
@@ -1275,13 +1288,18 @@ PTB** atómico (autorizar con el `UpgradeCap` → `Upgrade` → `commit_upgrade`
 en `Published.toml` (y que coincidan) y usa `sui client upgrade`; no admite `--out` ni `--pubfile-path`. El script nunca
 pasa `--skip-verify-compatibility` ni `--upgrade-capability`: la verificación local de compatibilidad de la CLI queda
 activa y el `UpgradeCap` lo toma la CLI de `Published.toml` (`upgrade-capability`, que `check` compara con
-`upgradeCapId`). Placeholders y forma de las shells: los de "Uso en testnet" (`<repo>`, `<su dir>`, `<branch>`, `<head>`).
+`upgradeCapId`). Placeholders y forma de las shells: los de "Uso en testnet" (`<repo>`, `<su dir>`, `<branch>`) y, en esta
+sección, `<C>` (el head de contrato que nombra la entrada de autorización) y `<H>` (el head de la branch que la contiene y
+con la CI en verde, que le pasa el orquestador; en lugar del `<head>` de la primera publicación).
 
 #### U0. Precondiciones (todas, antes de seguir)
 
 - PRE-1 mergeado y la CLI local del owner **= `ci.yml`** (`printf 'n\n' | sui --version` = `${SUI_VERSION}-${SUI_COMMIT}`;
   si no, el script aborta en testnet).
-- La branch con `master` integrado por merge y la CI en verde en el `<head>` conocido; el árbol limpio y en ese commit.
+- La branch con `master` integrado por merge, la **entrada de autorización** en `DECISIONES.md` dentro de la branch (nombra
+  el head de contrato `<C>`), y el owner parado en el head `<H>` de la branch que **contiene** esa entrada, con la **CI en
+  verde sobre `<H>`** (la comprueba y se la pasa el orquestador); el árbol limpio y en ese commit; y
+  `git diff <C>..<H> -- . ':(exclude)documents' ':(exclude,glob)**/*.md'` **vacío** (el comando exacto y su salida, en U1).
 - TASK-1..5, 7 y 8 de #73 en PASA contra la localnet; la **compuerta de pre-upgrade del MAYOR sin 🔴/🟠**; P-1..P-14 en
   `DECISIONES.md`; la **autorización explícita del owner** registrada.
 - `deployments/testnet.json` (con `packageVersion` 1) y `Published.toml` commiteados y `node scripts/publish.mjs check` en
@@ -1289,9 +1307,23 @@ activa y el `UpgradeCap` lo toma la CLI de `Published.toml` (`upgrade-capability
 
 #### U1. Shell
 
-La misma del paso 1 de "Uso en testnet" (`git status --porcelain` vacío, `git log -1 --format=%H` = `<head>`, `nvm use`,
+La misma del paso 1 de "Uso en testnet" (`git status --porcelain` vacío, `git log -1 --format=%H` = `<H>`, `nvm use`,
 `export SUI_CONFIG_DIR=<su dir>`, la línea `case` que imprime `config fuera de ~/.sui`, `suio`, `sui --version`,
-`suio active-env` = `testnet`). Además, para los pasos siguientes:
+`suio active-env` = `testnet`). **Antes** de seguir, la verificación del head (condición (1) de "Head autorizado"), desde la
+raíz del clon y **con el valor de `<C>` leído de la entrada de autorización de `DECISIONES.md`** (el SHA completo):
+
+```bash
+cd <repo>
+C=<C>                                          # el head de contrato que nombra la entrada de autorización (SHA completo)
+H="$(git log -1 --format=%H)"; echo "H = $H"   # = el <H> que le pasó el orquestador (CI en verde sobre ese commit)
+git status --porcelain                         # vacío, también sin archivos sin trackear
+git merge-base --is-ancestor "$C" "$H" && echo "C es ancestro de H"        # debe imprimir esa línea
+git diff --stat "$C" "$H" -- . ':(exclude)documents' ':(exclude,glob)**/*.md'   # SALIDA VACÍA: es lo que se pega
+git diff --quiet "$C" "$H" -- . ':(exclude)documents' ':(exclude,glob)**/*.md' && echo "sin cambios fuera de la documentación"   # debe imprimir esa línea
+```
+
+Si `C` no es ancestro de `H`, si el `git diff` muestra **cualquier** archivo fuera de `documents/`, o el `<H>` no coincide con
+el que le pasó el orquestador: **STOP**, no se sigue (la entrada de autorización no cubre ese árbol). Después:
 
 ```bash
 unset SUI_BIN                # el script usa SUI_BIN si existe (la receta de los smokes de localnet): que no quede de un smoke
