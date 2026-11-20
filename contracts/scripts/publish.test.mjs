@@ -559,16 +559,16 @@ test('readCliJson, formatCliFailure e interpretCliRun: el stderr de la CLI sale 
 });
 
 test('checkCliVersion compara con SUI_VERSION/SUI_COMMIT de ci.yml', () => {
-  assert.deepEqual(checkCliVersion({ network: 'testnet', versionOutput: 'sui 1.83.0-16d2dc1e05ed\n', ciYamlText: CI_YAML }), {
-    suiCliVersion: '1.83.0-16d2dc1e05ed',
+  assert.deepEqual(checkCliVersion({ network: 'testnet', versionOutput: 'sui 1.84.0-9dc25070cf2e\n', ciYamlText: CI_YAML }), {
+    suiCliVersion: '1.84.0-9dc25070cf2e',
     warning: null,
   });
   assert.throws(
-    () => checkCliVersion({ network: 'testnet', versionOutput: 'sui 1.84.0-aaaaaaaaaaaa\n', ciYamlText: CI_YAML }),
+    () => checkCliVersion({ network: 'testnet', versionOutput: 'sui 1.83.0-16d2dc1e05ed\n', ciYamlText: CI_YAML }),
     /no es la de ci\.yml/,
   );
-  const local = checkCliVersion({ network: 'localnet', versionOutput: 'sui 1.84.0-aaaaaaaaaaaa\n', ciYamlText: CI_YAML });
-  assert.equal(local.suiCliVersion, '1.84.0-aaaaaaaaaaaa');
+  const local = checkCliVersion({ network: 'localnet', versionOutput: 'sui 1.83.0-16d2dc1e05ed\n', ciYamlText: CI_YAML });
+  assert.equal(local.suiCliVersion, '1.83.0-16d2dc1e05ed');
   assert.match(local.warning, /no es la de ci\.yml/);
   assert.throws(
     () => checkCliVersion({ network: 'localnet', versionOutput: 'sui 1.83.0-16d2dc1e05ed', ciYamlText: 'env:\n  X: "1"\n' }),

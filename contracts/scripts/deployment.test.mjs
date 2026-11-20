@@ -35,7 +35,7 @@ const TIMESTAMP_MS = '1793631179013';
 const SOURCE_COMMIT = 'eb8489d239e661c22134d5c2eea019f0a67d25db';
 const SUI_CLI_VERSION = '1.83.0-16d2dc1e05ed';
 const FRAMEWORK_REV = '719fb2960ccfbf9f4d33041f8ea5146d30671696'; // fixture localnet.deployment.json: registro histórico (PV 139)
-const LOCK_FRAMEWORK_REV = '05ad86a3e86c522deea116f80dc2bf2309a53363'; // Move.lock del repo: piso de la PV 140 (repin de #8)
+const LOCK_FRAMEWORK_REV = 'e6f43880f4b65e2c1f0397583a9690b4b22c9223'; // Move.lock del repo: piso de la PV 142 (repin de #75)
 
 const localnetDeployment = () =>
   buildDeployment({
