@@ -216,7 +216,7 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 
 | Plan | Estado | Nota | Fecha |
 |---|---|---|---|
-| `PLAN_MULTIGAME` (#73) | ✅ v1.3 aprobado (MAYOR ronda 4, APPROVE; STOP decididos, D-20261119-05) | MINOR abiertos: R4-1 (códigos de `record_move`) va en el handoff de TASK-2b; R4-2 (textos viejos) en el próximo toque del plan o en TASK-8 | 2026-11-19 |
+| `PLAN_MULTIGAME` (#73) | ✅ v1.3 aprobado (MAYOR ronda 4, APPROVE; STOP decididos, D-20261119-05) | R4-1 (códigos de `record_move`, `EPhaseMismatch` = 25) y R4-2 (textos viejos) aplicados en v1.3.1, sin cambiar decisiones. Handoff `HANDOFF_MULTIGAME` v1.2 con 2 rondas del MAYOR; PRE-1 es el issue #75 | 2026-11-19 |
 
 ## Pendientes del usuario
 
