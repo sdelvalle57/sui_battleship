@@ -6586,3 +6586,831 @@ Hecha sobre el árbol sin commitear (HEAD `60d4a3b`) antes de pasar el reporte a
 
 **Pendientes que no entran en este commit:** N-2/N-3 (redacción de §G: el rechazo del PTB atacante es previo a la secuenciación y el clique caliente es una transacción fallida con gas cobrado; citar el límite del barrido tal como lo declara el DEV), N-5 (control permanente de §G al armar la compuerta), S-1/S-2/S-3 del MAYOR (TASK-7: tests que consuman `duel-clock` afirman `_meta.sandbox`; README "Modelo de confianza" con las dos reglas del protocolo; dry run opcional del owner en TASK-9) y los 🟡 de proceso (nombres de variable que no choquen con los roles; excepción `echo $$ > sui.pid` en C-13).
 
+
+
+---
+
+## 21. TASK-7a (reporte del DEV)
+
+> DEV, TASK-7a: capa sui/ de la app, parte 1 (config, registro, parsers y errores; la ruta del scratchpad sustituida por <scratchpad>).
+
+~~~~text
+## Task completado: HANDOFF_MULTIGAME — TASK-7a (app: capa `sui/`, parte 1: config, registro, parsers y errores)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-73-multigame` @ `84ca797` (árbol limpio al arrancar; `git merge-base --is-ancestor 8cc35ab HEAD` = 0, PRE-1 integrado). Sin commits, sin `git add`, sin push: todo queda como cambios del árbol de trabajo para el orquestador.
+Ruta de trabajo: `<repo>` = el worktree de #73. Node `v26.13.0`. Este task no usó red (salvo el registro de npm en `npm ci` / `npm audit`) ni `sui`.
+
+### Baseline medido y árbol de partida
+Medido **antes de tocar nada** sobre `84ca797` (idéntico al del orquestador y al del MID; no hubo STOP):
+
+| Gate | Baseline medido |
+|---|---|
+| `npm run lint -w app` | 0 problemas |
+| `npm run typecheck -w app` | 0 errores |
+| `npm test -w app` | **1246 tests en 66 archivos**, 0 fallos |
+| `VITE_SUI_NETWORK=testnet npm run build -w app` | `dist/assets/index-B3BeMVQC.js` 917.80 kB (277.96 kB gzip) |
+
+Salidas pegadas (la línea `RUN v… <ruta absoluta>` de la salida de vitest se quitó con `grep -v` sobre la ruta personal, por la regla de repo público; no hay otra diferencia):
+
+$ npm ci
+
+added 293 packages, and audited 295 packages in 8s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+9 moderate severity vulnerabilities
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues, run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit=0
+$ npm run lint -w app
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+$ npm run typecheck -w app
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+$ npm test -w app
+
+> test
+> vitest run
+
+
+
+
+ Test Files  66 passed (66)
+      Tests  1246 passed (1246)
+   Start at  10:23:55
+   Duration  19.88s (environment 59%, tests 15%, import 10%, setup 10%, transform 6%, worker 1%)
+
+Environment  jsdom was created 66 times · 112.65s total, 59% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+$ npm run build -w app
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 607 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.46 kB │ gzip:   0.30 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-B3BeMVQC.js   917.80 kB │ gzip: 277.96 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 431ms
+exit=0
+
+### Archivos modificados/creados
+`git status --porcelain --untracked-files=all` y `git diff --stat` (los 5 archivos nuevos no figuran en el `--stat` por ser sin trackear: `duel.ts` 168 líneas, `gameRegistry.ts` 332, `duel.test.ts` 351, `duelEvents.test.ts` 411 y `gameRegistry.test.ts` 393). Solo archivos de la lista permitida del task (`app/src/sui/{config,gameRegistry,events,duel,errors}.ts` + tests, `app/README.md` y `agents.md`):
+
+$ git status --porcelain --untracked-files=all
+ M agents.md
+ M app/README.md
+ M app/src/sui/config.test.ts
+ M app/src/sui/config.ts
+ M app/src/sui/errors.test.ts
+ M app/src/sui/errors.ts
+ M app/src/sui/events.ts
+?? app/src/sui/duel.test.ts
+?? app/src/sui/duel.ts
+?? app/src/sui/duelEvents.test.ts
+?? app/src/sui/gameRegistry.test.ts
+?? app/src/sui/gameRegistry.ts
+exit=0
+$ git diff --stat
+ agents.md                  |   4 +-
+ app/README.md              |  20 ++-
+ app/src/sui/config.test.ts | 254 +++++++++++++++++++++++++++++++++++++
+ app/src/sui/config.ts      | 167 ++++++++++++++++++++++++-
+ app/src/sui/errors.test.ts | 269 +++++++++++++++++++++++++++++++++++++++
+ app/src/sui/errors.ts      |  68 ++++++++--
+ app/src/sui/events.ts      | 305 ++++++++++++++++++++++++++++++++++++++++++++-
+ 7 files changed, 1063 insertions(+), 24 deletions(-)
+exit=0
+
+### Qué se implementó (por archivo)
+- **`app/src/sui/config.ts`** — `resolveConfig` lee y valida `packageVersion` (ausente = 1; si está, entero >= 1), `upgrades` y `typeOrigins`. **Regla de versión:** con `packageVersion` 1 (o ausente) ambos pueden faltar y todo cae al ID original (el `testnet.json` de hoy sigue válido y solo existe la fuente `legacy`); con `packageVersion > 1` la falta de cualquiera de los dos, o la falta de la entrada de un tipo del registro (`registryTypeKeys`), es un **error de configuración** (`ConfigResult` con `ok: false`), nunca "no hay partidas". Las mismas reglas que el `check` de la CI (`deployment.mjs`): `upgrades` consecutivos desde la versión 2, `packageId` distintos y distintos del original, tantas entradas como `packageVersion - 1`, último `packageId` = el vigente; `typeOrigins` con pares (módulo, nombre) únicos, `definingId` ∈ {original, `upgrades`} y los tipos de la v1 (`game::*`) con el ID original. `AppConfig` suma `upgrades?` y `typeOrigins?` (ver Desviaciones) y la nueva `PackageUpgrade`; `resolveConfig` siempre los completa (arreglos vacíos con `packageVersion` 1). `packageId` queda documentado como **solo** target de llamadas.
+- **`app/src/sui/gameRegistry.ts`** (nuevo) — (1) **Espejo de controles** `TIME_CONTROLS` (ids 0-7 con su `turn_ms` y etiqueta: "sin reloj", "10/20/30/60 min por jugada", "1 día / 3 días / 7 días por jugada"), `CLAIM_GRACE_MS` (7 días), `timeControlById` y `controlLabel(turnMs)`: la **cadena manda**; si el `turn_ms` coincide con la tabla usa su etiqueta y si no el formato genérico ("N s", "N min", "N h", "N días por jugada", la mayor unidad que divide exacto; milisegundos si ni siquiera un segundo entero), nunca un error. (2) **`definingIdOf(typeOrigins, módulo, nombre)`**, búsqueda por **par** (S-2), y `registryTypeKeys(hasUpgrades)` (los 4 tipos `legacy` y, con upgrades, `Duel`, sus 7 eventos y `Coinflip`). (3) **`buildGameRegistry(config)`**: un `GameDef` `coinflip` (`creatable`, `createSource`, `usesClock: false`, `controlIds: []`) con la fuente `legacy` (`game::Game` + 3 eventos) y, solo con upgrades, la `duel` (`Duel<Coinflip>` + los 7 eventos); cada fuente trae `objectType`, `eventTypes`, `sentEventTypes` (creación y resolución, los que "envía" un jugador) y los parsers **ya atados a sus tipos exactos**. Cada tipo sale de `typeOrigins` con su propio ID de definición (el evento y `G` pueden tener IDs distintos); una entrada faltante con upgrades lanza un `Error` de configuración (`resolveConfig` ya lo rechaza antes).
+- **`app/src/sui/duel.ts`** (nuevo) — esquema BCS de `Duel<G>` (campos y orden de R.1; `stake` como `u64`) y de `DuelState` (6 variantes en el orden `Pending`, `Cancelled`, `Active`, `Resolved`, `TimedOut`, `Expired`), `duelType`, `parseDuelObject(object, expectedType)` (tipo exacto, dueño `Shared`, bytes canónicos con `parseExactBcs`, invariantes de R.6: `stake == bet` en `Pending`, `== 2 × bet` en `Active`, `0` en los terminales, `to_move ∈ 1..=3` en `Active` con `turn_ms > 0`, `winner ∈ {creator, acceptor}`), la máscara `TO_MOVE_*` e `isValidToMove`. **No valida `turn_ms` contra la tabla.**
+- **`app/src/sui/events.ts`** — esquemas BCS en el orden de R.5 y parsers de los 7 eventos (`parseDuelCreated`, `parseDuelCancelled`, `parseDuelActivated`, `parseDuelTurn`, `parseDuelResolved`, `parseDuelTimedOut`, `parseDuelExpired`) con tipo exacto (`duelEventType` = `<defId del evento>::duel::<Evento><<tag de G>>`), BCS canónico e invariantes (`pot == payout + fee`, `winner ∈ {creator, acceptor}`, `to_move` de `DuelActivated` y de `DuelTurn`). Refactor mínimo: `assertEventType` delega en un `assertExactEventType` nuevo (mismo comportamiento).
+- **`app/src/sui/errors.ts`** — `ABORT_MESSAGES.duel` con **un mensaje por código, 0-25**; tipo `OwnAbortModule` (`house` | `game` | `duel`; `coinflip` no define códigos); `transactionErrorMessage(source, ids: OwnPackageIds)` acepta `packageId`, `originalPackageId` y **todos** los `packageId` de `upgrades[]` (V-5/H-j); el número 3 sigue resolviéndose por **módulo + código** (`house`/3 ≠ `game`/3 ≠ `duel`/3).
+- **`app/README.md`** (mapa de `sui/`, "Lecturas", "Mensajes de abort") y **`agents.md` §5** (filas nuevas del layout BCS de `Duel`/`DuelState`/7 eventos y del espejo de controles + `CLAIM_GRACE_MS`; fila de abort codes con `duel` 0-25 y los IDs de `upgrades[]`).
+
+### Tests nuevos (328 = 1574 − 1246; 3 archivos nuevos + `config.test.ts` y `errors.test.ts` ampliados)
+Por archivo: `duel.test.ts` 67 · `duelEvents.test.ts` 77 · `gameRegistry.test.ts` 59 · `config.test.ts` +45 (y dos `toEqual` existentes que ahora incluyen `upgrades: []` y `typeOrigins: []`) · `errors.test.ts` +80. Lista completa (archivo | bloque | nombre; los `it.each` aparecen expandidos), generada del reporte JSON de vitest:
+
+config.test.ts | resolveConfig: packageVersion > 1 without them is a configuration error (never "no games") | looks the entry up by (module, name): the same name in another module does not count
+config.test.ts | resolveConfig: packageVersion > 1 without them is a configuration error (never "no games") | rejects a missing typeOrigins
+config.test.ts | resolveConfig: packageVersion > 1 without them is a configuration error (never "no games") | rejects a missing upgrades
+config.test.ts | resolveConfig: packageVersion > 1 without them is a configuration error (never "no games") | rejects a typeOrigins without the entry of coinflip::Coinflip
+config.test.ts | resolveConfig: packageVersion > 1 without them is a configuration error (never "no games") | rejects a typeOrigins without the entry of duel::Duel
+config.test.ts | resolveConfig: packageVersion > 1 without them is a configuration error (never "no games") | rejects a typeOrigins without the entry of duel::DuelCreated
+config.test.ts | resolveConfig: packageVersion > 1 without them is a configuration error (never "no games") | rejects a typeOrigins without the entry of duel::DuelTimedOut
+config.test.ts | resolveConfig: packageVersion > 1 without them is a configuration error (never "no games") | rejects a typeOrigins without the entry of duel::DuelTurn
+config.test.ts | resolveConfig: packageVersion > 1 without them is a configuration error (never "no games") | rejects a typeOrigins without the entry of game::Game
+config.test.ts | resolveConfig: packageVersion > 1 without them is a configuration error (never "no games") | rejects a typeOrigins without the entry of game::GameCreated
+config.test.ts | resolveConfig: packageVersion > 1 without them is a configuration error (never "no games") | requires every type the registry resolves (so a missing entry never reaches the registry)
+config.test.ts | resolveConfig: packageVersion | rejects a packageVersion that is a fraction
+config.test.ts | resolveConfig: packageVersion | rejects a packageVersion that is a string
+config.test.ts | resolveConfig: packageVersion | rejects a packageVersion that is null
+config.test.ts | resolveConfig: packageVersion | rejects a packageVersion that is zero
+config.test.ts | resolveConfig: packageVersion 1 needs neither upgrades nor typeOrigins (the testnet.json of today) | accepts typeOrigins with the legacy types when packageVersion is 1 and uses them
+config.test.ts | resolveConfig: packageVersion 1 needs neither upgrades nor typeOrigins (the testnet.json of today) | rejects typeOrigins at packageVersion 1 that miss a legacy type of the registry
+config.test.ts | resolveConfig: packageVersion 1 needs neither upgrades nor typeOrigins (the testnet.json of today) | resolves a packageVersion 1 json without them to empty arrays and a registry with only the legacy source
+config.test.ts | resolveConfig: packageVersion 1 needs neither upgrades nor typeOrigins (the testnet.json of today) | resolves the real testnet.json of the repo, with only the legacy source while it has no upgrades
+config.test.ts | resolveConfig: packageVersion 1 needs neither upgrades nor typeOrigins (the testnet.json of today) | treats an absent packageVersion as the original publication
+config.test.ts | resolveConfig: typeOrigins format | rejects a definingId in the wrong format
+config.test.ts | resolveConfig: typeOrigins format | rejects a definingId that is neither the original nor an upgrade
+config.test.ts | resolveConfig: typeOrigins format | rejects a missing name
+config.test.ts | resolveConfig: typeOrigins format | rejects a module that is not an identifier
+config.test.ts | resolveConfig: typeOrigins format | rejects a name that is not an identifier
+config.test.ts | resolveConfig: typeOrigins format | rejects an entry that is not an object
+config.test.ts | resolveConfig: typeOrigins format | rejects a repeated (module, name) pair
+config.test.ts | resolveConfig: typeOrigins format | rejects a type of v1 that does not carry the original id
+config.test.ts | resolveConfig: typeOrigins format | rejects typeOrigins as an empty array
+config.test.ts | resolveConfig: typeOrigins format | rejects typeOrigins as not an array
+config.test.ts | resolveConfig: upgrades and typeOrigins of a deployment that went through an upgrade | accepts two types of the same module with different defining ids (S-2)
+config.test.ts | resolveConfig: upgrades and typeOrigins of a deployment that went through an upgrade | lets the registry build the legacy and the duel sources from what it read
+config.test.ts | resolveConfig: upgrades and typeOrigins of a deployment that went through an upgrade | reads the real upgrade fixture: current packageId, original id, upgrades and typeOrigins as they come
+config.test.ts | resolveConfig: upgrades format | rejects a last upgrade that is not the current packageId
+config.test.ts | resolveConfig: upgrades format | rejects an empty upgrades with packageVersion 2
+config.test.ts | resolveConfig: upgrades format | rejects a packageVersion that does not match the number of upgrades
+config.test.ts | resolveConfig: upgrades format | rejects a repeated packageId among the upgrades
+config.test.ts | resolveConfig: upgrades format | rejects upgrades as a missing txDigest
+config.test.ts | resolveConfig: upgrades format | rejects upgrades as an entry that is not an object
+config.test.ts | resolveConfig: upgrades format | rejects upgrades as a packageId in the wrong format
+config.test.ts | resolveConfig: upgrades format | rejects upgrades as a txDigest that is not base58
+config.test.ts | resolveConfig: upgrades format | rejects upgrades as a version out of sequence
+config.test.ts | resolveConfig: upgrades format | rejects upgrades as not an array
+config.test.ts | resolveConfig: upgrades format | rejects upgrades as the original id as the id of an upgrade
+config.test.ts | resolveConfig: upgrades format | rejects upgrades with a version 1 json
+duelEvents.test.ts | duel event parsers do not validate the time control against the table (the chain rules) | accepts a DuelCreated whose turn_ms is 45000n and whose control id is unknown
+duelEvents.test.ts | duel event parsers do not validate the time control against the table (the chain rules) | accepts a DuelCreated whose turn_ms is 90000n and whose control id is unknown
+duelEvents.test.ts | duel event parsers enforce the duel.move invariants | rejects a DuelActivated that claims a clock of 0 ms but moves a player
+duelEvents.test.ts | duel event parsers enforce the duel.move invariants | rejects a DuelActivated with clock and to_move 0
+duelEvents.test.ts | duel event parsers enforce the duel.move invariants | rejects a DuelActivated with clock and to_move 4
+duelEvents.test.ts | duel event parsers enforce the duel.move invariants | rejects a DuelActivated without clock whose deadline is not 0
+duelEvents.test.ts | duel event parsers enforce the duel.move invariants | rejects a DuelActivated without clock whose to_move is not 0
+duelEvents.test.ts | duel event parsers enforce the duel.move invariants | rejects a DuelResolved whose winner is neither creator nor acceptor
+duelEvents.test.ts | duel event parsers enforce the duel.move invariants | rejects a DuelResolved with pot ≠ payout + fee
+duelEvents.test.ts | duel event parsers enforce the duel.move invariants | rejects a DuelTimedOut whose winner is neither creator nor acceptor
+duelEvents.test.ts | duel event parsers enforce the duel.move invariants | rejects a DuelTimedOut with pot ≠ payout + fee
+duelEvents.test.ts | duel event parsers enforce the duel.move invariants | rejects a DuelTurn with to_move 0
+duelEvents.test.ts | duel event parsers enforce the duel.move invariants | rejects a DuelTurn with to_move 4
+duelEvents.test.ts | duel event parsers on the clock fixture (sandbox: only the mechanism) | comes from the sandbox and is tagged with a game whose id differs from the one of the events
+duelEvents.test.ts | duel event parsers on the clock fixture (sandbox: only the mechanism) | parses DuelActivated with clock: to_move 1..=3 and an absolute deadline
+duelEvents.test.ts | duel event parsers on the clock fixture (sandbox: only the mechanism) | parses DuelCreated with a control outside the table and keeps the id and the ms of the chain
+duelEvents.test.ts | duel event parsers on the clock fixture (sandbox: only the mechanism) | parses duelExpiredBothPending with the refund of each player
+duelEvents.test.ts | duel event parsers on the clock fixture (sandbox: only the mechanism) | parses duelExpiredOnePending with the refund of each player
+duelEvents.test.ts | duel event parsers on the clock fixture (sandbox: only the mechanism) | parses DuelResolved of the clock path
+duelEvents.test.ts | duel event parsers on the clock fixture (sandbox: only the mechanism) | parses DuelTimedOut with who claimed it, which is not the winner
+duelEvents.test.ts | duel event parsers on the clock fixture (sandbox: only the mechanism) | parses DuelTurn with the actor and the state after the move
+duelEvents.test.ts | duel event parsers on the real production fixture (BCS ↔ json) | distinguishes cancellation by the creator from rejection by the invitee
+duelEvents.test.ts | duel event parsers on the real production fixture (BCS ↔ json) | parses duelCancelledByCreator
+duelEvents.test.ts | duel event parsers on the real production fixture (BCS ↔ json) | parses duelCancelledByInvitee
+duelEvents.test.ts | duel event parsers on the real production fixture (BCS ↔ json) | parses duelCreatedInvite
+duelEvents.test.ts | duel event parsers on the real production fixture (BCS ↔ json) | parses duelCreatedOpen
+duelEvents.test.ts | duel event parsers on the real production fixture (BCS ↔ json) | parses duelResolvedAcceptorWins with pot = payout + fee
+duelEvents.test.ts | duel event parsers on the real production fixture (BCS ↔ json) | parses duelResolvedCreatorWins with pot = payout + fee
+duelEvents.test.ts | duel event parsers on the real production fixture (BCS ↔ json) | parses the atomic DuelActivated of the coinflip with no clock, to_move 0 and deadline 0
+duelEvents.test.ts | duel event parsers on the real production fixture (BCS ↔ json) | parses the open DuelCreated of the coinflip with control 0, no clock and bigint bet
+duelEvents.test.ts | duel event parsers on the real production fixture (BCS ↔ json) | tells the winner of each real resolution apart
+duelEvents.test.ts | duel event parsers reject a wrong type | rejects an event of another game (same event, other type argument)
+duelEvents.test.ts | duel event parsers reject a wrong type | rejects an event of another package
+duelEvents.test.ts | duel event parsers reject a wrong type | rejects an event whose type cannot be normalized
+duelEvents.test.ts | duel event parsers reject a wrong type | rejects the event of the legacy game
+duelEvents.test.ts | duel event parsers reject malformed bytes (unreadable rows) | rejects an Option tag 2 in the opponent of DuelCreated
+duelEvents.test.ts | duel event parsers reject malformed bytes (unreadable rows) | rejects truncated and trailing bytes of DuelActivated
+duelEvents.test.ts | duel event parsers reject malformed bytes (unreadable rows) | rejects truncated and trailing bytes of DuelCancelled
+duelEvents.test.ts | duel event parsers reject malformed bytes (unreadable rows) | rejects truncated and trailing bytes of DuelCreated
+duelEvents.test.ts | duel event parsers reject malformed bytes (unreadable rows) | rejects truncated and trailing bytes of DuelExpired
+duelEvents.test.ts | duel event parsers reject malformed bytes (unreadable rows) | rejects truncated and trailing bytes of DuelResolved
+duelEvents.test.ts | duel event parsers reject malformed bytes (unreadable rows) | rejects truncated and trailing bytes of DuelTimedOut
+duelEvents.test.ts | duel event parsers reject malformed bytes (unreadable rows) | rejects truncated and trailing bytes of DuelTurn
+duelEvents.test.ts | duelEventType | builds the type with the defining id of the event and the full tag of the game
+duelEvents.test.ts | duelEventType | keeps the event id and the game id apart when they were defined in different upgrades
+duelEvents.test.ts | duelEventType | normalizes short ids
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelActivated rejects a DuelCreated event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelActivated rejects a DuelExpired event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelActivated rejects a DuelResolved event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelActivated rejects a DuelTimedOut event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelActivated rejects a DuelTurn event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelCancelled rejects every other duel event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelCreated rejects a DuelActivated event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelCreated rejects a DuelExpired event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelCreated rejects a DuelResolved event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelCreated rejects a DuelTimedOut event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelCreated rejects a DuelTurn event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelExpired rejects a DuelActivated event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelExpired rejects a DuelCreated event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelExpired rejects a DuelResolved event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelExpired rejects a DuelTimedOut event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelExpired rejects a DuelTurn event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelResolved rejects a DuelActivated event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelResolved rejects a DuelCreated event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelResolved rejects a DuelExpired event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelResolved rejects a DuelTimedOut event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelResolved rejects a DuelTurn event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelTimedOut rejects a DuelActivated event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelTimedOut rejects a DuelCreated event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelTimedOut rejects a DuelExpired event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelTimedOut rejects a DuelResolved event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelTimedOut rejects a DuelTurn event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelTurn rejects a DuelActivated event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelTurn rejects a DuelCreated event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelTurn rejects a DuelExpired event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelTurn rejects a DuelResolved event
+duelEvents.test.ts | each duel event parser accepts only its own event type | DuelTurn rejects a DuelTimedOut event
+duel.test.ts | duelType | builds the normalized Duel<G> type from the defining ids of Duel and of the game
+duel.test.ts | duelType | keeps the ids apart when Duel and the game were defined in different upgrades
+duel.test.ts | isValidToMove | accepts the mask 1
+duel.test.ts | isValidToMove | accepts the mask 2
+duel.test.ts | isValidToMove | accepts the mask 3
+duel.test.ts | isValidToMove | rejects the mask 0
+duel.test.ts | isValidToMove | rejects the mask 255
+duel.test.ts | isValidToMove | rejects the mask 4
+duel.test.ts | parseDuelObject does not validate turn_ms against the control table (the chain rules) | accepts an active duel whose turn_ms is not in the table
+duel.test.ts | parseDuelObject does not validate turn_ms against the control table (the chain rules) | accepts a pending duel with turn_ms 1n
+duel.test.ts | parseDuelObject does not validate turn_ms against the control table (the chain rules) | accepts a pending duel with turn_ms 45000n
+duel.test.ts | parseDuelObject does not validate turn_ms against the control table (the chain rules) | accepts a pending duel with turn_ms 600000n
+duel.test.ts | parseDuelObject does not validate turn_ms against the control table (the chain rules) | accepts a pending duel with turn_ms 90000n
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | accepts a well-formed fee_rate of 1001 (MAX_FEE_BPS belongs to house)
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | reads the bet and the stake from the expected offsets
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects an active duel whose stake is 0n instead of 2 × bet
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects an active duel whose stake is 10000000n instead of 2 × bet
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects an active duel whose stake is 30000000n instead of 2 × bet
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects an active duel without clock (turn_ms 0): it only exists inside an activate_atomic transaction
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects an active duel with to_move 0
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects an active duel with to_move 255
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects an active duel with to_move 4
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects a pending duel whose stake differs from the bet
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects a timed-out duel whose winner is neither creator nor acceptor
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects cancelledByCreator with stake
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects expiredOnePending with stake
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects resolvedAcceptorWins whose winner is neither creator nor acceptor
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects resolvedCreatorWins whose winner is neither creator nor acceptor
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects resolvedCreatorWins with stake
+duel.test.ts | parseDuelObject enforces the duel.move invariants (R.6) | rejects timedOut with stake
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | comes from the sandbox: it is flagged and carries its own constants
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | matches the node json for activeBothPending
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | matches the node json for activeOnePending
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | matches the node json for activeSevenDays
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | matches the node json for expiredBothPending
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | matches the node json for expiredOnePending
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | matches the node json for pending
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | matches the node json for resolved
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | matches the node json for timedOut
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | parses activeBothPending as Active with to_move 3 and an absolute deadline
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | parses activeOnePending as Active with to_move 1 and an absolute deadline
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | parses activeSevenDays as Active with to_move 2 and an absolute deadline
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | parses the TimedOut, Expired and Resolved final states with stake 0
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | reads a turn_ms outside the control table as it comes from the chain (never an error)
+duel.test.ts | parseDuelObject on the clock fixture (sandbox: only the mechanism, no production constant) | uses a Duel<G> type whose game id differs from the Duel id (different upgrades)
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | distinguishes the winner of each real resolution
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | matches the node json for cancelledByCreator
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | matches the node json for cancelledByInvitee
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | matches the node json for pendingInvite
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | matches the node json for pendingOpen
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | matches the node json for resolvedAcceptorWins
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | matches the node json for resolvedCreatorWins
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | parses an invitation with the invited address
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | parses an open pending duel without clock and with bigint amounts
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | parses cancelledByCreator with stake 0
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | parses cancelledByInvitee with stake 0
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | parses resolvedAcceptorWins with a winner among the two players
+duel.test.ts | parseDuelObject on the real production fixture (duel-reads) | parses resolvedCreatorWins with a winner among the two players
+duel.test.ts | parseDuelObject rejects malformed data | rejects a Duel of another game (the type argument is part of the type)
+duel.test.ts | parseDuelObject rejects malformed data | rejects a Duel of another package
+duel.test.ts | parseDuelObject rejects malformed data | rejects an Option tag 2 in opponent
+duel.test.ts | parseDuelObject rejects malformed data | rejects an owner that is not shared
+duel.test.ts | parseDuelObject rejects malformed data | rejects an unknown DuelState variant (index 6)
+duel.test.ts | parseDuelObject rejects malformed data | rejects a type that cannot be normalized
+duel.test.ts | parseDuelObject rejects malformed data | rejects the legacy Game type
+duel.test.ts | parseDuelObject rejects malformed data | rejects trailing bytes that bcs parse would accept
+duel.test.ts | parseDuelObject rejects malformed data | rejects truncated bytes
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | covers exactly the codes 0-25, each with its own message
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | keeps coinflip without codes of its own: an abort of that module is reported with the raw code
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/0 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/10 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/11 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/12 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/13 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/14 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/15 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/16 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/17 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/18 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/19 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/1 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/20 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/21 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/22 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/23 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/24 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/25 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/2 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/3 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/4 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/5 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/6 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/7 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/8 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | maps duel/9 to its message with the diagnostic suffix
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | reports an unknown code of duel with the raw code
+errors.test.ts | ABORT_MESSAGES: module duel (R.3, codes 0-25) | tells apart house/3, game/3 and duel/3: the number alone does not identify the cause
+errors.test.ts | real executed failures of duel (production) | recognizes an accept on a resolved duel as duel/4
+errors.test.ts | real executed failures of duel (production) | recognizes cancel by a non-creator from the real effects BCS (the wallet path) as duel/3
+errors.test.ts | real executed failures of duel (production) | recognizes the node cliErrorText (Rust format) as duel/3 with the normalized packageId
+errors.test.ts | real failures of the clock fixture (sandbox: the executed version is another upgrade id) | comes from the sandbox and executed in a version that is not the production one
+errors.test.ts | real failures of the clock fixture (sandbox: the executed version is another upgrade id) | does not take a TypeArgumentError (a type id older than the definition) for an abort of the contract
+errors.test.ts | real failures of the clock fixture (sandbox: the executed version is another upgrade id) | maps claimBothPending to duel/22 only when the executed version is in upgrades[]
+errors.test.ts | real failures of the clock fixture (sandbox: the executed version is another upgrade id) | maps claimNotExpired to duel/14 only when the executed version is in upgrades[]
+errors.test.ts | real failures of the clock fixture (sandbox: the executed version is another upgrade id) | maps collectNotPlayer to duel/24 only when the executed version is in upgrades[]
+errors.test.ts | real failures of the clock fixture (sandbox: the executed version is another upgrade id) | maps createBadControl to duel/16 only when the executed version is in upgrades[]
+errors.test.ts | real failures of the clock fixture (sandbox: the executed version is another upgrade id) | maps recordMoveAfterDeadline to duel/21 only when the executed version is in upgrades[]
+errors.test.ts | real failures of the clock fixture (sandbox: the executed version is another upgrade id) | maps recordMoveNotYourTurn to duel/20 only when the executed version is in upgrades[]
+errors.test.ts | real failures of the clock fixture (sandbox: the executed version is another upgrade id) | maps refundNotStalled to duel/23 only when the executed version is in upgrades[]
+errors.test.ts | real failures of the clock fixture (sandbox: the executed version is another upgrade id) | maps the executed claim_timeout before the deadline (duel/14) from the effects BCS
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | has the 11 captured cases
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps acceptNotInvited by its message alone (a wallet that serializes the error) to duel/5
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps acceptNotInvited (structured) to duel/5
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps acceptNotPending by its message alone (a wallet that serializes the error) to duel/4
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps acceptNotPending (structured) to duel/4
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps acceptSelfPlay by its message alone (a wallet that serializes the error) to duel/9
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps acceptSelfPlay (structured) to duel/9
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps acceptWrongStake by its message alone (a wallet that serializes the error) to duel/10
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps acceptWrongStake (structured) to duel/10
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps cancelNotCreator by its message alone (a wallet that serializes the error) to duel/3
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps cancelNotCreator (structured) to duel/3
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps cancelNotPending by its message alone (a wallet that serializes the error) to duel/4
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps cancelNotPending (structured) to duel/4
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps createBetTooHigh by its message alone (a wallet that serializes the error) to duel/1
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps createBetTooHigh (structured) to duel/1
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps createBetTooLow by its message alone (a wallet that serializes the error) to duel/0
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps createBetTooLow (structured) to duel/0
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps createSelfInvite by its message alone (a wallet that serializes the error) to duel/2
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps createSelfInvite (structured) to duel/2
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps rejectNoInvitation by its message alone (a wallet that serializes the error) to duel/6
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps rejectNoInvitation (structured) to duel/6
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps rejectNotInvited by its message alone (a wallet that serializes the error) to duel/5
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | maps rejectNotInvited (structured) to duel/5
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | reports the abort of an upgrade as foreign while the config does not list that upgrade, and as own once upgrades[] does
+errors.test.ts | real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json) | reports the abort with the package of the upgrade: the version that ran (V-5)
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | accepts a whole AppConfig-like object, so the hooks can pass the config as it is
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | accepts only packageId and originalPackageId when there are no upgrades (packageVersion 1)
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | does not translate an abort of a package that is none of ours, even with the code of one of our modules
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | keeps ignoring the upgrade ids when the abort comes from a wallet text in the SDK format
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | translates a duel abort whose location.package is the current id
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | translates a duel abort whose location.package is the first upgrade
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | translates a duel abort whose location.package is the original id
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | translates a duel abort whose location.package is the second upgrade
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | translates a house abort whose location.package is the current id
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | translates a house abort whose location.package is the first upgrade
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | translates a house abort whose location.package is the original id
+errors.test.ts | transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version) | translates a house abort whose location.package is the second upgrade
+gameRegistry.test.ts | buildGameRegistry fails with a configuration error instead of an empty registry | does not accept the entry of another module with the same name
+gameRegistry.test.ts | buildGameRegistry fails with a configuration error instead of an empty registry | fails naming coinflip::Coinflip when its entry is missing
+gameRegistry.test.ts | buildGameRegistry fails with a configuration error instead of an empty registry | fails naming duel::DuelTurn when its entry is missing
+gameRegistry.test.ts | buildGameRegistry fails with a configuration error instead of an empty registry | fails naming duel::Duel when its entry is missing
+gameRegistry.test.ts | buildGameRegistry fails with a configuration error instead of an empty registry | fails naming game::GameResolved when its entry is missing
+gameRegistry.test.ts | buildGameRegistry fails with a configuration error instead of an empty registry | fails naming game::Game when its entry is missing
+gameRegistry.test.ts | buildGameRegistry fails with a configuration error instead of an empty registry | fails when there are upgrades and no typeOrigins at all
+gameRegistry.test.ts | buildGameRegistry without upgrades (packageVersion 1, the testnet.json of today) | declares the creation and the resolution as the events a player sends
+gameRegistry.test.ts | buildGameRegistry without upgrades (packageVersion 1, the testnet.json of today) | does not create a duel source even if typeOrigins is present
+gameRegistry.test.ts | buildGameRegistry without upgrades (packageVersion 1, the testnet.json of today) | has a single game, Coinflip, with only the legacy source and everything falling back to the original id
+gameRegistry.test.ts | buildGameRegistry without upgrades (packageVersion 1, the testnet.json of today) | parses a real legacy Game and its GameCreated through the source
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | builds exactly the event types that the node reports
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | builds the type of an event from its own defining id, not from the one of its module siblings (S-2)
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | builds the types with the id of the upgrade for duel and coinflip and the original id for game
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | declares the creation and the resolution as the events a player sends
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | has the legacy and the duel sources and creates in the new one
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | keeps each source from reading the events of the other
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | parses the events of both sources from one raw ListEvents page that mixes them
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | parses the real object cancelledByCreator through the source
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | parses the real object cancelledByInvitee through the source
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | parses the real object pendingInvite through the source
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | parses the real object pendingOpen through the source
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | parses the real object resolvedAcceptorWins through the source
+gameRegistry.test.ts | buildGameRegistry with upgrades (real typeOrigins of duel-reads) | parses the real object resolvedCreatorWins through the source
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | formats 1000n ms as "1 s por jugada"
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | formats 1209600000n ms as "14 días por jugada"
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | formats 1500n ms as "1500 ms por jugada"
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | formats 172800000n ms as "2 días por jugada"
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | formats 300000n ms as "5 min por jugada"
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | formats 45000n ms as "45 s por jugada"
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | formats 7200000n ms as "2 h por jugada"
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | formats 9000000n ms as "150 min por jugada"
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | formats 90000n ms as "90 s por jugada"
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | formats the maximum u64 without losing precision
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | formats the value read from the clock fixture (sandbox) in the generic format
+gameRegistry.test.ts | controlLabel: a turn_ms outside the mirror uses the generic format and is never an error | lets the table win over the generic format
+gameRegistry.test.ts | definingIdOf looks a type up by (module, name), never by module alone (S-2) | returns null for a type without entry instead of falling back to the module
+gameRegistry.test.ts | definingIdOf looks a type up by (module, name), never by module alone (S-2) | tells the same name in two modules apart
+gameRegistry.test.ts | definingIdOf looks a type up by (module, name), never by module alone (S-2) | tells two types of the same module with different defining ids apart
+gameRegistry.test.ts | registryTypeKeys | is exactly what the registry resolves: building with those entries works and dropping any one of them fails
+gameRegistry.test.ts | registryTypeKeys | lists the 4 legacy types without upgrades and adds Duel, its 7 events and Coinflip with upgrades
+gameRegistry.test.ts | resolutionAmounts stays valid for both sources (same fee formula, D10) | matches the DuelResolved event of each resolved Duel<Coinflip> (nonzero fee)
+gameRegistry.test.ts | resolutionAmounts stays valid for both sources (same fee formula, D10) | matches the GameResolved event of the resolved legacy Game
+gameRegistry.test.ts | the production registry does not include the trial game of the clock fixture | refuses to read a Duel of the trial game as a Duel of the coinflip
+gameRegistry.test.ts | the production registry does not include the trial game of the clock fixture | uses the tag of the coinflip, not the one of the trial game
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | does not know the control id -1 (a future upgrade may add it)
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | does not know the control id 255 (a future upgrade may add it)
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | does not know the control id 8 (a future upgrade may add it)
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | does not know the control id 9 (a future upgrade may add it)
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | has the 8 controls, ids 0-7 in order, with the turn_ms of the contract
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | labels the control 0 as "sin reloj"
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | labels the control 1 as "10 min por jugada"
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | labels the control 2 as "20 min por jugada"
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | labels the control 3 as "30 min por jugada"
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | labels the control 4 as "60 min por jugada"
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | labels the control 5 as "1 día por jugada"
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | labels the control 6 as "3 días por jugada"
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | labels the control 7 as "7 días por jugada"
+gameRegistry.test.ts | time controls mirror (R.2 of the handoff) | mirrors CLAIM_GRACE_MS of the contract: 7 days
+
+### Tests y gates (output pegado, por área tocada)
+Área tocada: **app** (sin contracts ni scripts: no aplican `sui move`, `node --test` ni `publish.mjs check`). Los comandos son los del job `app` de la CI, en ese orden, con Node `v26.13.0` (la línea `RUN` del test sin la ruta absoluta):
+
+$ npm ci
+
+added 293 packages, and audited 295 packages in 7s
+
+67 packages are looking for funding
+  run `npm fund` for details
+
+9 moderate severity vulnerabilities
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues, run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit=0
+$ npm audit signatures
+audited 292 packages in 8s
+
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+exit=0
+$ npm audit --omit=dev --audit-level=high
+found 0 vulnerabilities
+exit=0
+$ npm run lint -w app
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+$ npm run typecheck -w app
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+$ npm test -w app
+
+> test
+> vitest run
+
+
+
+
+ Test Files  69 passed (69)
+      Tests  1574 passed (1574)
+   Start at  10:36:59
+   Duration  26.85s (environment 58%, tests 14%, import 11%, setup 10%, transform 6%, worker 1%)
+
+Environment  jsdom was created 69 times · 148.53s total, 58% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+$ npm run build -w app
+
+> build
+> vite build
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 609 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.46 kB │ gzip:   0.29 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-Cu2v4dGX.js   924.57 kB │ gzip: 279.89 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 614ms
+exit=0
+
+Resumen de los gates: `npm ci` exit 0; `npm audit signatures` 292 firmas y 143 atestaciones verificadas; `npm audit --omit=dev --audit-level=high` 0 vulnerabilidades; lint 0 problemas (`--max-warnings 0`); typecheck 0 errores; **`npm test -w app`: 69 archivos, 1574 tests, 0 fallos (= 1246 + 328)**; build de testnet válido con el `testnet.json` actual (`packageVersion` 1, solo fuente `legacy`).
+
+**Bundle:** `dist/assets/index-Cu2v4dGX.js` **924.57 kB** (279.89 kB gzip) contra 917.80 kB (277.96 gzip) del baseline: **+6.77 kB (+1.93 kB gzip)**. Causa: `config.ts` importa `registryTypeKeys` de `gameRegistry.ts` y arrastra el registro y los parsers nuevos al grafo antes de que haya un consumidor en pantalla (TASK-7b/8). No hay dependencias nuevas.
+
+- Tablas de contrato (`contracts/README.md`) y `app/src/sui/` sincronizados: **no aplica** para el contrato (cero cambios de contrato); `app/README.md` y `agents.md` §5 sí se actualizaron. Ver Riesgos: `contracts/README.md` todavía no tiene la tabla de abort codes de `duel` (la documentación del contrato nuevo no es de este task).
+- `git diff --exit-code` de `contracts`, `app/src/components`, `app/src/hooks`, `app/src/pages`, `app/eslint.config.js`, `app/package.json`, `package.json` y `package-lock.json`: exit 0 (salida más abajo). `house.move`, `game.move` y `Move.lock` no se tocaron.
+
+### Verificación manual (localnet / lecturas públicas)
+No aplica (§6 de TASK-7a: sin red; el smoke de lectura es el de TASK-7b). Todo se probó contra las fixtures reales de TASK-5 (`duel-reads`, `duel-tx` de producción y `duel-clock` del ensayo).
+
+### Control anti-fuga del sandbox (TASK-5 §7), sobre lo agregado por este task
+Las dos líneas de abajo corren el control exacto del handoff (`git diff <merge-base> -U0 -- contracts/sources app/src | grep '^+' | grep -n "SANDBOX\|testgame"`, y lo mismo sobre los archivos nuevos sin trackear), con `wc -l` al final para pegar el conteo: **0 y 0**. El `merge-base` con `master` es `b0bbef8` y el HEAD de la branch ya trae los cambios de contrato de TASKs anteriores; ninguno aparece (el control mira todo lo agregado desde `master`). Tercera línea: PRE-1 (`8cc35ab`) es ancestro de `HEAD`.
+
+$ bash -c BASE="$(git merge-base master HEAD)"; git diff "$BASE" -U0 -- contracts/sources app/src | /usr/bin/grep "^+" | /usr/bin/grep -n "SANDBOX\|testgame" | wc -l
+0
+exit=0
+$ bash -c git ls-files --others --exclude-standard -- contracts/sources app/src | xargs -r /usr/bin/grep -n "SANDBOX\|testgame" | wc -l
+0
+exit=0
+$ bash -c BASE="$(git merge-base master HEAD)"; git merge-base --is-ancestor 8cc35ab HEAD; echo ancestor_PRE1=$?; echo merge-base=$BASE
+ancestor_PRE1=0
+merge-base=b0bbef8e55cb3c53416b56c490156c4013d416a1
+exit=0
+$ git diff --exit-code -- contracts app/src/components app/src/hooks app/src/pages app/eslint.config.js app/package.json package.json package-lock.json
+exit=0
+$ bash -c docker ps -aq | wc -l
+6
+exit=0
+$ bash -c docker images -aq | wc -l
+17
+exit=0
+
+(Arriba: `git diff --exit-code` con exit 0, y el conteo de Docker `docker ps -aq | wc -l` = 6 y `docker images -aq | wc -l` = 17.) **Docker:** referencia 5/17; las 17 imágenes coinciden y no se tocó nada (solo esos dos conteos y un `docker ps -a --format` de solo lectura). El contenedor de más es un `postgres:17` creado durante esta sesión (minutos antes del conteo) por otra sesión del host, sin relación con este task: no se tocó ni se hizo `prune`.
+
+### Evidencias específicas del task
+- **Espejo de controles:** las 8 etiquetas (0-7) y sus `turn_ms` tienen test (`gameRegistry.test.ts`); un `turn_ms` fuera del espejo da formato genérico, nunca error, con 45 000 ms y 90 000 ms escritos en el test ("45 s por jugada", "90 s por jugada") y con el valor del ensayo **leído de `_meta.sandboxConstants`** de `duel-clock` (afirmando `_meta.sandbox === true`); el parser del `Duel` acepta cualquier `turn_ms` (parcheando el BCS a 45 000 ms, 90 000 ms, 1 ms y 600 000 ms) y el de `DuelCreated`, un `control` desconocido.
+- **S-2:** `definingIdOf` con dos tipos del mismo módulo y `definingId` distintos (más el mismo nombre en dos módulos), el registro con `duel::DuelTurn` y `coinflip::Coinflip` redefinidos con IDs distintos (el tag del evento y el de `G` usan cada uno el suyo), y `resolveConfig` con `packageVersion` 3 (dos upgrades, `DuelTurn` definido en el segundo).
+- **`upgrades[]` en los abortos (V-5/H-j):** un abort de `duel` y otro de `house` con `location.package` = el original, cada upgrade y el vigente (8 casos), un paquete ajeno sin traducir, y con la fixture real de producción (los 11 `SimulationError` de `duel-tx` informan el **ID del upgrade**, no el original) y de ensayo (7 `SimulationError` más, con el ID de la versión de ensayo, que solo se traducen si ese ID está en `upgrades[]`).
+- **Reloj y fixtures reales:** los 6 objetos y los 7 eventos de producción (BCS ↔ `json` del nodo), los 8 objetos y los 7 eventos del ensayo (Active con `to_move` 1/2/3, `TimedOut`, `Expired`, `DuelTurn`, `DuelTimedOut`), y una página cruda de `ListEvents` con las dos fuentes mezcladas (6 `GameCreated` + 4 `DuelCreated`) leída por el registro.
+- **Matriz de rechazos:** bytes truncados y sobrantes, variante de `DuelState` desconocida, `Option` con tag 2, tipo de otro paquete / de otro juego / del `Game` anterior / no normalizable, dueño no compartido, y cada invariante de R.6 con un caso que lo rompe.
+
+**Tensión con el control anti-fuga y cómo se resolvió (sin STOP):** los tests del reloj necesitan el tag del juego de ensayo y su plazo, pero el control prohíbe escribir esas dos cadenas en `app/src`. Se resolvió **leyendo por valor**: el tag del juego de ensayo es el único valor de `ids` con forma `0x…::módulo::Tipo` (se busca con una expresión regular, sin nombrar la clave) y el plazo de ensayo es el valor de `_meta.sandboxConstants` cuya clave termina en `_TURN_MS`. La etiqueta esperada se deriva del valor leído (`${plazo / 1000} s por jugada`): ningún valor del ensayo se copia al código. La palabra en minúsculas `sandbox` aparece en nombres de test y en `_meta.sandbox`; el control (sensible a mayúsculas) dio 0. El registro de producción **no** incluye el juego de ensayo: hay un test que lo prueba (el `gameTag` del registro es el del coinflip y `parseObject` rechaza con `wrong_type` un `Duel` del ensayo).
+
+### Desviaciones del handoff (declaradas; todas son detalles de TypeScript, ninguna cambia un contrato de `sui/`)
+1. **`AppConfig.upgrades?` y `typeOrigins?` son opcionales en el tipo.** Unos 20 tests ajenos (`App.test.tsx`, `hooks/*.test.tsx`, `components/*.test.tsx`, `dappKit.test.ts`…) arman un `AppConfig` literal completo; hacerlos obligatorios obligaba a editar archivos fuera de la lista. `resolveConfig` **siempre** los completa (vacíos con `packageVersion` 1), así que en producción nunca faltan; una config armada a mano equivale a "sin upgrades". TASK-7b puede volverlos obligatorios cuando toque esos tests.
+2. **`OwnPackageIds.upgrades` es opcional** en `transactionErrorMessage` por el mismo motivo (`hooks/useExecuteTransaction.ts:86` arma `ids` con solo `packageId` y `originalPackageId` y no se toca: es TASK-7b). Ver Riesgos.
+3. **Invariantes adicionales a la lista del handoff** (derivadas de R.4/R.6, con test): un `Active` persistido con `turn_ms == 0` se rechaza (INV-D5/D7: solo existe dentro de un `activate_atomic`); `DuelActivated` sin reloj exige `to_move == 0` y `deadline_ms == 0` y con reloj `to_move ∈ 1..=3` (coincide con las fixtures reales); `DuelTurn` exige `to_move ∈ 1..=3` (R.4: `record_move` aborta con `EBadMask` si no).
+4. **La fuente `duel` existe si y solo si hay upgrades** (`packageVersion > 1`), como dice el plan §4.4; `typeOrigins` presente con `packageVersion` 1 se valida (cobertura de los 4 tipos `legacy`) pero no crea la fuente `duel`.
+5. **`GameDef.createSource`**: `duel` si existe y, antes del upgrade, `legacy` (lo que la app hace hoy). Es la única forma de que la app siga creando partidas con el `testnet.json` actual; D9 ("crear solo en la nueva") rige desde el upgrade. TASK-7b decide los builders con este campo.
+6. **`sentEventTypes` = [creación, resolución]** en las dos fuentes (el creador emite la creación y el aceptante la resolución, plan §8.2; en el coinflip nuevo la aceptación es atómica y emite `DuelResolved`).
+7. **Los parsers del `Duel` y de los eventos reciben el tipo exacto esperado** (que arma el registro), no el ID del paquete: el ID de definición de `DuelTurn` puede diferir del de `Duel` y del de `G` (S-2), así que un solo "ID de paquete" no alcanza.
+8. **Tests de eventos en `duelEvents.test.ts`** (archivo nuevo) en lugar de ampliar `events.test.ts`, que queda intacto.
+9. **Uso de `echo` en comandos de solo consulta** durante la sesión (`echo base=…`, `echo rc=$?`, `echo ---2`, `echo ====`, `echo ancestor_PRE1=…`): únicamente mostraban en la consola un código de salida o un separador; **ninguno escribió un archivo** ni un texto del repo, del reporte o de un borrador (todo eso, con las herramientas de escribir/editar). También hay dos redirecciones `>` de **salidas de comandos** a archivos del scratchpad (`added_lines.txt` con `git diff` y un `sed` de solo lectura para anteponer el archivo a cada línea, y `tests_new.txt` con `jq`) y `grep -v … > archivo` para quitar la línea con la ruta personal de vitest; ninguno es texto escrito por mí. Declaradas por si `audit_dev.sh` las marca (esperable 🟡: sin `sui`, sin código ni reporte escrito por esa vía).
+
+### Riesgos / pendientes
+- **TASK-7b — IDs de `upgrades[]` en el hook:** `transactionErrorMessage` ya acepta todos, pero `useExecuteTransaction.ts:86` sigue pasando solo `packageId` y `originalPackageId`; con **un** upgrade (v2 = `packageId`) alcanza, con el tercero un abort de una versión intermedia se mostraría crudo. 7b debe pasarle `upgrades` (basta pasar la `config`: cumple la forma).
+- **Nadie consume todavía** `buildGameRegistry`, `controlLabel`, `TIME_CONTROLS`, `CLAIM_GRACE_MS` ni los parsers del `Duel` (código previsto por el plan para 7b/8; el lobby y "Mis partidas" siguen con `gameEventType(originalPackageId)`, que es lo correcto para `game::*`).
+- **`contracts/README.md`** no tiene la tabla de abort codes de `duel` ni su sección (documentación del contrato nuevo); `agents.md` §5 y `ABORT_MESSAGES` ya los listan. No se toca contracts en este task.
+- El build de `config.ts` arrastra el registro al bundle (+6.77 kB); se mantendrá igual cuando 7b/8 lo consuman.
+- Sin hallazgos de diseño, fondos o seguridad: **no hubo STOP**.
+
+### §R-6: los 4 greps (`/usr/bin/grep -nE`) sobre el diff (líneas agregadas de los 7 archivos modificados y de los 5 nuevos, 2725 líneas) y sobre este reporte
+Sobre el **diff** (`git diff HEAD -U0` + los archivos nuevos): las cuatro salidas son vacías (exit 1 de `grep` = sin coincidencias). No hay direcciones de cuenta, claves, rutas personales ni IDs de 40 a 64 hex literales: los tests construyen sus IDs sintéticos con `'ab'.repeat(32)` / `` `0x${'3'.repeat(64)}` `` y todo ID real se lee de las fixtures.
+
+$ /usr/bin/grep -nE [0-9a-fA-F]{40,64} added_lines.txt
+exit=1
+$ /usr/bin/grep -nE 0x[0-9a-fA-F]{8,} added_lines.txt
+exit=1
+$ /usr/bin/grep -nE suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home- added_lines.txt
+exit=1
+$ /usr/bin/grep -nE [0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4} added_lines.txt
+exit=1
+$ /usr/bin/grep -nE [0-9a-fA-F]{40,64} REPORTE_MULTIGAME_TASK-7a.txt
+561:merge-base=b0bbef8e55cb3c53416b56c490156c4013d416a1
+exit=0
+$ /usr/bin/grep -nE 0x[0-9a-fA-F]{8,} REPORTE_MULTIGAME_TASK-7a.txt
+exit=1
+$ /usr/bin/grep -nE suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home- REPORTE_MULTIGAME_TASK-7a.txt
+608:$ /usr/bin/grep -nE suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home- added_lines.txt
+exit=0
+$ /usr/bin/grep -nE [0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4} REPORTE_MULTIGAME_TASK-7a.txt
+exit=1
+
+Sobre este **reporte** (armado con `cat` de las salidas capturadas más el texto escrito con la herramienta de archivos), las mismas cuatro búsquedas, desde el scratchpad, con el reporte por nombre relativo:
+
+CLASIFICACIÓN
+- Grep 1 (`[0-9a-fA-F]{40,64}`): una coincidencia, la línea `merge-base=<SHA completo>` de la salida del control anti-fuga. Es el SHA completo del HEAD de `master` (`b0bbef8…`): **commit público conocido**, sin dato personal.
+- Grep 2 (`0x[0-9a-fA-F]{8,}`): sin coincidencias (exit 1).
+- Grep 3 (claves, frases y rutas personales): una coincidencia, la línea `$ /usr/bin/grep …` de la propia salida capturada del grep sobre el diff (el patrón escrito en el rótulo se encuentra a sí mismo). **Autorreferencia**, no es una ruta ni un dato: no hay ninguna ruta personal en el reporte.
+- Grep 4 (IDs abreviados con `…` o `...`): sin coincidencias (exit 1).
+- Nota: al repetir los cuatro greps sobre este reporte ya completo (con estas salidas pegadas) aparecen, además, las líneas de esta misma sección y del rótulo del grep 3 que se citan a sí mismas, y la línea del SHA completo repetida dentro de la salida pegada del grep 1: **autorreferencia**, no datos nuevos.
+
+### Cierre de la localnet
+No aplica: este task no levantó ninguna localnet ni usó `sui`.
+
+### Guarda de ~/.sui (C-13, R-12)
+Solo `stat`, `ls -la` y los primeros 12 hex de `sha256sum` de `client.yaml` (nunca `cat`), **al inicio, tras escribir el reporte y al final**: 244 bytes, mtime `2026-10-30 17:52:52.515735237 -0500`, el directorio de configuración solo tiene `client.yaml` y el hash empieza con `ef12fd09615f`: **igual a la línea base en las tres mediciones**. El conteo de la frase de shell por comando inexistente da 0 sobre el reporte y sobre cada borrador (`p1`..`p7`), y el grep de rastros de una ejecución accidental de `sui` (génesis, directorio de configuración, puerto ocupado) da vacío. Ejecución accidental de `sui`: **ninguna** (no se ejecutó `sui`, `suiup`, `keytool` ni nada contra testnet; tampoco `sui client`, faucet, `new-address`, `pkill` ni `prune`). Todo texto de código TypeScript, tests, documentación y reporte se escribió con las herramientas de escribir/editar archivos; los resultados de comandos se anexaron con `cat` y se rotularon con `capture.sh`.
+
+### Documentación
+- READMEs / `agents.md` actualizados: **sí** (PROY-20) — `app/README.md` (mapa de `app/src/sui/`: `config.ts`, `events.ts`, `errors.ts` y filas nuevas de `duel.ts` y `gameRegistry.ts`; secciones "Lecturas" y "Mensajes de abort") y `agents.md` §5 (layout BCS de `Duel`/`DuelState`/7 eventos, espejo de controles y `CLAIM_GRACE_MS`, y la fila de abort codes). `contracts/README.md` y `documents/STATUS.md` no se tocaron (el segundo lo hace el orquestador).
+- Snippet propuesto para `documents/STATUS.md`:
+  > #73 TASK-7a (app, capa `sui/` parte 1) — hecho: `config.ts` lee `upgrades`/`typeOrigins` (opcionales solo con `packageVersion` 1; con más, error de configuración), registro de juegos con espejo de controles (`gameRegistry.ts`), esquemas y parsers del `Duel` y de sus 7 eventos (`duel.ts`, `events.ts`) y `ABORT_MESSAGES.duel` 0-25 con los IDs de `upgrades[]` en `transactionErrorMessage`. Gates de app: lint 0, typecheck 0, `npm test -w app` 1574 tests en 69 archivos (baseline 1246 en 66 + 328), bundle de testnet 924.57 kB (277.96 → 279.89 kB gzip). Pendiente para TASK-7b: pasar `upgrades` desde `useExecuteTransaction`, builders, lobby y "Mis partidas" multi-fuente, claves e invalidación.
+
+~~~~
+
+
+---
+
+## 22. TASK-7a (revisión del MID)
+
+> MID, TASK-7a: PASA (sin 🔴 ni 🟠; 1 🟡 y 5 🔵).
+
+PASA
+
+## Revisión TASK-7a (#73, capa `app/src/sui/`, parte 1): PASA (sin 🔴 ni 🟠; 1 🟡 y 5 🔵 que no bloquean) y un ajuste del handoff de TASK-7b que hay que hacer antes de lanzarlo
+
+- **Fecha:** 2026-11-20. Handoff v1.2.8, plan v1.3.2, HEAD 84ca797; sin commitear: `agents.md`, `app/README.md`, `app/src/sui/{config,errors,events}.ts` y los tests de `config` y `errors`, y 5 archivos nuevos (`duel.ts`, `gameRegistry.ts`, `duel.test.ts`, `duelEvents.test.ts`, `gameRegistry.test.ts`).
+- **Qué leí:** el reporte del DEV en sus secciones de evidencias, desviaciones, riesgos y control anti-fuga; `duel.ts` y `gameRegistry.ts` **enteros**; el `git diff` completo de `config.ts`, `events.ts` y `errors.ts`; `duel.test.ts` entero; los índices de tests de `config`, `gameRegistry`, `duelEvents` y `errors` y las partes que importan para la mutación; el diff de `app/README.md` y `agents.md`; y cruce con las fixtures reales de TASK-5 y con `localnet.upgraded.deployment.json` (TASK-4). También leí los consumidores actuales de `transactionErrorMessage` y de `originalPackageId` en `hooks/`.
+- **Qué ejecuté:** solo lecturas y `grep`. No corrí gates ni `sui`.
+- **Resultado:** el task cumple §3, §5 y el DoD. Las constantes de layout y los mensajes coinciden con R.1, R.3 y R.5 campo por campo; los tests corren contra las **fixtures reales** y cruzan el BCS con el `json` que devolvió el nodo; los invariantes y los rechazos están cubiertos de forma que una mutación los rompe.
+
+## 0. Controles del orquestador: coinciden
+
+Worktree = 7 modificados + 5 nuevos (12 entradas), HEAD 84ca797, stash vacío; cero diff en `contracts`, `components`, `pages`, `hooks`, `lobby.ts`, `myGames.ts`, `transactions`, `eslint.config.js`, `package*.json` y `.github`; control anti-fuga `SANDBOX|testgame` (sin `-i`) en 0; `~/.sui` idéntico; 0 procesos `sui`; lint 0, typecheck 0, **1574 tests en 69 archivos (1246 + 328), 0 fallos**; build de testnet válido, +6,77 kB. **Docker 6/17:** el contenedor extra es el `postgres:17` efímero de otra sesión del host, que el DEV declaró y no tocó: lo acepto como en TASK-1b/2/2b.
+
+**Auditoría mecánica (P-2): sin hallazgo.** 0 heredocs, 0 `sed -i`, 0 `tee`, 0 `cat >`, 0 `printf` ajeno a `sui`; los 9 `echo` son diagnóstico a stdout, y las redirecciones `>` que declara (`added_lines.txt` con un `git diff`, `tests_new.txt` con `jq`, un `grep -v … > archivo`) escriben **salidas de comandos** al scratchpad, no texto escrito por el DEV. 13 `Write` y 47 `Edit`. El DEV no ejecutó `sui`.
+
+## 1. Conformidad con TASK-7a §3/§5 (punto 1)
+
+**`config.ts`:** cumple.
+- `packageVersion` ausente = 1; con 1 los dos campos pueden faltar y todo cae al ID original (el `testnet.json` real de hoy sigue válido y tiene su test); con `packageVersion > 1`, la falta de `upgrades`, de `typeOrigins` o de **una entrada de un tipo del registro** es un **error de configuración** y nunca "no hay partidas".
+- Las reglas son las del `check` de `deployment.mjs` (TASK-4): `upgrades` consecutivos desde 2, `packageId` distintos entre sí y del original, una entrada por upgrade y el último = el vigente; `typeOrigins` con pares (módulo, nombre) únicos, `definingId` ∈ {original, `upgrades`} y los tipos de la v1 con el ID original.
+- **Búsqueda por (módulo, nombre)** (S-2): `definingIdOf` y el test con "dos tipos del mismo módulo con `definingId` distintos" y "el mismo nombre en otro módulo no cuenta". `packageId` queda documentado como solo target de llamadas.
+- Hay un test con `localnet.upgraded.deployment.json` (la salida real de TASK-4), otro con el `testnet.json` real del repo y la verificación de que el registro sale de lo leído.
+
+**`gameRegistry.ts`:** cumple.
+- Fuentes `legacy` (`game::Game` + 3 eventos) y `duel` (`Duel<Coinflip>` + 7 eventos), cada tipo con **su propio** ID de definición (el evento y `G` pueden diferir).
+- Espejo de controles R.2 ids 0-7 con los `turn_ms` y las etiquetas correctas; `CLAIM_GRACE_MS` = 7 días.
+- `controlLabel`: la tabla gana; fuera de ella, formato genérico "N s / N min / N h / N días por jugada" y nunca un error; lo prueban 45 000 ms y 90 000 ms escritos en el test, el valor de ensayo leído de la fixture y el máximo `u64` sin perder precisión.
+- **`buildGameRegistry` falla con un `Error` de configuración y no devuelve un registro vacío** si falta una entrada.
+
+**`duel.ts`:** cumple. BCS del `Duel` en el orden exacto de R.1 (`id, version, house_id, creator, opponent, bet, stake, fee_rate, turn_ms, state`), `stake` como `u64`, `DuelState` con las 6 variantes en el orden fijado; tipo exacto con normalización, dueño `Shared`, bytes canónicos (`parseExactBcs`) e invariantes de R.6.
+
+**Los 7 eventos de `events.ts`:** los esquemas coinciden campo por campo con R.5 y con las `public struct` de `duel.move` (verificado contra la fuente); tipo exacto `<ID del evento>::duel::<Evento><<tag de G>>`; `pot == payout + fee` en `DuelResolved` y `DuelTimedOut`; `winner ∈ {creator, acceptor}`. El refactor de `assertEventType` es mínimo y mantiene el comportamiento.
+
+**`errors.ts`:** cumple.
+- 26 mensajes de `duel` (0-25), con una causa por código. Los leí contra R.3: coinciden con el sentido de cada código (7 `EVersionMismatch`, 15 `EBrokenStake`, 17 `ENoClock`, 18 `EHasClock`, 22 `EBothPending`, 23 `ENotStalled`, 25 `EPhaseMismatch`, etc.).
+- **`house`/3, `game`/3 y `duel`/3 se distinguen por módulo + código** (test explícito).
+- **`transactionErrorMessage` acepta `packageId`, `originalPackageId` y todos los `upgrades[]`** (V-5/H-j), con un test por cada ID para un abort de `duel` y otro de `house`.
+
+**¿Los tests son contra las fixtures reales? Sí.**
+- Objetos: los 6 de producción (`duel-reads`) y los 8 del ensayo se parsean y se **comparan con el `json` que devolvió el nodo** (cruce BCS ↔ json).
+- Eventos: los 7 con su `bcs` real.
+- Abortos: los 11 `SimulationError` de producción (`duel-tx`, que informan el **ID del upgrade**, no el original) y los 7 del ensayo.
+- Páginas crudas: la página de `ListEvents` con las dos fuentes mezcladas (6 `GameCreated` + 4 `DuelCreated`).
+- Los IDs sintéticos de los casos negativos se construyen con `'ab'.repeat(32)`; no hay un solo ID real literal en `app/src` (control de las 4 expresiones en 0).
+
+**Mutación mental (qué rompe cada cosa):**
+
+| Si se quita… | ¿Lo atrapa un test? |
+|---|---|
+| la comparación del tipo exacto | **Sí:** `wrong_type` con otro paquete, otro juego (`Duel` del ensayo leído como del coinflip), el `Game` anterior y un tipo no normalizable; lo mismo en los 7 eventos y la matriz "cada parser acepta solo su evento" |
+| el chequeo de `Shared` | **Sí:** `not_shared` con un `AddressOwner` |
+| el chequeo de `definingId` / de la entrada de un tipo | **Sí:** config con entrada faltante, con ID ajeno, con par repetido y con un tipo de la v1 con ID distinto del original |
+| `pot == payout + fee` | **Sí:** `DuelResolved` y `DuelTimedOut` con el pozo roto |
+| `winner ∈ {creator, acceptor}` | **Sí:** objetos `Resolved`/`TimedOut` y eventos con el ganador reemplazado |
+| el orden de campos o de variantes | **Sí:** el cruce con el `json` real de **cada** variante (las 6 están en las fixtures) rompe cualquier permutación; el único par ambiguo (`bet`/`stake` en un `Pending`, que valen lo mismo) lo desambigua el `Active` (`stake = 2 × bet`) y el test que parchea `bet` y `stake` en offsets distintos |
+| los invariantes de `stake` por estado | **Sí:** un caso por estado (Pending, Cancelled, Active con 0, `bet` y `3 × bet`, y los terminales) |
+
+## 2. El sandbox y el anti-fuga (punto 2)
+
+**Sólido, con un matiz de robustez (🔵 N-1).**
+- Los tests del reloj **leen por valor** el tag de `G` (el único valor de `ids` con forma `0x…::módulo::Tipo`) y el plazo de ensayo (la clave de `_meta.sandboxConstants` que termina en `_TURN_MS`), afirman `_meta.sandbox === true`, y la etiqueta esperada **se deriva del valor leído**: **ningún valor del ensayo se copia al código ni ninguna cadena `SANDBOX_*` o del juego de ensayo aparece en `app/src`** (el control sensible a mayúsculas da 0; "sandbox" en minúscula aparece solo en nombres de test y en `_meta.sandbox`, y el control no lo busca así).
+- **No hay un truco frágil que falle en silencio:** si el regex no encontrara el tag, `TEST_GAME_TAG` sería `''` y el test `expect(TEST_GAME_TAG).not.toBe('')` y todos los que parsean con `CLOCK_DUEL_TYPE` fallarían a gritos. Es **fail-closed**.
+- El matiz: depende de que `ids` de la fixture de reloj tenga **un solo** valor con esa forma. Más robusto y sin recorrer `ids`: derivar `G` del **argumento de tipo** de `objects.pending.type` (estructural). 🔵 N-1, opcional.
+- **Ningún test toma una constante de producción de la fixture del sandbox:** el sandbox se usa solo para el mecanismo (BCS, variantes, `turn_ms` fuera del espejo, IDs de definición de upgrades distintos) y los valores reales (`turn_ms` 1-7, gracia de 7 días) los fija el espejo de R.2 y el test del contrato.
+- **El registro de producción rechaza un `Duel` del juego de ensayo** (`wrong_type`) y su `gameTag` es el del coinflip: probado en `gameRegistry.test.ts` y en `duel.test.ts`.
+
+## 3. Desviaciones y decisiones (punto 3)
+
+- **`AppConfig.upgrades?`/`typeOrigins?` y `OwnPackageIds.upgrades?` opcionales en el tipo: aceptable, con una condición para 7b.**
+  - En producción `resolveConfig` **siempre** los completa (vacíos con `packageVersion` 1) y `buildGameRegistry`/`transactionErrorMessage` tratan la ausencia como "sin upgrades", que es lo **correcto** para una config armada a mano.
+  - Riesgo real: un camino nuevo que arme la config a mano y olvide `upgrades` leería solo la fuente `legacy` o traduciría abortos de menos IDs **sin error**. Hoy el único consumidor de `transactionErrorMessage` es `useExecuteTransaction.ts` y las cuentas de `config` salen de `resolveConfig`.
+  - **Condición:** 7b pasa `config` completo (no `{ packageId, originalPackageId }`) a `transactionErrorMessage` y a `buildGameRegistry`; volverlos obligatorios es opcional y no vale tocar ~20 tests ajenos solo para eso.
+- **Los 2 `toEqual` existentes de `config.test.ts` con `upgrades: []` y `typeOrigins: []`: consecuencia legítima.** Comparé con `git diff`: el único cambio a tests existentes son esas dos líneas por cada `toEqual` (los valores nuevos que `resolveConfig` ahora devuelve); no se quitó ni aflojó ninguna aserción.
+- **Invariantes adicionales: están en R.4/R.6 y no son estrictas de más.**
+  - `Active` persistido con `turn_ms == 0` rechazado: INV-D5/D7 (un `Active` sin reloj solo existe dentro de un `activate_atomic`).
+  - `DuelActivated` sin reloj con `to_move == 0` y `deadline_ms == 0`, y con reloj `to_move ∈ 1..=3`: es lo que emiten `activate_atomic` y `activate` (R.4, `EBadMask`), y coincide con las fixtures reales.
+  - `DuelTurn` con `to_move ∈ 1..=3`: `record_move` aborta `EBadMask` si no.
+  - No rechazan ningún dato válido de la cadena que el contrato pueda producir; si un upgrade futuro cambiara una de esas reglas, **fallaría cerrado** con un `ReadDataError` explícito, que es lo deseable (SEG-10). `fee_rate ≤ 1000` **no** se valida (es de `house` y modificable): bien.
+- **`GameDef.createSource` = `duel` si hay upgrades y `legacy` antes; `sentEventTypes` = [creación, resolución]; fuente `duel` solo con upgrades; parsers con el tipo exacto:** coherentes con el plan §4.4/§8.2 y con D9 (crear en la nueva fuente desde el upgrade; antes, la app sigue creando en la anterior).
+
+## 4. Bundle +6,77 kB (+1,93 gzip) (punto 4): aceptable
+
+El `import` de `registryTypeKeys` desde `config.ts` arrastra el registro y los parsers al bundle antes de que haya consumidor. **No pido que `config.ts` deje de importarlo:** TASK-7b y TASK-8 consumen el registro, los parsers y `controlLabel` (lobby, "Mis partidas", detalle, formulario), así que esos bytes entrarían igual; evitarlo ahora solo movería el costo. No hay un presupuesto de tamaño en `ESTANDARES.md` y el DoD de este task pide solo pegar el tamaño. Que el DEV de TASK-8 vuelva a medir el bundle al cierre (el MVP ya estaba en 917,80 kB).
+
+## 5. Docs (punto 5)
+
+`app/README.md` (mapa de `sui/`, "Lecturas", "Mensajes de abort") y `agents.md` §5 (layout BCS de `Duel`/`DuelState`/7 eventos, espejo de controles y `CLAIM_GRACE_MS`, y la fila de abort codes con `duel` 0-25 y los IDs de `upgrades[]`) son **exactos contra el código**, sin rutas ni cuentas. La tabla de abort codes de `duel` y su sección en `contracts/README.md` **corresponden a TASK-8** (el handoff las asigna a su bullet de docs, con los 26 códigos y los 7 eventos); no es un hueco de 7a.
+
+## 6. Pendientes para TASK-7b (punto 6): hay un ajuste del handoff
+
+Lo que el DEV señala es correcto (el hook `useExecuteTransaction.ts` sigue pasando solo `packageId` y `originalPackageId`; nadie consume todavía el registro, `controlLabel` ni los parsers). **Al revisar los consumidores veo un problema del handoff de TASK-7b, no del DEV:**
+
+- **§4 de TASK-7b ("Tocar") solo permite** `lobby.ts`, `myGames.ts`, `transactions/*`, `hooks/{queryKeys,txInvalidation}.ts` y el README, y **prohíbe** "lo que TASK-7a dejó". Pero para que el lobby, "Mis partidas" y los builders usen el registro hay que tocar los **hooks que los llaman** (`useLobby`, `useMyGames`, `useExecuteTransaction`, `useCreateGame`, `useCancelGame`, `useRejectGame` y los que usan `config.originalPackageId` como clave), y para el lobby "Todos" hace falta el **literal prefijo** de `DuelCreated` (sin parámetros de tipo), que **el registro de 7a no expone** (solo trae los tags completos). Sin esos cambios, el DEV de 7b tendría un STOP en el primer hook.
+- **Propongo un handoff v1.2.9 mínimo** (te lo aplico si me lo pides): **Tocar** += `app/src/hooks/{useLobby,useMyGames,useExecuteTransaction,useCreateGame,useCancelGame,useRejectGame,useAcceptGame}.ts` y sus tests, **solo** para pasar el registro o la `config` completa y las claves con la dimensión del juego; y **permiso aditivo** sobre `gameRegistry.ts`/`events.ts` (solo agregar, p. ej. `duelEventPrefix` para el literal "Todos"; **sin cambiar** lo que 7a dejó ni sus tests). **NO tocar** componentes y páginas sigue igual.
+
+**Advertencias para el DEV de 7b (para tu brief):**
+1. Pasar `config` **completo** a `transactionErrorMessage` (`hooks/useExecuteTransaction.ts:86` pasa hoy solo dos IDs): con 3 versiones, un abort de una versión intermedia se vería crudo.
+2. Armar **todo** tag, target y `typeArguments` **desde el registro** (`GameDef.sources[].eventTypes`, `objectType`, `gameTag`); targets con `packageId`, `typeArguments` con `definingId`, y el test de **igualdad de cadena con `definingId ≠ packageId`** (un `G` definido en una versión anterior a la vigente).
+3. **ListEvents ≤ 10 literales** (cuenta literales; un `sender ∧ eventType` cuenta 2), partición en trozos con un cursor por trozo y fusión por (checkpoint, transacción, índice del evento) con el test de 11 literales ⇒ 2 pedidos; literal **prefijo** para "Todos" y tag completo para un juego; `emitModule` no se usa; direcciones de 64 hex.
+4. **S-1:** con el prefijo, el nodo devuelve **todas** las instanciaciones de `G` (también las de un juego que la app todavía no registra): el parser **ignora** un `G` desconocido (ni error ni "partida rota"), con un test con un `G` fuera del registro. La página cruda de `duel-clock` (dos instanciaciones de `G`) es el caso real; la fixture `duel-reads` trae además la unión `GameCreated` + `DuelCreated`.
+5. `GameDef.createSource` decide a qué fuente va "crear": `legacy` hasta el upgrade y `duel` después. El coinflip nuevo se crea con **control 0** (`create(house, stake, opponent)`) y se acepta con `splitCoins` + `accept` con `tx.object.random()` **último** (regla real: tras el comando con `Random` solo `TransferObjects`/`MergeCoins`).
+6. `sentEventTypes` = [creación, resolución]; en el coinflip nuevo la aceptación es atómica y emite `DuelActivated` y `DuelResolved` en la misma tx: "Mis partidas" usa la resolución del aceptante.
+7. La House de `duel-tx` es una **versión histórica**: sus `version` y `fees_collected` no son los vigentes. El `turn_ms` de ensayo de `duel-clock` (leído de `_meta.sandboxConstants`) se muestra con formato genérico.
+8. Si `AppConfig` hay que volverlo obligatorio, se declara; si no, queda opcional (ver §3).
+
+## 7. Hallazgos
+
+Ninguno 🔴 ni 🟠.
+
+- 🟡 **H-1 (handoff de 7b):** el "Tocar" de TASK-7b no alcanza (ver §6); hay que ampliarlo antes de lanzar 7b. **No es un defecto de 7a.**
+- 🔵 **N-1:** derivar el tag de `G` del argumento de tipo de `objects.pending.type` de la fixture de reloj, en lugar del regex sobre `ids` (más robusto ante recapturas).
+- 🔵 **N-2:** `AppConfig.upgrades?`/`typeOrigins?` opcionales: aceptado; la condición es que 7b pase `config` completo (§3).
+- 🔵 **N-3:** el +6,77 kB se medirá de nuevo al cierre de TASK-8 (§4).
+- 🔵 **N-4:** la tabla de abort codes de `duel` en `contracts/README.md` va en TASK-8.
+- 🔵 **N-5:** `DuelState` y el espejo `TIME_CONTROLS` son copias de `duel.move`; se revisan en todo upgrade que toque la tabla o el enum (ya está escrito en `agents.md` §5 y en el comentario de `TIME_CONTROLS`).
+
+## 8. Qué commitear
+
+1. **Código y tests:** `app/src/sui/{config,errors,events}.ts`, `app/src/sui/{config,errors}.test.ts` y los 5 archivos nuevos (`duel.ts`, `gameRegistry.ts`, `duel.test.ts`, `duelEvents.test.ts`, `gameRegistry.test.ts`). Mensaje: `app: add the duel and game registry layer of the sui reads and the duel abort messages (Refs #73)`.
+2. **Docs:** `app/README.md` y `agents.md`. Mensaje: `docs: describe the duel layer, the controls mirror and the abort codes of the app (Refs #73)`.
+3. **Reportes y STATUS:** el reporte del DEV (`<scratchpad>/REPORTE_MULTIGAME_TASK-7a.txt`, tras el §R-6) y esta revisión en `documents/REPORTES_MULTIGAME.md`, más la fila de STATUS. Mensaje: `docs: add the TASK-7a DEV report and MID review and record the task in STATUS (Refs #73)`.
+4. Sin palabras de cierre; antes del merge, el `grep` de cuerpos de commit y la revisión de integración en el PR.
+
+**Snippet para STATUS:** "app @ `feature/issue-73-multigame` (TASK-7a de #73, capa `sui/` parte 1), Node `v26.13.0`, 2026-11-20 | `config.ts` lee `upgrades` y `typeOrigins` (opcionales solo con `packageVersion` 1; con más, error de configuración, búsqueda por (módulo, nombre)); `gameRegistry.ts` con las fuentes `legacy` y `duel`, espejo de controles 0-7 y `CLAIM_GRACE_MS`; `duel.ts` y `events.ts` con el `Duel` y los 7 eventos (tipo exacto, BCS canónico, invariantes R.6); `ABORT_MESSAGES.duel` 0-25 y `transactionErrorMessage` con los IDs de `upgrades[]` | lint 0, typecheck 0, **1574 tests en 69 archivos (1246 + 328)**, contra las fixtures reales de TASK-5 | bundle de testnet 924,57 kB (+6,77 kB; gzip 279,89) | anti-fuga del sandbox en 0 | MID: PASA | pendiente de TASK-7b: pasar `upgrades` desde `useExecuteTransaction`, builders, lobby y 'Mis partidas' multi-fuente, claves e invalidación."
+
+## 9. Handoff de TASK-7b
+
+**Autorizo TASK-7b** **condicionado al ajuste de §6 (handoff v1.2.9)**: si prefieres lanzarlo sin el ajuste, el brief tiene que decir explícitamente que el DEV puede tocar los hooks que llaman a `lobby.ts`/`myGames.ts`/`useExecuteTransaction` y agregar (solo agregar) el literal prefijo al registro. Las **ocho advertencias de §6** van al brief. Dependencias ya cubiertas: config, registro, parsers y errores (7a), fixtures reales (TASK-5), regla de `ListEvents` (TASK-1b/H-i) y `PostRandomCommandRestrictions` (TASK-5).
+
+## 10. Lo que queda de la compuerta §G tras TASK-7a
+
+**Entra desde TASK-7a:** el punto 8 en parte (los gates de app de la capa `sui/` con las fixtures reales: 1574 tests) y la evidencia de que el mapeo de abortos cubre los 26 códigos con los IDs de `upgrades[]`.
+
+**Falta:** TASK-7b y TASK-8 (builders, lobby, "Mis partidas", componentes; en TASK-8 el README de `contracts/` con los 26 códigos y los 7 eventos, `max_bet < 2^63` y la regla del grep de CI); el punto 15 al armar la compuerta; `DECISIONES.md` y la parte testnet de `SMOKE_MULTIGAME.md` (la redacta el MID); la CI en verde sobre el head; la revisión de SEG-5 del MAYOR; y la autorización explícita del upgrade de testnet (TASK-6), pendiente y separada.
+
+## §R-6 sobre esta revisión
+Greps con `/usr/bin/grep` sobre este archivo: hex de 40-64 caracteres, `0x` + 8 hex, claves, rutas personales (incluidos el prefijo de las carpetas de sesión y el segmento "home" de su slug), y abreviaturas con puntos suspensivos: el resultado va en el mensaje de entrega. No incluye direcciones de cuenta ni hashes completos ni rutas personales.
+
+
+
+---
+
+## 23. TASK-7a (verificación del orquestador)
+
+> Controles independientes de los gates, el anti-fuga del sandbox y la auditoría de la transcripción.
+
+## Verificación independiente del orquestador (TASK-7a)
+
+Hecha sobre el árbol sin commitear (HEAD `84ca797`) antes de pasar el reporte al MID, y repetida al commitear.
+
+| Control | Resultado |
+|---|---|
+| `git status --porcelain --untracked-files=all` | 12 entradas: 7 modificadas (`agents.md`, `app/README.md`, `app/src/sui/{config,errors,events}.ts`, `config.test.ts`, `errors.test.ts`) y 5 nuevas (`duel.ts`, `gameRegistry.ts`, `duel.test.ts`, `duelEvents.test.ts`, `gameRegistry.test.ts`) |
+| `git diff --exit-code` sobre `contracts`, `app/src/components`, `app/src/pages`, `app/src/hooks`, `lobby.ts`, `myGames.ts`, `transactions`, `app/eslint.config.js`, `package.json`, `package-lock.json`, `app/package.json`, `.github` | 0 |
+| Control anti-fuga del sandbox (`SANDBOX\|testgame`, sin `-i`) sobre lo agregado y los 5 archivos nuevos de `contracts/sources` y `app/src` | 0 y 0 |
+| `npm run lint -w app`; `npm run typecheck -w app`; `npm test -w app` | 0 problemas; 0 errores; **1574 tests en 69 archivos, 0 fallos** (1246 + 328) |
+| `VITE_SUI_NETWORK=testnet npm run build -w app` | válido: `index-Cu2v4dGX.js` 924,57 kB (gzip 279,89 kB) frente a 917,80 kB (277,96 kB) del baseline: +6,77 kB |
+| §R-6 (4 greps, grep 3 con `claude-[0-9]+\|-home-`) sobre el diff y los 5 archivos nuevos | 0 coincidencias en los cuatro; ninguna de las 3 cuentas efímeras de las fixtures de TASK-5 aparece en el diff ni en el reporte |
+| §R-6 sobre el reporte del DEV (641 líneas, leído) | grep 3: 3 líneas, todas el texto del propio patrón; grep 1: 2 líneas, el SHA completo de `master` (público) y una autorreferencia de las salidas pegadas; grep 2 y 4: 0 |
+| `~/.sui` | 244 bytes, mtime 2026-10-30 17:52:52, solo `client.yaml`, `ef12fd09615f`; 0 procesos `sui` |
+| Docker | 6 contenedores / 17 imágenes: el contenedor extra es un `postgres:17` efímero de otra sesión del host, que no se tocó (referencia 5/17) |
+| Auditoría mecánica de la transcripción (`audit_dev.sh`, P-2) | 63 líneas Bash; 0 heredocs, 0 `sed -i`, 0 `tee`, 0 `cat >`, 0 `printf`; los 9 `echo` son diagnóstico a stdout; las redirecciones `>` escriben salidas de comandos al scratchpad; 13 `Write` y 47 `Edit`; el DEV no ejecutó `sui` |
+| Código de producción (leído por el orquestador) | `duel.ts` y `gameRegistry.ts` enteros; los diffs de `config.ts`, `errors.ts` y `events.ts`. Los tests no se leyeron línea por línea: los leyó el MID (`duel.test.ts` entero y los índices de los otros) y el orquestador comprobó con `grep` cómo leen la fixture del ensayo (por valor, afirmando `_meta.sandbox`) |
+
+**Nota:** las dos desviaciones que merecen mención para TASK-7b son `AppConfig.upgrades?` y `typeOrigins?` opcionales en el tipo (la condición del MID: 7b pasa la `config` completa a `transactionErrorMessage` y a `buildGameRegistry`) y el aumento de 6,77 kB del bundle por un import que aún no consume nadie.
+
+**Pendiente que no entra en este commit:** el handoff v1.2.9 (amplía el "Tocar" de TASK-7b con los hooks y un permiso aditivo sobre `gameRegistry.ts` y `events.ts`, e incorpora los pendientes de TASK-4 y TASK-5), que escribe el MID y se commitea aparte.
+
