@@ -54,7 +54,9 @@ sui_battleship/
 │   └── scripts/              # recaptura de contracts/fixtures/ en la localnet aislada: capture-read-fixtures.mjs (#10),
 │                             # capture-tx-fixtures.mjs (#11), capture-house-fixtures.mjs (#14) y su guarda compartida
 │                             # localnet-guard.mjs (#11: sin SDK ni red; #75: solo loopback `http://127.0.0.1:<puerto>`, 1024-65535,
-│                             # por defecto 9000, con localnet-guard.d.mts y el test app/src/test/localnet-guard.test.ts);
+│                             # por defecto 9000, con localnet-guard.d.mts y el test app/src/test/localnet-guard.test.ts; #77: la
+│                             # regla de la URL vive en app/src/sui/localnetUrl.mjs, que la guarda importa y la config de la
+│                             # app comparte para `VITE_LOCALNET_URL`);
 │                             # check-deploy-image.sh (#15): chequeo de la imagen de Railway (job deploy-image y local)
 ├── Dockerfile                # (#15) imagen de Railway: build de testnet + Caddy; sin testnet.json no se construye
 ├── .dockerignore             # (#15) contexto en lista blanca (sin localnet.json, .env*, node_modules ni dist)
@@ -194,6 +196,9 @@ borradas al cerrar. Nada en `~/.sui/`.
    - Las capturas de fixtures de la app (`app/scripts/capture-*.mjs`, con `"$NODE"` y desde `<repo>`) se corren siempre con
      `--url "$RPC_URL"`: la guarda (`localnet-guard.mjs`) acepta solo `http://127.0.0.1:<puerto>` (loopback, 1024-65535) y por
      defecto, sin `--url`, el 9000; con el 9000 ocupado por otro servicio, una captura sin `--url` le hablaría a ese servicio.
+     Esa misma regla (`app/src/sui/localnetUrl.mjs`, que la guarda importa) la aplica la app con `VITE_LOCALNET_URL` (#77):
+     `VITE_SUI_NETWORK=localnet VITE_LOCALNET_URL="$RPC_URL" npm run dev -w app` (sin `--host`) apunta el navegador a la
+     localnet aislada del `<puerto>`; sin la variable el navegador usa el 9000.
 5. **Cuentas:** `suic addresses --json` (solo alias y direcciones); las que se usen se anotan en
    `<SMOKE_DIR>/ids.env` (`export ADMIN=0x…`), que también acumula los IDs (`PKG`, `HOUSE`, …). **Nunca**
    `new-address`: su `--json` incluye la frase de recuperación (`crates/sui/src/client_commands.rs:2886-2891`).
@@ -209,7 +214,11 @@ borradas al cerrar. Nada en `~/.sui/`.
    regla B4); (2) ningún proceso de Node (sondas, scripts, la app) lee nada de `<SMOKE_DIR>/net`; (3) ninguna clave se
    imprime ni se pega. Las sondas en Node solo hablan con la red por gRPC.
    **Pasos de navegador (🌐):** Chrome headless + CDP con perfil desechable en `<SMOKE_DIR>` (`--user-data-dir`,
-   `HOME`/`XDG_*` aislados, depuración solo en `127.0.0.1`), nunca el navegador ni el perfil del usuario. Con más de
+   `HOME`/`XDG_*` aislados, depuración solo en `127.0.0.1`), nunca el navegador ni el perfil del usuario. La app se levanta con
+   `VITE_SUI_NETWORK=localnet VITE_LOCALNET_URL="$RPC_URL" npm run dev -w app` (#77), **siempre sin `--host`** (la burner wallet
+   de `DEV` no puede quedar escuchando en la red local), y con el 9000 ocupado por otro servicio el navegador **nunca** debe
+   apuntar al 9000: sin `VITE_LOCALNET_URL` la app usa ese puerto (con el valor vacío o inválido muestra un error de
+   configuración, no el 9000). Con más de
    una pestaña, cada una se abre con `Target.createTarget({ url, newWindow: true })`, todas visibles, y nunca
    `Page.bringToFront`: las pestañas de fondo quedan `hidden` y no corren intervalos ni remontajes (regla del smoke de #11).
 7. **Cierre:** `kill "$(cat <SMOKE_DIR>/sui.pid)"` (nunca `pkill`); en otra llamada, confirmar que terminó (`kill -0 "$(cat <SMOKE_DIR>/sui.pid)"` falla) y solo entonces `rm -rf <SMOKE_DIR>` (comprobar que ya no existe);

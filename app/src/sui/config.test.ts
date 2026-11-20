@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { resolveConfig } from './config';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ACCEPTED, REJECTED_STRINGS, REJECTED_STRINGS_ENV } from '../test/localnetCorpus';
+import { loadConfig, resolveConfig } from './config';
 import { buildGameRegistry, registryTypeKeys, type TypeOrigin } from './gameRegistry';
+import { NETWORKS } from './networks';
 
 const fixtures = import.meta.glob<unknown>('../../../contracts/scripts/fixtures/localnet.deployment.json', {
   eager: true,
@@ -480,4 +482,120 @@ describe('resolveConfig: packageVersion', () => {
   ])('rejects a packageVersion that is %s', (_label, packageVersion) => {
     expect(errorOf(resolveConfig(TESTNET_ENV, testnetWith({ packageVersion })))).toContain('el campo packageVersion (');
   });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// #77: `VITE_LOCALNET_URL`
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** Mensaje de D4 (#77) para un valor recibido: fijo, nombra la variable, lo recibido entre comillas y lo admitido. */
+function localnetUrlError(value: string): string {
+  return `VITE_LOCALNET_URL=${JSON.stringify(value)} no es válida: solo se admite http://127.0.0.1:<puerto> (loopback, puerto 1024-65535); sin la variable, la app usa el puerto 9000`;
+}
+
+const LOCALNET_DEPLOYMENTS = { [LOCALNET_KEY]: localnetFixture };
+
+describe('resolveConfig: VITE_LOCALNET_URL on localnet', () => {
+  it('uses the default port 9000 without the variable (today behavior, real localnet fixture)', () => {
+    const result = resolveConfig({ VITE_SUI_NETWORK: 'localnet', DEV: true }, LOCALNET_DEPLOYMENTS);
+    expect(result.ok && result.config.grpcUrl).toBe('http://127.0.0.1:9000');
+    expect(result.ok && result.config.grpcUrl).toBe(NETWORKS.localnet.grpcUrl);
+  });
+
+  it.each(ACCEPTED)('uses %s as the endpoint and keeps the rest of the config unchanged', (url) => {
+    const without = resolveConfig({ VITE_SUI_NETWORK: 'localnet', DEV: true }, LOCALNET_DEPLOYMENTS);
+    const withUrl = resolveConfig({ VITE_SUI_NETWORK: 'localnet', VITE_LOCALNET_URL: url, DEV: true }, LOCALNET_DEPLOYMENTS);
+    if (!without.ok || !withUrl.ok) {
+      throw new Error('se esperaba una config válida');
+    }
+    expect(withUrl.config.grpcUrl).toBe(url);
+    expect(withUrl.config).toEqual({ ...without.config, grpcUrl: url });
+  });
+
+  it.each([...REJECTED_STRINGS, ...REJECTED_STRINGS_ENV, ' '])(
+    'rejects the invalid value %j with the D4 message and never falls back to 9000',
+    (value) => {
+      const result = resolveConfig(
+        { VITE_SUI_NETWORK: 'localnet', VITE_LOCALNET_URL: value, DEV: true },
+        LOCALNET_DEPLOYMENTS,
+      );
+      expect(result).toEqual({ ok: false, error: localnetUrlError(value) });
+    },
+  );
+
+  it('treats the empty string as an error, not as the default (an unset shell variable must not reach port 9000)', () => {
+    const result = resolveConfig({ VITE_SUI_NETWORK: 'localnet', VITE_LOCALNET_URL: '', DEV: true }, LOCALNET_DEPLOYMENTS);
+    expect(result).toEqual({ ok: false, error: localnetUrlError('') });
+  });
+
+  it('treats undefined as the only value that means the default', () => {
+    const result = resolveConfig(
+      { VITE_SUI_NETWORK: 'localnet', VITE_LOCALNET_URL: undefined, DEV: true },
+      LOCALNET_DEPLOYMENTS,
+    );
+    expect(result.ok && result.config.grpcUrl).toBe('http://127.0.0.1:9000');
+  });
+
+  it('reports an invalid value before a missing localnet.json (D5)', () => {
+    const result = resolveConfig({ VITE_SUI_NETWORK: 'localnet', VITE_LOCALNET_URL: 'http://localhost:19000', DEV: true }, {});
+    expect(result).toEqual({ ok: false, error: localnetUrlError('http://localhost:19000') });
+  });
+
+  it('reports the missing localnet.json as usual when the value is valid', () => {
+    const result = resolveConfig({ VITE_SUI_NETWORK: 'localnet', VITE_LOCALNET_URL: 'http://127.0.0.1:19000', DEV: true }, {});
+    expect(errorOf(result)).toContain('Falta contracts/deployments/localnet.json');
+  });
+
+  it('does not change burnerWalletEnabled', () => {
+    const result = resolveConfig(
+      { VITE_SUI_NETWORK: 'localnet', VITE_LOCALNET_URL: 'http://127.0.0.1:19000', DEV: false },
+      LOCALNET_DEPLOYMENTS,
+    );
+    expect(result.ok && result.config.burnerWalletEnabled).toBe(false);
+  });
+});
+
+describe('resolveConfig: VITE_LOCALNET_URL on testnet', () => {
+  const without = resolveConfig(TESTNET_ENV, { [TESTNET_KEY]: TESTNET_DEPLOYMENT });
+
+  it.each([
+    ['valid', 'http://127.0.0.1:19000'],
+    ['invalid', 'http://evil.example:19000'],
+    ['empty', ''],
+  ])('ignores a %s value: same result as without it, with the testnet endpoint', (_label, value) => {
+    const result = resolveConfig({ ...TESTNET_ENV, VITE_LOCALNET_URL: value }, { [TESTNET_KEY]: TESTNET_DEPLOYMENT });
+    expect(result).toEqual(without);
+    expect(result.ok && result.config.grpcUrl).toBe(NETWORKS.testnet.grpcUrl);
+    expect(JSON.stringify(result)).not.toContain('VITE_LOCALNET_URL');
+  });
+});
+
+describe('loadConfig: VITE_LOCALNET_URL', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each(['http://127.0.0.1:19000', 'http://localhost:19000', ''])(
+    'returns the usual testnet config on testnet even with VITE_LOCALNET_URL=%j',
+    (value) => {
+      vi.stubEnv('VITE_SUI_NETWORK', 'testnet');
+      const baseline = loadConfig();
+      vi.stubEnv('VITE_LOCALNET_URL', value);
+      const result = loadConfig();
+      expect(result).toEqual(baseline);
+      expect(result.ok && result.config.grpcUrl).toBe(NETWORKS.testnet.grpcUrl);
+    },
+  );
+
+  it.each(['http://localhost:19000', ''])(
+    'reports the D4 error for the invalid value %j on localnet, whether or not localnet.json exists (D5)',
+    (value) => {
+      vi.stubEnv('VITE_SUI_NETWORK', 'localnet');
+      vi.stubEnv('VITE_LOCALNET_URL', value);
+      expect(loadConfig()).toEqual({ ok: false, error: localnetUrlError(value) });
+    },
+  );
+  // El caso "valor válido y sin localnet.json" (el error de archivo ausente de siempre) lo prueba `resolveConfig` con `{}`
+  // arriba; no se repite con `loadConfig` porque dependería de que no exista `contracts/deployments/localnet.json`, justo lo
+  // que deja una localnet publicada (el flujo que habilita #77).
 });

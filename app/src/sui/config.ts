@@ -1,5 +1,6 @@
 import { isValidTransactionDigest } from '@mysten/sui/utils';
 import { registryTypeKeys, type TypeOrigin } from './gameRegistry';
+import { isLoopbackUrl } from './localnetUrl.mjs';
 import { isNetwork, NETWORKS, type Network } from './networks';
 
 /** Única versión del esquema de `contracts/deployments/<red>.json` que entiende la app (`contracts/README.md`). */
@@ -26,7 +27,10 @@ export type PackageUpgrade = { version: number; packageId: string; txDigest: str
 /** Configuración de la app para la red del build: red, endpoint gRPC e IDs del despliegue. */
 export type AppConfig = {
   network: Network;
-  /** `NETWORKS[network].grpcUrl`. */
+  /**
+   * Endpoint **efectivo** de gRPC-web: `NETWORKS[network].grpcUrl` (el por defecto de la red) o, solo en localnet y con
+   * `VITE_LOCALNET_URL` definida, esa URL de loopback (#77).
+   */
   grpcUrl: string;
   /** 8 hex, del JSON de despliegue. */
   chainId: string;
@@ -211,9 +215,13 @@ function basename(path: string): string {
  * `upgrades` y `typeOrigins` (#73, plan §4.4) son opcionales **solo** con `packageVersion` 1 (o ausente: el `testnet.json` de
  * antes del upgrade sigue siendo válido y el registro queda con la fuente `legacy`). Con `packageVersion > 1` su falta, o la
  * falta de una entrada de un tipo del registro, es un error de configuración y nunca "no hay partidas".
+ *
+ * `VITE_LOCALNET_URL` (#77) solo se lee con `VITE_SUI_NETWORK=localnet`: `undefined` es el único valor que significa "el
+ * puerto por defecto"; cualquier otro (incluida la cadena vacía) tiene que cumplir `isLoopbackUrl` o es un error, nunca un
+ * regreso silencioso al 9000. Con testnet se ignora por completo (ni se valida ni da error).
  */
 export function resolveConfig(
-  env: { VITE_SUI_NETWORK?: string; DEV: boolean },
+  env: { VITE_SUI_NETWORK?: string; VITE_LOCALNET_URL?: string; DEV: boolean },
   deployments: Record<string, unknown>,
 ): ConfigResult {
   const requested = env.VITE_SUI_NETWORK;
@@ -227,6 +235,17 @@ export function resolveConfig(
     return fail(`VITE_SUI_NETWORK=${JSON.stringify(requested)} no es una red admitida: usar localnet o testnet`);
   }
   const network = requested;
+
+  let grpcUrl = NETWORKS[network].grpcUrl;
+  if (network === 'localnet' && env.VITE_LOCALNET_URL !== undefined) {
+    const localnetUrl = env.VITE_LOCALNET_URL;
+    if (!isLoopbackUrl(localnetUrl)) {
+      return fail(
+        `VITE_LOCALNET_URL=${JSON.stringify(localnetUrl)} no es válida: solo se admite http://127.0.0.1:<puerto> (loopback, puerto 1024-65535); sin la variable, la app usa el puerto 9000`,
+      );
+    }
+    grpcUrl = localnetUrl;
+  }
 
   const fileName = `${network}.json`;
   const file = `contracts/deployments/${fileName}`;
@@ -284,7 +303,7 @@ export function resolveConfig(
     ok: true,
     config: {
       network,
-      grpcUrl: NETWORKS[network].grpcUrl,
+      grpcUrl,
       chainId,
       packageId,
       originalPackageId,
@@ -298,12 +317,23 @@ export function resolveConfig(
 }
 
 /**
- * Único punto de la app que lee `import.meta.env` y los JSON de `contracts/deployments/` (ARQ-8, PROY-15). El glob
- * se resuelve al compilar: un `<red>.json` ausente deja el registro sin esa clave y `resolveConfig` lo reporta.
+ * Único punto de la app que lee las variables `import.meta.env.*` y los JSON de `contracts/deployments/` (ARQ-8,
+ * PROY-15). El glob se resuelve al compilar: un `<red>.json` ausente deja el registro sin esa clave y `resolveConfig` lo
+ * reporta.
+ *
+ * Las variables se leen **solo por propiedad** (nunca el objeto del entorno entero: ni spread ni alias ni argumento) y
+ * `VITE_LOCALNET_URL` solo se pasa con `VITE_SUI_NETWORK === 'localnet'`: Vite reemplaza cada `import.meta.env.VITE_*`
+ * por un literal y esa comparación por una constante, así que un build de testnet no embebe el valor de la variable
+ * aunque esté definida en el entorno (#77, D1).
  */
 export function loadConfig(): ConfigResult {
   return resolveConfig(
-    { VITE_SUI_NETWORK: import.meta.env.VITE_SUI_NETWORK, DEV: import.meta.env.DEV },
+    {
+      VITE_SUI_NETWORK: import.meta.env.VITE_SUI_NETWORK,
+      VITE_LOCALNET_URL:
+        import.meta.env.VITE_SUI_NETWORK === 'localnet' ? import.meta.env.VITE_LOCALNET_URL : undefined,
+      DEV: import.meta.env.DEV,
+    },
     import.meta.glob<unknown>('../../../contracts/deployments/*.json', { eager: true, import: 'default' }),
   );
 }
