@@ -1,4 +1,4 @@
-// Tests de `deployment.mjs` sobre salidas reales de la Sui CLI 1.83.0 capturadas en una localnet aislada y desechable
+// Tests de `deployment.mjs` sobre salidas reales de la Sui CLI 1.84.0 capturadas en una localnet aislada y desechable
 // (`fixtures/`, TASK-1 de #7). Los valores esperados se leyeron del fixture a mano (`jq`) y van como literales.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,17 +25,17 @@ const PUBLISH = JSON.parse(readFixture('localnet-publish.json'));
 const DRY_RUN = JSON.parse(readFixture('localnet-publish-dry-run.json'));
 const PUBLISHED_TOML = readFixture('Published.localnet.toml');
 
-const LOCALNET_CHAIN_ID = '87818ef5';
-const PKG = '0x280be75013446e6acf6fe1291884cfd05889a12ce00e82c4f1a05b2235e2b06e';
-const HOUSE = '0xbcbcb0392aad3b13aeb43a007105a1467f4d33a3f40b28aff08f72f4c4da0930';
-const HOUSE_CAP = '0xd37dee147b2f38e168ad47537974ae47a244b52b7caf02545712c3f35a0bc625';
-const UPGRADE_CAP = '0xc13c18241f1157574188e5c7535612099754b50d7f8a6a8a7351bb55b5d874b3';
-const DIGEST = 'C8teaea3BBUvqFnAJ7WidwvBYAgE7zpNWsZ1gEkiwBCz';
-const TIMESTAMP_MS = '1793631179013';
+const LOCALNET_CHAIN_ID = 'cb1e492c';
+const PKG = '0x8b6a8b1f648af5773e3f97e9fcc07edab93d77c165c4e1dc99c1a41ef87fd71d';
+const HOUSE = '0xbf3bf8d1638985c2acc7b0b86e2563fd30ade6c45aa4532a1ffdaa8fbbeb8035';
+const HOUSE_CAP = '0x95794194fad84a5f3fee87a06d88b79a3044b0f9b3bc38db3444b3e142135e7c';
+const UPGRADE_CAP = '0x1ae71697a07810fb1d42b77e008bb7225bef3ffb1b65a93aca17faca3739748a';
+const DIGEST = 'BVdpCHXfQ9qwEG5tABiZBeVN1qkgtiqUPhJ4GazaJYdH';
+const TIMESTAMP_MS = '1795148038204';
 const SOURCE_COMMIT = 'eb8489d239e661c22134d5c2eea019f0a67d25db';
-const SUI_CLI_VERSION = '1.83.0-16d2dc1e05ed';
-const FRAMEWORK_REV = '719fb2960ccfbf9f4d33041f8ea5146d30671696'; // fixture localnet.deployment.json: registro histórico (PV 139)
-const LOCK_FRAMEWORK_REV = '05ad86a3e86c522deea116f80dc2bf2309a53363'; // Move.lock del repo: piso de la PV 140 (repin de #8)
+const SUI_CLI_VERSION = '1.84.0-9dc25070cf2e';
+const FRAMEWORK_REV = 'e6f43880f4b65e2c1f0397583a9690b4b22c9223'; // fixture localnet.deployment.json: piso de la PV 142 (recapturada en #75)
+const LOCK_FRAMEWORK_REV = 'e6f43880f4b65e2c1f0397583a9690b4b22c9223'; // Move.lock del repo: piso de la PV 142 (repin de #75)
 
 const localnetDeployment = () =>
   buildDeployment({
@@ -146,10 +146,10 @@ test('parseDryRunOutput sobre el fixture real: ok, gas estimado y los cuatro IDs
   assert.ok(result.gasEstimate > 0n);
   assert.equal(result.gasEstimate, 47_246_000n);
   assert.deepEqual(result.created, {
-    packageId: '0x53f46dd0e78a04dde73a51d100b2f51fa6c5ee67d773a70b500a189db8b7b2a6',
-    houseId: '0x72c4f3280217f967d374a3e50f46e91b091e811cc235f260657a772c0409db07',
-    houseCapId: '0x4e67a6a9739f80833ba5b40c8f51462384b294cc03848ccb231e15c0b1fc0bfa',
-    upgradeCapId: '0xc307c66239d046e66868232aee1dc1a90a860308970c68b21e57ed2e7388058b',
+    packageId: '0xe8c83494b09dedd61ae4910ab9f65a04b5aefd4b2690887249a08c80f4e4ba94',
+    houseId: '0x32b612672a6f79427ae028469c4bd344bb53b2c487bd7e969442a7064074cdcd',
+    houseCapId: '0x606b012e49781c44d6b20f7c83dc90606f14fad8dff5e0165f599952c6564274',
+    upgradeCapId: '0x05fb2d1428db3cb5c3b5c12e2068076dd73a600cde9b1ec8c1bff20edc4efa67',
   });
 });
 
@@ -177,7 +177,7 @@ test('buildDeployment arma los 14 campos en orden y validateDeployment lo acepta
     houseId: HOUSE,
     houseCapId: HOUSE_CAP,
     publishTxDigest: DIGEST,
-    publishTimestamp: '2026-11-02T14:52:59.013Z',
+    publishTimestamp: '2026-11-20T04:13:58.204Z',
     sourceCommit: SOURCE_COMMIT,
     suiCliVersion: SUI_CLI_VERSION,
     frameworkRev: FRAMEWORK_REV,
@@ -243,11 +243,11 @@ test('parsePublishedToml lee cada campo del fixture real', () => {
   assert.deepEqual([...entries.keys()], ['localnet']);
   assert.deepEqual(entries.get('localnet'), {
     chainId: LOCALNET_CHAIN_ID,
-    publishedAt: '0x06501a59986ee126787b2e18b133737d37ee89d1ffd207f38b2ffe61b18a4ec8',
-    originalId: '0x06501a59986ee126787b2e18b133737d37ee89d1ffd207f38b2ffe61b18a4ec8',
+    publishedAt: '0xc1c2c06f1d7d60da6eadc482a2f0983f07d1c917e9ad0e35f30e8ba3c3ef9514',
+    originalId: '0xc1c2c06f1d7d60da6eadc482a2f0983f07d1c917e9ad0e35f30e8ba3c3ef9514',
     version: 1,
-    toolchainVersion: '1.83.0',
-    upgradeCapability: '0xf47132acbaeb5c58715c658a84f05119bf95523dd9ea099a3d3364ce1518acbb',
+    toolchainVersion: '1.84.0',
+    upgradeCapability: '0x32ea9b07651911fc31c4c56ce234b33d37823b8553b0f09c33d8282196f13081',
   });
 });
 
@@ -283,7 +283,7 @@ const strictTomlCases = [
   ['entero mal formado', () => tomlWithLine(9, 'version = 1.0'), /^Error: Published\.toml:9: version debe ser un entero$/],
   [
     'texto sin comillas',
-    () => tomlWithLine(6, 'chain-id = 87818ef5'),
+    () => tomlWithLine(6, 'chain-id = cb1e492c'),
     /^Error: Published\.toml:6: chain-id debe ser un texto entre comillas$/,
   ],
 ];

@@ -6,8 +6,56 @@
 // el SDK (import dinámico), crea el cliente y lee el chain id del nodo para `assertDeployment`.
 import process from 'node:process';
 
-/** Única URL aceptada: la localnet aislada de `agents.md` §3. */
+/** URL por defecto (sin `--url`): la localnet aislada de `agents.md` §3 en el puerto por defecto de `sui start`. */
 export const LOCALNET_URL = 'http://127.0.0.1:9000';
+
+// Solo loopback IPv4 literal, `http`, puerto decimal de 4 o 5 dígitos sin ceros a la izquierda y nada más (sin
+// credenciales, path, query ni fragmento). En JavaScript `$` ancla solo al final de la cadena (sin la bandera `m`).
+const LOOPBACK_URL = /^http:\/\/127\.0\.0\.1:([1-9][0-9]{3,4})$/;
+
+/**
+ * `true` si y solo si `url` es un `string` de la forma `http://127.0.0.1:<puerto>` con el puerto entre 1024 y 65535. La
+ * restricción "solo loopback" se conserva: lo único que se generaliza es el puerto (una localnet aislada puede correr en
+ * otro puerto con `sui start --fullnode-rpc-port`, p. ej. si el 9000 lo ocupa un servicio de otro proyecto del host).
+ * Función pura: sin `process`, sin red.
+ *
+ * Mantener en sincronía con `localnet-guard.d.mts`; los tests de `app/src/test/localnet-guard.test.ts` son la verificación.
+ *
+ * @param {unknown} url valor a validar (de cualquier tipo: solo un `string` puede ser válido)
+ * @returns {boolean}
+ */
+export function isLoopbackUrl(url) {
+  if (typeof url !== 'string') return false;
+  const match = LOOPBACK_URL.exec(url);
+  if (match === null) return false;
+  const port = Number(match[1]);
+  return Number.isInteger(port) && port >= 1024 && port <= 65535;
+}
+
+/**
+ * Valida los argumentos de un script de captura: `--url <valor>` opcional (sin `--url`, la URL es `LOCALNET_URL`), el valor
+ * tiene que cumplir `isLoopbackUrl` y cualquier otro argumento es un error (`--url` repetido, `--url=<valor>`, etc.).
+ * Función pura: devuelve el resultado en vez de escribir por `stderr` o salir.
+ *
+ * Mantener en sincronía con `localnet-guard.d.mts`; los tests de `app/src/test/localnet-guard.test.ts` son la verificación.
+ *
+ * @param {string[]} argv argumentos del proceso sin `node` ni el script (`process.argv.slice(2)`)
+ * @returns {{ ok: true, url: string } | { ok: false, message: string }}
+ */
+export function checkLocalnetArgs(argv) {
+  const urlFlag = argv.indexOf('--url');
+  const url = urlFlag === -1 ? LOCALNET_URL : argv[urlFlag + 1];
+  const unknownArgs = urlFlag === -1 ? argv : argv.filter((_arg, i) => i !== urlFlag && i !== urlFlag + 1);
+  if (!isLoopbackUrl(url) || unknownArgs.length > 0) {
+    return {
+      ok: false,
+      message:
+        'solo se captura desde la localnet aislada (http://127.0.0.1:<puerto>, 1024-65535, por defecto 9000); ' +
+        `recibido --url ${String(url)}${unknownArgs.length > 0 ? ` y argumentos desconocidos: ${unknownArgs.join(' ')}` : ''}.`,
+    };
+  }
+  return { ok: true, url };
+}
 
 /**
  * Valida los argumentos de un script de captura y devuelve la URL. Con otra URL o con argumentos desconocidos escribe el
@@ -19,18 +67,12 @@ export const LOCALNET_URL = 'http://127.0.0.1:9000';
  * @returns {string} la URL de la localnet
  */
 export function assertLocalnetUrl(argv, scriptName) {
-  const urlFlag = argv.indexOf('--url');
-  const url = urlFlag === -1 ? LOCALNET_URL : argv[urlFlag + 1];
-  const unknownArgs = urlFlag === -1 ? argv : argv.filter((_arg, i) => i !== urlFlag && i !== urlFlag + 1);
-  if (url !== LOCALNET_URL || unknownArgs.length > 0) {
-    process.stderr.write(
-      `${scriptName}: solo se captura desde la localnet aislada (${LOCALNET_URL}); ` +
-        `recibido --url ${String(url)}${unknownArgs.length > 0 ? ` y argumentos desconocidos: ${unknownArgs.join(' ')}` : ''}. ` +
-        'No se hizo ningún pedido.\n',
-    );
+  const result = checkLocalnetArgs(argv);
+  if (!result.ok) {
+    process.stderr.write(`${scriptName}: ${result.message} No se hizo ningún pedido.\n`);
     process.exit(2);
   }
-  return url;
+  return result.url;
 }
 
 /**

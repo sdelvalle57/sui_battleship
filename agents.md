@@ -53,7 +53,8 @@ sui_battleship/
 │   ├── public/               # (#15) estáticos que Vite copia tal cual a la raíz de dist/: favicon.svg
 │   └── scripts/              # recaptura de contracts/fixtures/ en la localnet aislada: capture-read-fixtures.mjs (#10),
 │                             # capture-tx-fixtures.mjs (#11), capture-house-fixtures.mjs (#14) y su guarda compartida
-│                             # localnet-guard.mjs (#11: sin SDK ni red);
+│                             # localnet-guard.mjs (#11: sin SDK ni red; #75: solo loopback `http://127.0.0.1:<puerto>`, 1024-65535,
+│                             # por defecto 9000, con localnet-guard.d.mts y el test app/src/test/localnet-guard.test.ts);
 │                             # check-deploy-image.sh (#15): chequeo de la imagen de Railway (job deploy-image y local)
 ├── Dockerfile                # (#15) imagen de Railway: build de testnet + Caddy; sin testnet.json no se construye
 ├── .dockerignore             # (#15) contexto en lista blanca (sin localnet.json, .env*, node_modules ni dist)
@@ -75,8 +76,8 @@ sui_battleship/
 **Toolchain:** Sui CLI instalada con `suiup` en local (versión fijada en `documents/STATUS.md`); en CI, el
 binario `sui` del mismo asset del release, verificado por SHA-256 (`.github/workflows/ci.yml`, `env`),
 siempre la misma versión (D-20261030-13); Node (versión en
-`.nvmrc`, PROY-17), npm. El `node` por defecto de la máquina puede ser otro: correr `nvm use` antes de cada gate. Instalada el 2026-10-30:
-Sui CLI `1.83.0` (release `testnet`) vía `suiup` en `~/.local/bin` (STATUS H1, sección Toolchain).
+`.nvmrc`, PROY-17), npm. El `node` por defecto de la máquina puede ser otro: correr `nvm use` antes de cada gate. Instalada el 2026-11-19 (#75):
+Sui CLI `1.84.0` (release `testnet`) vía `suiup` en `~/.local/bin` (antes `1.83.0`, 2026-10-30; STATUS H1, sección Toolchain).
 
 **Prerrequisito de `sui move`:** `~/.sui/sui_config/client.yaml` **sin claves**, con `active_env: testnet`
 (D-20261030-07; STATUS Toolchain/H11). Sin ese archivo la CLI ofrece crear una config y genera una clave
@@ -134,11 +135,19 @@ borradas al cerrar. Nada en `~/.sui/`.
    SMOKE_DIR=<SMOKE_DIR>
    SUI=<ruta absoluta del binario sui>
    NODE=<ruta absoluta de Node 26>     # p. ej. ~/.nvm/versions/node/v26.13.0/bin/node, escrita literal (HOME aislado: sin nvm)
+   RPC_URL=http://127.0.0.1:<puerto>   # el RPC de la localnet: 9000 por defecto; otro puerto si el 9000 está ocupado (paso 4)
    export SUI_CONFIG_DIR="$SMOKE_DIR/net" TMPDIR="$SMOKE_DIR/tmp" HOME="$SMOKE_DIR/home" MOVE_HOME=<HOME real>/.move
    [ -x "$SUI" ] && [ -d "$SUI_CONFIG_DIR" ] || { echo GUARD-FAIL; return 97; }
-   smoke_guard() {
+   # Solo para el arranque (paso 4): lee únicamente el config aislado, sin red.
+   smoke_guard_pre() {
      [ -f "$SUI_CONFIG_DIR/client.yaml" ] \
        && [ "$(printf 'n\n' | "$SUI" client active-env)" = localnet ] \
+       || { echo GUARD-FAIL; return 97; }
+   }
+   # Todo lo demás: además, el RPC del env activo es exactamente $RPC_URL (nunca el de otro servicio).
+   smoke_guard() {
+     smoke_guard_pre || return 97
+     [ "$(printf 'n\n' | "$SUI" client --json envs | jq -r '.[1] as $a | .[0][] | select(.alias==$a) | .rpc')" = "$RPC_URL" ] \
        || { echo GUARD-FAIL; return 97; }
    }
    suic() { printf 'n\n' | "$SUI" client "$@"; }
@@ -147,17 +156,30 @@ borradas al cerrar. Nada en `~/.sui/`.
 
    `HOME` aislado es la segunda barrera (si un camino de la CLI ignorara `SUI_CONFIG_DIR`, caería en
    `<SMOKE_DIR>/home/.sui`, nunca en `~/.sui/`); `MOVE_HOME` conserva la caché de dependencias Move
-   (`move-command-line-common/src/env.rs:28-37`). Si aun así se descargaran de nuevo, se declara.
+   (`move-command-line-common/src/env.rs:28-37`). Si aun así se descargaran de nuevo, se declara. `smoke_guard` no toca
+   la red: `suic --json envs` solo lista alias y RPC del config aislado. Con el puerto por defecto, `smoke_guard_pre` y
+   `smoke_guard` coinciden en la práctica; con otro puerto, `smoke_guard` falla (`GUARD-FAIL`) hasta que `sui start`
+   reescribe el alias (paso 4), de modo que nunca se le habla al servicio que ocupe el 9000.
 3. **Prefijo de cada llamada con `sui`:** `. <SMOKE_DIR>/env.sh &&` y, salvo la de génesis,
    `{ . <SMOKE_DIR>/ids.env 2>/dev/null || true; } && smoke_guard &&`. Siempre `"$SUI"` o `suic`, nunca `sui` a
    secas: sin `env.sh`, `"$SUI"` está vacío y la llamada falla sin tocar nada. Un `GUARD-FAIL` detiene el smoke y
    se reporta.
 4. **Génesis y arranque** (sin `--force-regenesis` ni faucet; la génesis crea 5 cuentas con fondos y un
    `client.yaml` con `active_env = localnet`, sin imprimir frases):
-   - Génesis: `. <SMOKE_DIR>/env.sh && [ ! -e "$SUI_CONFIG_DIR/client.yaml" ] && printf 'n\n' | "$SUI" genesis --working-dir "$SUI_CONFIG_DIR" > "$SMOKE_DIR/genesis.log" 2>&1; echo "exit=$?"`
+   - **Puerto (antes de nada):** `ss -ltn | grep ':9000 '`. Si el 9000 lo ocupa otro servicio del host (p. ej. de otro
+     proyecto), **no se toca**: la localnet corre en otro puerto libre `<puerto>` (confirmarlo con `ss -ltn | grep -c ':<puerto> '`
+     = 0), con `--fullnode-rpc-port <puerto>` (por defecto 9000) y `RPC_URL=http://127.0.0.1:<puerto>` en `env.sh`. Sin el flag,
+     `sui start` muere con `Address already in use`, y un `suic` con el alias apuntando al 9000 le hablaría al otro servicio.
+   - Génesis (sin ningún `suic`): `. <SMOKE_DIR>/env.sh && [ ! -e "$SUI_CONFIG_DIR/client.yaml" ] && printf 'n\n' | "$SUI" genesis --working-dir "$SUI_CONFIG_DIR" > "$SMOKE_DIR/genesis.log" 2>&1; echo "exit=$?"`
    - Arranque como **comando en segundo plano del harness** (`run_in_background`), con el env en la misma orden y
-     `exec` (así el PID guardado es el de la red): `. <SMOKE_DIR>/env.sh && smoke_guard && echo $$ > "$SMOKE_DIR/sui.pid" && exec "$SUI" start --network.config "$SUI_CONFIG_DIR" > "$SMOKE_DIR/sui-start.log" 2>&1`.
-     Nunca `nohup … &` dentro de una llamada normal.
+     `exec` (así el PID guardado es el de la red): `. <SMOKE_DIR>/env.sh && smoke_guard_pre && echo $$ > "$SMOKE_DIR/sui.pid" && exec "$SUI" start --network.config "$SUI_CONFIG_DIR" [--fullnode-rpc-port <puerto>] > "$SMOKE_DIR/sui-start.log" 2>&1`
+     (el flag solo con un puerto distinto de 9000; el arranque usa `smoke_guard_pre`, no `smoke_guard`). Nunca `nohup … &`
+     dentro de una llamada normal.
+   - **Orden obligatorio:** génesis → `sui start` con el flag → recién después `smoke_guard`, `suic` y `publish.mjs`. El
+     `client.yaml` de la génesis apunta `localnet` al 9000 hasta que arranca la red: `sui start --network.config <dir>`
+     reescribe el alias `localnet` del config de `<dir>` (el aislado) con el RPC de `--fullnode-rpc-port`
+     (`crates/sui/src/sui_commands.rs:1292-1297` y `update_wallet_config_rpc` @ `testnet-v1.84.0`); no hace falta ningún
+     `new-env` (no existe `remove-env`, y `new-env` no redefine un alias existente). Cualquier `suic` anterior iría al 9000.
    - Comprobar que está arriba, en otra llamada: `. <SMOKE_DIR>/env.sh && smoke_guard && suic chain-identifier`.
    - Publicación efímera del paquete con el script (#7), **después** del paso 5 (necesita `ADMIN` en `ids.env`), con
      el prefijo del paso 3 y desde `contracts/`. Un `--pubfile-path` nuevo por génesis (uno viejo hace fallar a la CLI):
@@ -165,6 +187,9 @@ borradas al cerrar. Nada en `~/.sui/`.
      - (B) cuando la app necesita la ruta por defecto: lo mismo **sin `--out`**, que escribe
        `contracts/deployments/localnet.json` (ignorado por git; el script crea la carpeta si falta y el cierre lo borra).
      Si modifica `Move.lock`: `git checkout -- contracts/Move.lock` y declararlo.
+   - Las capturas de fixtures de la app (`app/scripts/capture-*.mjs`, con `"$NODE"` y desde `<repo>`) se corren siempre con
+     `--url "$RPC_URL"`: la guarda (`localnet-guard.mjs`) acepta solo `http://127.0.0.1:<puerto>` (loopback, 1024-65535) y por
+     defecto, sin `--url`, el 9000; con el 9000 ocupado por otro servicio, una captura sin `--url` le hablaría a ese servicio.
 5. **Cuentas:** `suic addresses --json` (solo alias y direcciones); las que se usen se anotan en
    `<SMOKE_DIR>/ids.env` (`export ADMIN=0x…`), que también acumula los IDs (`PKG`, `HOUSE`, …). **Nunca**
    `new-address`: su `--json` incluye la frase de recuperación (`crates/sui/src/client_commands.rs:2886-2891`).
@@ -191,8 +216,16 @@ borradas al cerrar. Nada en `~/.sui/`.
    antes no existen); y, como los ignora `.gitignore`, cada uno por separado: `test ! -e contracts/deployments/localnet.json`
    y `! compgen -G 'contracts/Pub.*.toml'` (bash), los dos con estado 0. Nunca con un único `ls` de las dos rutas: `ls`
    sale ≠ 0 si falta **cualquiera** de ellas, así que un `Pub.*.toml` sobrante pasaría por limpio (m-1 de #8).
-   `sui start` 1.83 sale con código 144 ante SIGTERM; el harness marca el comando como fallido: es esperado, lo que
-   vale es que `kill -0` falle.
+   `sui start` 1.83 y 1.84 salen con código 144 ante SIGTERM; el harness marca el comando como fallido: es esperado, lo que
+   vale es que `kill -0` falle. Con un puerto distinto de 9000, también que `ss -ltn | grep -c ':<puerto> '` dé 0 (el puerto
+   queda libre) y que el 9000 siga como estaba (el servicio de otro proyecto no se toca).
+8. **Nota de proceso (R-12): los reportes y las ediciones de docs con comandos `sui`/`suiup` se escriben solo con las herramientas
+   de escribir/editar archivos del harness.** Nunca con un heredoc (ni entrecomillado), `sed -i`, `printf` o `echo`: un texto
+   con acentos graves dentro de un heredoc sin comillas se ejecuta como sustitución de comandos y puede lanzar un `sui` a secas
+   con el HOME real. Además de la guarda del paso 7, `stat`, `ls -la` y `sha256sum` de `client.yaml` (nunca `cat`) también se
+   corren **después de escribir cada reporte o borrador** y **después de cerrar cada génesis**, y sobre cada borrador:
+   `grep -c 'command not found'` (debe dar 0) y `grep -nE 'Cannot run genesis|sui_config|Address already in use'` (rastros de
+   una ejecución accidental). Ante cualquier ejecución accidental de `sui`: parar, verificar `~/.sui/` y declararlo en el reporte.
 
 **Reglas del script de publicación para agentes (D-20261102-03):** ningún agente corre
 `publish.mjs publish --network testnet`, ni con `--dry-run`. Un agente solo define `SUI_CONFIG_DIR` como
@@ -379,7 +412,7 @@ testnet con una wallet real.
 
 | Qué | Dónde | Nota |
 |---|---|---|
-| Sui CLI | `suiup` (`~/.local/bin`) | `1.83.0-16d2dc1e05ed`, release `testnet` (STATUS H1, Toolchain) |
+| Sui CLI | `suiup` (`~/.local/bin`) | `1.84.0-9dc25070cf2e`, release `testnet` (STATUS H1, Toolchain) |
 | CI | `.github/workflows/ci.yml` (`ubuntu-24.04`) | Versión en `env` (`SUI_VERSION`/`SUI_COMMIT`) = la de STATUS; config sin claves en `$RUNNER_TEMP`; sin secretos |
 | `client.yaml` | `~/.sui/sui_config/` | Sin claves **siempre** (`active_env: testnet`, D-20261030-07); la clave del owner vive en su `SUI_CONFIG_DIR` propio (D-20261102-03). **Nunca** en el repo ni en logs |
 | Keystore / direcciones | `~/.sui/sui_config/` | **Nunca** en el repo ni en logs |

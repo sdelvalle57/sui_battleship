@@ -68,6 +68,12 @@ del owner o testnet se entrega como checklist (formato `FLUJO_AGENTES.md` §6).
 
 Usa exactamente la plantilla de `FLUJO_AGENTES.md` §5. Sin reporte completo, el MID no revisa.
 
+**Cómo se escribe el reporte (R-12, #75).** Los reportes y los borradores con comandos de `sui` o `suiup` se escriben **solo con las herramientas de escribir
+y editar archivos** del harness, nunca con un heredoc (ni entrecomillado), `sed -i`, `printf` o `echo`: un texto con acentos graves dentro de un heredoc sin
+comillas se ejecuta como sustitución de comandos y puede lanzar un `sui` a secas con el HOME real. Detalle y verificaciones (guarda de `~/.sui` tras cada
+reporte, `grep` de rastros de ejecución accidental): `agents.md` §3, paso 8. En el reporte, del `client.yaml` basta con los primeros 12 hex del `sha256sum` o
+«igual a la línea base».
+
 ## Respondiendo a correcciones del MID
 
 Cada hallazgo: ✅ corregido (qué + test) · 🤔 aclaración (evidencia técnica) · 📋 diferido (solo MINOR, con issue propuesto). Después de corregir, re-ejecuta la auto-revisión completa.

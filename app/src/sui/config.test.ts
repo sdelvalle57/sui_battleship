@@ -50,11 +50,11 @@ describe('resolveConfig: valid deployments', () => {
       config: {
         network: 'localnet',
         grpcUrl: 'http://127.0.0.1:9000',
-        chainId: '87818ef5',
-        packageId: '0x280be75013446e6acf6fe1291884cfd05889a12ce00e82c4f1a05b2235e2b06e',
-        originalPackageId: '0x280be75013446e6acf6fe1291884cfd05889a12ce00e82c4f1a05b2235e2b06e',
-        houseId: '0xbcbcb0392aad3b13aeb43a007105a1467f4d33a3f40b28aff08f72f4c4da0930',
-        publishTxDigest: 'C8teaea3BBUvqFnAJ7WidwvBYAgE7zpNWsZ1gEkiwBCz',
+        chainId: 'cb1e492c',
+        packageId: '0x8b6a8b1f648af5773e3f97e9fcc07edab93d77c165c4e1dc99c1a41ef87fd71d',
+        originalPackageId: '0x8b6a8b1f648af5773e3f97e9fcc07edab93d77c165c4e1dc99c1a41ef87fd71d',
+        houseId: '0xbf3bf8d1638985c2acc7b0b86e2563fd30ade6c45aa4532a1ffdaa8fbbeb8035',
+        publishTxDigest: 'BVdpCHXfQ9qwEG5tABiZBeVN1qkgtiqUPhJ4GazaJYdH',
         burnerWalletEnabled: false,
       },
     });
