@@ -1,7 +1,9 @@
 import { useLocation, useParams } from 'react-router';
+import { ChainClockSampler } from '../components/ChainClockSampler';
 import { readCreatedNotice } from '../components/createdNotice';
 import { GameActions } from '../components/GameActions';
 import { GameDetail } from '../components/GameDetail';
+import { asActiveDuel } from '../components/gameTexts';
 import { ReadState } from '../components/ReadState';
 import { TransactionStatus } from '../components/TransactionStatus';
 import { rowFromDetail } from '../hooks/gameRow';
@@ -57,6 +59,8 @@ export function GameDetailPage() {
       <ReadState status={result.status} onRetry={result.refetch} busy={result.isFetching} />
       {game !== null && (
         <>
+          {/* Solo una partida activa con reloj cuenta un plazo: sin ella no se pide la hora de la cadena (TASK-8b). */}
+          {asActiveDuel(game) !== null && <ChainClockSampler />}
           <GameDetail game={game} lastActivityMs={timestampMs} network={network} account={address} />
           <GameActions game={game} />
         </>

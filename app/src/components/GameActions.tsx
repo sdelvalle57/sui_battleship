@@ -11,6 +11,8 @@ import { ACCEPT_GAS_RESERVE_MIST, acceptBalanceCheck, wonBy } from '../sui/accep
 import { formatMist } from '../sui/format';
 import { NOT_INVITED_HINT } from '../sui/gameActions';
 import type { ResolvedGame } from '../sui/gameTx';
+import { ACTION_TEXT, asActiveDuel, claimedText, refundedText } from './gameTexts';
+import { TimeoutActions } from './TimeoutActions';
 import { TransactionStatus } from './TransactionStatus';
 import { IN_FLIGHT_TEXT } from './txNotice';
 
@@ -43,9 +45,11 @@ function adoptedStatus(adopted: AdoptedTx, address: string | null): { outcome: T
       return { outcome: adopted.outcome, text: rejectedText(adopted.outcome.kind === 'success' ? adopted.outcome.value : null) };
     case 'accept':
       return { outcome: adopted.outcome, text: acceptedText(adopted.outcome.kind === 'success' ? adopted.outcome.value : null, address) };
-    case 'create':
     case 'claim':
+      return { outcome: adopted.outcome, text: claimedText(adopted.outcome.kind === 'success' ? adopted.outcome.value : null, address) };
     case 'refundStalled':
+      return { outcome: adopted.outcome, text: refundedText(adopted.outcome.kind === 'success' ? adopted.outcome.value : null) };
+    case 'create':
     case 'updateFeeRate':
     case 'updateBetLimits':
     case 'withdrawFees':
@@ -82,7 +86,7 @@ function AcceptBlock({ bet, disabled, onAccept }: { bet: bigint; disabled: boole
           onAccept();
         }}
       >
-        Aceptar
+        {ACTION_TEXT.accept}
       </button>
     </div>
   );
@@ -102,8 +106,10 @@ function AcceptBlock({ bet, disabled, onAccept }: { bet: bigint; disabled: boole
  * estados de transacción y la alerta "sin confirmar" se mantienen. `variant='detail'` es el detalle de siempre.
  *
  * #73 (TASK-8a): recibe la fila neutral a la fuente (`GameRow`) y los hooks enrutan por su fuente; el marcado es el mismo
- * para una partida anterior y una nueva. Un estado que no es `Pending` (`Active`, `TimedOut`, `Expired`) no ofrece ninguna
- * de las tres; las acciones de tiempo (reclamar y reembolsar) son de 8b.
+ * para una partida anterior y una nueva. Un estado que no es `Pending` no ofrece ninguna de las tres. TASK-8b: una partida
+ * `Active` de la fuente nueva suma las acciones de tiempo (`TimeoutActions`: "Reclamar victoria" y "Reembolsar", con lo que
+ * pasará con los fondos y el motivo cuando no están disponibles), y el resultado adoptado de un reclamo o un reembolso
+ * (otra pestaña, la fila de "Mis partidas") se muestra con su texto.
  */
 export function GameActions({ game, variant = 'detail' }: { game: GameRow; variant?: 'detail' | 'row' }) {
   const { network } = useAppConfig();
@@ -126,6 +132,11 @@ export function GameActions({ game, variant = 'detail' }: { game: GameRow; varia
     ([accept.outcome, cancel.outcome, reject.outcome].some((outcome) => outcome?.kind === 'success') ||
       adopted?.outcome.kind === 'success');
   const offer = !settled;
+  // #73 (TASK-8b): una partida activa con reloj suma las acciones de tiempo (reclamar y reembolsar).
+  const active = asActiveDuel(game);
+  const adoptedTx = target.notice?.kind === 'adopted' ? target.notice.adopted : null;
+  const adoptedTimeDone =
+    adoptedTx !== null && (adoptedTx.action === 'claim' || adoptedTx.action === 'refundStalled') && adoptedTx.outcome.kind === 'success';
 
   return (
     <div className="game-actions">
@@ -142,7 +153,7 @@ export function GameActions({ game, variant = 'detail' }: { game: GameRow; varia
             cancel.cancel();
           }}
         >
-          Cancelar
+          {ACTION_TEXT.cancel}
         </button>
       )}
       {showReject && offer && (
@@ -153,8 +164,19 @@ export function GameActions({ game, variant = 'detail' }: { game: GameRow; varia
             reject.reject();
           }}
         >
-          Rechazar
+          {ACTION_TEXT.reject}
         </button>
+      )}
+      {active !== null && (
+        <TimeoutActions
+          game={active}
+          view={target.view}
+          address={address}
+          busy={target.busy}
+          unconfirmed={target.unconfirmed !== null}
+          adoptedDone={adoptedTimeDone}
+          variant={variant}
+        />
       )}
       <TransactionStatus stage={accept.stage} outcome={accept.outcome} network={network} successText={acceptedText(acceptValue, address)} />
       <TransactionStatus stage={cancel.stage} outcome={cancel.outcome} network={network} successText={cancelledText(cancelValue)} />

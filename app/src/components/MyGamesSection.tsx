@@ -7,10 +7,11 @@ import { resolutionAmounts } from '../sui/game';
 import { sameAddress } from '../sui/ids';
 import { sectionFooter, type MyGamesSection as SectionKey } from '../sui/myGames';
 import { readErrorMessage } from '../sui/readErrors';
+import { controlText, expiredText, STATE_TEXT } from './gameTexts';
 import { GameActions } from './GameActions';
+import { GameStatus } from './GameStatus';
 import { CreatedAt, FloorSince } from './HistoryTime';
 import { ReadState } from './ReadState';
-import { FALLBACK_STATE_TEXT } from './stateText';
 
 const sui = (mist: bigint) => `${formatMist(mist)} SUI`;
 
@@ -66,23 +67,35 @@ function stateLabel(game: GameRow): string {
       return 'Cancelada';
     case 'resolved':
       return 'Resuelta';
-    // Fallback mínimo de 8a para los estados de la fuente nueva que esta pantalla todavía no distingue (8b los reemplaza).
     case 'active':
+      return STATE_TEXT.active;
     case 'timed_out':
+      return STATE_TEXT.timedOut;
     case 'expired':
-      return FALLBACK_STATE_TEXT[game.state.kind];
+      return STATE_TEXT.expired;
   }
 }
 
-/** Resultado de "Terminadas" leído del objeto (DL-14): ganaste o perdiste, con el pozo y el pago de la fórmula v1. */
+/**
+ * Resultado de "Terminadas" leído del objeto (DL-14): ganaste o perdiste, con el pozo y el pago de la fórmula v1. #73
+ * (TASK-8b): una partida ganada por tiempo dice "por tiempo" y muestra el mismo reparto; una en la que nadie movió, que cada
+ * jugador recuperó su apuesta, sin comisión.
+ */
 function FinishedResult({ game, address }: { game: GameRow; address: string }) {
   if (game.state.kind === 'cancelled') return <p className="my-game-result">Cancelada: la apuesta volvió a quien la creó</p>;
-  if (game.state.kind === 'timed_out' || game.state.kind === 'expired') {
-    return <p className="my-game-result">{FALLBACK_STATE_TEXT[game.state.kind]}</p>;
+  if (game.state.kind === 'expired') return <p className="my-game-result">{expiredText(game)}</p>;
+  const { pot, payout } = resolutionAmounts(game.bet, game.feeRate);
+  if (game.state.kind === 'timed_out') {
+    const won = sameAddress(game.state.winner, address);
+    return (
+      <p className="my-game-result">
+        {won ? 'Ganaste por tiempo' : 'Perdiste por tiempo'} · pozo {sui(pot)} · al ganador {sui(payout)}{' '}
+        <small>(según la fórmula del contrato)</small>
+      </p>
+    );
   }
   const result = rowPlayerResult(game, address);
   if (result === null) return null;
-  const { pot, payout } = resolutionAmounts(game.bet, game.feeRate);
   return (
     <p className="my-game-result">
       {result === 'won' ? 'Ganaste' : 'Perdiste'} · pozo {sui(pot)} · al ganador {sui(payout)} <small>(según la fórmula del contrato)</small>
@@ -94,7 +107,8 @@ function FinishedResult({ game, address }: { game: GameRow; address: string }) {
  * Una fila de "Mis partidas": contraparte, apuesta, estado, hora del evento que la trajo y "Ver partida". En "Terminadas",
  * el rol y el resultado del objeto; en las otras dos, las acciones de la fila (`GameActions` con `variant='row'`, una
  * `useTxTarget` por fila). Una partida ilegible no se muestra como sana (SEG-10). La fila es neutral a la fuente (#73,
- * TASK-8a): el mismo marcado para una partida anterior y una nueva.
+ * TASK-8a). TASK-8b: una partida de la fuente nueva con reloj suma su control de tiempo, una `Active` suma su resumen
+ * (turno, plazo con cuenta regresiva y siguiente paso) y las acciones de tiempo, y cada terminal dice cómo terminó.
  */
 export function MyGameRow({ item, section, address }: { item: ListedRow; section: SectionKey; address: string }) {
   if (item.kind === 'unreadable') {
@@ -117,9 +131,11 @@ export function MyGameRow({ item, section, address }: { item: ListedRow; section
     <li className="my-game-row" data-game-id={game.id}>
       <p>
         {section === 'finished' && <strong>{sameAddress(game.creator, address) ? 'Creaste' : 'Aceptaste'} · </strong>}
-        <Counterpart game={game} address={address} /> · {sui(game.bet)} · {stateLabel(game)} ·{' '}
+        <Counterpart game={game} address={address} /> · {sui(game.bet)}
+        {game.source === 'duel' && game.control.turnMs > 0n && <> · {controlText(game)}</>} · {stateLabel(game)} ·{' '}
         <CreatedAt txDigest={item.txDigest} className="my-game-time" /> · <Link to={`/game/${game.id}`}>Ver partida</Link>
       </p>
+      {game.state.kind === 'active' && <GameStatus game={game} account={address} compact />}
       {section === 'finished' ? <FinishedResult game={game} address={address} /> : <GameActions game={game} variant="row" />}
     </li>
   );

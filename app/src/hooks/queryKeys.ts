@@ -62,6 +62,12 @@ export const queryKeys = {
   checkpointTime: (network: Network, sequenceNumber: bigint) =>
     ['sui', network, 'checkpointTime', sequenceNumber.toString()] as const,
   /**
+   * Muestra de la hora de la cadena para la cuenta regresiva (#73, TASK-8b): el timestamp del último checkpoint que informó
+   * el indicador de red. Clave propia y no `checkpointTime`: su `queryFn` además anota la muestra en el reloj de pantalla, y
+   * compartir la clave dejaría una muestra sin anotar si otra pantalla ya cacheó ese checkpoint.
+   */
+  chainClock: (network: Network, sequenceNumber: bigint) => ['sui', network, 'chainClock', sequenceNumber.toString()] as const,
+  /**
    * Clave de **mutación** de todas las transacciones de una cuenta (DL-7 de #12): el candado global (`isMutating` con
    * esta clave parcial) y el "en curso" de cualquier objetivo. Sin cuenta, `'none'`.
    */

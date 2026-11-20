@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GameRow } from '../hooks/gameRow';
@@ -17,6 +17,7 @@ vi.mock('../hooks/useAppConfig', () => ({ useAppConfig: vi.fn() }));
 vi.mock('../hooks/useGame', () => ({ useGame: vi.fn() }));
 vi.mock('../hooks/useTransactionTime', () => ({ useTransactionTime: vi.fn() }));
 vi.mock('../hooks/useWalletAccount', () => ({ useWalletAccount: vi.fn() }));
+vi.mock('../components/ChainClockSampler', () => ({ ChainClockSampler: () => <span data-testid="chain-sampler" /> }));
 vi.mock('../components/GameActions', () => ({
   GameActions: ({ game }: { game: GameRow }) => (
     <div data-testid="game-actions" data-source={game.source}>
@@ -121,14 +122,38 @@ describe('GameDetailPage', () => {
   });
 
   it.each([
-    ['active', { kind: 'active', acceptor: `0x${'cd'.repeat(32)}`, toMove: 1, deadlineMs: 5n }, 'En juego', 2_000_000_000n],
-    ['timed out', { kind: 'timed_out', acceptor: `0x${'cd'.repeat(32)}`, winner: `0x${'cd'.repeat(32)}` }, 'Terminada por tiempo agotado', 0n],
-    ['expired', { kind: 'expired', acceptor: `0x${'cd'.repeat(32)}` }, 'Terminada: se devolvieron las apuestas', 0n],
-  ] as [string, DuelState, string, bigint][])('shows the neutral fallback line for a %s Duel and no winner', (_name, state, label, stake) => {
-    renderAt(`/game/${ID}`, read({ detail: duelDetail({ ...DUEL, stake, state }), status: { kind: 'ready', refreshing: false }, isFetching: false }));
-    expect(screen.getByText('Estado').nextElementSibling).toHaveTextContent(label);
-    expect(screen.queryByText('Ganador')).not.toBeInTheDocument();
-    expect(screen.queryByText('Resultado para ti')).not.toBeInTheDocument();
+    ['active', { kind: 'active', acceptor: `0x${'cd'.repeat(32)}`, toMove: 1, deadlineMs: 5n }, 'En juego', 2_000_000_000n, false, false],
+    ['timed out', { kind: 'timed_out', acceptor: `0x${'cd'.repeat(32)}`, winner: `0x${'cd'.repeat(32)}` }, 'Ganó por tiempo', 0n, true, false],
+    ['expired', { kind: 'expired', acceptor: `0x${'cd'.repeat(32)}` }, 'Nadie movió a tiempo: cada jugador recuperó su apuesta', 0n, false, true],
+  ] as [string, DuelState, string, bigint, boolean, boolean][])(
+    'shows the real text of a %s Duel in "Estado" (TASK-8b), and no "Resultado para ti" without an account',
+    (_name, state, label, stake, hasWinner, hasRefund) => {
+      renderAt(`/game/${ID}`, read({ detail: duelDetail({ ...DUEL, stake, state }), status: { kind: 'ready', refreshing: false }, isFetching: false }));
+      expect(screen.getByText('Estado').nextElementSibling).toHaveTextContent(label);
+      expect(screen.queryByText('Ganador') !== null).toBe(hasWinner);
+      expect(screen.queryByText('Devuelto a cada jugador') !== null).toBe(hasRefund);
+      expect(screen.queryByText('Resultado para ti')).not.toBeInTheDocument();
+    },
+  );
+
+  it('reads the chain time only for an active Duel with a clock: it mounts the sampler there and nowhere else', () => {
+    renderAt(
+      `/game/${ID}`,
+      read({
+        detail: duelDetail({ ...DUEL, stake: 2_000_000_000n, state: { kind: 'active', acceptor: `0x${'cd'.repeat(32)}`, toMove: 1, deadlineMs: 5n } }),
+        status: { kind: 'ready', refreshing: false },
+        isFetching: false,
+      }),
+    );
+    expect(screen.getByTestId('chain-sampler')).toBeInTheDocument();
+  });
+
+  it('does not mount the sampler for a pending Duel or a game of the previous source', () => {
+    renderAt(`/game/${ID}`, read({ detail: duelDetail(DUEL), status: { kind: 'ready', refreshing: false }, isFetching: false }));
+    expect(screen.queryByTestId('chain-sampler')).not.toBeInTheDocument();
+    cleanup();
+    renderAt(`/game/${ID}`, read({ detail: detailOf(GAME), status: { kind: 'ready', refreshing: false }, isFetching: false }));
+    expect(screen.queryByTestId('chain-sampler')).not.toBeInTheDocument();
   });
 
   const DIGEST = '7VXtB8Pc47Jss33zYQRMXJDfLsY7XvdWFX78gzj7q7YH';

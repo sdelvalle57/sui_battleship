@@ -411,11 +411,11 @@ describe('GameActions with a row of the new source', () => {
     expect(reject).toHaveBeenCalledWith();
   });
 
+  // TASK-8b: una partida `Active` ya ofrece las acciones de tiempo (GameActions.timeout.test.tsx); las terminadas, ninguna.
   it.each([
-    ['active', { kind: 'active', acceptor: OTHER, toMove: 1, deadlineMs: 9n }],
     ['timed out', { kind: 'timed_out', acceptor: OTHER, winner: CREATOR }],
     ['expired', { kind: 'expired', acceptor: OTHER }],
-  ] as [string, DuelState][])('offers no action on a %s new-source game (the time actions are 8b), for any account', (_name, state) => {
+  ] as [string, DuelState][])('offers no action on a %s new-source game, for any account', (_name, state) => {
     for (const account of [CREATOR, OTHER, INVITEE, null]) {
       setup(account);
       const view = render(<GameActions game={duelGame(INVITEE, state)} />);

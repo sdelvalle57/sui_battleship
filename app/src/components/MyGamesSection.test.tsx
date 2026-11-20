@@ -154,14 +154,14 @@ describe('MyGamesSection: rows', () => {
     expect(next.container).not.toHaveTextContent(/anterior|nueva|sin reloj|por jugada/i);
   });
 
-  it('shows the six states of a new-source game in its section: the three known ones as always and the fallback line for the rest', () => {
+  it('shows the six states of a new-source game in its section with the real text of each one (TASK-8b)', () => {
     const states: [DuelState, SectionKey, string][] = [
       [{ kind: 'pending' }, 'pending', 'Pendiente'],
       [{ kind: 'active', acceptor: OTHER, toMove: 1, deadlineMs: 5n }, 'pending', 'En juego'],
       [{ kind: 'cancelled' }, 'finished', 'Cancelada'],
       [{ kind: 'resolved', acceptor: OTHER, winner: ME }, 'finished', 'Resuelta'],
-      [{ kind: 'timed_out', acceptor: OTHER, winner: ME }, 'finished', 'Terminada por tiempo agotado'],
-      [{ kind: 'expired', acceptor: OTHER }, 'finished', 'Terminada: se devolvieron las apuestas'],
+      [{ kind: 'timed_out', acceptor: OTHER, winner: ME }, 'finished', 'Ganó por tiempo'],
+      [{ kind: 'expired', acceptor: OTHER }, 'finished', 'Nadie movió a tiempo: cada jugador recuperó su apuesta'],
     ];
     for (const [state, section, label] of states) {
       const { container, unmount } = renderSection(section, [duelItem(1, state, 'creator')]);
@@ -171,15 +171,16 @@ describe('MyGamesSection: rows', () => {
     }
   });
 
-  it('gives a timed-out or expired game one neutral result line, without winner or amounts (8b replaces it)', () => {
+  it('gives a timed-out game the real result line (won or lost by time, with the split) and an expired one the refund line (TASK-8b)', () => {
     const { container } = renderSection('finished', [
       duelItem(1, { kind: 'timed_out', acceptor: OTHER, winner: ME }, 'creator'),
-      duelItem(2, { kind: 'expired', acceptor: OTHER }, 'creator'),
+      duelItem(2, { kind: 'timed_out', acceptor: OTHER, winner: OTHER }, 'creator'),
+      duelItem(3, { kind: 'expired', acceptor: OTHER }, 'creator'),
     ]);
-    const [timedOut, expired] = rows(container);
-    expect(timedOut?.querySelector('.my-game-result')).toHaveTextContent('Terminada por tiempo agotado');
-    expect(expired?.querySelector('.my-game-result')).toHaveTextContent('Terminada: se devolvieron las apuestas');
-    expect(timedOut?.querySelector('.my-game-result')).not.toHaveTextContent(/Ganaste|Perdiste|pozo/);
+    const [won, lost, expired] = rows(container);
+    expect(won?.querySelector('.my-game-result')).toHaveTextContent('Ganaste por tiempo · pozo 0.002 SUI · al ganador 0.00195 SUI (según la fórmula del contrato)');
+    expect(lost?.querySelector('.my-game-result')).toHaveTextContent('Perdiste por tiempo · pozo 0.002 SUI · al ganador 0.00195 SUI');
+    expect(expired?.querySelector('.my-game-result')).toHaveTextContent('Nadie movió a tiempo: cada jugador recuperó su apuesta (0.001 SUI). Sin comisión.');
     expect(container.querySelector('.game-actions')).toBeNull();
   });
 

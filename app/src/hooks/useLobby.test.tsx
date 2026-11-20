@@ -291,6 +291,19 @@ describe('useLobbyEntries and the registry (#73)', () => {
     expect(args?.registry[0]?.sources.map((source) => source.kind)).toEqual(['legacy']);
   });
 
+  it('useLobby(games) is the filter by game (TASK-8b): "Todos" by default and one game with its own query key, rows in the neutral model', async () => {
+    lobbyMock.mockResolvedValue(mixedPage());
+    const all = renderHook(() => useLobby(), { wrapper: queryWrapper(queryClient) });
+    await advance(0);
+    expect(lobbyMock.mock.calls[0]?.[1]).toMatchObject({ games: 'all' });
+    const one = renderHook(() => useLobby('coinflip'), { wrapper: queryWrapper(queryClient) });
+    await advance(0);
+    expect(lobbyMock).toHaveBeenCalledTimes(2);
+    expect(lobbyMock.mock.calls[1]?.[1]).toMatchObject({ games: 'coinflip' });
+    expect(one.result.current.items.map((i) => (i.kind === 'game' ? i.row.source : i.kind))).toEqual(['legacy', 'duel', 'duel']);
+    expect(all.result.current.items).toHaveLength(3);
+  });
+
   it('with upgrades in the config the registry has the new source too', async () => {
     const upgraded = `0x${'2'.repeat(64)}`;
     const typeOrigins = [

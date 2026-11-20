@@ -13,6 +13,25 @@ export const CREATE_GAS_RESERVE_MIST = 10_000_000n;
  */
 export const GAME_STORAGE_DEPOSIT_MIST = { open: 1_953_200n, invitation: 2_196_400n } as const;
 
+/**
+ * Depósito de storage de crear con la fuente nueva (`Duel<G>`, #73), medido en la localnet aislada con el precio de storage
+ * de testnet (TASK-8a: `storageCost` de la creación menos 988 000 MIST del cobro de la moneda de gas): partida abierta e
+ * invitación. Es **+456 000 MIST** sobre el del `Game` (el `Duel` tiene más campos: `turn_ms` y un `DuelState` mayor).
+ */
+export const DUEL_STORAGE_DEPOSIT_MIST = { open: 2_409_200n, invitation: 2_652_400n } as const;
+
+/** Fuente a la que va "crear" un juego (`GameDef.createSource`): la anterior (`game::Game`) o la nueva (`Duel<G>`). */
+export type CreateSourceKind = 'legacy' | 'duel';
+
+/**
+ * Depósito de storage de crear según la fuente a la que va "crear" (`GameDef.createSource`): el del `Game` con `legacy` (el
+ * `testnet.json` con `packageVersion` 1) y el del `Duel` con `duel`. Selector puro: el componente no ramifica por fuente ni
+ * arma la cifra (ARQ-1).
+ */
+export function storageDepositFor(createSource: CreateSourceKind): { readonly open: bigint; readonly invitation: bigint } {
+  return createSource === 'duel' ? DUEL_STORAGE_DEPOSIT_MIST : GAME_STORAGE_DEPOSIT_MIST;
+}
+
 /** Lo que el formulario muestra de la House: comisión y límites de apuesta. */
 export type HouseTerms = { feeRate: number; minBet: bigint; maxBet: bigint };
 

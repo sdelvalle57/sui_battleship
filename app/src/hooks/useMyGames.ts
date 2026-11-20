@@ -57,8 +57,6 @@ export type UseMyGamesResult =
       kind: 'ready';
       /** Las tres secciones con **todas** las filas (anteriores, nuevas e ilegibles) en el modelo neutral: sin filtrar nada. */
       sections: MyGamesRows;
-      /** Las mismas tres secciones con las filas tal como las leyó `sui/` (`MyGameEntry`), sin pasar por el modelo neutral. */
-      allSections: MyGamesSections;
       unreadableEvents: number;
       activity: MyGamesSource;
       invitations: MyGamesSource;
@@ -197,12 +195,11 @@ export function useMyGames(): UseMyGamesResult {
 
   if (address === null) return { kind: 'no_account' };
 
-  const allSections = groupMyGames({ activity: activityItems, invitations: invitationItems, address, pins: next });
+  const grouped = groupMyGames({ activity: activityItems, invitations: invitationItems, address, pins: next });
   const toRows = (entries: MyGamesSections[MyGamesSection]): ListedRow[] => entries.map((entry) => rowFromMyGameEntry(entry, registry));
   return {
     kind: 'ready',
-    sections: { invitations: toRows(allSections.invitations), pending: toRows(allSections.pending), finished: toRows(allSections.finished) },
-    allSections,
+    sections: { invitations: toRows(grouped.invitations), pending: toRows(grouped.pending), finished: toRows(grouped.finished) },
     unreadableEvents: (invitationsQuery.data?.pages ?? []).reduce((total, page) => total + page.unreadableEvents, 0),
     activity: toSource(activityQuery, publish),
     invitations: toSource(invitationsQuery, publish),

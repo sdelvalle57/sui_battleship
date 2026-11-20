@@ -664,13 +664,12 @@ describe('useMyGames and the two sources (#73)', () => {
     }
   });
 
-  it('sections does not filter: it has the rows of both sources in the neutral model, and allSections the same rows as sui/ read them', async () => {
+  it('sections does not filter: it has the rows of both sources in the neutral model', async () => {
     activityMock.mockResolvedValue(page([ownPending(1), duelItem(1, 'creator')]));
     invitationsMock.mockResolvedValue(page([]));
     const hook = render();
     await advance(0);
     const result = ready(hook);
-    expect(result.allSections.pending.map((row) => row.kind)).toEqual(['duel', 'game']);
     expect(result.sections.pending.map((row) => (row.kind === 'game' ? row.row.source : row.kind))).toEqual(['duel', 'legacy']);
     expect(ids(result.sections.pending)).toEqual([gid(0x200 + 1), gid(1)]);
   });
@@ -701,7 +700,7 @@ describe('useMyGames and the two sources (#73)', () => {
     invitationsMock.mockResolvedValue(page([]));
     const hook = render();
     await advance(0);
-    expect(ready(hook).allSections.pending).toHaveLength(1);
+    expect(ready(hook).sections.pending).toHaveLength(1);
     const open = duelItem(1, 'creator');
     const resolved: MyDuelItem = { ...open, objectVersion: 9n, duel: { ...open.duel, stake: 0n, state: { kind: 'resolved', acceptor: OTHER, winner: ME } } };
     activityMock.mockResolvedValue(page([resolved]));
@@ -709,6 +708,6 @@ describe('useMyGames and the two sources (#73)', () => {
       ready(hook).refresh();
     });
     await advance(0);
-    expect(ready(hook).allSections.finished.map((row) => row.kind)).toEqual(['duel']);
+    expect(ready(hook).sections.finished.map((row) => (row.kind === 'game' ? row.row.source : row.kind))).toEqual(['duel']);
   });
 });

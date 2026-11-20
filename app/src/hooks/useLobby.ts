@@ -141,12 +141,13 @@ export function useLobbyEntries(games: GameSelection = 'all'): UseLobbyEntriesRe
 }
 
 /**
- * Lobby de "Todos" para los componentes: lo de `useLobbyEntries` con `items` = **todas** las filas (anteriores, nuevas e
- * ilegibles) en el modelo neutral a la fuente (`rowFromLobbyItem`). No filtra nada: una fila de la fuente nueva se dibuja
- * y se acciona como una anterior (TASK-8a; el rótulo, el control de tiempo y el filtro por juego son de 8b).
+ * Lobby para los componentes: lo de `useLobbyEntries` con `items` = **todas** las filas (anteriores, nuevas e ilegibles) del
+ * juego elegido en el modelo neutral a la fuente (`rowFromLobbyItem`). Sin argumento es "Todos" (TASK-8a: no filtra nada, una
+ * fila de la fuente nueva se dibuja y se acciona como una anterior); TASK-8b suma el **filtro por juego**: con un juego,
+ * `useLobbyEntries` pide solo sus eventos (con su propia clave de consulta).
  */
-export function useLobby(): UseLobbyResult {
+export function useLobby(games: GameSelection = 'all'): UseLobbyResult {
   const registry = useGameRegistry();
-  const { entries, ...rest } = useLobbyEntries('all');
+  const { entries, ...rest } = useLobbyEntries(games);
   return { ...rest, items: entries.map((entry) => rowFromLobbyItem(entry, { isMine: entry.isMine, registry })) };
 }
