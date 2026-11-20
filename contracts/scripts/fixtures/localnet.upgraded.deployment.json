@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "network": "localnet",
+  "chainId": "13c5acea",
+  "packageId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617",
+  "originalPackageId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36",
+  "packageVersion": 2,
+  "upgradeCapId": "0x4367c28e169586f024ebcf963c9e14a5516a53441885fa5108a2d2ea0a24ea84",
+  "houseId": "0xd79a078e03a03c3245517c398e2d9bf78a2eca287a1dea072fab858763cdaed2",
+  "houseCapId": "0x7d592b22f0269e86d2b650c531a97159ebde2445f79c3024feb3cf4fda289121",
+  "publishTxDigest": "HP5TN8bVeECsZiTwiWjsxFxXNQDcb45wnhiHZ9Fn2hYC",
+  "publishTimestamp": "2026-11-20T08:03:10.413Z",
+  "sourceCommit": "ab61256275c31ba3d4050bed1e33c695159ca92a",
+  "suiCliVersion": "1.84.0-9dc25070cf2e",
+  "frameworkRev": "e6f43880f4b65e2c1f0397583a9690b4b22c9223",
+  "upgrades": [
+    {
+      "version": 2,
+      "packageId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617",
+      "txDigest": "9K1PE3EfwtutpCb3qFL4VPRwcTouffgBvwGezB6hDnB3"
+    }
+  ],
+  "typeOrigins": [
+    {
+      "module": "coinflip",
+      "name": "Coinflip",
+      "definingId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+    },
+    {
+      "module": "duel",
+      "name": "Collected",
+      "definingId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+    },
+    {
+      "module": "duel",
+      "name": "Duel",
+      "definingId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+    },
+    {
+      "module": "duel",
+      "name": "DuelActivated",
+      "definingId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+    },
+    {
+      "module": "duel",
+      "name": "DuelCancelled",
+      "definingId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+    },
+    {
+      "module": "duel",
+      "name": "DuelCreated",
+      "definingId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+    },
+    {
+      "module": "duel",
+      "name": "DuelExpired",
+      "definingId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+    },
+    {
+      "module": "duel",
+      "name": "DuelResolved",
+      "definingId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+    },
+    {
+      "module": "duel",
+      "name": "DuelState",
+      "definingId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+    },
+    {
+      "module": "duel",
+      "name": "DuelTimedOut",
+      "definingId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+    },
+    {
+      "module": "duel",
+      "name": "DuelTurn",
+      "definingId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+    },
+    {
+      "module": "game",
+      "name": "Game",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "game",
+      "name": "GameCancelled",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "game",
+      "name": "GameCreated",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "game",
+      "name": "GameResolved",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "game",
+      "name": "GameState",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "house",
+      "name": "BetLimitsUpdated",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "house",
+      "name": "FeeRateUpdated",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "house",
+      "name": "FeesWithdrawn",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "house",
+      "name": "HOUSE",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "house",
+      "name": "House",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "house",
+      "name": "HouseCap",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "house",
+      "name": "HouseCapTransferred",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    },
+    {
+      "module": "house",
+      "name": "HouseMigrated",
+      "definingId": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+    }
+  ]
+}
