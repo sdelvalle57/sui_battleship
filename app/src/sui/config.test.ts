@@ -1,11 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { resolveConfig } from './config';
+import { buildGameRegistry, registryTypeKeys, type TypeOrigin } from './gameRegistry';
 
 const fixtures = import.meta.glob<unknown>('../../../contracts/scripts/fixtures/localnet.deployment.json', {
   eager: true,
   import: 'default',
 });
 const localnetFixture = fixtures['../../../contracts/scripts/fixtures/localnet.deployment.json'];
+
+/** Salida real de `publish.mjs upgrade` en la localnet aislada (#73, TASK-4): `packageVersion` 2, con `upgrades` y `typeOrigins`. */
+type UpgradedDeployment = {
+  packageId: string;
+  originalPackageId: string;
+  upgrades: { version: number; packageId: string; txDigest: string }[];
+  typeOrigins: TypeOrigin[];
+  [key: string]: unknown;
+};
+const UPGRADED_PATH = '../../../contracts/scripts/fixtures/localnet.upgraded.deployment.json';
+const upgradedFixture = import.meta.glob<UpgradedDeployment>('../../../contracts/scripts/fixtures/localnet.upgraded.deployment.json', {
+  eager: true,
+  import: 'default',
+})[UPGRADED_PATH] as UpgradedDeployment;
+
+/** El `testnet.json` commiteado: hoy `packageVersion` 1, sin `upgrades` ni `typeOrigins`; tras el upgrade los trae. */
+const REAL_TESTNET_PATH = '../../../contracts/deployments/testnet.json';
+const realTestnet = import.meta.glob<unknown>('../../../contracts/deployments/testnet.json', { eager: true, import: 'default' })[
+  REAL_TESTNET_PATH
+];
 
 const LOCALNET_KEY = '../../../contracts/deployments/localnet.json';
 const TESTNET_KEY = '../../../contracts/deployments/testnet.json';
@@ -53,6 +74,8 @@ describe('resolveConfig: valid deployments', () => {
         chainId: 'cb1e492c',
         packageId: '0x8b6a8b1f648af5773e3f97e9fcc07edab93d77c165c4e1dc99c1a41ef87fd71d',
         originalPackageId: '0x8b6a8b1f648af5773e3f97e9fcc07edab93d77c165c4e1dc99c1a41ef87fd71d',
+        upgrades: [],
+        typeOrigins: [],
         houseId: '0xbf3bf8d1638985c2acc7b0b86e2563fd30ade6c45aa4532a1ffdaa8fbbeb8035',
         publishTxDigest: 'BVdpCHXfQ9qwEG5tABiZBeVN1qkgtiqUPhJ4GazaJYdH',
         burnerWalletEnabled: false,
@@ -69,6 +92,8 @@ describe('resolveConfig: valid deployments', () => {
         chainId: '4c78adac',
         packageId: TESTNET_DEPLOYMENT.packageId,
         originalPackageId: TESTNET_DEPLOYMENT.originalPackageId,
+        upgrades: [],
+        typeOrigins: [],
         houseId: TESTNET_DEPLOYMENT.houseId,
         publishTxDigest: TESTNET_DEPLOYMENT.publishTxDigest,
         burnerWalletEnabled: false,
@@ -225,5 +250,234 @@ describe('resolveConfig: burnerWalletEnabled', () => {
     const result = resolveConfig({ VITE_SUI_NETWORK: 'testnet', DEV: true }, { [TESTNET_KEY]: TESTNET_DEPLOYMENT });
     expect(result.ok).toBe(true);
     expect(result.ok && result.config.burnerWalletEnabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// #73 (TASK-7a): `upgrades` y `typeOrigins`
+// ---------------------------------------------------------------------------------------------------------------------
+
+const LOCALNET_ENV = { VITE_SUI_NETWORK: 'localnet', DEV: false };
+const ORIGINAL = upgradedFixture.originalPackageId;
+const UPGRADE_2 = upgradedFixture.packageId;
+const UPGRADE_3 = `0x${'3'.repeat(64)}`;
+const UPGRADE_3_DIGEST = 'CKxfBzbFQSrbdVXrGdoVuVcc9Y9wZ6S4jpDhvPwGeq2a';
+
+/** El json del upgrade real con campos reemplazados; un valor `undefined` quita la clave. */
+function upgradedWith(overrides: Record<string, unknown>) {
+  const merged: Record<string, unknown> = { ...structuredClone(upgradedFixture), ...overrides };
+  return { [LOCALNET_KEY]: Object.fromEntries(Object.entries(merged).filter(([, value]) => value !== undefined)) };
+}
+
+/** Un json con `packageVersion` 3: dos upgrades y `duel::DuelTurn` definido en el segundo (S-2: mismo módulo, otro ID). */
+function twoUpgradesDeployment() {
+  const origins = structuredClone(upgradedFixture.typeOrigins).map((origin) =>
+    origin.module === 'duel' && origin.name === 'DuelTurn' ? { ...origin, definingId: UPGRADE_3 } : origin,
+  );
+  return upgradedWith({
+    packageVersion: 3,
+    packageId: UPGRADE_3,
+    upgrades: [...structuredClone(upgradedFixture.upgrades), { version: 3, packageId: UPGRADE_3, txDigest: UPGRADE_3_DIGEST }],
+    typeOrigins: origins,
+  });
+}
+
+const withoutType = (module: string, name: string): TypeOrigin[] =>
+  structuredClone(upgradedFixture.typeOrigins).filter((origin) => !(origin.module === module && origin.name === name));
+
+describe('resolveConfig: upgrades and typeOrigins of a deployment that went through an upgrade', () => {
+  it('reads the real upgrade fixture: current packageId, original id, upgrades and typeOrigins as they come', () => {
+    const result = resolveConfig(LOCALNET_ENV, upgradedWith({}));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.config.packageId).toBe(UPGRADE_2);
+    expect(result.config.originalPackageId).toBe(ORIGINAL);
+    expect(result.config.upgrades).toEqual(upgradedFixture.upgrades);
+    expect(result.config.typeOrigins).toEqual(upgradedFixture.typeOrigins);
+  });
+
+  it('lets the registry build the legacy and the duel sources from what it read', () => {
+    const result = resolveConfig(LOCALNET_ENV, upgradedWith({}));
+    if (!result.ok) throw new Error(result.error);
+    const [coinflip] = buildGameRegistry(result.config);
+    expect(coinflip?.sources.map((source) => source.kind)).toEqual(['legacy', 'duel']);
+    const duel = coinflip?.sources.find((source) => source.kind === 'duel');
+    expect(duel?.objectType).toBe(`${UPGRADE_2}::duel::Duel<${UPGRADE_2}::coinflip::Coinflip>`);
+  });
+
+  it('accepts two types of the same module with different defining ids (S-2)', () => {
+    const result = resolveConfig(LOCALNET_ENV, twoUpgradesDeployment());
+    if (!result.ok) throw new Error(result.error);
+    const origins = result.config.typeOrigins ?? [];
+    expect(origins.find((o) => o.module === 'duel' && o.name === 'Duel')?.definingId).toBe(UPGRADE_2);
+    expect(origins.find((o) => o.module === 'duel' && o.name === 'DuelTurn')?.definingId).toBe(UPGRADE_3);
+    const duel = buildGameRegistry(result.config)[0]?.sources.find((source) => source.kind === 'duel');
+    expect(duel?.kind === 'duel' && duel.eventTypes.turn).toBe(`${UPGRADE_3}::duel::DuelTurn<${UPGRADE_2}::coinflip::Coinflip>`);
+    expect(duel?.kind === 'duel' && duel.eventTypes.created).toBe(`${UPGRADE_2}::duel::DuelCreated<${UPGRADE_2}::coinflip::Coinflip>`);
+  });
+});
+
+describe('resolveConfig: packageVersion 1 needs neither upgrades nor typeOrigins (the testnet.json of today)', () => {
+  it('resolves the real testnet.json of the repo, with only the legacy source while it has no upgrades', () => {
+    const result = resolveConfig(TESTNET_ENV, { [TESTNET_KEY]: realTestnet });
+    if (!result.ok) throw new Error(result.error);
+    const [coinflip] = buildGameRegistry(result.config);
+    const hasUpgrades = (result.config.upgrades ?? []).length > 0;
+    expect(coinflip?.sources.map((source) => source.kind)).toEqual(hasUpgrades ? ['legacy', 'duel'] : ['legacy']);
+  });
+
+  it('resolves a packageVersion 1 json without them to empty arrays and a registry with only the legacy source', () => {
+    const result = resolveConfig(TESTNET_ENV, testnetWith({}));
+    if (!result.ok) throw new Error(result.error);
+    expect(result.config.upgrades).toEqual([]);
+    expect(result.config.typeOrigins).toEqual([]);
+    const [coinflip] = buildGameRegistry(result.config);
+    expect(coinflip?.sources.map((source) => source.kind)).toEqual(['legacy']);
+    expect(coinflip?.sources[0]?.objectType).toBe(`${TESTNET_DEPLOYMENT.originalPackageId}::game::Game`);
+  });
+
+  it('treats an absent packageVersion as the original publication', () => {
+    expect(resolveConfig(TESTNET_ENV, testnetWith({ packageVersion: undefined })).ok).toBe(true);
+  });
+
+  it('accepts typeOrigins with the legacy types when packageVersion is 1 and uses them', () => {
+    const legacy = structuredClone(upgradedFixture.typeOrigins).filter((o) => o.module === 'game');
+    const original = TESTNET_DEPLOYMENT.originalPackageId;
+    const result = resolveConfig(TESTNET_ENV, testnetWith({ typeOrigins: legacy.map((o) => ({ ...o, definingId: original })) }));
+    if (!result.ok) throw new Error(result.error);
+    expect(result.config.typeOrigins).toHaveLength(legacy.length);
+    expect(buildGameRegistry(result.config)[0]?.sources.map((source) => source.kind)).toEqual(['legacy']);
+  });
+
+  it('rejects typeOrigins at packageVersion 1 that miss a legacy type of the registry', () => {
+    const legacy = structuredClone(upgradedFixture.typeOrigins).filter((o) => o.module === 'game' && o.name !== 'GameResolved');
+    const original = TESTNET_DEPLOYMENT.originalPackageId;
+    const error = errorOf(resolveConfig(TESTNET_ENV, testnetWith({ typeOrigins: legacy.map((o) => ({ ...o, definingId: original })) })));
+    expect(error).toContain('typeOrigins no tiene una entrada para game::GameResolved');
+  });
+});
+
+describe('resolveConfig: packageVersion > 1 without them is a configuration error (never "no games")', () => {
+  it('rejects a missing upgrades', () => {
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ upgrades: undefined })))).toContain(
+      'contracts/deployments/localnet.json: con packageVersion 2 falta upgrades',
+    );
+  });
+
+  it('rejects a missing typeOrigins', () => {
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ typeOrigins: undefined })))).toContain(
+      'contracts/deployments/localnet.json: con packageVersion 2 falta typeOrigins',
+    );
+  });
+
+  it.each([
+    ['duel', 'Duel'],
+    ['duel', 'DuelCreated'],
+    ['duel', 'DuelTurn'],
+    ['duel', 'DuelTimedOut'],
+    ['coinflip', 'Coinflip'],
+    ['game', 'Game'],
+    ['game', 'GameCreated'],
+  ])('rejects a typeOrigins without the entry of %s::%s', (module, name) => {
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ typeOrigins: withoutType(module, name) })))).toContain(
+      `typeOrigins no tiene una entrada para ${module}::${name}`,
+    );
+  });
+
+  it('looks the entry up by (module, name): the same name in another module does not count', () => {
+    const origins = structuredClone(upgradedFixture.typeOrigins).map((o) => (o.module === 'duel' && o.name === 'Duel' ? { ...o, module: 'game' } : o));
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ typeOrigins: origins })))).toContain('typeOrigins no tiene una entrada para duel::Duel');
+  });
+
+  it('requires every type the registry resolves (so a missing entry never reaches the registry)', () => {
+    for (const key of registryTypeKeys(true)) {
+      expect(resolveConfig(LOCALNET_ENV, upgradedWith({ typeOrigins: withoutType(key.module, key.name) })).ok).toBe(false);
+    }
+  });
+});
+
+describe('resolveConfig: upgrades format', () => {
+  const [first] = upgradedFixture.upgrades;
+  const entry = (overrides: Record<string, unknown>) => ({ ...first, ...overrides });
+
+  it.each([
+    ['not an array', { 'not': 'array' }, 'el campo upgrades'],
+    ['an entry that is not an object', ['x'], 'el campo upgrades[0]'],
+    ['a version out of sequence', [entry({ version: 3 })], 'el campo upgrades[0].version'],
+    ['a packageId in the wrong format', [entry({ packageId: '0xabc' })], 'el campo upgrades[0].packageId'],
+    ['the original id as the id of an upgrade', [entry({ packageId: ORIGINAL })], 'el campo upgrades[0].packageId'],
+    ['a txDigest that is not base58', [entry({ txDigest: '0OIl0OIl0OIl0OIl0OIl0OIl0OIl0OIl' })], 'el campo upgrades[0].txDigest'],
+    ['a missing txDigest', [entry({ txDigest: undefined })], 'el campo upgrades[0].txDigest'],
+  ])('rejects upgrades as %s', (_label, upgrades, fragment) => {
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ upgrades })))).toContain(fragment);
+  });
+
+  it('rejects an empty upgrades with packageVersion 2', () => {
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ upgrades: [] })))).toContain('upgrades tiene 0 entradas y packageVersion es 2');
+  });
+
+  it('rejects a packageVersion that does not match the number of upgrades', () => {
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ packageVersion: 3 })))).toContain('upgrades tiene 1 entradas y packageVersion es 3');
+  });
+
+  it('rejects upgrades with a version 1 json', () => {
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ packageVersion: 1 })))).toContain('upgrades tiene 1 entradas y packageVersion es 1');
+  });
+
+  it('rejects a repeated packageId among the upgrades', () => {
+    const upgrades = [first, { ...first, version: 3 }];
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ packageVersion: 3, upgrades })))).toContain('el campo upgrades[1].packageId');
+  });
+
+  it('rejects a last upgrade that is not the current packageId', () => {
+    const error = errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ packageId: UPGRADE_3 })));
+    expect(error).toContain(`el último upgrade (${UPGRADE_2}) no es el packageId vigente (${UPGRADE_3})`);
+  });
+});
+
+describe('resolveConfig: typeOrigins format', () => {
+  const [first] = upgradedFixture.typeOrigins;
+  const entry = (overrides: Record<string, unknown>) => ({ ...first, ...overrides });
+  const replaceFirst = (replacement: unknown) => [replacement, ...structuredClone(upgradedFixture.typeOrigins).slice(1)];
+
+  it.each([
+    ['not an array', { 'not': 'array' }],
+    ['an empty array', []],
+  ])('rejects typeOrigins as %s', (_label, typeOrigins) => {
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ typeOrigins })))).toContain('el campo typeOrigins');
+  });
+
+  it.each([
+    ['an entry that is not an object', 'x', 'el campo typeOrigins[0]'],
+    ['a module that is not an identifier', entry({ module: 'duel::x' }), 'el campo typeOrigins[0]'],
+    ['a name that is not an identifier', entry({ name: '' }), 'el campo typeOrigins[0]'],
+    ['a missing name', entry({ name: undefined }), 'el campo typeOrigins[0]'],
+    ['a definingId in the wrong format', entry({ definingId: '0xabc' }), 'el campo typeOrigins[0].definingId'],
+    ['a definingId that is neither the original nor an upgrade', entry({ definingId: UPGRADE_3 }), 'el campo typeOrigins[0].definingId'],
+  ])('rejects %s', (_label, replacement, fragment) => {
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ typeOrigins: replaceFirst(replacement) })))).toContain(fragment);
+  });
+
+  it('rejects a repeated (module, name) pair', () => {
+    const error = errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ typeOrigins: [...structuredClone(upgradedFixture.typeOrigins), entry({})] })));
+    expect(error).toContain(`typeOrigins repite el tipo ${first?.module ?? ''}::${first?.name ?? ''}`);
+  });
+
+  it('rejects a type of v1 that does not carry the original id', () => {
+    const origins = structuredClone(upgradedFixture.typeOrigins).map((o) => (o.module === 'game' && o.name === 'Game' ? { ...o, definingId: UPGRADE_2 } : o));
+    expect(errorOf(resolveConfig(LOCALNET_ENV, upgradedWith({ typeOrigins: origins })))).toContain(
+      `el tipo game::Game existe desde la v1 y lleva el ID original, no ${UPGRADE_2}`,
+    );
+  });
+});
+
+describe('resolveConfig: packageVersion', () => {
+  it.each([
+    ['zero', 0],
+    ['a fraction', 1.5],
+    ['a string', '2'],
+    ['null', null],
+  ])('rejects a packageVersion that is %s', (_label, packageVersion) => {
+    expect(errorOf(resolveConfig(TESTNET_ENV, testnetWith({ packageVersion })))).toContain('el campo packageVersion (');
   });
 });

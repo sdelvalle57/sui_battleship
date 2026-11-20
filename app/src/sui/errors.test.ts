@@ -10,6 +10,7 @@ import {
   transactionErrorMessage,
   type MoveAbortInfo,
 } from './errors';
+import { shortAddress } from './format';
 
 type FixtureSimulation = { sender: string; message: string; executionError: SuiClientTypes.ExecutionError };
 type FixtureTx = { digest: string; status: SuiClientTypes.ExecutionStatus; effects: { bcs: string } };
@@ -326,6 +327,274 @@ describe('runtime cancellations (DL-11)', () => {
     const wrapped = { ...RANDOMNESS, cause: abort };
     expect(transactionErrorMessage(wrapped, IDS)).toBe(
       'La partida ya no está pendiente: se canceló, se rechazó o se aceptó antes. (código game/4)',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// #73 (TASK-7a): módulo `duel`, números repetidos entre módulos e IDs de `upgrades[]`
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** Textos de `duel` por código (R.3 del handoff, 0-25): uno por código, escritos en el test y no leídos de la tabla. */
+const DUEL_MESSAGES: [number, string][] = [
+  [0, 'La apuesta es menor que el mínimo de la House.'],
+  [1, 'La apuesta supera el máximo de la House.'],
+  [2, 'No puedes invitarte a ti mismo.'],
+  [3, 'Solo quien creó la partida puede cancelarla.'],
+  [4, 'La partida ya no está pendiente: se canceló, se rechazó o se aceptó antes.'],
+  [5, 'Esta invitación es para otra dirección.'],
+  [6, 'La partida es abierta: no hay invitación que rechazar.'],
+  [7, 'La partida se creó con otra versión de la House: solo se puede cancelar, rechazar o reembolsar.'],
+  [8, 'La partida pertenece a otra House.'],
+  [9, 'No puedes aceptar tu propia partida.'],
+  [10, 'El pago tiene que igualar exactamente la apuesta.'],
+  [11, 'La partida no está en juego: todavía no se aceptó o ya terminó.'],
+  [12, 'El cobro no corresponde a esta partida.'],
+  [13, 'El índice del ganador es inválido: solo puede ser 0 o 1.'],
+  [14, 'El plazo del jugador en turno todavía no venció: aún no se puede reclamar por tiempo.'],
+  [15, 'El pozo de la partida no es el doble de la apuesta: la operación se bloquea por seguridad.'],
+  [16, 'El control de tiempo elegido no existe.'],
+  [17, 'La partida no tiene reloj: no admite esta operación.'],
+  [18, 'La partida tiene reloj: no se puede resolver en una sola transacción.'],
+  [19, 'El turno indicado es inválido: solo puede ser 1, 2 o 3.'],
+  [20, 'No es tu turno.'],
+  [21, 'El plazo venció: ya solo se puede reclamar por tiempo.'],
+  [22, 'Ninguno de los dos jugó: no hay ganador por tiempo y la partida se reembolsa a cada jugador.'],
+  [23, 'Todavía no se puede reembolsar: no pasó el plazo ni, con un solo jugador pendiente, la gracia de reclamo.'],
+  [24, 'Solo los jugadores de la partida pueden hacer esto.'],
+  [25, 'La jugada no corresponde a la fase simultánea en curso.'],
+];
+
+describe('ABORT_MESSAGES: module duel (R.3, codes 0-25)', () => {
+  it.each(DUEL_MESSAGES)('maps duel/%i to its message with the diagnostic suffix', (code, text) => {
+    expect(transactionErrorMessage(moveAbort('duel', code), IDS)).toBe(`${text} (código duel/${String(code)})`);
+  });
+
+  it('covers exactly the codes 0-25, each with its own message', () => {
+    expect(Object.keys(ABORT_MESSAGES.duel).map(Number)).toEqual(Array.from({ length: 26 }, (_, i) => i));
+    expect(new Set(Object.values(ABORT_MESSAGES.duel)).size).toBe(26);
+  });
+
+  it('tells apart house/3, game/3 and duel/3: the number alone does not identify the cause', () => {
+    const messages = [moveAbort('house', 3), moveAbort('game', 3), moveAbort('duel', 3)].map((error) => transactionErrorMessage(error, IDS));
+    expect(messages).toEqual([
+      'La House está en una versión distinta de la de esta app: hay que actualizar la app. (código house/3)',
+      'Solo quien creó la partida puede cancelarla. (código game/3)',
+      'Solo quien creó la partida puede cancelarla. (código duel/3)',
+    ]);
+  });
+
+  it('keeps coinflip without codes of its own: an abort of that module is reported with the raw code', () => {
+    expect(transactionErrorMessage(moveAbort('coinflip', 0), IDS)).toBe('El contrato rechazó la operación (código coinflip/0)');
+  });
+
+  it('reports an unknown code of duel with the raw code', () => {
+    expect(transactionErrorMessage(moveAbort('duel', 26), IDS)).toBe('El contrato rechazó la operación (código duel/26)');
+  });
+});
+
+describe('transactionErrorMessage accepts every package id of upgrades[] (V-5/H-j: the abort reports the executed version)', () => {
+  const V1 = `0x${'1'.repeat(64)}`;
+  const V2 = `0x${'2'.repeat(64)}`;
+  const V3 = `0x${'3'.repeat(64)}`;
+  const V4 = `0x${'4'.repeat(64)}`;
+  const UPGRADED_IDS = {
+    packageId: V4,
+    originalPackageId: V1,
+    upgrades: [{ packageId: V2 }, { packageId: V3 }, { packageId: V4 }],
+  };
+
+  it.each([
+    ['the original id', V1],
+    ['the first upgrade', V2],
+    ['the second upgrade', V3],
+    ['the current id', V4],
+  ])('translates a duel abort whose location.package is %s', (_label, pkg) => {
+    expect(transactionErrorMessage(moveAbort('duel', 20, pkg), UPGRADED_IDS)).toBe('No es tu turno. (código duel/20)');
+  });
+
+  it.each([
+    ['the original id', V1],
+    ['the first upgrade', V2],
+    ['the second upgrade', V3],
+    ['the current id', V4],
+  ])('translates a house abort whose location.package is %s', (_label, pkg) => {
+    expect(transactionErrorMessage(moveAbort('house', 3, pkg), UPGRADED_IDS)).toBe(
+      'La House está en una versión distinta de la de esta app: hay que actualizar la app. (código house/3)',
+    );
+  });
+
+  it('does not translate an abort of a package that is none of ours, even with the code of one of our modules', () => {
+    expect(transactionErrorMessage(moveAbort('duel', 20, `0x${'5'.repeat(64)}`), UPGRADED_IDS)).toBe(
+      `La transacción abortó en ${shortAddress(`0x${'5'.repeat(64)}`)}::duel (código 20)`,
+    );
+  });
+
+  it('accepts only packageId and originalPackageId when there are no upgrades (packageVersion 1)', () => {
+    const noUpgrades = { packageId: V1, originalPackageId: V1 };
+    expect(transactionErrorMessage(moveAbort('game', 3, V1), noUpgrades)).toBe('Solo quien creó la partida puede cancelarla. (código game/3)');
+    expect(transactionErrorMessage(moveAbort('game', 3, V2), noUpgrades)).toBe(`La transacción abortó en ${shortAddress(V2)}::game (código 3)`);
+  });
+
+  it('accepts a whole AppConfig-like object, so the hooks can pass the config as it is', () => {
+    const config = { ...UPGRADED_IDS, network: 'localnet', houseId: V1 };
+    expect(transactionErrorMessage(moveAbort('duel', 4, V3), config)).toBe(`${ABORT_MESSAGES.duel[4] ?? ''} (código duel/4)`);
+  });
+
+  it('keeps ignoring the upgrade ids when the abort comes from a wallet text in the SDK format', () => {
+    const text = formatMoveAbortMessage({
+      command: 0,
+      location: { package: V3, module: 'duel', functionName: 'cancel', instruction: 16 },
+      abortCode: '3',
+    });
+    expect(transactionErrorMessage(new Error(text), UPGRADED_IDS)).toBe('Solo quien creó la partida puede cancelarla. (código duel/3)');
+  });
+});
+
+type DuelTxFixture = {
+  ids: { packageId: string; originalPackageId: string };
+  simulationErrors: Record<string, FixtureSimulation>;
+  executed: { cancelNotCreatorExecuted: FixtureFailed; acceptNotPendingExecuted: FixtureFailed };
+  cliErrorText: string;
+};
+const DUEL_TX_PATH = '../../../contracts/fixtures/duel-tx.localnet.json';
+const duelTx = import.meta.glob<DuelTxFixture>('../../../contracts/fixtures/duel-tx.localnet.json', {
+  eager: true,
+  import: 'default',
+})[DUEL_TX_PATH] as DuelTxFixture;
+const DUEL_IDS = { packageId: duelTx.ids.packageId, originalPackageId: duelTx.ids.originalPackageId };
+
+describe('real SimulationError of the coinflip on the base duel (production, duel-tx.localnet.json)', () => {
+  const DUEL_CASES: [string, number][] = [
+    ['createBetTooLow', 0],
+    ['createBetTooHigh', 1],
+    ['createSelfInvite', 2],
+    ['cancelNotCreator', 3],
+    ['cancelNotPending', 4],
+    ['rejectNotInvited', 5],
+    ['rejectNoInvitation', 6],
+    ['acceptSelfPlay', 9],
+    ['acceptNotInvited', 5],
+    ['acceptNotPending', 4],
+    ['acceptWrongStake', 10],
+  ];
+
+  it('has the 11 captured cases', () => {
+    expect(Object.keys(duelTx.simulationErrors).sort()).toEqual(DUEL_CASES.map(([name]) => name).sort());
+  });
+
+  it('reports the abort with the package of the upgrade: the version that ran (V-5)', () => {
+    expect(duelTx.ids.packageId).not.toBe(duelTx.ids.originalPackageId);
+    for (const sim of Object.values(duelTx.simulationErrors)) {
+      expect(sim.executionError.MoveAbort?.location?.package).toBe(duelTx.ids.packageId);
+      expect(sim.executionError.MoveAbort?.location?.module).toBe('duel');
+    }
+  });
+
+  it.each(DUEL_CASES)('maps %s (structured) to duel/%i', (name, code) => {
+    const sim = duelTx.simulationErrors[name];
+    if (sim === undefined) throw new Error(`falta ${name}`);
+    const error = new SimulationError(sim.message, { executionError: sim.executionError });
+    expect(findMoveAbort(error)).toEqual({ packageId: duelTx.ids.packageId, module: 'duel', code: String(code) });
+    expect(transactionErrorMessage(error, DUEL_IDS)).toBe(`${ABORT_MESSAGES.duel[code] ?? ''} (código duel/${String(code)})`);
+  });
+
+  it.each(DUEL_CASES)('maps %s by its message alone (a wallet that serializes the error) to duel/%i', (name, code) => {
+    const sim = duelTx.simulationErrors[name];
+    if (sim === undefined) throw new Error(`falta ${name}`);
+    expect(findMoveAbort(new Error(sim.message))).toEqual({ packageId: duelTx.ids.packageId, module: 'duel', code: String(code) });
+  });
+
+  it('reports the abort of an upgrade as foreign while the config does not list that upgrade, and as own once upgrades[] does', () => {
+    const sim = duelTx.simulationErrors.cancelNotCreator;
+    if (sim === undefined) throw new Error('falta cancelNotCreator');
+    const error = new SimulationError(sim.message, { executionError: sim.executionError });
+    const onlyOriginal = { packageId: duelTx.ids.originalPackageId, originalPackageId: duelTx.ids.originalPackageId };
+    expect(transactionErrorMessage(error, onlyOriginal)).toBe(
+      `La transacción abortó en ${shortAddress(duelTx.ids.packageId)}::duel (código 3)`,
+    );
+    expect(transactionErrorMessage(error, { ...onlyOriginal, upgrades: [{ packageId: duelTx.ids.packageId }] })).toBe(
+      'Solo quien creó la partida puede cancelarla. (código duel/3)',
+    );
+  });
+});
+
+describe('real executed failures of duel (production)', () => {
+  it('recognizes cancel by a non-creator from the real effects BCS (the wallet path) as duel/3', () => {
+    const failed = duelTx.executed.cancelNotCreatorExecuted;
+    const expected: MoveAbortInfo = { packageId: duelTx.ids.packageId, module: 'duel', code: '3' };
+    expect(findMoveAbort(failed)).toEqual(expected);
+    const status = extractStatusFromEffectsBcs(fromBase64(failed.FailedTransaction.effects.bcs));
+    expect(status.success).toBe(false);
+    expect(findMoveAbort(status.error)).toEqual(expected);
+    expect(transactionErrorMessage(status.error, DUEL_IDS)).toBe('Solo quien creó la partida puede cancelarla. (código duel/3)');
+  });
+
+  it('recognizes an accept on a resolved duel as duel/4', () => {
+    const failed = duelTx.executed.acceptNotPendingExecuted;
+    expect(transactionErrorMessage(failed, DUEL_IDS)).toBe(
+      'La partida ya no está pendiente: se canceló, se rechazó o se aceptó antes. (código duel/4)',
+    );
+    const status = extractStatusFromEffectsBcs(fromBase64(failed.FailedTransaction.effects.bcs));
+    expect(transactionErrorMessage(status.error, DUEL_IDS)).toBe(
+      'La partida ya no está pendiente: se canceló, se rechazó o se aceptó antes. (código duel/4)',
+    );
+  });
+
+  it('recognizes the node cliErrorText (Rust format) as duel/3 with the normalized packageId', () => {
+    expect(findMoveAbort(new Error(duelTx.cliErrorText))).toEqual({ packageId: duelTx.ids.packageId, module: 'duel', code: '3' });
+  });
+});
+
+describe('real failures of the clock fixture (sandbox: the executed version is another upgrade id)', () => {
+  type ClockTxFixture = {
+    _meta: { sandbox: boolean };
+    ids: Record<string, unknown>;
+    simulationErrors: Record<string, { executionError: SuiClientTypes.ExecutionError; message: string }>;
+    executed: { cancelUnknownTypeArgumentExecuted: FixtureFailed; claimNotExpiredExecuted: FixtureFailed };
+  };
+  const CLOCK_PATH = '../../../contracts/fixtures/duel-clock.localnet.json';
+  const clockTx = import.meta.glob<ClockTxFixture>('../../../contracts/fixtures/duel-clock.localnet.json', {
+    eager: true,
+    import: 'default',
+  })[CLOCK_PATH] as ClockTxFixture;
+  /** El ID del paquete que ejecutó, tomado del abort real de la fixture (la versión de ensayo no es la de producción). */
+  const EXECUTED_PKG = clockTx.executed.claimNotExpiredExecuted.FailedTransaction.status.error?.MoveAbort?.location?.package ?? '';
+  const CLOCK_IDS = { packageId: duelTx.ids.packageId, originalPackageId: duelTx.ids.originalPackageId, upgrades: [{ packageId: EXECUTED_PKG }] };
+
+  it('comes from the sandbox and executed in a version that is not the production one', () => {
+    expect(clockTx._meta.sandbox).toBe(true);
+    expect(EXECUTED_PKG).toMatch(/^0x[0-9a-f]{64}$/);
+    expect([duelTx.ids.packageId, duelTx.ids.originalPackageId]).not.toContain(EXECUTED_PKG);
+  });
+
+  it.each([
+    ['createBadControl', 16],
+    ['claimNotExpired', 14],
+    ['claimBothPending', 22],
+    ['refundNotStalled', 23],
+    ['recordMoveAfterDeadline', 21],
+    ['recordMoveNotYourTurn', 20],
+    ['collectNotPlayer', 24],
+  ])('maps %s to duel/%i only when the executed version is in upgrades[]', (name, code) => {
+    const sim = clockTx.simulationErrors[name];
+    if (sim === undefined) throw new Error(`falta ${name}`);
+    const error = new SimulationError(sim.message, { executionError: sim.executionError });
+    expect(transactionErrorMessage(error, CLOCK_IDS)).toBe(`${ABORT_MESSAGES.duel[code] ?? ''} (código duel/${String(code)})`);
+    expect(transactionErrorMessage(error, DUEL_IDS)).toBe(`La transacción abortó en ${shortAddress(EXECUTED_PKG)}::duel (código ${String(code)})`);
+  });
+
+  it('maps the executed claim_timeout before the deadline (duel/14) from the effects BCS', () => {
+    const failed = clockTx.executed.claimNotExpiredExecuted;
+    const status = extractStatusFromEffectsBcs(fromBase64(failed.FailedTransaction.effects.bcs));
+    expect(transactionErrorMessage(status.error, CLOCK_IDS)).toBe(`${ABORT_MESSAGES.duel[14] ?? ''} (código duel/14)`);
+  });
+
+  it('does not take a TypeArgumentError (a type id older than the definition) for an abort of the contract', () => {
+    const failed = clockTx.executed.cancelUnknownTypeArgumentExecuted;
+    expect(findMoveAbort(failed)).toBeNull();
+    expect(transactionErrorMessage(failed, CLOCK_IDS)).toBe(
+      'La red no ejecutó la transacción: TypeArgumentError { argument_idx: 0, kind: TypeNotFound } in command 0',
     );
   });
 });

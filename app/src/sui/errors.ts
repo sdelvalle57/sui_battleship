@@ -1,11 +1,15 @@
 import { normalizeSuiAddress } from '@mysten/sui/utils';
 import { shortAddress } from './format';
 
+/** Módulos del paquete con códigos de abort propios; `coinflip` no define ninguno (los aborts de su flujo son de `duel`). */
+export type OwnAbortModule = 'house' | 'game' | 'duel';
+
 /**
  * Mensajes de los abort codes del contrato por **módulo + código** (DL-4; tabla de `contracts/README.md`, "Abort codes").
- * Único lugar con estos textos: el número 3 existe en los dos módulos con significados distintos.
+ * Único lugar con estos textos: el número 3 existe en los tres módulos con significados distintos. `duel` (#73, R.3 del
+ * handoff, 0-25): una causa por código y los números quedan estables desde la primera publicación (PROY-2).
  */
-export const ABORT_MESSAGES: Record<'house' | 'game', Record<number, string>> = {
+export const ABORT_MESSAGES: Record<OwnAbortModule, Record<number, string>> = {
   game: {
     0: 'La apuesta es menor que el mínimo de la House.',
     1: 'La apuesta supera el máximo de la House.',
@@ -26,6 +30,45 @@ export const ABORT_MESSAGES: Record<'house' | 'game', Record<number, string>> = 
     3: 'La House está en una versión distinta de la de esta app: hay que actualizar la app.',
     4: 'La House ya está en la versión de este paquete.',
   },
+  duel: {
+    0: 'La apuesta es menor que el mínimo de la House.',
+    1: 'La apuesta supera el máximo de la House.',
+    2: 'No puedes invitarte a ti mismo.',
+    3: 'Solo quien creó la partida puede cancelarla.',
+    4: 'La partida ya no está pendiente: se canceló, se rechazó o se aceptó antes.',
+    5: 'Esta invitación es para otra dirección.',
+    6: 'La partida es abierta: no hay invitación que rechazar.',
+    7: 'La partida se creó con otra versión de la House: solo se puede cancelar, rechazar o reembolsar.',
+    8: 'La partida pertenece a otra House.',
+    9: 'No puedes aceptar tu propia partida.',
+    10: 'El pago tiene que igualar exactamente la apuesta.',
+    11: 'La partida no está en juego: todavía no se aceptó o ya terminó.',
+    12: 'El cobro no corresponde a esta partida.',
+    13: 'El índice del ganador es inválido: solo puede ser 0 o 1.',
+    14: 'El plazo del jugador en turno todavía no venció: aún no se puede reclamar por tiempo.',
+    15: 'El pozo de la partida no es el doble de la apuesta: la operación se bloquea por seguridad.',
+    16: 'El control de tiempo elegido no existe.',
+    17: 'La partida no tiene reloj: no admite esta operación.',
+    18: 'La partida tiene reloj: no se puede resolver en una sola transacción.',
+    19: 'El turno indicado es inválido: solo puede ser 1, 2 o 3.',
+    20: 'No es tu turno.',
+    21: 'El plazo venció: ya solo se puede reclamar por tiempo.',
+    22: 'Ninguno de los dos jugó: no hay ganador por tiempo y la partida se reembolsa a cada jugador.',
+    23: 'Todavía no se puede reembolsar: no pasó el plazo ni, con un solo jugador pendiente, la gracia de reclamo.',
+    24: 'Solo los jugadores de la partida pueden hacer esto.',
+    25: 'La jugada no corresponde a la fase simultánea en curso.',
+  },
+};
+
+/**
+ * Identificadores de nuestro paquete con los que puede informar un `MoveAbort` (V-5/H-j de #73, medido: `location.package`
+ * es el ID de la versión **ejecutada**, el del paquete por el que se llamó): el vigente, el original y el de cada upgrade.
+ * `AppConfig` cumple esta forma tal cual (`upgrades` es opcional: sin upgrades solo valen los dos primeros).
+ */
+export type OwnPackageIds = {
+  packageId: string;
+  originalPackageId: string;
+  upgrades?: readonly { packageId: string }[];
 };
 
 /** Un `MoveAbort` reconocido: paquete normalizado, módulo y código (como string, igual que el SDK). */
@@ -187,21 +230,26 @@ export function runtimeCancellation(source: unknown): 'randomness' | 'congestion
   return null;
 }
 
-function isOwnModule(module: string): module is 'house' | 'game' {
-  return module === 'house' || module === 'game';
+function isOwnModule(module: string): module is OwnAbortModule {
+  return module === 'house' || module === 'game' || module === 'duel';
 }
 
 /**
  * Mensaje en español para cualquier fallo de una transacción (DL-4). Un abort solo se traduce si viene de **nuestro**
- * paquete (`packageId` u `originalPackageId`, normalizados: tras un upgrade el abort puede informar cualquiera de los
- * dos); de otro paquete se muestra crudo. Sin abort: una cancelación del runtime tiene su texto de "intenta de nuevo"
- * (DL-11); otro `ExecutionError` (gas, objetos) es "la red no ejecutó"; cualquier otro error viene de la wallet o del
- * SDK y se muestra con su mensaje.
+ * paquete (`packageId`, `originalPackageId` o el de cualquier entrada de `upgrades`, normalizados: tras un upgrade el abort
+ * informa el ID de la versión ejecutada, que puede ser cualquiera de ellos, V-5); de otro paquete se muestra crudo. El
+ * mensaje sale de **módulo + código**: `house`/3, `game`/3 y `duel`/3 son tres causas distintas. Sin abort: una cancelación
+ * del runtime tiene su texto de "intenta de nuevo" (DL-11); otro `ExecutionError` (gas, objetos) es "la red no ejecutó";
+ * cualquier otro error viene de la wallet o del SDK y se muestra con su mensaje.
  */
-export function transactionErrorMessage(source: unknown, ids: { packageId: string; originalPackageId: string }): string {
+export function transactionErrorMessage(source: unknown, ids: OwnPackageIds): string {
   const abort = findMoveAbort(source);
   if (abort) {
-    const own = new Set([normalizeSuiAddress(ids.packageId), normalizeSuiAddress(ids.originalPackageId)]);
+    const own = new Set(
+      [ids.packageId, ids.originalPackageId, ...(ids.upgrades ?? []).map((upgrade) => upgrade.packageId)].map((id) =>
+        normalizeSuiAddress(id),
+      ),
+    );
     if (!own.has(abort.packageId)) {
       return `La transacción abortó en ${shortAddress(abort.packageId)}::${abort.module} (código ${abort.code})`;
     }
