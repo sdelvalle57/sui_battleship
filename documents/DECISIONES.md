@@ -10,6 +10,12 @@
 
 ---
 
+### D-20261119-04 — Tag `v0.1.0` del MVP (N-5)
+- **Decisión:** al cerrar el MVP (#17), el orquestador crea el tag anotado `v0.1.0` sobre el merge commit del PR de #17 en `master` y lo pushea. Sin GitHub Release, salvo que el owner la pida (si la pide, el MID redacta las notas).
+- **Alternativa descartada:** taggear antes del merge (el tag no incluiría el acta del smoke ni el cierre de docs); que el owner lo cree a mano.
+- **Motivo:** N-5 era decisión del owner (no delegada, D-20261104-05); el owner decidió el tag y pidió que lo cree el orquestador.
+- **Aprobado por:** usuario ("haz tu tag v0.1.0 del MVP", 2026-11-19). **Fecha:** 2026-11-19.
+
 ### D-20261119-03 — K0 de la sonda del smoke con el historial de #8 podado: solo la sonda (STOP-1 del handoff v1.3 de #17)
 - **Decisión:** cuando el `previousTransaction` de la House está debajo del piso del fullnode público (hoy: la comisión de #8, checkpoint 402799414; piso 404332001), la sonda toma `K0` = altura del nodo leída antes que la House − 1000 checkpoints (DL-12, C-5 del handoff v1.3.1). Se valida con dos coherencias sobre 0.6: ningún `GameResolved`, ni `FeeRateUpdated`/`BetLimitsUpdated`/`FeesWithdrawn`/`HouseMigrated`, con checkpoint ≤ `K0` ni de ese digest. Si la House está fresca, rige DL-9 sin cambios. El owner no firma nada para fijar `K0`. Respaldo (a1): si `pre` da dos exit 5 seguidos por la coherencia de C-5, o si el owner cambia de opinión, el owner firma por CLI `update_fee_rate` 200 → 200 justo antes de un `pre` nuevo y la sonda vuelve sola a DL-9.
 - **Alternativa descartada:** (a1) como camino principal (una firma más con la CLI del owner); (a2) adelantar H4 antes del paso 0 (el owner firmaría antes de las precondiciones y H4 saldría de su lugar en DL-3); (c) leer el digest viejo por GraphQL (rompe la lista blanca solo-gRPC de DL-2 y no alcanza, porque las ventanas de 4a y `final` también quedan debajo del piso de `ListEvents`).

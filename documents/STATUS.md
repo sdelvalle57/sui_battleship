@@ -237,8 +237,8 @@ paralelo; #15 después de #12; #18 fuera del MVP.
 - Abierto: #58 (code-splitting del bundle de la app, post-MVP; P-3 de #15, D-20261104-03 (3)).
 - **#16:** revisar D-20261104-04 (P-1..P-3, tomada por delegación, D-20261104-01; también en la lista de arriba).
   **N-2:** resuelto por D-20261119-02. ✅ 2026-11-19: TASK-5 de #16 (PR #68) completó la URL y cerró #15 y #16.
-- ✅ 2026-11-19 (owner) **N-About (#16, owner, no delegable):** settings "About" del repo: descripción, website con la URL
-  (`https://sui-battleship-app-production.up.railway.app`) y topics. Ningún agente los cambia.
+- ✅ 2026-11-19 (owner) **N-About (#16, owner, no delegable):** settings "About" del repo: descripción y website con la URL
+  (`https://sui-battleship-app-production.up.railway.app`); los topics quedan vacíos (opcional). Ningún agente los cambia.
 - Abierto: #35 (11 *moderate* solo dev de `minimatch` < 11.0.1 vía eslint/typescript-eslint, aceptados hasta que haya versiones elegibles).
 - (Resueltos 2026-10-30: P-1 → D-20261030-05; P-2 → PR de docs; P-3 → Sui CLI instalada, H1.)
 
