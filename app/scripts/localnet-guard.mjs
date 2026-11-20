@@ -1,36 +1,17 @@
 // Guarda de localnet compartida por los scripts de captura de fixtures (#10 `capture-read-fixtures.mjs`, #11
 // `capture-tx-fixtures.mjs`; DL-15 de #11).
 //
-// Este módulo **no** importa el SDK ni nada de red en el nivel superior (solo `node:*`, M-4 de #11): importarlo no puede
-// hacer ningún pedido. El script que lo usa llama a `assertLocalnetUrl` como primera instrucción, y recién después importa
-// el SDK (import dinámico), crea el cliente y lee el chain id del nodo para `assertDeployment`.
+// Este módulo **no** importa el SDK ni nada de red en el nivel superior (solo `node:*` y el módulo puro de la regla de la
+// URL, M-4 de #11): importarlo no puede hacer ningún pedido. El script que lo usa llama a `assertLocalnetUrl` como
+// primera instrucción, y recién después importa el SDK (import dinámico), crea el cliente y lee el chain id del nodo
+// para `assertDeployment`.
 import process from 'node:process';
+import { LOCALNET_URL, isLoopbackUrl } from '../src/sui/localnetUrl.mjs';
 
-/** URL por defecto (sin `--url`): la localnet aislada de `agents.md` §3 en el puerto por defecto de `sui start`. */
-export const LOCALNET_URL = 'http://127.0.0.1:9000';
-
-// Solo loopback IPv4 literal, `http`, puerto decimal de 4 o 5 dígitos sin ceros a la izquierda y nada más (sin
-// credenciales, path, query ni fragmento). En JavaScript `$` ancla solo al final de la cadena (sin la bandera `m`).
-const LOOPBACK_URL = /^http:\/\/127\.0\.0\.1:([1-9][0-9]{3,4})$/;
-
-/**
- * `true` si y solo si `url` es un `string` de la forma `http://127.0.0.1:<puerto>` con el puerto entre 1024 y 65535. La
- * restricción "solo loopback" se conserva: lo único que se generaliza es el puerto (una localnet aislada puede correr en
- * otro puerto con `sui start --fullnode-rpc-port`, p. ej. si el 9000 lo ocupa un servicio de otro proyecto del host).
- * Función pura: sin `process`, sin red.
- *
- * Mantener en sincronía con `localnet-guard.d.mts`; los tests de `app/src/test/localnet-guard.test.ts` son la verificación.
- *
- * @param {unknown} url valor a validar (de cualquier tipo: solo un `string` puede ser válido)
- * @returns {boolean}
- */
-export function isLoopbackUrl(url) {
-  if (typeof url !== 'string') return false;
-  const match = LOOPBACK_URL.exec(url);
-  if (match === null) return false;
-  const port = Number(match[1]);
-  return Number.isInteger(port) && port >= 1024 && port <= 65535;
-}
+// La regla de la URL (`LOCALNET_URL`, `isLoopbackUrl`: solo `http://127.0.0.1:<puerto>`, 1024-65535, por defecto 9000) vive
+// en `app/src/sui/localnetUrl.mjs` y se comparte con la config de la app (#77); acá se importa y se re-exporta tal cual,
+// de modo que la guarda de las capturas y el endpoint de la app son la misma función.
+export { LOCALNET_URL, isLoopbackUrl };
 
 /**
  * Valida los argumentos de un script de captura: `--url <valor>` opcional (sin `--url`, la URL es `LOCALNET_URL`), el valor
