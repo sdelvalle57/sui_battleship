@@ -1,3 +1,4 @@
+import { rowAcceptState, rowCanCancel, rowCanReject, type GameRow } from '../hooks/gameRow';
 import type { AdoptedTx, TxOutcome } from '../hooks/txSession';
 import { useAcceptGame } from '../hooks/useAcceptGame';
 import { useAppConfig } from '../hooks/useAppConfig';
@@ -7,10 +8,9 @@ import { useSuiBalance } from '../hooks/useSuiBalance';
 import { useTxTarget } from '../hooks/useTxTarget';
 import { useWalletAccount } from '../hooks/useWalletAccount';
 import { ACCEPT_GAS_RESERVE_MIST, acceptBalanceCheck, wonBy } from '../sui/acceptGame';
-import type { GameResolvedEvent } from '../sui/events';
 import { formatMist } from '../sui/format';
-import type { Game } from '../sui/game';
-import { acceptState, canCancel, canReject, NOT_INVITED_HINT } from '../sui/gameActions';
+import { NOT_INVITED_HINT } from '../sui/gameActions';
+import type { ResolvedGame } from '../sui/gameTx';
 import { TransactionStatus } from './TransactionStatus';
 import { IN_FLIGHT_TEXT } from './txNotice';
 
@@ -26,7 +26,7 @@ function rejectedText(refund: bigint | null): string {
  * Resultado de una aceptación (DL-5, SEG-10): solo con el `GameResolved` de la confirmación del nodo, con sus montos;
  * sin evento, un éxito honesto que remite al detalle.
  */
-function acceptedText(event: GameResolvedEvent | null, address: string | null): string {
+function acceptedText(event: ResolvedGame | null, address: string | null): string {
   if (event === null) return 'Partida aceptada; no se pudo leer el resultado de la transacción: el detalle muestra el ganador';
   const amounts = `(pozo ${sui(event.pot)} − comisión ${sui(event.fee)})`;
   return address !== null && wonBy(event, address)
@@ -44,6 +44,8 @@ function adoptedStatus(adopted: AdoptedTx, address: string | null): { outcome: T
     case 'accept':
       return { outcome: adopted.outcome, text: acceptedText(adopted.outcome.kind === 'success' ? adopted.outcome.value : null, address) };
     case 'create':
+    case 'claim':
+    case 'refundStalled':
     case 'updateFeeRate':
     case 'updateBetLimits':
     case 'withdrawFees':
@@ -98,19 +100,23 @@ function AcceptBlock({ bet, disabled, onAccept }: { bet: bigint; disabled: boole
  * aviso "en curso" (la página lo muestra una sola vez). Con un `success` propio o adoptado en la fila (H-3), tampoco
  * ofrece "Aceptar", "Cancelar" ni "Rechazar": las tres dejan la partida terminal, aunque el objeto leído siga viejo. Los
  * estados de transacción y la alerta "sin confirmar" se mantienen. `variant='detail'` es el detalle de siempre.
+ *
+ * #73 (TASK-8a): recibe la fila neutral a la fuente (`GameRow`) y los hooks enrutan por su fuente; el marcado es el mismo
+ * para una partida anterior y una nueva. Un estado que no es `Pending` (`Active`, `TimedOut`, `Expired`) no ofrece ninguna
+ * de las tres; las acciones de tiempo (reclamar y reembolsar) son de 8b.
  */
-export function GameActions({ game, variant = 'detail' }: { game: Game; variant?: 'detail' | 'row' }) {
+export function GameActions({ game, variant = 'detail' }: { game: GameRow; variant?: 'detail' | 'row' }) {
   const { network } = useAppConfig();
   const { address } = useWalletAccount();
   const target = useTxTarget({ kind: 'game', gameId: game.id });
-  const cancel = useCancelGame(target.view);
-  const reject = useRejectGame(target.view);
+  const cancel = useCancelGame(target.view, game);
+  const reject = useRejectGame(target.view, game);
   const accept = useAcceptGame(target.view, game);
   const busy = target.busy || target.unconfirmed !== null;
   const adopted = target.notice?.kind === 'adopted' ? adoptedStatus(target.notice.adopted, address) : null;
-  const accepting = acceptState(game, address);
-  const showCancel = canCancel(game, address);
-  const showReject = canReject(game, address);
+  const accepting = rowAcceptState(game, address);
+  const showCancel = rowCanCancel(game, address);
+  const showReject = rowCanReject(game, address);
   const cancelValue = cancel.outcome?.kind === 'success' ? cancel.outcome.value : null;
   const rejectValue = reject.outcome?.kind === 'success' ? reject.outcome.value : null;
   const acceptValue = accept.outcome?.kind === 'success' ? accept.outcome.value : null;

@@ -1,13 +1,15 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { rowFromGame, type DuelGameRow, type GameRow, type ListedRow } from '../hooks/gameRow';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useCheckpointTime } from '../hooks/useCheckpointTime';
 import type { MyGamesSource } from '../hooks/useMyGames';
 import { useTransactionTime } from '../hooks/useTransactionTime';
 import type { AppConfig } from '../sui/config';
+import type { DuelState } from '../sui/duel';
 import type { Game, GameState } from '../sui/game';
-import type { MyGameItem, MyGameRole, MyGamesSection as SectionKey } from '../sui/myGames';
+import type { MyGameRole, MyGamesSection as SectionKey } from '../sui/myGames';
 import { PaginationStalledError } from '../sui/readErrors';
 import { MyGamesSection } from './MyGamesSection';
 
@@ -16,7 +18,7 @@ vi.mock('../hooks/useTransactionTime', () => ({ useTransactionTime: vi.fn() }));
 vi.mock('../hooks/useCheckpointTime', () => ({ useCheckpointTime: vi.fn() }));
 // Las acciones de la fila se prueban en GameActions.test.tsx y con la máquina real en MyGamesPage.test.tsx.
 vi.mock('./GameActions', () => ({
-  GameActions: ({ game, variant }: { game: Game; variant?: string }) => (
+  GameActions: ({ game, variant }: { game: GameRow; variant?: string }) => (
     <div className="game-actions" data-variant={variant}>
       acciones de {game.id}
     </div>
@@ -41,7 +43,22 @@ function game(n: number, { creator = ME, opponent = null, state = { kind: 'pendi
     state,
   };
 }
-const item = (g: Game, role: MyGameRole): MyGameItem => ({ kind: 'game', game: g, objectVersion: 4n, role, txDigest: `tx-${g.id.slice(-2)}`, checkpoint: 100n });
+const item = (g: Game, role: MyGameRole): ListedRow => ({ kind: 'game', row: rowFromGame(g, 'coinflip'), role, txDigest: `tx-${g.id.slice(-2)}` });
+/** Una partida de la fuente nueva (control "sin reloj", como el coinflip) en cualquier estado del `Duel`. */
+function duelItem(n: number, state: DuelState, role: MyGameRole, { creator = ME, opponent = null }: { creator?: string; opponent?: string | null } = {}): ListedRow {
+  const row: DuelGameRow = {
+    source: 'duel',
+    id: gid(n),
+    gameKey: 'coinflip',
+    creator,
+    opponent,
+    bet: 1_000_000n,
+    feeRate: 250,
+    state,
+    control: { id: 0, turnMs: 0n, label: 'sin reloj' },
+  };
+  return { kind: 'game', row, role, txDigest: `tx-${gid(n).slice(-2)}` };
+}
 function source(overrides: Partial<MyGamesSource> = {}): MyGamesSource {
   return {
     status: { kind: 'ready', refreshing: false },
@@ -60,7 +77,7 @@ function source(overrides: Partial<MyGamesSource> = {}): MyGamesSource {
   };
 }
 const MORE: Record<SectionKey, string> = { invitations: 'Cargar más invitaciones', pending: 'Cargar más actividad', finished: 'Cargar más actividad' };
-function renderSection(section: SectionKey, items: MyGameItem[], src: MyGamesSource = source()) {
+function renderSection(section: SectionKey, items: ListedRow[], src: MyGamesSource = source()) {
   return render(
     <MemoryRouter>
       <MyGamesSection section={section} items={items} source={src} address={ME} moreLabel={MORE[section]} busy={false} />
@@ -117,8 +134,8 @@ describe('MyGamesSection: rows', () => {
 
   it('shows unreadable rows as such, with a link and data-game-id only when the game id is known', () => {
     const { container } = renderSection('finished', [
-      { kind: 'unreadable', gameId: gid(5), role: 'creator', txDigest: 'tx-a', checkpoint: 10n },
-      { kind: 'unreadable', gameId: null, role: null, txDigest: 'tx-b', checkpoint: 9n },
+      { kind: 'unreadable', gameId: gid(5), role: 'creator', txDigest: 'tx-a' },
+      { kind: 'unreadable', gameId: null, role: null, txDigest: 'tx-b' },
     ]);
     const [known, unknown] = rows(container);
     expect(known).toHaveTextContent('Partida ilegible');
@@ -126,6 +143,52 @@ describe('MyGamesSection: rows', () => {
     expect(within(known as HTMLElement).getByRole('link')).toHaveAttribute('href', `/game/${gid(5)}`);
     expect(unknown).toHaveTextContent('Partida ilegible');
     expect(unknown).not.toHaveAttribute('data-game-id');
+  });
+
+  it('draws a row of the new source with the same markup as one of the previous source (no source label, no time control)', () => {
+    const previous = renderSection('pending', [item(game(1, { opponent: OTHER }), 'creator')]);
+    const previousHtml = previous.container.innerHTML;
+    previous.unmount();
+    const next = renderSection('pending', [duelItem(1, { kind: 'pending' }, 'creator', { opponent: OTHER })]);
+    expect(next.container.innerHTML).toBe(previousHtml);
+    expect(next.container).not.toHaveTextContent(/anterior|nueva|sin reloj|por jugada/i);
+  });
+
+  it('shows the six states of a new-source game in its section: the three known ones as always and the fallback line for the rest', () => {
+    const states: [DuelState, SectionKey, string][] = [
+      [{ kind: 'pending' }, 'pending', 'Pendiente'],
+      [{ kind: 'active', acceptor: OTHER, toMove: 1, deadlineMs: 5n }, 'pending', 'En juego'],
+      [{ kind: 'cancelled' }, 'finished', 'Cancelada'],
+      [{ kind: 'resolved', acceptor: OTHER, winner: ME }, 'finished', 'Resuelta'],
+      [{ kind: 'timed_out', acceptor: OTHER, winner: ME }, 'finished', 'Terminada por tiempo agotado'],
+      [{ kind: 'expired', acceptor: OTHER }, 'finished', 'Terminada: se devolvieron las apuestas'],
+    ];
+    for (const [state, section, label] of states) {
+      const { container, unmount } = renderSection(section, [duelItem(1, state, 'creator')]);
+      const [row] = rows(container);
+      expect(row, label).toHaveTextContent(`0.001 SUI · ${label}`);
+      unmount();
+    }
+  });
+
+  it('gives a timed-out or expired game one neutral result line, without winner or amounts (8b replaces it)', () => {
+    const { container } = renderSection('finished', [
+      duelItem(1, { kind: 'timed_out', acceptor: OTHER, winner: ME }, 'creator'),
+      duelItem(2, { kind: 'expired', acceptor: OTHER }, 'creator'),
+    ]);
+    const [timedOut, expired] = rows(container);
+    expect(timedOut?.querySelector('.my-game-result')).toHaveTextContent('Terminada por tiempo agotado');
+    expect(expired?.querySelector('.my-game-result')).toHaveTextContent('Terminada: se devolvieron las apuestas');
+    expect(timedOut?.querySelector('.my-game-result')).not.toHaveTextContent(/Ganaste|Perdiste|pozo/);
+    expect(container.querySelector('.game-actions')).toBeNull();
+  });
+
+  it('calls the account the acceptor of a new-source game it accepted, also when it is Active', () => {
+    const { container } = renderSection('pending', [
+      duelItem(1, { kind: 'active', acceptor: ME, toMove: 2, deadlineMs: 9n }, 'acceptor', { creator: OTHER }),
+    ]);
+    const [row] = rows(container);
+    expect(row).toHaveTextContent('Aceptaste la de 0xcdcd…cdcd');
   });
 });
 

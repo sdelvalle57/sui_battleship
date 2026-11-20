@@ -1,12 +1,12 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { rowFromGame, type GameRow } from '../hooks/gameRow';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useSuiBalance } from '../hooks/useSuiBalance';
 import { useWalletAccount } from '../hooks/useWalletAccount';
 import type { AppConfig } from '../sui/config';
 import { confirmTransaction, preflightTransaction, waitForCheckpoint } from '../sui/execution';
-import type { Game } from '../sui/game';
 import { createPolicyQueryClient } from '../test/queryHarness';
 import { GameActions } from './GameActions';
 
@@ -48,17 +48,20 @@ const CONFIG: AppConfig = {
   publishTxDigest: '11111111111111111111111111111111',
   burnerWalletEnabled: true,
 };
-const GAME: Game = {
-  id: fixture.ids.games.open,
-  version: 1n,
-  houseId: fixture.ids.houseId,
-  creator: CREATOR,
-  opponent: null,
-  bet: 1_000_001n,
-  stake: 1_000_001n,
-  feeRate: 250,
-  state: { kind: 'pending' },
-};
+const GAME: GameRow = rowFromGame(
+  {
+    id: fixture.ids.games.open,
+    version: 1n,
+    houseId: fixture.ids.houseId,
+    creator: CREATOR,
+    opponent: null,
+    bet: 1_000_001n,
+    stake: 1_000_001n,
+    feeRate: 250,
+    state: { kind: 'pending' },
+  },
+  'coinflip',
+);
 
 const { signAndExecuteTransaction } = kit;
 let queryClient: QueryClient;

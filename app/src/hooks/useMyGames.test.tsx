@@ -10,6 +10,7 @@ import { PaginationStalledError } from '../sui/readErrors';
 import { fetchPublishCheckpoint } from '../sui/transactionInfo';
 import { advance, createPolicyQueryClient, queryWrapper } from '../test/queryHarness';
 import { deferred } from '../test/txHarness';
+import type { ListedRow } from './gameRow';
 import { queryKeys } from './queryKeys';
 import { useAccountTxBusy } from './useAccountTxBusy';
 import { useAppConfig } from './useAppConfig';
@@ -98,7 +99,7 @@ function ready(hook: Hook) {
   if (result.kind !== 'ready') throw new Error('se esperaba una cuenta');
   return result;
 }
-const ids = (items: MyGameItem[]) => items.map((i) => (i.kind === 'game' ? i.game.id : i.gameId));
+const ids = (items: ListedRow[]) => items.map((i) => (i.kind === 'game' ? i.row.id : i.gameId));
 const MY_GAMES = queryKeys.myGames('testnet', PKG, ME);
 
 beforeEach(() => {
@@ -387,7 +388,7 @@ describe('useMyGames: pins (DL-5)', () => {
     await advance(0);
     const pinned = ready(hook).sections.invitations;
     expect(ids(pinned)).toEqual([gid(7)]);
-    expect(pinned[0]).toMatchObject({ kind: 'game', role: 'acceptor', game: { state: { kind: 'resolved' } } });
+    expect(pinned[0]).toMatchObject({ kind: 'game', role: 'acceptor', row: { state: { kind: 'resolved' } } });
     expect(ready(hook).sections.finished).toEqual([]);
     act(() => {
       ready(hook).refresh();
@@ -482,7 +483,7 @@ describe('useMyGames: pins (DL-5)', () => {
     });
     await advance(0);
     expect(ids(ready(second).sections.pending)).toEqual([gid(8)]);
-    expect(ready(second).sections.pending[0]).toMatchObject({ kind: 'game', game: { state: { kind: 'cancelled' } } });
+    expect(ready(second).sections.pending[0]).toMatchObject({ kind: 'game', row: { state: { kind: 'cancelled' } } });
     expect(ready(second).sections.finished).toEqual([]);
   });
 
@@ -521,7 +522,7 @@ describe('useMyGames: pins (DL-5)', () => {
     });
     await advance(0);
     expect(ids(ready(hook).sections.pending)).toEqual([gid(9)]);
-    expect(ready(hook).sections.pending[0]).toMatchObject({ kind: 'game', game: { state: { kind: 'cancelled' } } });
+    expect(ready(hook).sections.pending[0]).toMatchObject({ kind: 'game', row: { state: { kind: 'cancelled' } } });
     expect(ready(hook).sections.finished).toEqual([]);
   });
 
@@ -663,15 +664,36 @@ describe('useMyGames and the two sources (#73)', () => {
     }
   });
 
-  it('allSections has the rows of both sources while sections (what the components draw today) only has the legacy rows', async () => {
+  it('sections does not filter: it has the rows of both sources in the neutral model, and allSections the same rows as sui/ read them', async () => {
     activityMock.mockResolvedValue(page([ownPending(1), duelItem(1, 'creator')]));
     invitationsMock.mockResolvedValue(page([]));
     const hook = render();
     await advance(0);
     const result = ready(hook);
     expect(result.allSections.pending.map((row) => row.kind)).toEqual(['duel', 'game']);
-    expect(result.sections.pending.map((row) => row.kind)).toEqual(['game']);
-    expect(ids(result.sections.pending)).toEqual([gid(1)]);
+    expect(result.sections.pending.map((row) => (row.kind === 'game' ? row.row.source : row.kind))).toEqual(['duel', 'legacy']);
+    expect(ids(result.sections.pending)).toEqual([gid(0x200 + 1), gid(1)]);
+  });
+
+  it('gives the duel rows their role, their event and a time control derived from the object (no clock for the coinflip)', async () => {
+    activityMock.mockResolvedValue(page([duelItem(1, 'creator')]));
+    invitationsMock.mockResolvedValue(page([]));
+    const hook = render();
+    await advance(0);
+    const [row] = ready(hook).sections.pending;
+    expect(row).toMatchObject({
+      kind: 'game',
+      role: 'creator',
+      row: { source: 'duel', gameKey: 'coinflip', control: { id: 0, turnMs: 0n, label: 'sin reloj' }, state: { kind: 'pending' } },
+    });
+  });
+
+  it('keeps the legacy rows without a time control and with the game that owns the legacy source', async () => {
+    activityMock.mockResolvedValue(page([ownPending(1)]));
+    invitationsMock.mockResolvedValue(page([]));
+    const hook = render();
+    await advance(0);
+    expect(ready(hook).sections.pending[0]).toMatchObject({ kind: 'game', role: 'creator', row: { source: 'legacy', gameKey: 'coinflip', control: null } });
   });
 
   it('pins a duel row in its section like a legacy one: it does not move when the object changes state', async () => {

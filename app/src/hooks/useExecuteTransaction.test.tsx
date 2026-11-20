@@ -112,6 +112,8 @@ function targetOf(action: TxAction): TxTarget {
     case 'cancel':
     case 'reject':
     case 'accept':
+    case 'claim':
+    case 'refundStalled':
       return { kind: 'game', gameId: action.gameId };
     case 'updateFeeRate':
     case 'updateBetLimits':

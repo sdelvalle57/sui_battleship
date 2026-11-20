@@ -1,8 +1,9 @@
-import { playerResult } from '../sui/acceptGame';
-import { resolutionAmounts, type Game } from '../sui/game';
+import { rowPlayerResult, type GameRow } from '../hooks/gameRow';
+import { resolutionAmounts } from '../sui/game';
 import { explorerObjectUrl } from '../sui/explorer';
 import { formatBps, formatMist, formatTimestamp, shortAddress } from '../sui/format';
 import type { Network } from '../sui/networks';
+import { FALLBACK_STATE_TEXT } from './stateText';
 
 const sui = (mist: bigint) => `${formatMist(mist)} SUI`;
 
@@ -10,7 +11,7 @@ function Address({ value }: { value: string }) {
   return <span title={value}>{shortAddress(value)}</span>;
 }
 
-function stateLabel(game: Game) {
+function stateLabel(game: GameRow) {
   switch (game.state.kind) {
     case 'pending':
       return game.opponent === null ? (
@@ -24,14 +25,21 @@ function stateLabel(game: Game) {
       return 'Cancelada';
     case 'resolved':
       return 'Resuelta';
+    // Fallback mínimo de 8a para los estados de la fuente nueva que esta pantalla todavía no distingue.
+    case 'active':
+    case 'timed_out':
+    case 'expired':
+      return FALLBACK_STATE_TEXT[game.state.kind];
   }
 }
 
 /**
- * Detalle de una partida (presentacional). En `Pending` muestra la estimación del reparto y, en `Resolved`, los montos
- * cobrados, ambos con la fórmula de la v1 (`resolutionAmounts`). "Última actividad" es la hora de la última transacción
- * que tocó el objeto, que puede ser una fallida (sonda P6 de #10): nunca se presenta como la que la resolvió. Con la
- * partida resuelta y la cuenta conectada como creador o aceptante, "Resultado para ti" (DL-12 de #12), leído del objeto.
+ * Detalle de una partida (presentacional), de cualquiera de las dos fuentes (fila neutral, #73 TASK-8a). En `Pending`
+ * muestra la estimación del reparto y, en `Resolved`, los montos cobrados, ambos con la fórmula de la v1
+ * (`resolutionAmounts`, la misma de la fuente nueva). "Última actividad" es la hora de la última transacción que tocó el
+ * objeto, que puede ser una fallida (sonda P6 de #10): nunca se presenta como la que la resolvió. Con la partida resuelta y
+ * la cuenta conectada como creador o aceptante, "Resultado para ti" (DL-12 de #12), leído del objeto. `Active`, `TimedOut`
+ * y `Expired` muestran solo una línea neutra en "Estado" (fallback de 8a; 8b los distingue).
  */
 export function GameDetail({
   game,
@@ -39,13 +47,13 @@ export function GameDetail({
   network,
   account,
 }: {
-  game: Game;
+  game: GameRow;
   lastActivityMs: number | null;
   network: Network;
   account: string | null;
 }) {
   const { pot, fee, payout } = resolutionAmounts(game.bet, game.feeRate);
-  const result = playerResult(game, account);
+  const result = rowPlayerResult(game, account);
   const explorerUrl = explorerObjectUrl(network, game.id);
   return (
     <article className="game-detail">

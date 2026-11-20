@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { rowFromGame, type ListedRow } from '../hooks/gameRow';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useCheckpointTime } from '../hooks/useCheckpointTime';
-import { useLobby, type LobbyRow, type UseLobbyResult } from '../hooks/useLobby';
+import { useLobby, type UseLobbyResult } from '../hooks/useLobby';
 import { useTransactionTime } from '../hooks/useTransactionTime';
 import type { AppConfig } from '../sui/config';
 import type { Game } from '../sui/game';
@@ -34,7 +35,28 @@ function game(n: number, creator = OTHER): Game {
     state: { kind: 'pending' },
   };
 }
-const row = (g: Game, isMine = false, createdTxDigest = `tx-${g.id.slice(-2)}`): LobbyRow => ({ kind: 'game', game: g, createdTxDigest, isMine });
+const row = (g: Game, isMine = false, txDigest = `tx-${g.id.slice(-2)}`): ListedRow => ({
+  kind: 'game',
+  row: rowFromGame(g, 'coinflip'),
+  role: isMine ? 'creator' : null,
+  txDigest,
+});
+const duelRow = (g: Game, isMine = false, txDigest = `tx-${g.id.slice(-2)}`): ListedRow => ({
+  kind: 'game',
+  row: {
+    source: 'duel',
+    id: g.id,
+    gameKey: 'coinflip',
+    creator: g.creator,
+    opponent: g.opponent,
+    bet: g.bet,
+    feeRate: g.feeRate,
+    state: g.state,
+    control: { id: 0, turnMs: 0n, label: 'sin reloj' },
+  },
+  role: isMine ? 'creator' : null,
+  txDigest,
+});
 
 function lobby(overrides: Partial<UseLobbyResult> = {}): UseLobbyResult {
   return {
@@ -128,6 +150,26 @@ describe('LobbyList: rows', () => {
     expect(second).not.toHaveTextContent('(tuya)');
   });
 
+  it('draws a row of the new source with the same markup as one of the previous source, without a source label or a time control', () => {
+    const previous = row(game(1, MINE), true);
+    const next = duelRow(game(1, MINE), true);
+    const { container, unmount } = renderWith(lobby({ items: [previous] }));
+    const previousHtml = container.innerHTML;
+    unmount();
+    const rendered = renderWith(lobby({ items: [next] }));
+    expect(rendered.container.innerHTML).toBe(previousHtml);
+    expect(screen.getByRole('listitem')).not.toHaveTextContent(/anterior|nueva|sin reloj|por jugada/i);
+  });
+
+  it('draws the rows of both sources together, in the order given', () => {
+    renderWith(lobby({ items: [duelRow(game(3)), row(game(2)), duelRow(game(1), true)] }));
+    const items = screen.getAllByRole('listitem');
+    expect(items).toHaveLength(3);
+    expect(within(items[0] as HTMLElement).getByRole('link', { name: 'Ver partida' })).toHaveAttribute('href', `/game/${game(3).id}`);
+    expect(within(items[1] as HTMLElement).getByRole('link', { name: 'Ver partida' })).toHaveAttribute('href', `/game/${game(2).id}`);
+    expect(items[2]).toHaveTextContent('(tuya)');
+  });
+
   it('shows "—" when the creation time is pruned or missing', () => {
     vi.mocked(useTransactionTime).mockReturnValue({ timestampMs: null, status: { kind: 'error', error: new Error('pruned') } });
     renderWith(lobby({ items: [row(game(1))] }));
@@ -138,7 +180,7 @@ describe('LobbyList: rows', () => {
     const unreadableId = game(7).id;
     renderWith(
       lobby({
-        items: [row(game(1)), { kind: 'unreadable', gameId: unreadableId, txDigest: 'tx-u', isMine: false }, { kind: 'unreadable', gameId: null, txDigest: 'tx-v', isMine: false }, row(game(2))],
+        items: [row(game(1)), { kind: 'unreadable', gameId: unreadableId, txDigest: 'tx-u', role: null }, { kind: 'unreadable', gameId: null, txDigest: 'tx-v', role: null }, row(game(2))],
       }),
     );
     const items = screen.getAllByRole('listitem');
@@ -155,8 +197,8 @@ describe('LobbyList: rows', () => {
     renderWith(
       lobby({
         items: [
-          { kind: 'unreadable', gameId: null, txDigest: 'tx-ptb', isMine: false },
-          { kind: 'unreadable', gameId: null, txDigest: 'tx-ptb', isMine: false },
+          { kind: 'unreadable', gameId: null, txDigest: 'tx-ptb', role: null },
+          { kind: 'unreadable', gameId: null, txDigest: 'tx-ptb', role: null },
         ],
       }),
     );

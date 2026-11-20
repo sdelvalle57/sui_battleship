@@ -1,34 +1,36 @@
 import { Link } from 'react-router';
+import type { ListedRow } from '../hooks/gameRow';
 import { useAppConfig } from '../hooks/useAppConfig';
-import { useLobby, type LobbyRow } from '../hooks/useLobby';
+import { useLobby } from '../hooks/useLobby';
 import { formatBps, formatMist, shortAddress } from '../sui/format';
 import { readErrorMessage } from '../sui/readErrors';
 import { CreatedAt, FloorSince } from './HistoryTime';
 import { ReadState } from './ReadState';
 
-function LobbyRowView({ row }: { row: LobbyRow }) {
-  if (row.kind === 'unreadable') {
+/** Una fila del lobby, con el mismo marcado para una partida de la fuente anterior y de la nueva (modelo neutral, TASK-8a). */
+function LobbyRowView({ item }: { item: ListedRow }) {
+  if (item.kind === 'unreadable') {
     return (
       <li className="lobby-row unreadable">
         Partida ilegible
-        {row.gameId !== null && (
+        {item.gameId !== null && (
           <>
             {' '}
-            <Link to={`/game/${row.gameId}`} title={row.gameId}>
-              {shortAddress(row.gameId)}
+            <Link to={`/game/${item.gameId}`} title={item.gameId}>
+              {shortAddress(item.gameId)}
             </Link>
           </>
         )}
       </li>
     );
   }
-  const { game } = row;
+  const { row } = item;
   return (
     <li className="lobby-row">
-      <span className="lobby-bet">{formatMist(game.bet)} SUI</span> · comisión {formatBps(game.feeRate)} · creada por{' '}
-      <span title={game.creator}>{shortAddress(game.creator)}</span>
-      {row.isMine && <strong className="lobby-mine"> (tuya)</strong>} · <CreatedAt txDigest={row.createdTxDigest} /> ·{' '}
-      <Link to={`/game/${game.id}`}>Ver partida</Link>
+      <span className="lobby-bet">{formatMist(row.bet)} SUI</span> · comisión {formatBps(row.feeRate)} · creada por{' '}
+      <span title={row.creator}>{shortAddress(row.creator)}</span>
+      {item.role === 'creator' && <strong className="lobby-mine"> (tuya)</strong>} · <CreatedAt txDigest={item.txDigest} /> ·{' '}
+      <Link to={`/game/${row.id}`}>Ver partida</Link>
     </li>
   );
 }
@@ -56,11 +58,11 @@ export function LobbyList() {
         <>
           {items.length > 0 && (
             <ul className="lobby-rows">
-              {items.map((row, index) => (
+              {items.map((item, index) => (
                 <LobbyRowView
                   // Dos ilegibles de la misma transacción sin ID (un PTB con varios `GameCreated`) no deben compartir key.
-                  key={row.kind === 'game' ? row.game.id : `${row.txDigest}:${row.gameId ?? `i${String(index)}`}`}
-                  row={row}
+                  key={item.kind === 'game' ? item.row.id : `${item.txDigest}:${item.gameId ?? `i${String(index)}`}`}
+                  item={item}
                 />
               ))}
             </ul>

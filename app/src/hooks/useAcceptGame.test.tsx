@@ -72,7 +72,7 @@ const renderAccept = () =>
   renderHook(
     () => {
       const target = useTxTarget({ kind: 'game', gameId: GAME_ID });
-      return { target, accept: useAcceptGame(target.view, { bet: BET }) };
+      return { target, accept: useAcceptGame(target.view, { bet: BET, gameKey: 'coinflip', source: 'legacy' }) };
     },
     { wrapper: queryWrapper(queryClient) },
   );

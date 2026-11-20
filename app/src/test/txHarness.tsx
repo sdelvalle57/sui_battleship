@@ -1,3 +1,4 @@
+import type { RoutedGame } from '../hooks/gameRow';
 import { useCancelGame } from '../hooks/useCancelGame';
 import { useRejectGame } from '../hooks/useRejectGame';
 import { useTxTarget } from '../hooks/useTxTarget';
@@ -5,11 +6,14 @@ import { useUpdateBetLimits } from '../hooks/useUpdateBetLimits';
 import { useUpdateFeeRate } from '../hooks/useUpdateFeeRate';
 import { useWithdrawFees } from '../hooks/useWithdrawFees';
 
-/** Una vista de partida como la de `GameActions`: una fuente (`useTxTarget`) y sus dos acciones con la misma `view`. */
-export function useGameView(gameId: string) {
+/**
+ * Una vista de partida como la de `GameActions`: una fuente (`useTxTarget`) y sus dos acciones con la misma `view`. Las
+ * acciones enrutan por la fuente de la partida (#73, TASK-8a): por defecto la anterior, como las pruebas de antes.
+ */
+export function useGameView(gameId: string, game: RoutedGame = { gameKey: 'coinflip', source: 'legacy' }) {
   const target = useTxTarget({ kind: 'game', gameId });
-  const cancel = useCancelGame(target.view);
-  const reject = useRejectGame(target.view);
+  const cancel = useCancelGame(target.view, game);
+  const reject = useRejectGame(target.view, game);
   return { target, cancel, reject };
 }
 

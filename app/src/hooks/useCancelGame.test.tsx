@@ -85,8 +85,8 @@ describe.each([
     const { result } = renderHook(
       () => {
         const { view } = useTxTarget({ kind: 'game', gameId });
-        const cancel = useCancelGame(view);
-        const reject = useRejectGame(view);
+        const cancel = useCancelGame(view, { gameKey: 'coinflip', source: 'legacy' });
+        const reject = useRejectGame(view, { gameKey: 'coinflip', source: 'legacy' });
         return kind === 'cancel' ? cancel : reject;
       },
       { wrapper: queryWrapper(queryClient) },

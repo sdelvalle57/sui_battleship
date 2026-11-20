@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { advance, createPolicyQueryClient, queryWrapper } from '../test/queryHarness';
 import type { AppConfig } from '../sui/config';
 import { GAME_REFETCH_MS } from '../sui/gameDetail';
+import type { TypeOrigin } from '../sui/gameRegistry';
 import { READ_TIMEOUT_MS } from '../sui/readPolicy';
 import { useAppConfig } from './useAppConfig';
 import { useGame } from './useGame';
@@ -25,6 +26,25 @@ const fixture = import.meta.glob<Fixture>('../../../contracts/fixtures/game-read
 const OPEN = fixture.objects.pendingOpen;
 const PKG = OPEN.type.split('::')[0] ?? '';
 
+// El `Duel` de producción (`duel-reads`, TASK-5) y la config con upgrades y `typeOrigins` que arma su registro.
+type DuelReads = { ids: { packageId: string; originalPackageId: string; upgrades: { version: number; packageId: string; txDigest: string }[] }; typeOrigins: TypeOrigin[]; objects: { pendingOpen: FixtureObject } };
+const duelReads = import.meta.glob<DuelReads>('../../../contracts/fixtures/duel-reads.localnet.json', { eager: true, import: 'default' })[
+  '../../../contracts/fixtures/duel-reads.localnet.json'
+] as DuelReads;
+const DUEL_OPEN = duelReads.objects.pendingOpen;
+const DUEL_CONFIG: AppConfig = {
+  network: 'localnet',
+  grpcUrl: 'http://127.0.0.1:9000',
+  chainId: '1f1f882e',
+  packageId: duelReads.ids.packageId,
+  originalPackageId: duelReads.ids.originalPackageId,
+  houseId: `0x${'3'.repeat(64)}`,
+  publishTxDigest: '11111111111111111111111111111111',
+  burnerWalletEnabled: false,
+  upgrades: duelReads.ids.upgrades,
+  typeOrigins: duelReads.typeOrigins,
+};
+
 const CONFIG: AppConfig = {
   network: 'localnet',
   grpcUrl: 'http://127.0.0.1:9000',
@@ -39,7 +59,7 @@ const CONFIG: AppConfig = {
 type GetObject = (input: { objectId: string; signal?: AbortSignal }) => Promise<unknown>;
 const getObject = vi.fn<GetObject>();
 const okObject = (content = fromBase64(OPEN.content)) => () =>
-  Promise.resolve({ object: { objectId: OPEN.objectId, type: OPEN.type, owner: OPEN.owner, content, previousTransaction: OPEN.previousTransaction } });
+  Promise.resolve({ object: { objectId: OPEN.objectId, version: '4', type: OPEN.type, owner: OPEN.owner, content, previousTransaction: OPEN.previousTransaction } });
 /** SDK colgado: solo rechaza cuando se dispara la señal que recibió. */
 const hang: GetObject = ({ signal }) =>
   new Promise((_resolve, reject) => {
@@ -86,8 +106,43 @@ describe('useGame', () => {
     await advance(0);
     expect(result.current).toMatchObject({ status: { kind: 'retrying', attempt: 2, max: 3 } });
     await advance(1000);
-    expect(result.current).toMatchObject({ status: { kind: 'ready' }, game: { id: OPEN.objectId } });
+    expect(result.current).toMatchObject({ status: { kind: 'ready' }, detail: { kind: 'game', game: { id: OPEN.objectId } } });
     expect(getObject).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns the Duel of the new source when the object is a Duel of a registered game (the union Game | Duel)', async () => {
+    vi.mocked(useAppConfig).mockReturnValue(DUEL_CONFIG);
+    getObject.mockImplementation(() =>
+      Promise.resolve({
+        object: {
+          objectId: DUEL_OPEN.objectId,
+          version: '9',
+          type: DUEL_OPEN.type,
+          owner: DUEL_OPEN.owner,
+          content: fromBase64(DUEL_OPEN.content),
+          previousTransaction: 'prev-tx',
+        },
+      }),
+    );
+    const { result } = render(DUEL_OPEN.objectId);
+    await advance(0);
+    expect(result.current).toMatchObject({
+      kind: 'read',
+      status: { kind: 'ready' },
+      previousTransaction: 'prev-tx',
+      detail: { kind: 'duel', gameKey: 'coinflip', objectVersion: 9n, duel: { id: DUEL_OPEN.objectId, state: { kind: 'pending' } } },
+    });
+  });
+
+  it('fails definitively with NotAGameError for an object of another type, and does not refetch (DL-7)', async () => {
+    getObject.mockImplementation(() =>
+      Promise.resolve({ object: { objectId: OPEN.objectId, version: '4', type: '0x2::coin::Coin<0x2::sui::SUI>', owner: OPEN.owner, content: new Uint8Array(), previousTransaction: null } }),
+    );
+    const { result } = render(OPEN.objectId);
+    await advance(0);
+    await advance(2 * GAME_REFETCH_MS);
+    expect(result.current).toMatchObject({ status: { kind: 'error', error: { name: 'NotAGameError' } }, detail: null });
+    expect(getObject).toHaveBeenCalledTimes(1);
   });
 
   it.each([

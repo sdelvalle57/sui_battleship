@@ -3,8 +3,8 @@ import type { Transaction } from '@mysten/sui/transactions';
 import { normalizeSuiAddress } from '@mysten/sui/utils';
 import type { Mutation, MutationStatus, QueryKey } from '@tanstack/react-query';
 import { hashKey } from '@tanstack/react-query';
-import type { GameCreatedEvent, GameResolvedEvent } from '../sui/events';
 import type { NodeTransactionResult } from '../sui/execution';
+import type { CreatedGame, ExpiredGame, ResolvedGame, TimedOutGame } from '../sui/gameTx';
 import type { BetLimitsUpdatedEvent, FeeRateUpdatedEvent } from '../sui/houseAdmin';
 
 /**
@@ -19,13 +19,16 @@ import type { BetLimitsUpdatedEvent, FeeRateUpdatedEvent } from '../sui/houseAdm
 
 /**
  * Acción de una transacción propia: decide qué datos quedaron viejos (DL-6 de #11). Las de la House (#14) no llevan
- * `gameId`: su objetivo es la House de la config.
+ * `gameId`: su objetivo es la House de la config. `claim` (reclamar la victoria por tiempo agotado) y `refundStalled`
+ * (reembolsar una partida estancada) son de las partidas con reloj de #73 (TASK-8a): objetivo `{ kind: 'game', gameId }`.
  */
 export type TxAction =
   | { kind: 'create' }
   | { kind: 'cancel'; gameId: string }
   | { kind: 'reject'; gameId: string }
   | { kind: 'accept'; gameId: string }
+  | { kind: 'claim'; gameId: string }
+  | { kind: 'refundStalled'; gameId: string }
   | { kind: 'updateFeeRate' }
   | { kind: 'updateBetLimits' }
   | { kind: 'withdrawFees' };
@@ -97,19 +100,25 @@ export type TxVariables<T> = {
 
 /**
  * Lo que se lee de una creación exitosa: la partida creada (DL-9 de #11; `null` si no se pudo identificar) y si la
- * comisión guardada difiere de la mostrada (M-2 de #11).
+ * comisión guardada difiere de la mostrada (M-2 de #11). #73 (TASK-8a): la partida sale con la forma **neutral a la fuente**
+ * (`CreatedGame`: la creó la fuente anterior o la nueva), así los consumidores no distinguen cuál.
  */
 export type CreateGameValue = {
-  created: GameCreatedEvent | null;
+  created: CreatedGame | null;
   feeChanged: { from: number; to: number } | null;
 };
 
-/** Valor del resultado de cada acción (lo que devuelve su `interpret`). No se exporta: se lee por `TxValueByAction`. */
+/**
+ * Valor del resultado de cada acción (lo que devuelve su `interpret`). No se exporta: se lee por `TxValueByAction`. #73:
+ * aceptar, reclamar y reembolsar usan la forma neutral a la fuente de `sui/gameTx.ts`.
+ */
 type TxValueMap = {
   create: CreateGameValue;
   cancel: bigint | null;
   reject: bigint | null;
-  accept: GameResolvedEvent | null;
+  accept: ResolvedGame | null;
+  claim: TimedOutGame | null;
+  refundStalled: ExpiredGame | null;
   updateFeeRate: FeeRateUpdatedEvent | null;
   updateBetLimits: BetLimitsUpdatedEvent | null;
   withdrawFees: bigint | null;
@@ -151,6 +160,8 @@ const TX_ACTION_KINDS = {
   cancel: true,
   reject: true,
   accept: true,
+  claim: true,
+  refundStalled: true,
   updateFeeRate: true,
   updateBetLimits: true,
   withdrawFees: true,
@@ -225,6 +236,8 @@ function actionGameId(action: TxAction): string | null {
     case 'cancel':
     case 'reject':
     case 'accept':
+    case 'claim':
+    case 'refundStalled':
       return normalizeSuiAddress(action.gameId);
     case 'create':
       return null;

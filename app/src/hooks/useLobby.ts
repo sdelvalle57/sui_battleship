@@ -7,24 +7,21 @@ import { fetchLobbyPage, type LobbyItem, type LobbyPage } from '../sui/lobby';
 import { PaginationStalledError } from '../sui/readErrors';
 import { deriveReadStatus, type ReadStatus } from '../sui/readStatus';
 import { fetchPublishCheckpoint } from '../sui/transactionInfo';
+import { rowFromLobbyItem, type ListedRow } from './gameRow';
 import { queryKeys } from './queryKeys';
 import { useAppConfig } from './useAppConfig';
 import { useGameRegistry } from './useGameRegistry';
 import { useWalletAccount } from './useWalletAccount';
 
-/**
- * Fila del lobby con la marca de si la creó la cuenta conectada: la vista que dibujan hoy los componentes, solo con las
- * filas de la fuente anterior (`game::Game`) y las ilegibles. Las de la fuente nueva (`Duel<G>`) van en `entries`
- * (`LobbyEntry`): los componentes las dibujan en TASK-8 (rótulo "anterior"/"nueva" y control de tiempo).
- */
-export type LobbyRow = Exclude<LobbyItem, { kind: 'duel' }> & { isMine: boolean };
-
-/** Fila del lobby de cualquiera de las dos fuentes (con `isMine`), en el orden del lobby. */
+/** Fila del lobby de cualquiera de las dos fuentes (con `isMine`: la creó la cuenta conectada), en el orden del lobby. */
 export type LobbyEntry = LobbyItem & { isMine: boolean };
 
-/** Lo que el lobby necesita para mostrarse: filas, estado combinado, paginación y acciones. */
+/**
+ * Lo que el lobby necesita para mostrarse: filas, estado combinado, paginación y acciones. #73 (TASK-8a): `items` son las
+ * filas de **las dos fuentes** con el modelo neutral (`ListedRow`; en el lobby, `role: 'creator'` marca las propias).
+ */
 export type UseLobbyResult = {
-  items: LobbyRow[];
+  items: ListedRow[];
   status: ReadStatus;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -144,12 +141,12 @@ export function useLobbyEntries(games: GameSelection = 'all'): UseLobbyEntriesRe
 }
 
 /**
- * Lobby de "Todos" para los componentes de hoy: lo de `useLobbyEntries` con `items` = solo las filas de la fuente
- * anterior (`game::Game`) y las ilegibles, que son las que saben dibujar y accionar hoy (aceptar, cancelar y rechazar
- * llaman a `game::*`). Las filas de la fuente nueva llegan por `useLobbyEntries` cuando TASK-8 sume su rótulo, su control
- * de tiempo y sus acciones.
+ * Lobby de "Todos" para los componentes: lo de `useLobbyEntries` con `items` = **todas** las filas (anteriores, nuevas e
+ * ilegibles) en el modelo neutral a la fuente (`rowFromLobbyItem`). No filtra nada: una fila de la fuente nueva se dibuja
+ * y se acciona como una anterior (TASK-8a; el rótulo, el control de tiempo y el filtro por juego son de 8b).
  */
 export function useLobby(): UseLobbyResult {
+  const registry = useGameRegistry();
   const { entries, ...rest } = useLobbyEntries('all');
-  return { ...rest, items: entries.filter((entry): entry is LobbyRow => entry.kind !== 'duel') };
+  return { ...rest, items: entries.map((entry) => rowFromLobbyItem(entry, { isMine: entry.isMine, registry })) };
 }

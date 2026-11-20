@@ -9,6 +9,7 @@ import type { Game } from '../sui/game';
 import { fetchLobbyPage, type LobbyItem, type LobbyPage } from '../sui/lobby';
 import { NotYetCheckpointedError, PaginationStalledError } from '../sui/readErrors';
 import { fetchPublishCheckpoint } from '../sui/transactionInfo';
+import type { ListedRow } from './gameRow';
 import { useAppConfig } from './useAppConfig';
 import { queryKeys } from './queryKeys';
 import { useLobby, useLobbyEntries } from './useLobby';
@@ -65,7 +66,8 @@ const lobbyMock = vi.mocked(fetchLobbyPage);
 const publishMock = vi.mocked(fetchPublishCheckpoint);
 let queryClient: QueryClient;
 const render = () => renderHook(() => useLobby(), { wrapper: queryWrapper(queryClient) });
-const ids = (items: { kind: string; game?: Game }[]) => items.map((i) => i.game?.id);
+const ids = (items: ListedRow[]) => items.map((i) => (i.kind === 'game' ? i.row.id : undefined));
+const mine = (items: ListedRow[]) => items.map((i) => i.role === 'creator');
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -193,21 +195,21 @@ describe('useLobby: pages', () => {
     lobbyMock.mockResolvedValue(lobbyPage([game(1, CREATOR), game(2)], null));
     const { result } = render();
     await advance(0);
-    expect(result.current.items.map((i) => i.isMine)).toEqual([true, false]);
+    expect(mine(result.current.items)).toEqual([true, false]);
   });
 
   it('marks nothing as mine without a connected account', async () => {
     lobbyMock.mockResolvedValue(lobbyPage([game(1, CREATOR)], null));
     const { result } = render();
     await advance(0);
-    expect(result.current.items.map((i) => i.isMine)).toEqual([false]);
+    expect(mine(result.current.items)).toEqual([false]);
   });
 
   it('keeps unreadable rows', async () => {
     lobbyMock.mockResolvedValue({ ...lobbyPage([game(1)], null), items: [{ kind: 'unreadable', gameId: null, txDigest: 'tx-x' }] });
     const { result } = render();
     await advance(0);
-    expect(result.current.items).toEqual([{ kind: 'unreadable', gameId: null, txDigest: 'tx-x', isMine: false }]);
+    expect(result.current.items).toEqual([{ kind: 'unreadable', gameId: null, txDigest: 'tx-x', role: null }]);
   });
 
   it('flags a stalled next page and stops offering more pages', async () => {
@@ -224,11 +226,12 @@ describe('useLobby: pages', () => {
 
 // #73, TASK-7b: las dos fuentes del coinflip, el filtro por juego y el registro armado de la config completa.
 describe('useLobbyEntries and the registry (#73)', () => {
+  const duelIdOf = (n: number) => `0x${(0x100 + n).toString(16).padStart(64, '0')}`;
   const duelRow = (n: number, creator = OTHER): LobbyItem => ({
     kind: 'duel',
     gameKey: 'coinflip',
     duel: {
-      id: `0x${(0x100 + n).toString(16).padStart(64, '0')}`,
+      id: duelIdOf(n),
       version: 1n,
       houseId: CONFIG.houseId,
       creator,
@@ -248,14 +251,26 @@ describe('useLobbyEntries and the registry (#73)', () => {
     publishMock.mockResolvedValue(59n);
   });
 
-  it('useLobby keeps showing only the legacy rows (the components of today); the new rows come in useLobbyEntries', async () => {
+  it('useLobby does not filter the rows of the new source: both sources come in the neutral model, in the lobby order', async () => {
     lobbyMock.mockResolvedValue(mixedPage());
     const { result } = render();
     await advance(0);
-    expect(result.current.items.map((i) => i.kind)).toEqual(['game']);
+    expect(result.current.items.map((i) => (i.kind === 'game' ? i.row.source : i.kind))).toEqual(['legacy', 'duel', 'duel']);
+    expect(ids(result.current.items)).toEqual([game(1).id, duelIdOf(1), duelIdOf(2)]);
     const entries = renderHook(() => useLobbyEntries(), { wrapper: queryWrapper(queryClient) });
     await advance(0);
     expect(entries.result.current.entries.map((e) => e.kind)).toEqual(['game', 'duel', 'duel']);
+  });
+
+  it('gives each row of the new source the control of its DuelCreated and the legacy rows none, and marks the account\'s own rows with the role creator', async () => {
+    vi.mocked(useWalletAccount).mockReturnValue({ address: CREATOR, short: 'x' });
+    lobbyMock.mockResolvedValue(mixedPage());
+    const { result } = render();
+    await advance(0);
+    const rows = result.current.items.flatMap((i) => (i.kind === 'game' ? [i.row] : []));
+    expect(rows.map((r) => r.control)).toEqual([null, { id: 0, turnMs: 0n, label: 'sin reloj' }, { id: 0, turnMs: 0n, label: 'sin reloj' }]);
+    expect(rows.map((r) => r.gameKey)).toEqual(['coinflip', 'coinflip', 'coinflip']);
+    expect(mine(result.current.items)).toEqual([false, true, false]);
   });
 
   it('marks isMine on the rows of the new source with the connected address, and deduplicates by the id of either source', async () => {

@@ -215,6 +215,43 @@ describe('liveTxGameIds (T4-16, H-6 of #13)', () => {
   });
 });
 
+describe('claim and refundStalled in the transaction session (#73, TASK-8a)', () => {
+  const key = queryKeys.txAccount('localnet', A);
+  const target = queryKeys.txTarget('localnet', A, { kind: 'game', gameId: GAME });
+  const vars = (action: unknown, runId: number) => ({ input: {}, viewId: 1, runId, action, account: null, targetHash: hashKey(target) });
+  const at = (n: number) => `0x${n.toString(16).padStart(64, '0')}`;
+
+  it('txVariablesOf recognizes both time actions as actions of the app (an own claim is not foreign)', () => {
+    for (const action of [{ kind: 'claim', gameId: GAME }, { kind: 'refundStalled', gameId: GAME }]) {
+      expect(txVariablesOf({ viewId: 1, runId: 2, action })).toEqual({ viewId: 1, runId: 2, action });
+    }
+  });
+
+  it('toTxGameEntry gives the normalized game id of a claim and of a refund, so "Mis partidas" pins that game while it is live', () => {
+    expect(toTxGameEntry(mutation(1, 'pending', key, undefined, vars({ kind: 'claim', gameId: '0x7' }, 1))).gameId).toBe(at(7));
+    expect(toTxGameEntry(mutation(2, 'pending', key, undefined, vars({ kind: 'refundStalled', gameId: '0X8' }, 2))).gameId).toBe(at(8));
+    const entries = [
+      mutation(6, 'pending', key, undefined, vars({ kind: 'claim', gameId: at(1) }, 6)),
+      mutation(7, 'success', key, success, vars({ kind: 'refundStalled', gameId: at(2) }, 7)),
+    ].map(toTxGameEntry);
+    expect([...liveTxGameIds(entries, { maxId: 5, pendingIds: new Set() })].sort()).toEqual([at(1), at(2)]);
+  });
+
+  it('a foreign finished claim on the game target that started after mounting is adopted with its action', () => {
+    const state = deriveTargetState({
+      entries: [entry(5, { action: { kind: 'claim', gameId: GAME } })],
+      viewId: VIEW,
+      mount: { maxId: 1, pendingIds: new Set() },
+    });
+    expect(state.notice).toMatchObject({ kind: 'adopted', adopted: { action: 'claim' } });
+  });
+
+  it('an own refund in flight is busy for its target and never foreign', () => {
+    const own = entry(5, { status: 'pending', viewId: VIEW, action: { kind: 'refundStalled', gameId: GAME }, outcome: null });
+    expect(deriveTargetState({ entries: [own], viewId: VIEW, mount: EMPTY })).toEqual({ inFlightForeign: false, notice: null, unconfirmed: null });
+  });
+});
+
 describe('queryKeys.txAccount / txTarget', () => {
   it('normalizes the account and the game, and uses none without account', () => {
     expect(queryKeys.txAccount('localnet', null)).toEqual(['sui', 'localnet', 'tx', 'none']);

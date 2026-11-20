@@ -10,7 +10,6 @@ import {
   groupMyGames,
   mergeMyGames,
   myGameKey,
-  type MyGameItem,
   type MyGamesPage,
   type MyGamesPins,
   type MyGamesSection,
@@ -19,6 +18,7 @@ import {
 import { PaginationStalledError } from '../sui/readErrors';
 import { READ_MAX_RETRIES } from '../sui/readPolicy';
 import { deriveReadStatus, type ReadStatus } from '../sui/readStatus';
+import { rowFromMyGameEntry, type ListedRow } from './gameRow';
 import { queryKeys } from './queryKeys';
 import { liveTxGameIds, mountSnapshot, toTxGameEntry } from './txSession';
 import { useAppConfig } from './useAppConfig';
@@ -47,23 +47,17 @@ export type MyGamesSource = {
   retry: () => void;
 };
 
-/**
- * Las tres secciones con las filas de la fuente anterior (`game::Game`) y las ilegibles: la vista que dibujan hoy los
- * componentes. Las filas de la fuente nueva (`Duel<G>`) van en `allSections` y las dibuja TASK-8.
- */
-export type LegacyMyGamesSections = Record<MyGamesSection, MyGameItem[]>;
-
-function legacyRows(rows: MyGamesSections[MyGamesSection]): MyGameItem[] {
-  return rows.filter((row): row is MyGameItem => row.kind !== 'duel');
-}
+/** Las tres secciones con las filas de las dos fuentes en el modelo neutral a la fuente (`ListedRow`), que dibujan los componentes. */
+export type MyGamesRows = Record<MyGamesSection, ListedRow[]>;
 
 /** Lo que dibuja la página: sin cuenta, nada que consultar; con cuenta, las tres secciones y el estado de cada fuente. */
 export type UseMyGamesResult =
   | { kind: 'no_account' }
   | {
       kind: 'ready';
-      sections: LegacyMyGamesSections;
-      /** Las tres secciones con las filas de las dos fuentes del coinflip (anteriores, nuevas e ilegibles). */
+      /** Las tres secciones con **todas** las filas (anteriores, nuevas e ilegibles) en el modelo neutral: sin filtrar nada. */
+      sections: MyGamesRows;
+      /** Las mismas tres secciones con las filas tal como las leyó `sui/` (`MyGameEntry`), sin pasar por el modelo neutral. */
       allSections: MyGamesSections;
       unreadableEvents: number;
       activity: MyGamesSource;
@@ -204,9 +198,10 @@ export function useMyGames(): UseMyGamesResult {
   if (address === null) return { kind: 'no_account' };
 
   const allSections = groupMyGames({ activity: activityItems, invitations: invitationItems, address, pins: next });
+  const toRows = (entries: MyGamesSections[MyGamesSection]): ListedRow[] => entries.map((entry) => rowFromMyGameEntry(entry, registry));
   return {
     kind: 'ready',
-    sections: { invitations: legacyRows(allSections.invitations), pending: legacyRows(allSections.pending), finished: legacyRows(allSections.finished) },
+    sections: { invitations: toRows(allSections.invitations), pending: toRows(allSections.pending), finished: toRows(allSections.finished) },
     allSections,
     unreadableEvents: (invitationsQuery.data?.pages ?? []).reduce((total, page) => total + page.unreadableEvents, 0),
     activity: toSource(activityQuery, publish),
