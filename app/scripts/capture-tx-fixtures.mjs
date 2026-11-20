@@ -277,7 +277,7 @@ const executed = {
 say(`executed: ${Object.keys(executed).length} transacciones`);
 
 // Texto del abort en formato Rust: el `description` del error de ejecución por gRPC, idéntico al
-// `effects.status.error` que imprime `sui client tx-block <digest> --json` (CLI 1.83). Solo la dirección del paquete.
+// `effects.status.error` que imprime `sui client tx-block <digest> --json` (CLI 1.84). Solo la dirección del paquete.
 const { response: rawFailed } = await client.ledgerService.getTransaction({
   digest: failedDigest,
   readMask: { paths: ['effects.status'] },
@@ -298,7 +298,7 @@ const fixture = {
       simulationErrors:
         'SimulationError real de Transaction.build({ client }) con setSender(<cuenta de la génesis del rol>), sin firmar; PTB con la forma de V-11 de #11 (splitCoins(gas) + create_game; cancel_game/reject_game con el Game) y de DL-1 de #12 (splitCoins(gas, [bet]) + accept_game(game, house, coin, random) como último comando). Por caso: { sender: <rol>, message, executionError }',
       executed:
-        'SuiGrpcClient.getTransaction({ digest, include: { effects: true, events: true, objectTypes: true } }) de transacciones hechas con la CLI 1.83; effects.bcs y bcs de eventos en base64, sin sender ni signatures',
+        'SuiGrpcClient.getTransaction({ digest, include: { effects: true, events: true, objectTypes: true } }) de transacciones hechas con la CLI 1.84; effects.bcs y bcs de eventos en base64, sin sender ni signatures',
       cliErrorText:
         "description del error de ejecución por gRPC (ledgerService.getTransaction, readMask effects.status) del fallo ejecutado; idéntico a effects.status.error de `sui client tx-block <digest> --json`",
       selection:

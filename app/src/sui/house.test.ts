@@ -50,8 +50,8 @@ describe('parseHouseObject', () => {
       id: fixture.ids.houseId,
       version: 1n,
       feeRate: 250,
-      // Las 3 aceptaciones de la captura de #12 (TASK-1), con comisión 50000 cada una.
-      feesCollected: 150_000n,
+      // Las 4 aceptaciones de la captura de #12 (TASK-1), con comisión 50000 cada una.
+      feesCollected: 200_000n,
       minBet: 1_000_000n,
       maxBet: 50_000_000_000n,
     });

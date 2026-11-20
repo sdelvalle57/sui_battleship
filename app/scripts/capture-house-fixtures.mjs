@@ -269,7 +269,7 @@ const fixture = {
     capturedAt: new Date().toISOString(),
     network: 'localnet',
     order:
-      'Transacciones por CLI 1.83, en este orden y con el HouseCap en ADMIN: (1) ADMIN update_fee_rate 250; (2) ADMIN update_bet_limits 2000000 10000000000; (3) A crea una partida abierta de 200000000; (4) B la acepta (comisión 10000000); (5) ADMIN withdraw_fees + TransferObjects a sí mismo. Después, solo lecturas y simulaciones',
+      'Transacciones por CLI 1.84, en este orden y con el HouseCap en ADMIN: (1) ADMIN update_fee_rate 250; (2) ADMIN update_bet_limits 2000000 10000000000; (3) A crea una partida abierta de 200000000; (4) B la acepta (comisión 10000000); (5) ADMIN withdraw_fees + TransferObjects a sí mismo. Después, solo lecturas y simulaciones',
     method: {
       houseCapListing:
         'SuiGrpcClient.listOwnedObjects({ owner, type: normalizeStructTag(<originalPackageId>::house::HouseCap), limit, include: { content: true } }) ⇒ { objects, hasNextPage, cursor }: admin = ADMIN con limit 2; nonOwner = A con limit 2; adminLimit1 = ADMIN con limit 1',
