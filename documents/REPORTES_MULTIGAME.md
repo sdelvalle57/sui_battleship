@@ -4863,3 +4863,1726 @@ Los **15 mutantes de las guardas mueren**. El M11 se repitió porque su texto or
 
 **M-4 del MAYOR (rutas del scratchpad):** el reporte del DEV de TASK-4 trae 20 líneas con la ruta absoluta del scratchpad de la sesión, que codifica el nombre de usuario del host con guiones y por eso el grep 3 de §R-6 (`/home/`) no la detecta. Al transcribirlo a este archivo se **sustituyó** esa ruta por `<scratchpad>` (única edición del texto del reporte, declarada también en el subtítulo de su sección). Los documentos ya commiteados antes de este commit no la contienen (`git grep` = 0). Desde ahora el grep 3 de §R-6 suma `claude-[0-9]+|-home-`.
 
+
+
+---
+
+## 17. TASK-5 (reporte del DEV)
+
+> DEV, TASK-5: ensayo de punta a punta del upgrade en la localnet aislada, SEG-5 y fixtures (la ruta del scratchpad sustituida por <scratchpad>).
+
+~~~~text
+## Task completado: HANDOFF_MULTIGAME — TASK-5 (ensayo de punta a punta del upgrade en la localnet aislada, evidencia de SEG-5 y fixtures para la app)
+
+Convenciones: <repo> = worktree de la branch feature/issue-73-multigame; <HOME real> = home del usuario; <SMOKE_DIR> = carpeta de la corrida dentro del scratchpad (YA BORRADA); <scratchpad> = scratchpad de la sesion. Los anexos pegados al final son las salidas crudas de capture.sh con esas rutas sustituidas por estos placeholders (sed hacia archivos nuevos, nunca -i). Direcciones de cuentas de la genesis: ninguna en este reporte (los anexos las enmascaran por rol A/B/C/ADMIN; las fixtures nuevas traen solo direcciones efimeras de la genesis desechable, como las existentes). Todo comando de la CLI llevo delante el guard de entrada n por stdin (printf 'n\n' |), via suic / suic_v1 / el prefijo de los gates. Ningun STOP del handoff, ninguna ejecucion accidental de la CLI, ningun comando contra testnet ni contra el 9000 ajeno. Los veredictos de cada paso estan respaldados por salida pegada en los anexos del final: "A<NN>" = el anexo cuyo primer renglon de comando lleva el archivo NN_*.txt (A01, A02, A03, A04, A10, A11, A12, A13 ... A66; cada uno rotulado por capture.sh con "$ bash -c cat NN_nombre.txt"). Las pocas salidas que NO estan en un anexo capture.sh (las guardas smoke_guard / smoke_guard_v1 / chain-identifier / --version del arranque, la comprobacion por tx-block de las monedas de pago del H-1 y el ls/stat de la guarda de ~/.sui al inicio y tras la genesis) se imprimieron en la terminal y se citan en el texto. Ningun contrato, ni test, ni Move.lock, ni Published.toml, ni deployments/testnet.json se toco.
+
+Resumen de los veredictos: filas 1-13 del smoke en PASA; gasto por resultado IGUAL (42 accepts leidos por gRPC, 36 con la misma forma: 14 ganados por el creador y 22 por el aceptante, mismo computo/storage/rebate); barrido del presupuesto minimo IGUAL (21 partidas, 7 ganadas por el creador y 14 por el aceptante: umbral 2474892 MIST en todas, resolucion de 1 MIST); PTB atacante RECHAZADO por el nodo (PostRandomCommandRestrictions) y control ACEPTADO; V-15 PASA contra el claim_timeout / refund_stalled / cancel reales; V-12 coherente con TASK-1b.
+
+### Branch (con SHA corto del HEAD)
+feature/issue-73-multigame @ 60d4a3b (worktree <repo>). Sin commits ni git add (los hace el orquestador).
+
+### Baseline medido y árbol de partida
+- git status al inicio: limpio; rama feature/issue-73-multigame; HEAD 60d4a3b; git merge-base --is-ancestor 8cc35ab HEAD = 0 (PRE-1 integrado). CLI de la maquina: sui 1.84.0-9dc25070cf2e (= ci.yml). Node v26.13.0 (export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH).
+- Medido ANTES de tocar nada (anexos A01-A03): node --test scripts/*.test.mjs = 173 PASS (0 fail); publish.mjs check = "1 despliegue(s) válidos y coherentes con Published.toml"; sui move build / build --lint / test con -e testnet --warnings-are-errors: 0 warnings, 0 lints, Total tests: 309; passed: 309 (= 83 house/game + 186 duel + 40 coinflip, tal como pedia el encargo); git diff --exit-code -- Move.lock Published.toml = 0; npm test -w app = 66 archivos / 1246 tests PASS. Coincide con lo esperado: sin delta, ningun STOP. Docker de referencia: docker ps -aq = 5 contenedores, docker images -aq = 17 imagenes (iguales al terminar: A66).
+
+### Archivos modificados/creados (git status --porcelain --untracked-files=all y git diff --stat, al cierre, A61)
+ M contracts/README.md                                   (+44 lineas: 3 filas en la tabla de archivos y la subseccion "Fixtures de `duel` (#73, TASK-5)")
+?? app/scripts/capture-duel-clock.mjs
+?? app/scripts/capture-duel-reads.mjs
+?? app/scripts/capture-duel-tx.mjs
+?? contracts/fixtures/duel-clock.localnet.json           (SANDBOX: _meta.sandbox = true y _meta.sandboxConstants)
+?? contracts/fixtures/duel-reads.localnet.json
+?? contracts/fixtures/duel-tx.localnet.json
+git diff --stat: contracts/README.md | 44 ++ (1 file changed, 44 insertions). Nada mas: contracts/sources, contracts/tests, Move.toml, Move.lock, Published.toml, deployments/testnet.json, .github y app/src sin diff (A61: git diff --exit-code = 0).
+
+### Qué se implementó (3 líneas)
+Ensayo completo en una localnet aislada (puerto 19000, Receta P): v1 = arbol 26f2676 publicado con el binario 1.83.0 verificado (Receta V1) y registrado con record, upgrade a HEAD con publish.mjs upgrade (variante A y variante B) + check, partidas viejas jugadas antes y despues del upgrade, coinflip nuevo (crear/cancelar/rechazar/aceptar con ambos ganadores), gasto por resultado y barrido del presupuesto minimo, PTB atacante/control del sorteo, v3 sandbox (testgame con reloj; fuera del arbol) con reclamo, reembolso, abortes, clique del hot potato y typeArguments con IDs de upgrades distintos.
+Tres scripts de captura nuevos bajo localnet-guard.mjs y tres fixtures deterministas (dos corridas iguales salvo _meta.capturedAt; codigo 2 ante --url que no es loopback) + documentacion en contracts/README.md. Cero cambios de contrato.
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados: ninguno en tests (el task no pide tests nuevos del repo: las evidencias son las salidas del ensayo y el determinismo de las capturas, A43/A44).
+- Contracts (sin cambios de fuentes; baseline A02): sui move build / build --lint / test = 0 warnings / 0 lints / 309 PASS; Move.lock y Published.toml sin delta. No se volvieron a correr al final porque contracts/sources no cambio (git diff --exit-code -- contracts/sources = 0, A61).
+- Scripts (final, A63): node --test scripts/*.test.mjs = 173 PASS, 0 fail; publish.mjs check = "1 despliegue(s) válidos y coherentes con Published.toml" (contracts/deployments/localnet.json ya borrado). Durante la corrida, tras el upgrade variante B, check = "2 despliegue(s) válidos y coherentes con Published.toml" (localnet + testnet) (A13).
+- App (final, A63): npm run lint -w app = 0 problemas; typecheck = 0 errores; npm test -w app = 66 archivos / 1246 tests PASS.
+- Tablas de contrato (contracts/README.md) sincronizadas: si (fixtures y su recaptura). app/src/sui/: no aplica (no se toco).
+- git diff --exit-code de house.move, game.move, duel.move, coinflip.move y Move.lock: exit 0.
+
+### Verificación manual (localnet aislada; digests por paso)
+
+Entorno (Receta P + Receta V1; todo en <SMOKE_DIR>, ya borrado): ss -ltn | grep ':9000 ' = 2 lineas LISTEN (un servicio de otro proyecto del host; NO se toco, ni una llamada contra el); ss -ltn | grep -c ':19000 ' = 0 (libre). env.sh escrito con la herramienta de escribir archivos (RPC_URL=http://127.0.0.1:19000, smoke_guard_pre, smoke_guard con RPC exacto, suic, act_as, suic_v1, smoke_guard_v1, y setid armado con jq). Genesis SIN ningun suic: ". env.sh && [ ! -e client.yaml ] && printf 'n\n' | $SUI genesis --working-dir $SUI_CONFIG_DIR" -> exit=0. Arranque como comando en segundo plano del harness: ". env.sh && smoke_guard_pre && echo $$ > sui.pid && exec $SUI start --network.config $SUI_CONFIG_DIR --fullnode-rpc-port 19000" (PID 2874756; el puerto 19000 paso a LISTEN; sui-start.log de 0 lineas). Recien despues: smoke_guard OK, chain-identifier = Base58 CN6sohq1jfv2z9FSErQZgG71GHLgNxpRxqAPpPEwtsKg / Hex a8d865ab; smoke_guard_v1 OK; sui --version del binario 1.83.0 = sui 1.83.0-16d2dc1e05ed y de la red/upgrade = sui 1.84.0-9dc25070cf2e; "suic --json envs" = alias localnet con rpc http://127.0.0.1:19000 (reescrito por sui start con el flag). El cliente 1.83.0 habla sin problemas con la red de la 1.84.0 (sin STOP de la Receta V1 paso 4). Esas salidas de guarda se imprimieron en la terminal (no estan en un anexo capture.sh).
+
+Hashes del binario 1.83.0 (V-16), verificados ANTES de ejecutarlo (A04): valores esperados de git show 88dd53b:.github/workflows/ci.yml (lineas 22-25): SUI_VERSION 1.83.0, SUI_COMMIT 16d2dc1e05ed, SUI_TGZ_SHA256 e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8, SUI_BIN_SHA256 29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa. sha256sum del tgz del cache de suiup (copiado a <SMOKE_DIR>/dl183) = e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8 (COINCIDE); ./sui extraido del tgz a <SMOKE_DIR>/bin183 (solo ./sui) = 29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa y el binario instalado por suiup (sui-v1.83.0) = el mismo hash (COINCIDEN los dos). CONSTANCIA: el binario 1.83.0 NO se ejecuto antes de esa verificacion; su primera ejecucion fue smoke_guard_v1 (con el prefijo aislado y la red 1.84.0 ya arriba). Ninguna llamada al 1.83.0 sin el prefijo (HOME y SUI_CONFIG_DIR aislados, smoke_guard && smoke_guard_v1); suiup remove/cleanup no se usaron.
+
+#### Tabla de resultados del smoke (filas 1-13 del handoff, con digest/estado por paso)
+
+| # | Acción | Resultado | Digest / estado (anexo) |
+|---|---|---|---|
+| 1 | Receta P (9000 ajeno intacto, 19000 libre, genesis sin suic, sui start --fullnode-rpc-port 19000), smoke_guard y smoke_guard_v1; v1 con 1.83.0 (Receta V1); House con comision fijada | PASA | chain a8d865ab; v1-A publicado: digest D1AT2jXFm4R1cuC3tu9TojB579PGDNtaTE6fRUafTh3P (computo 1000000 + storage 46246000 = 47246000 MIST, rebate 0, A10); v1-B publicado: digest DopHA9reL2AXnYNaVQViicD36s7sioKgwaVRshekFBkz (computo 1000000 + storage 46246000, rebate 987901 por la moneda de pago extra que sumo la CLI a ese gas, A11); House B: version 1, fee_rate fijada a 500 bps con update_fee_rate: digest BNeYf4aTAe7f4DKufKLSF3K4C1r47V8dr7EDLQMroQSz (A12); record sin --out de A y de B con metadatos de 26f2676 (A10, A11) |
+| 2 | Partidas viejas creadas (abierta, invitacion, cancelada, resuelta, Pending) | PASA | 6 partidas game::Game de 10000000 MIST, fee_rate 500 copiado: GO1/GO2/GO3 abiertas Pending, GINV invitacion a B Pending, GCAN abierta cancelada por A (estado Cancelled, stake 0), GRES abierta aceptada por B (Resolved, stake 0, fees_collected 0 -> 1000000); estados leidos de los objetos al final de A12 |
+| 3 | publish.mjs upgrade variantes A y B + check | PASA | A (--out fuera del worktree, sobre su propio v1 y su propio localnet.json base): dry run "Dry run ok. Gas estimado: 86667363 MIST"; upgrade digest Bv9nzv5XZyACtkkkqxZvy4oWTcPSrBZNwcRiasSHBTuV, packageVersion 1 -> 2, paquete 0xa2489a7475e89c951ac881c2df946157fbe5bb2a2652ebeb89af35fab73788db, 24 typeOrigins, sourceCommit = HEAD 60d4a3bebb89dae1b28fbc8b31e386b2bc12dd11 (arbol limpio), House A intacta: version 1, fee_rate 0.0, fees_collected 0 antes y despues (A10); B (sin --out: reescribe contracts/deployments/localnet.json): dry run ok (mismo gas estimado), upgrade digest 14oaKaode2WzE6UnV3X8CEJbQ3vW5PPjpUmuDs8JFnhG, paquete 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b (PK2), packageVersion 2, upgrades[0] = {version 2, packageId PK2, txDigest 14oaKa...}, 24 typeOrigins, sourceCommit 60d4a3bebb89dae1b28fbc8b31e386b2bc12dd11, suiCliVersion 1.84.0-9dc25070cf2e, frameworkRev e6f43880f4b65e2c1f0397583a9690b4b22c9223; gas real del upgrade: computo 1000000 + storage 87301200 - rebate 2621738 (= 85679462 MIST netos); check = "2 despliegue(s) válidos y coherentes con Published.toml"; House B intacta: version 1, fee_rate 500, fees_collected 1000000 antes y despues, min/max bet iguales (A13, A45); git diff --exit-code -- Move.lock Published.toml = 0 (A13) |
+| 4 | Pending vieja aceptada y otra cancelada tras el upgrade | PASA | accept_game de GO1 por el ID ORIGINAL (paquete v1): digest FsevJCj3tBoKqy7TSGXBuqBspsTynjYTWbagjAvC6Dtz, GameResolved pot 20000000 = payout 19000000 + fee 1000000; accept_game de GO2 por el ID del UPGRADE: digest B24z3iYAJjuY1uVgDowsnqe2PDU8jSSkn8xvFCGoUi5d, pot 20000000 = 19000000 + 1000000; cancel_game de GO3 por el ID del upgrade: digest ECQqrEqZyLH5KuaQHxCK9cziqnKyDAX8mhtk8c2VA3k5, refund 10000000 al creador; el tipo del evento sigue con el ID original (definingId); estados finales GO1/GO2 Resolved, GO3 Cancelled, GINV sigue Pending; fees_collected 1000000 -> 3000000 (A14) |
+| 5 | Coinflip nuevo: crear, cancelar, rechazar, aceptar (ambos ganadores) | PASA | crear abierta 5Kw8bWyjzRCWfX4vRvnWaTeozSCFTVPfhMzWx36u9m8J (DuelCreated, control 0, turn_ms 0, fee_rate 500) y cancelar por A r2Hx75ZQryi8iquZeAwzh3aVWSqhvokMAvdiVgcjfkM (DuelCancelled refund 10000000); invitacion a B FNVPHYSE2R2cpwRL2UPdHsXC37R5WRCcmW5VckF3hvB7 y reject por B EhhtFLbFYpTRqqudJnsC1m1LhCnVsQdLDe7KFinXwWVn (cancelled_by B); fee_rate COPIADO al crear: partida creada con House en 500, House cambiada a 300 por ADMIN (5He5yyKsqvDnTaTub3obXpus68T339wC9RJkbhPH5Kn8), accept de B FYciU3zi3GTJgUHqzSimomcfZat8cZHCyqNWqjVAYsFN: DuelResolved fee 1000000 (500 bps, no 300), pot 20000000 = payout 19000000 + fee 1000000; House restaurada a 500 (FykwmB7cHR7U8Z7pN1Gvyrcp3z9oHTawHMW6ns2WPU2o); invitacion aceptada por B 456DSVoicRZwxVdG3rQA5FTPqisjqejEmkTwcX5rX6Fs (Resolved, pot = payout + fee); 43 DuelResolved<Coinflip> en la corrida con AMBOS ganadores (creador y aceptante, tabla de A23); fees_collected de la MISMA House junta las dos fuentes: 3000000 (viejas) -> 4000000 tras la primera aceptacion nueva -> 46000000 al terminar la produccion nueva (A16, A23, fixture duel-tx) (A15, A16, A17, A24) |
+| 6 | Gasto por resultado (>= 2 y >= 2) y barrido del presupuesto minimo | PASA | A17b (6 rondas con moneda de gas fija), A23 (42 accepts leidos por gRPC), A18-A21 (barrido): ver las dos secciones siguientes. Computo, storage y rebate IGUALES entre resultados; umbral IGUAL: 2474892 MIST |
+| 6b | PTB atacante [accept, house::fees_collected] y control [..., accept, TransferObjects] | PASA | atacante RECHAZADO (dry run y envio) con "Commands following a command with Random can only be TransferObjects or MergeCoins"; control ACEPTADO (dry run success y envio): digest 71fEXFC3euaPngXj2jdEvKtT5Md98NMukQQ5RNkDv29g, DuelActivated + DuelResolved (A22) |
+| 7 | v3 sandbox: partida por turnos hasta collect+pay | PASA | create 5tdoTA9CBYeL4YHmKexrhmt2w65D4sfvYYiQp3rawEFq (control 8 = 15 s), accept (first_to_move 1) CxwZzsL4r4wiBpa1gALWB9zYRPQDiAJCkadb7x6Kt3ym, play de A (next 2) E4Pr7JwFAsGJEEJGKAPJpLj9P1tcwMms6cgGE71ZcPdM, play de B (next 1) 35Q3339TNtQCKZefRZhJn7aWJ1knXfGNe6zdSrYH64hZ, settle por B (collect + pay, winner_index 0) 6cvjb2yyrNHUsLX9C7ZBh2ehvQqKNWwFQSfTjXErT4tU: DuelResolved, A recibe 19000000, fees_collected 46000000 -> 47000000, stake 0 (conservacion) (A32) |
+| 8 | Reclamo por tiempo por un tercero | PASA | create 5fzVB8DFr9f3bJx4DFmbVDiu9LMsqFHHNTKAS3FyM3W4, accept (first_to_move 2: debe mover B) F3UVLedaMTnkSopQTci1WoAUh5EwvXPneXqhWpV7SNd4; vencido el plazo, claim_timeout de C (tercero) ZeswhXAe6eaz1zo6Y1ETABVNWtxGLHv8jbdkQJXdNKH: estado TimedOut, balances por rol "A:19000000 C:-3151225" (el Coin va al rival A; C solo paga su gas), fees_collected 47000000 -> 48000000 (A33) |
+| 9 | Ambos pendientes vencido -> refund_stalled; un pendiente pasada la gracia -> refund_stalled | PASA | ambos pendientes (first_to_move 3): refund_stalled de C EGzD7ABYqcDMKGfBDUpWXYPn954ggMoNfbZpD5pXWtVm: Expired, "A:10000000 B:10000000", sin comision (fees_collected 48000000 igual); un pendiente: antes de la gracia refund_stalled aborta ENotStalled/23 (12qZ7RcGiHvzAUR9mhbFmdEMc2PuRSpHwULndzLMxE4w), pasada la gracia del sandbox refund_stalled de C Bd4dcTWPh8CAkx292QVt5MVQ7wji49YctNpmrNrS5vrf: Expired, "A:10000000 B:10000000", fees_collected 48000000 igual (A34) |
+| 10 | Abortes: claim_timeout antes del plazo; record_move despues; collect de un tercero | PASA | claim_timeout antes del plazo Do1wT59EZ7UGzoRotP2xNcRNBamVreJgu6RHSMee7LFE = ENotExpired (duel/14); record_move de B despues del plazo Bqbv6hx8WFDzeUz3MKYwMdZ6fe8f55vGPw8KXvFHHLpH = EDeadlinePassed (duel/21); collect (via settle) de C, tercero, GMYxbiRfrFchxQmWUfXvt6FApYnFoXjJ27VEtjbfGEvc = ENotPlayer (duel/24); ademas claim_timeout con ambos pendientes vencido 3tZScpvJHBv5uVZvcVnn83RbqFVAzpr1xTdy1Rf45xa9 = EBothPending (duel/22) (A33, A34) |
+| 11 | typeArguments con IDs de upgrades distintos | PASA | ver la seccion V-12 (A37): con el ID de DEFINICION pasa siempre (target PK3, PK2 o el de otro upgrade); el de almacenamiento de una version >= la que define el modulo tambien pasa; falla (TypeArgumentError TypeNotFound) el ID anterior a la definicion y el original |
+| 12 | Capturas (con _meta.sandbox en la de reloj) | PASA | tres scripts con --url "$RPC_URL" (A40-A42); dos corridas iguales salvo _meta.capturedAt, byte a byte: 2 lineas distintas (el par < > de capturedAt) por archivo (A43); codigo 2 ante --url no loopback antes de cualquier pedido, los tres scripts, y ante argumentos desconocidos (A44); duel-clock con _meta.sandbox = true y sandboxConstants |
+| 13 | Cierre | PASA | kill por PID, red caida, <SMOKE_DIR> borrado, ~/.sui identico, localnet.json y contracts/build borrados, arbol limpio (DoD): secciones siguientes y A60-A66 |
+
+#### Gasto por resultado (H-3, S-1 del MAYOR; SEG-5)
+- Mismo bet (10000000 MIST) y mismo fee_rate (500) en todos. Lectura independiente por gRPC (A23, script de lectura en <scratchpad>; no es la CLI que envio las transacciones): 42 DuelResolved<Coinflip> (accepts) leidos; por cada transaccion se toma effects.gasUsed y su forma (comandos y monedas de gas) y se agrupa por RESULTADO (gana el creador / gana el aceptante):
+  * comandos=2 monedasDeGas=1: computo 1000000, storage 6399200, rebate 4924308 -> gana el creador: 14, gana el aceptante: 22. IGUALES en las 36.
+  * comandos=2 monedasDeGas=2: computo 1000000, storage 6399200, rebate 5912209 -> creador 3, aceptante 2 (ver el hallazgo H-1).
+  * comandos=3 (el control de S-2, un SplitCoins extra y un TransferObjects): computo 1000000, storage 7387200, rebate 4924308 -> aceptante 1.
+- A17b (capture.sh, 6 rondas con moneda de gas fija, mismo bet y fee_rate): 3 ganadas por el aceptante (B) y 3 por el creador (A), TODAS con status success, computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492. Veredicto: PASA (computo, storage y rebate iguales entre todos y entre resultados; >= 2 por resultado).
+- HALLAZGO H-1 (no es una diferencia entre resultados): en las primeras 12 rondas (A17) el storageRebate tomo dos valores, 5912209 y 4924308, UNO u OTRO para cualquiera de los dos ganadores. La diferencia, 987901, es el rebate de una moneda de pago extra: la CLI sumo una segunda moneda de gas (gas smashing) en algunas transacciones y la elimino (tx-block: payment 2 objetos y deleted 1 vs payment 1 y deleted 0). Se verifico y se reparo en el wrapper (ptb.sh): desde ahi la CLI recibe --gas-coin con la moneda de mayor saldo, y la columna monedasDeGas de la tabla lo hace visible. Las filas con 2 monedas siguen contando para los dos resultados (3 y 2).
+
+#### Barrido del presupuesto minimo de gas (N-3 del MAYOR)
+Que se mide (y su limite): para CADA partida nueva (mismo bet, A la crea, B la acepta), B intenta aceptar con presupuestos CRECIENTES desde un valor claramente insuficiente hasta que un accept tiene exito. Un accept sin gas suficiente (InsufficientGas) revierte y NO revela el resultado (no hay evento y la partida sigue Pending); el primer exito es el menor presupuesto de esa escalera con el que el accept corre completo, y solo ahi se conoce el ganador. Un exito consume la partida, asi que cada partida da UNA medida; por eso se corren muchas. La resolucion es el paso de la escalera. Limite: no se pueden atribuir los fallos a un resultado (no se conoce hasta que hay exito); lo que se compara es el primer exito por ganador y el ultimo fallo inmediato anterior de cada partida. Wrapper sweep.sh (en <scratchpad>/t5/tools, listado al final del reporte).
+- Sonda gruesa (A18): con la misma partida, 1000000 = InsufficientGas (computo 1000000, storage 0), 2000000 = InsufficientGas, 3000000 = success (la partida queda consumida: despues 5000000/6000000/7000000 abortan con duel::assert_acceptable code 4 = ENotPending).
+- Escalera completa de una partida (A19, de 2400000 a 2480000 de a 10000): fallos hasta 2470000, exito en 2480000; ganador B.
+- 10 partidas con paso 500 (A20; se imprimen solo los renglones de la zona del umbral y el resumen SWEEP): TODAS lastFail=2474500 firstSuccess=2475000, ganadores A en 5 y B en 5. (Los intentos anteriores de cada escalera, desde 2470000, fallaron por construccion: el bucle solo sigue tras un fallo.)
+- 10 partidas con paso 1 (A21, de 2474885 a 2474900): TODAS lastFail=2474891 firstSuccess=2474892, ganadores A en 2 y B en 8; cada intento fallido = InsufficientGas con cobro computo 1000000 / storage 4924800 / rebate 4924308 y el exito = computo 1000000 / storage 6399200 / rebate 4924308.
+- Veredicto (PASA, con el alcance dicho): umbral IGUAL entre resultados, 2474892 MIST con resolucion de 1 MIST, en 21 partidas (A: 7, B: 14) y ademas idem 2475000 con paso 500; el umbral coincide con el costo neto del accept (computo 1000000 + storage 6399200 - rebate 4924308 = 2474892) que es igual para ambos resultados (tabla anterior): no hay diferencial explotable por presupuesto de gas. NO CONCLUYENTE solo en lo que el diseno no permite medir: el costo de un fallo por gas insuficiente no depende del resultado (no se conoce) y es el mismo en todos los intentos.
+
+#### PTB atacante contra el sorteo (S-2 del MAYOR; A22)
+- (a) [SplitCoins del pago, coinflip::accept(duel, House, pago, Random), house::fees_collected(House)] (un MoveCall despues del comando que usa Random): --dry-run => "Dry run failed ... code: 'Client specified an invalid argument', message: "Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins""; enviado => el mismo error del nodo, sin digest (la transaccion NO llega a ejecutarse ni a secuenciarse; no se cobra gas); la partida sigue Pending (estado leido despues: {"state":"Pending","stake":"10000000"}). RECHAZADO. Veredicto PASA.
+- (b) control [SplitCoins(gas, [bet, 1000000]), coinflip::accept(duel, House, cs.0, Random), TransferObjects([cs.1], B)]: --dry-run = "Dry run completed, execution status: success" (Status: Success); enviado = digest 71fEXFC3euaPngXj2jdEvKtT5Md98NMukQQ5RNkDv29g, success, eventos DuelActivated y DuelResolved; partida Resolved. ACEPTADO. Veredicto PASA.
+- Diferencia con V-15 (H-2 mas abajo): este rechazo ocurre en la validacion de entrada del nodo (RPC InvalidArgument, antes de secuenciar), no como FailedTransaction con gas cobrado.
+
+#### V-12 (typeArguments con IDs de upgrades distintos; A37) y V-15 (clique caliente contra el claim_timeout real; A35)
+- Orígenes reales (A13, A45, A31): duel y coinflip se definen en PK2 (el upgrade del script), house y game en el ID original; testgame (sandbox) en el v3 (0xb713e949cae9253fb1d65f177d2a8f4bfe63903cc1b00e2260d380f5a5319eb9); el UpgradeCap del sandbox queda version 3, policy 0 (compatible). La tabla de typeOrigins del json (24 tipos) = la tabla de la cadena leida por gRPC ledgerService.getObject con readMask package: json 24 / cadena 24 / diferencias 0, tanto en el paquete A como en el B (A13, A45).
+- V-12: con partidas reales, cancel de duel sobre Duel<Coinflip> y Duel<Testgame>: target PK3 con G=PK2::coinflip (ID de definicion) = success; target PK3 con G=PK3::coinflip (ID de almacenamiento del ultimo upgrade, >= la definicion) = success; target PK2 con G=PK2::coinflip = success; target PK3 con G=PK3::testgame (definicion de testgame) = success; target PK3 con G=PK2::testgame (ID ANTERIOR a la definicion), G=PK1::coinflip y G=PK1::testgame (ID original) = failure TypeArgumentError { argument_idx: 0, kind: TypeNotFound } in command 0. Veredicto PASA: la regla de diseno (typeArguments desde typeOrigins) funciona siempre y es coherente con H-d de TASK-1b (el de almacenamiento >= definicion tambien pasa; solo falla el anterior o el original).
+- V-15: duel D1 Active (A crea, B acepta, A debe mover) y D2 Pending creado por B; PTB firmado por B [testgame::collect_part(D1, House) -> Collected, entry privada de duel con el MISMO D1, testgame::pay_part(D1, c, 0)]. Con duel::claim_timeout<Testgame>(D1), con duel::refund_stalled<Testgame>(D1) y con duel::cancel<Testgame>(D1): las tres = FailedTransaction CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1, sin eventos, gas cobrado, D1 sigue Active con stake 20000000 (las tres). Control: la misma entry privada (cancel) sobre OTRO duel (D2) entre collect y pay de D1 = success (DuelCancelled + DuelResolved; D1 Resolved, D2 Cancelled): el clique es por objeto. Veredicto PASA (redaccion H-h: la transaccion se secuencia como FailedTransaction con gas cobrado y sin efectos; ningun comando se ejecuta).
+
+#### Estado de la v3 sandbox (H-2, R2-1)
+- Arbol: git archive HEAD contracts en <SMOKE_DIR>/v3 (nunca en el worktree) + sources/testgame.move (witness Testgame has drop, entry create/accept/play/settle y dos public solo de ensayo collect_part/pay_part) + en SU copia de duel.move: const SANDBOX_CONTROL_8_TURN_MS = 15_000 (id 8 agregado en turn_ms_of; ningun id existente se redefine) y const SANDBOX_CLAIM_GRACE_MS = 15_000 en refund_stalled. diff -r contra contracts/sources en A30 (solo esos cambios y testgame.move). Dry run y upgrade por la CLI directa con la Receta U (copia Pub.v3.toml del pubfile ya avanzado por el script, source.local = <SMOKE_DIR>/v3/contracts): upgrade digest 47fRYHF8yF2zY1KbKhZJD9gzXy6Pyv2edzVJa8D4k9Ke, version 3, paquete 0xb713e949cae9253fb1d65f177d2a8f4bfe63903cc1b00e2260d380f5a5319eb9 (A30, A31); no pasa por publish.mjs ni reescribe deployments/localnet.json. Aviso del build (no fatal): "The constant 'CLAIM_GRACE_MS' is never used" (solo del sandbox).
+- DoD: el sandbox se borro con <SMOKE_DIR>; el control anti-fuga y el resto del cierre estan abajo (A61, A62).
+
+#### Fixtures (A40-A44)
+- contracts/fixtures/duel-reads.localnet.json: producción; objetos Duel<Coinflip> Pending abierta, Pending invitacion, Cancelled por el creador, Cancelled por el invitado, Resolved con victoria del creador y del aceptante; 7 eventos (con bcs); typeOrigins (24 tipos) leidos por gRPC y exigidos iguales al json de la CLI; publicacion y upgrade (digest, timestamp, checkpoint); dos paginas crudas de ListEvents: un literal DuelCreated<Coinflip> (3 frames) y la UNION del coinflip anterior (GameCreated con el ID original) y el nuevo en UN pedido (10 frames: 6 GameCreated + 4 DuelCreated).
+- contracts/fixtures/duel-tx.localnet.json: producción; ids; la House en la version que dejo la ultima aceptacion de produccion (lectura historica con GetObject y version: fees_collected 46000000, fee_rate 500, version 1; las comisiones del sandbox no la cambian); 11 SimulationError de simulaciones sin firmar (duel/0, 1, 2, 3, 4, 5, 6, 9, 5, 4, 10) con rol; 12 transacciones ejecutadas (crear abierta e invitacion, cancelar, rechazar, aceptar con cada ganador y una invitacion, cancel fallido de B duel/3 y accept fallido de C duel/4 con presupuesto explicito, y 3 de las partidas ANTERIORES tocadas despues del upgrade: aceptada por el ID original, aceptada por el del upgrade y cancelada por el del upgrade, verificadas por el paquete del MoveCall); cliErrorText.
+- contracts/fixtures/duel-clock.localnet.json: SANDBOX (_meta.sandbox = true y _meta.sandboxConstants = {SANDBOX_CONTROL_8_ID 8, SANDBOX_CONTROL_8_TURN_MS 15000, SANDBOX_CLAIM_GRACE_MS 15000}); descubre el juego por los eventos con el literal PREFIJO de DuelCreated (2 instanciaciones de G: Coinflip y Testgame); typeOrigins del paquete del sandbox (25 tipos; testgame -> v3, duel/coinflip -> v2, house/game -> original); objetos Active (un jugador pendiente con plazo vencido, el de 7 dias, ambos pendientes vencido), TimedOut, Expired (ambos pendientes y un pendiente tras la gracia), Resolved y Pending; 7 eventos (DuelCreated, DuelActivated, DuelTurn, DuelResolved, DuelTimedOut y los dos DuelExpired); una pagina cruda con el literal prefijo (dos instanciaciones de G); 7 SimulationError (createBadControl duel/16, claimNotExpired duel/14, claimBothPending duel/22, refundNotStalled duel/23, recordMoveAfterDeadline duel/21, recordMoveNotYourTurn duel/20, collectNotPlayer duel/24; independientes del momento de la captura); 9 transacciones ejecutadas (activate, record_move, collect + pay, claim_timeout por un tercero, los dos refund_stalled, claim fallido duel/14, claim fallido duel/22 y el cancel con un typeArgument de un ID anterior = TypeNotFound).
+- Determinismo (A43): copia de las tres fixtures, las tres capturas otra vez con --url "$RPC_URL", diff de jq 'del(._meta.capturedAt)' = IGUALES para las tres, y el diff de bytes de cada una = solo el par de lineas de capturedAt (2 lineas por archivo). Guarda (A44): para los tres scripts, --url http://192.0.2.1:9000 y --url https://fullnode.testnet.sui.io:443 salen con codigo=2 y el mensaje "No se hizo ningún pedido" (la guarda corre antes de importar el SDK; no hubo ningun pedido a esas URL), y --url http://127.0.0.1:19000 --foo tambien codigo=2.
+- Contenido de las fixtures de produccion: el grep sin distincion de mayusculas de sandbox|testgame sobre duel-reads y duel-tx da 0; el de duel-clock lleva las constantes SANDBOX_ solo en _meta.
+
+### Desviaciones del handoff
+1. Variante A y variante B del script sobre DOS paquetes v1 distintos (A y B): un upgrade es de un solo sentido (con el pubfile ya avanzado el script aborta antes de pagar gas, A del TASK-4), asi que cada variante necesita su v1 y su deployments/localnet.json base. El paquete B es el de todo lo demas (partidas viejas, coinflip nuevo, sandbox, fixtures).
+2. Wrapper ptb.sh / txsum.sh / evsum.sh / round.sh / sweep.sh / attack.sh / sbx.sh (en <scratchpad>/t5/tools, listados al final): resumen de cada transaccion SIN direcciones de cuentas (rol en vez de direccion), moneda de gas fija y marcadores {A}/{B}/{C}/{ADMIN} para que la linea de comando que rotula capture.sh nunca lleve una direccion. Cada comando de gas, barrido y PTB se pego con capture.sh. En el primer tramo (A12) una linea de comando llevo la direccion de B en claro (cg "'some(@$B)'"); en la copia sanitizada que se anexa esta enmascarada (<B>); desde ahi se usa el marcador.
+3. Variable de shell A pisada: en dos llamadas la variable A (ruta del anexo) quedo pisada por ". ids.env" (que define el rol A) y capture.sh escribio dos archivos con nombre = la direccion del rol A en el directorio actual (el worktree y el repo principal), que no eran parte del entregable. Se movieron al scratchpad como anexos (A11 y A12) y se verifico git status limpio en ambos repos. No se toco ningun archivo trackeado.
+4. R-12 / C-13: todo archivo con texto escrito por mi (env.sh, pubfiles copia, scripts de captura, wrappers, sandbox testgame.move y sus ediciones, README, este reporte) se escribio SOLO con las herramientas Write y Edit. En la transcripcion hay usos de echo / printf / sed / heredoc que NO escriben texto a archivos y que el auditor va a listar: (a) echo y printf de solo visualizacion y de control (por ejemplo "echo GUARD1_OK", "echo PID-de-la-localnet=...", "echo $f: ..."); (b) "echo $$ > sui.pid", que es el comando exigido por la Receta P; (c) un "echo placeholder > /dev/null" inutil; (d) una linea "cat > /dev/null <<< """ y un "python3 - <<'EOF' ... EOF" VACIO (un tropiezo: no escribio nada ni ejecuto sui); (e) sed SIN -i para transformar salidas hacia archivos NUEVOS (los anexos sanitizados) y para imprimir; setid usa jq. Ninguno de los textos de ARCHIVO se escribio por esa via, y ningun heredoc contenia sui ni acentos graves. Declarado para el juicio 🟡/🟠 del MID.
+5. Fixtures de produccion editadas despues de capturar: al revisar los greps vi que dos campos de texto de _meta (note y method.house) nombraban la palabra "sandbox" en duel-reads y duel-tx. Con la localnet ya cerrada no podia recapturar; edite con la herramienta Edit exactamente esos dos o tres textos de _meta (note: " Solo producción: nada del sandbox." -> " Solo producción."; method.house: "como las del sandbox" -> "como las de un juego de ensayo con reloj") y los MISMOS textos en los scripts capture-duel-reads.mjs y capture-duel-tx.mjs. Solo metadata de texto, ningun dato; las fixtures siguen siendo JSON valido (jq -e . = ok). La prueba de determinismo (A43) se hizo antes de esa edicion de texto.
+6. duel-tx lee la House en una version HISTORICA (la que dejo la ultima aceptacion de produccion) y no la vigente: sin eso el fees_collected de la fixture de produccion incluiria las comisiones de las transacciones del sandbox de la misma genesis (3000000 mas) y dejaria de ser "produccion". Detalle en el comentario del script y en el README.
+7. contracts/README.md se toco (permitido "si hace falta"): las 3 filas nuevas de la tabla de archivos y la subseccion "Fixtures de duel" con el orden de recaptura, los roles, la seleccion y la descripcion del sandbox. No se agrego codigo del sandbox: solo su descripcion; el modulo testgame no existe en el repo.
+8. El pubfile de la v3 sandbox (Pub.v3.toml) se armo con la herramienta Write a partir del pubfile ya avanzado por el script (Receta U, regla 1); la copia del pubfile del upgrade de cada variante (Pub.v1a.repo.toml, Pub.v1.repo.toml) igual.
+9. No se corrio la receta del handoff "binario 1.83.0 extraido de la descarga con gh": se uso el tgz del cache de suiup y la copia instalada (permitido por el encargo), con los dos SHA-256 verificados antes de ejecutar.
+10. Presupuestos del barrido: el barrido grueso (A18) uso una partida que se consumio con el exito de 3000000, y el de A19 una escalera con paso 10000; los de A20 y A21 usan pasos 500 y 1. Solo se imprimen, en A20/A21, los renglones de la zona del umbral y el resumen (el filtro de grep del comando esta en el propio anexo); la escalera completa de una partida esta en A19.
+
+### Riesgos / pendientes / hallazgos para el MID y el MAYOR
+- H-1 (rebate): el storageRebate de un accept depende de cuantas monedas de gas pague la CLI (una moneda de pago extra suma 987901 de rebate), no del resultado; los 42 accepts lo muestran (A23 agrupa por forma). Para cualquier medicion futura por resultado hay que fijar la moneda de gas. Una wallet arma su propio pago de gas, asi que esto no es un canal por resultado.
+- H-2 (PostRandomCommandRestrictions): el rechazo del PTB atacante ocurre en la validacion de entrada del nodo (RPC InvalidArgument: "Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins"): no hay digest ni FailedTransaction ni gas cobrado. Es DISTINTO del rechazo del clique caliente (V-15), que se secuencia como FailedTransaction con gas cobrado y sin efectos. La app no necesita distinguirlos (nunca arma esos PTB), pero la redaccion de la compuerta debe decir cual es cual.
+- H-3 (barrido): el umbral de presupuesto de un accept coincide con su costo neto (computo + storage - rebate = 2474892 en este bet/fee_rate) y es el mismo para los dos resultados, con resolucion de 1 MIST. Un accept con presupuesto insuficiente aborta con InsufficientGas, no emite eventos y deja la partida Pending, y cobra lo mismo en todos los intentos: no revela el resultado.
+- H-4 (V-12 otra vez): coherente con TASK-1b (H-d): el ID de almacenamiento de una version >= la que define el modulo tambien pasa en un typeArgument; el anterior o el original, no.
+- H-5 (script de upgrade): con el arbol limpio el script registra sourceCommit = HEAD (60d4a3b); si el arbol estuviera sucio lo deja en null. Gas del upgrade real de HEAD sobre el v1: 85679462 MIST netos (dry run estimaba 86667363).
+- Sin pendientes de fondos ni de seguridad. Sin STOP.
+
+### §R-6: los 4 greps (/usr/bin/grep -nE) sobre el diff, las fixtures nuevas y este reporte
+Diff (contracts/README.md, lineas agregadas) y los 3 scripts nuevos: los cuatro greps = 0 coincidencias (A64).
+Fixtures nuevas (A64, A65):
+1. [0-9a-fA-F]{40,64}: duel-reads 171, duel-tx 304, duel-clock 328 lineas; TODAS son 0x + 64 hex: IDs de paquete y objeto de la genesis desechable (21, 36 y 31 valores unicos por archivo) y 2-3 cuentas efimeras de la genesis por archivo (campos creator, opponent, acceptor, winner, claimed_by, owner): 19, 33 y 28 son IDs de paquete/objeto/sistema y 2, 3 y 3 son cuentas efimeras (sin claves; como las fixtures existentes, C-6). Ningun digest de transaccion (base58) coincide.
+2. 0x[0-9a-fA-F]{8,}: las mismas lineas (171, 297 y 320): los mismos IDs y cuentas efimeras.
+3. suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home-: 0 coincidencias en las fixtures y en los scripts.
+4. [0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}: 0 coincidencias.
+Sobre este reporte (corridos con /usr/bin/grep -nE despues de escribirlo, ver la ultima seccion de este archivo): clasificados abajo.
+
+### Cierre de la localnet (A60, A66)
+- kill "$(cat <SMOKE_DIR>/sui.pid)" (PID 2874756) -> estado 0; el comando en segundo plano termino con exit code 144 (esperado ante SIGTERM). kill -0 sobre ese PID -> "No such process" (estado 1). ps: 0 procesos "sui start".
+- ss -ltn | grep -c ':19000 ' = 0 (queda libre); ss -ltn | grep ':9000 ' = 2 lineas (igual que al empezar: el servicio de otro proyecto, intacto).
+- rm -rf de <SMOKE_DIR> (genesis con sus claves desechables, arboles v1, v1a y v3 sandbox, binario 1.83.0 dl183/bin183, pubfiles, ids.env, env.sh y logs): comprobado que ya no existe (test ! -e = 0). contracts/deployments/localnet.json borrado (rm -f; rmdir contracts/deployments falla a proposito porque contiene testnet.json); contracts/build (artefacto ignorado de los gates y del upgrade) borrado.
+- DoD, al cierre, DESPUES de borrar el sandbox y cerrar la localnet y ANTES de escribir este reporte (A61, A62): git status --porcelain --untracked-files=all = solo los 7 archivos esperados (README + 3 scripts + 3 fixtures); test ! -e contracts/deployments/localnet.json = 0; ! compgen -G 'contracts/Pub.*.toml' = 0; git diff --exit-code -- contracts/sources = 0; git diff --exit-code -- contracts/Move.lock contracts/Published.toml contracts/deployments contracts/tests = 0; git stash list vacio; control anti-fuga de lineas agregadas: BASE = b0bbef8e55cb3c53416b56c490156c4013d416a1 (git merge-base master HEAD); git diff $BASE -U0 -- contracts/sources app/src | grep '^+' | grep -n 'SANDBOX\|testgame' = 0 coincidencias (exit 1) y git ls-files --others --exclude-standard -- contracts/sources app/src = 0 archivos nuevos sin trackear (nada que grepear). Barrera funcional declarada: test_create_rejects_invalid_control (el id 8 aborta EBadControl en el contrato real) y los bordes de la gracia en 604800000 ms de TASK-2b siguen en los 309 tests en verde.
+- Docker: docker ps -aq = 5 y docker images -aq = 17 antes y despues (sin diferencia; no se toco Docker).
+
+### Guarda de ~/.sui (C-13, R-12)
+Linea base: mtime 2026-10-30 17:52:52.515735237 -0500, 244 bytes, ls -la = solo client.yaml en la subcarpeta de configuracion, sha256sum de client.yaml = ef12fd09615f (primeros 12 hex). Medida al INICIO, tras la GENESIS (y tras sui start y las primeras llamadas), y al CIERRE (A66, despues de matar la red y borrar <SMOKE_DIR>): igual en todas (mismo mtime, 244 bytes, solo client.yaml, ef12fd09615f). Ejecucion accidental de sui: ninguna. Se repite la medida DESPUES de escribir este reporte (ver la ultima seccion).
+
+### Documentación
+- READMEs / agents.md actualizados: contracts/README.md si (3 filas y la subseccion de fixtures y recaptura). agents.md y STATUS: no aplica (los edita el orquestador).
+- Snippet propuesto para documents/STATUS.md (fila "localnet aislada @ feature/issue-73-multigame (TASK-5 de #73)"): localnet aislada @ feature/issue-73-multigame (TASK-5 de #73), CLI 1.84.0-9dc25070cf2e (red y upgrade) + 1.83.0-16d2dc1e05ed (v1, SHA-256 del tgz y del binario verificados contra 88dd53b antes de ejecutar), Node v26.13.0, 2026-11-20, puerto 19000 (el 9000 lo ocupa un servicio de otro proyecto, no se tocó) | baseline: 0 warnings / 0 lints / 309 tests PASS; node --test 173; check 1 despliegue; app 1246 tests en 66 archivos | v1 (26f2676, 1.83.0) + record + publish.mjs upgrade variantes A y B + check (2 despliegues en la localnet): packageVersion 2, 24 typeOrigins = cadena (gRPC), House intacta, upgrade neto 85679462 MIST; partidas viejas aceptadas (por el ID original y por el del upgrade) y canceladas tras el upgrade; coinflip nuevo con ambos ganadores y fees_collected de la misma House; gasto por resultado IGUAL en 42 accepts (36 de la misma forma, 14 creador y 22 aceptante) y umbral de presupuesto IGUAL 2474892 MIST en 21 partidas; PTB atacante [accept, house::fees_collected] RECHAZADO por PostRandomCommandRestrictions y control con TransferObjects ACEPTADO; v3 sandbox (testgame): partida por turnos, reclamo por tercero, reembolsos 100/100 sin comision, abortes duel/14, 21, 22, 23, 24, V-15 contra claim_timeout, refund_stalled y cancel reales, V-12 coherente con TASK-1b; 3 fixtures deterministas (duel-reads, duel-tx, duel-clock con _meta.sandbox).
+- Contexto para el MID (tamano): el task incluye tres scripts de captura de ~250-450 lineas y tres fixtures de 58, 110 y ~90 KB; el repo no cambia mas que README, scripts y fixtures.
+
+### Herramientas auxiliares (escritas con la herramienta de archivos; no se commitean; viven en <scratchpad>/t5/tools)
+ptb.sh (sui client ptb dentro del prefijo aislado con el rol, moneda de gas fija, marcadores de rol y resumen sin direcciones), txsum.sh (resumen de una transaccion: digest, estado, gas, monedas de pago, objetos creados, tipos de eventos), evsum.sh (eventos con las cuentas reemplazadas por su rol), round.sh (una ronda del coinflip nuevo), sweep.sh (escalera de presupuestos de una partida), attack.sh (PTB atacante y control), gastable.mjs (tabla de gasUsed por resultado por gRPC), verify_origins.mjs (typeOrigins del json contra la cadena por gRPC), sbx.sh (escenarios del sandbox: play, timeout, refund_both, refund_one, clique, types, leave y leave2). Todos cargan el prefijo de la localnet aislada (env.sh y smoke_guard) y los de Node exigen RPC_URL de loopback.
+
+## ANEXOS (salidas crudas de capture.sh, en orden; las rutas absolutas ya sustituidas por <scratchpad>, <repo>, <HOME real> y <SMOKE_DIR>)
+$ bash -c cat 01_baseline_node.txt
+$ bash -c export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && node --version && cd <repo>/contracts && node --test scripts/*.test.mjs 2>&1 | tail -12 && node scripts/publish.mjs check
+v26.13.0
+✔ record --upgrade usa el meta.json que dejó upgrade junto a la salida cruda (como record), sin los cuatro flags (0.93554ms)
+✔ record --upgrade: argumentos faltantes, base ausente, salida de error de la CLI o sin cambio de paquete ("digest inexistente") fallan claro y sin escribir (4.462683ms)
+✔ record --upgrade en testnet: solo escribe si el json coincide con el Published.toml ya existente; si no, STOP sin registrar (1.982323ms)
+✔ ningún test ni código de upgrade llega a la CLI real: spawn siempre inyectado y SUI_BIN inexistente en los tests de main (1.565959ms)
+ℹ tests 173
+ℹ suites 0
+ℹ pass 173
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 294.153578
+1 despliegue(s) válidos y coherentes con Published.toml
+exit=0
+exit=0
+$ bash -c cat 02_baseline_move.txt
+$ bash -c cd <repo>/contracts && printf 'n\n' | sui --version && printf 'n\n' | sui move build -e testnet --warnings-are-errors 2>&1 | tail -5 && printf 'n\n' | sui move build -e testnet --lint --warnings-are-errors 2>&1 | tail -5 && printf 'n\n' | sui move test -e testnet --warnings-are-errors 2>&1 | tail -6; git diff --exit-code -- Move.lock Published.toml; echo lockdiff=$?
+sui 1.84.0-9dc25070cf2e
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+[ PASS    ] battleship::duel_tests::test_stake_is_two_bets_after_activate
+[ PASS    ] battleship::duel_tests::test_surrender_out_of_turn_before_deadline_resolves
+[ PASS    ] battleship::duel_tests::test_terminal_states_hold_no_stake
+[ PASS    ] battleship::duel_tests::test_turn_based_game_runs_to_resolution_by_collect_and_pay
+[ PASS    ] battleship::duel_tests::test_turn_ms_is_never_changed_by_record_move
+Test result: OK. Total tests: 309; passed: 309; failed: 0
+lockdiff=0
+exit=0
+exit=0
+$ bash -c cat 03_baseline_app.txt
+$ bash -c export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && node --version && cd <repo> && npm test -w app 2>&1 | tail -8
+v26.13.0
+      Tests  1246 passed (1246)
+   Start at  09:33:45
+   Duration  19.53s (environment 63%, tests 15%, import 10%, setup 10%, transform 1%, worker 1%)
+
+Environment  jsdom was created 66 times · 115.54s total, 63% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+exit=0
+$ bash -c cat 04_v16_hashes.txt
+$ bash -c cd <repo> && git show 88dd53b:.github/workflows/ci.yml | sed -n '22,25p'
+  SUI_VERSION: "1.83.0"
+  SUI_COMMIT: "16d2dc1e05ed"
+  SUI_TGZ_SHA256: "e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8"
+  SUI_BIN_SHA256: "29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa"
+exit=0
+$ bash -c cp <HOME real>/.cache/suiup/releases/sui-testnet-v1.83.0-ubuntu-x86_64.tgz <SMOKE_DIR>/dl183/ && cd <SMOKE_DIR>/dl183 && sha256sum *.tgz
+e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8  sui-testnet-v1.83.0-ubuntu-x86_64.tgz
+exit=0
+$ bash -c cd <SMOKE_DIR>/bin183 && tar -xzf <SMOKE_DIR>/dl183/sui-testnet-v1.83.0-ubuntu-x86_64.tgz ./sui && sha256sum sui <HOME real>/.local/share/suiup/binaries/testnet/sui-v1.83.0
+29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa  sui
+29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa  <HOME real>/.local/share/suiup/binaries/testnet/sui-v1.83.0
+exit=0
+exit=0
+$ bash -c cat 10_v1A.txt
+$ bash <scratchpad>/t5/tools/txsum.sh file <SMOKE_DIR>/v1a-publish.json
+digest=D1AT2jXFm4R1cuC3tu9TojB579PGDNtaTE6fRUafTh3P
+status=success
+gas: computationCost=1000000 storageCost=46246000 storageRebate=0 nonRefundableStorageFee=0
+published package v1 0x47e9901530aeffd86b5c555a992ef547daa246354c468a540576acf990d30cd2
+created 0x47e9901530aeffd86b5c555a992ef547daa246354c468a540576acf990d30cd2::house::House 0x7f7220151248d9ac0c11457c824296ca49ebf1c6117272881823171791dbfecb
+created 0x2::package::Publisher 0x951a4ee88c34e48b6afcc1773266246beafd2261c8b7849998d8298fd06a0ce9
+created 0x2::package::UpgradeCap 0xb45ac2668087f29c5f5e003fb6b8567f5aefecda7e940ca57b54fcbd1597bb21
+created 0x47e9901530aeffd86b5c555a992ef547daa246354c468a540576acf990d30cd2::house::HouseCap 0xeebf72f351802dcab4eb2858654942c2dc466936f0ad16213d26db1653b9011e
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && smoke_guard && cd <repo>/contracts && "$NODE" scripts/publish.mjs record --network localnet --from <SMOKE_DIR>/v1a-publish.json --chain-id a8d865ab --source-commit $(git rev-parse 26f2676) --sui-cli-version 1.83.0-16d2dc1e05ed --framework-rev 05ad86a3e86c522deea116f80dc2bf2309a53363
+Despliegue escrito en <repo>/contracts/deployments/localnet.json:
+  schemaVersion: 1
+  network: localnet
+  chainId: a8d865ab
+  packageId: 0x47e9901530aeffd86b5c555a992ef547daa246354c468a540576acf990d30cd2
+  originalPackageId: 0x47e9901530aeffd86b5c555a992ef547daa246354c468a540576acf990d30cd2
+  packageVersion: 1
+  upgradeCapId: 0xb45ac2668087f29c5f5e003fb6b8567f5aefecda7e940ca57b54fcbd1597bb21
+  houseId: 0x7f7220151248d9ac0c11457c824296ca49ebf1c6117272881823171791dbfecb
+  houseCapId: 0xeebf72f351802dcab4eb2858654942c2dc466936f0ad16213d26db1653b9011e
+  publishTxDigest: D1AT2jXFm4R1cuC3tu9TojB579PGDNtaTE6fRUafTh3P
+  publishTimestamp: 2026-11-20T14:36:02.831Z
+  sourceCommit: 26f267626d797f3b2b1939c0fec496103b6d135f
+  suiCliVersion: 1.83.0-16d2dc1e05ed
+  frameworkRev: 05ad86a3e86c522deea116f80dc2bf2309a53363
+Siguiente paso obligatorio (#8), no lo ejecuta este script. En la shell donde exportaste tu SUI_CONFIG_DIR
+(README → "Uso en testnet", pasos 6-10):
+  printf 'n\n' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client call --package 0x47e9901530aeffd86b5c555a992ef547daa246354c468a540576acf990d30cd2 --module house --function update_fee_rate --args 0x7f7220151248d9ac0c11457c824296ca49ebf1c6117272881823171791dbfecb 0xeebf72f351802dcab4eb2858654942c2dc466936f0ad16213d26db1653b9011e <bps>
+Verificación:
+  printf 'n\n' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client object 0x7f7220151248d9ac0c11457c824296ca49ebf1c6117272881823171791dbfecb --json   # campo content.fee_rate
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && suic --json object $HOUSEA | jq -c '{type: .objType, version: .content.version, fee_rate: .content.fee_rate, fees_collected: .content.fees_collected, min_bet: .content.min_bet, max_bet: .content.max_bet}'
+{"type":"0x47e9901530aeffd86b5c555a992ef547daa246354c468a540576acf990d30cd2::house::House","version":"1","fee_rate":0.0,"fees_collected":"0","min_bet":"1000000","max_bet":"50000000000"}
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs upgrade --network localnet --pubfile-path <SMOKE_DIR>/Pub.v1a.repo.toml --out <SMOKE_DIR>/localnet-A.json --dry-run
+Dry run ok. Gas estimado: 86667363 MIST.
+Directorio temporal: <SMOKE_DIR>/tmp/battleship-upgrade-GpvZUB (bórralo cuando termines)
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs upgrade --network localnet --pubfile-path <SMOKE_DIR>/Pub.v1a.repo.toml --out <SMOKE_DIR>/localnet-A.json
+Upgrade registrado en <SMOKE_DIR>/localnet-A.json:
+  packageVersion: 1 → 2
+  packageId: 0x47e9901530aeffd86b5c555a992ef547daa246354c468a540576acf990d30cd2 → 0xa2489a7475e89c951ac881c2df946157fbe5bb2a2652ebeb89af35fab73788db
+  upgrades[0]: version 2, packageId 0xa2489a7475e89c951ac881c2df946157fbe5bb2a2652ebeb89af35fab73788db, txDigest Bv9nzv5XZyACtkkkqxZvy4oWTcPSrBZNwcRiasSHBTuV
+  typeOrigins: 24 tipos, 11 definidos en un upgrade
+  sourceCommit: 60d4a3bebb89dae1b28fbc8b31e386b2bc12dd11
+  suiCliVersion: 1.84.0-9dc25070cf2e
+  frameworkRev: e6f43880f4b65e2c1f0397583a9690b4b22c9223
+Directorio temporal con la salida cruda: <SMOKE_DIR>/tmp/battleship-upgrade-sKvjt3 (bórralo cuando termines)
+Siguiente (no lo ejecuta este script; README → Upgrade, pasos de registro y verificación):
+  git diff -- contracts/Published.toml   # solo published-at, version y toolchain-version; si no, STOP
+  node scripts/publish.mjs check
+  verificación independiente de typeOrigins por gRPC o GraphQL público (no con la CLI que la produjo)
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && suic --json object $HOUSEA | jq -c '{type: .objType, version: .content.version, fee_rate: .content.fee_rate, fees_collected: .content.fees_collected, min_bet: .content.min_bet, max_bet: .content.max_bet}' && jq -c '{packageVersion, packageId, originalPackageId, upgrades, sourceCommit, suiCliVersion, typeOrigins: (.typeOrigins|length)}' <SMOKE_DIR>/localnet-A.json
+{"type":"0x47e9901530aeffd86b5c555a992ef547daa246354c468a540576acf990d30cd2::house::House","version":"1","fee_rate":0.0,"fees_collected":"0","min_bet":"1000000","max_bet":"50000000000"}
+{"packageVersion":2,"packageId":"0xa2489a7475e89c951ac881c2df946157fbe5bb2a2652ebeb89af35fab73788db","originalPackageId":"0x47e9901530aeffd86b5c555a992ef547daa246354c468a540576acf990d30cd2","upgrades":[{"version":2,"packageId":"0xa2489a7475e89c951ac881c2df946157fbe5bb2a2652ebeb89af35fab73788db","txDigest":"Bv9nzv5XZyACtkkkqxZvy4oWTcPSrBZNwcRiasSHBTuV"}],"sourceCommit":"60d4a3bebb89dae1b28fbc8b31e386b2bc12dd11","suiCliVersion":"1.84.0-9dc25070cf2e","typeOrigins":24}
+exit=0
+exit=0
+$ bash -c cat 11_v1B.txt
+$ bash <scratchpad>/t5/tools/txsum.sh file <SMOKE_DIR>/v1-publish.json
+digest=DopHA9reL2AXnYNaVQViicD36s7sioKgwaVRshekFBkz
+status=success
+gas: computationCost=1000000 storageCost=46246000 storageRebate=987901 nonRefundableStorageFee=99
+created 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::house::House 0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718
+created 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::house::HouseCap 0x66f5b4b77fed9ed7d9324e5713ab843e440750efb46a691e451e64d7534f0e70
+created 0x2::package::Publisher 0x7add48648e9cbb7bd8fef4eba1f2fbb925017860aa0333648869c02121d61cfc
+published package v1 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4
+created 0x2::package::UpgradeCap 0xd27ea4d3565bfacf5709759953f4823bf175676b9a6b397ed5abc3015e2f8b65
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && smoke_guard && cd <repo>/contracts && "$NODE" scripts/publish.mjs record --network localnet --from <SMOKE_DIR>/v1-publish.json --chain-id a8d865ab --source-commit $(git rev-parse 26f2676) --sui-cli-version 1.83.0-16d2dc1e05ed --framework-rev 05ad86a3e86c522deea116f80dc2bf2309a53363 | head -20
+Despliegue escrito en <repo>/contracts/deployments/localnet.json:
+  schemaVersion: 1
+  network: localnet
+  chainId: a8d865ab
+  packageId: 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4
+  originalPackageId: 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4
+  packageVersion: 1
+  upgradeCapId: 0xd27ea4d3565bfacf5709759953f4823bf175676b9a6b397ed5abc3015e2f8b65
+  houseId: 0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718
+  houseCapId: 0x66f5b4b77fed9ed7d9324e5713ab843e440750efb46a691e451e64d7534f0e70
+  publishTxDigest: DopHA9reL2AXnYNaVQViicD36s7sioKgwaVRshekFBkz
+  publishTimestamp: 2026-11-20T14:36:52.301Z
+  sourceCommit: 26f267626d797f3b2b1939c0fec496103b6d135f
+  suiCliVersion: 1.83.0-16d2dc1e05ed
+  frameworkRev: 05ad86a3e86c522deea116f80dc2bf2309a53363
+Siguiente paso obligatorio (#8), no lo ejecuta este script. En la shell donde exportaste tu SUI_CONFIG_DIR
+(README → "Uso en testnet", pasos 6-10):
+  printf 'n\n' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client call --package 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4 --module house --function update_fee_rate --args 0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 0x66f5b4b77fed9ed7d9324e5713ab843e440750efb46a691e451e64d7534f0e70 <bps>
+Verificación:
+  printf 'n\n' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client object 0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 --json   # campo content.fee_rate
+exit=0
+exit=0
+$ bash -c cat 12_old_games.san.txt
+$ bash -c ROLE=ADMIN bash <scratchpad>/t5/tools/ptb.sh --move-call 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::house::update_fee_rate @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 @0x66f5b4b77fed9ed7d9324e5713ab843e440750efb46a691e451e64d7534f0e70 500u16
+cli_exit=0
+digest=BNeYf4aTAe7f4DKufKLSF3K4C1r47V8dr7EDLQMroQSz
+status=success
+gas: computationCost=1000000 storageCost=3807600 storageRebate=3807219 nonRefundableStorageFee=381
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::house::FeeRateUpdated
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && suic --json object $HOUSE | jq -c '{version: .content.version, fee_rate: .content.fee_rate, fees_collected: .content.fees_collected}'
+{"version":"1","fee_rate":500.0,"fees_collected":"0"}
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::create_game @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 none
+cli_exit=0
+digest=BXoAWB18ucez6YFqPcRHDw6kVqJLLQXhbwP3VwzX9jvD
+status=success
+gas: computationCost=1000000 storageCost=2941200 storageRebate=0 nonRefundableStorageFee=0
+created 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::Game 0xbe55a245ae88a863828e5dad3e0341cd3dd4dfff253f7e765d35e1c77de282f2
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::create_game @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 none
+cli_exit=0
+digest=BMnia4UqdELpuFrQs9DYpmiAQC4qV1dJWeDKwJYbL2Yo
+status=success
+gas: computationCost=1000000 storageCost=2941200 storageRebate=987901 nonRefundableStorageFee=99
+created 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::Game 0x587647517a9bd91dbd67347f73efc74476f83d49accbe4db7e37beeeb152ffbb
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::create_game @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 none
+cli_exit=0
+digest=2EynGfyFmzwBiUA4gTSw8Xgs4Ckc8J1ZkgvqCUZrDU3Z
+status=success
+gas: computationCost=1000000 storageCost=2941200 storageRebate=987901 nonRefundableStorageFee=99
+created 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::Game 0x6e231361b311063024dcbd16b2ad41dd18f1b7e4cd30afc5d2439d212fbb2e12
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::create_game @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 'some(@<B>)'
+cli_exit=0
+digest=36HR4h25efLE8E9ndnsGPTcJoSxUUn4LEZm8vij7xDbD
+status=success
+gas: computationCost=1000000 storageCost=3184400 storageRebate=987901 nonRefundableStorageFee=99
+created 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::Game 0x109d456b5e46959e92bb723ae5139264279604096619870d93e3a692ae7979f8
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::create_game @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 none
+cli_exit=0
+digest=3kKjSoVJMM3TJJ8FYno3WKDDUUUpYRrayXaYXR9aLcHF
+status=success
+gas: computationCost=1000000 storageCost=2941200 storageRebate=987901 nonRefundableStorageFee=99
+created 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::Game 0x3d3c31bec0cc1a88b1eaa6db16cb0c672f7dfb090fb7e4f9fd5d91d30c2d00e1
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --move-call 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::cancel_game @0x3d3c31bec0cc1a88b1eaa6db16cb0c672f7dfb090fb7e4f9fd5d91d30c2d00e1
+cli_exit=0
+digest=5SSFwsJMSqi4wCFmohfzG82G7zvZ15K44p3fKAFb3BYq
+status=success
+gas: computationCost=1000000 storageCost=3929200 storageRebate=2940906 nonRefundableStorageFee=294
+created 0x2::coin::Coin<0x2::sui::SUI> 0xa5efdba9b027c8feefe9460cddd9fcd13a55b581d007ab4bbd9f40900beaa285
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCancelled
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::create_game @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 none
+cli_exit=0
+digest=HaJksoSHAJyUXYyWhntW56bwEsDWgcGZxND6ZgBcCSrH
+status=success
+gas: computationCost=1000000 storageCost=2941200 storageRebate=1975802 nonRefundableStorageFee=198
+created 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::Game 0x13ddbe227a5517f80c376b01e78a665fd087b324ca9fd9e6ba9ac331fccf453f
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated
+exit=0
+$ bash -c ROLE=B bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::accept_game @0x13ddbe227a5517f80c376b01e78a665fd087b324ca9fd9e6ba9ac331fccf453f @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=0
+digest=63qRNVfuByjGJ5W3K2JDRq4iLbRUGHF84xpfmSuQjkZd
+status=success
+gas: computationCost=1000000 storageCost=5943200 storageRebate=3480452 nonRefundableStorageFee=348
+created 0x2::coin::Coin<0x2::sui::SUI> 0xfe8021d748bf30f7065ab1b3e9d3bc1a3be00f074681afa4b40403de1e812f68
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameResolved
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && for g in $GO1 $GO2 $GO3 $GINV $GCAN $GRES; do suic --json object $g | jq -c '{id: .objectId, bet: .content.bet, fee_rate: .content.fee_rate, state: .content.state.variant, stake: .content.stake}'; done; suic --json object $HOUSE | jq -c '{version: .content.version, fee_rate: .content.fee_rate, fees_collected: .content.fees_collected}'
+{"id":"0xbe55a245ae88a863828e5dad3e0341cd3dd4dfff253f7e765d35e1c77de282f2","bet":"10000000","fee_rate":500.0,"state":null,"stake":"10000000"}
+{"id":"0x587647517a9bd91dbd67347f73efc74476f83d49accbe4db7e37beeeb152ffbb","bet":"10000000","fee_rate":500.0,"state":null,"stake":"10000000"}
+{"id":"0x6e231361b311063024dcbd16b2ad41dd18f1b7e4cd30afc5d2439d212fbb2e12","bet":"10000000","fee_rate":500.0,"state":null,"stake":"10000000"}
+{"id":"0x109d456b5e46959e92bb723ae5139264279604096619870d93e3a692ae7979f8","bet":"10000000","fee_rate":500.0,"state":null,"stake":"10000000"}
+{"id":"0x3d3c31bec0cc1a88b1eaa6db16cb0c672f7dfb090fb7e4f9fd5d91d30c2d00e1","bet":"10000000","fee_rate":500.0,"state":null,"stake":"0"}
+{"id":"0x13ddbe227a5517f80c376b01e78a665fd087b324ca9fd9e6ba9ac331fccf453f","bet":"10000000","fee_rate":500.0,"state":null,"stake":"0"}
+{"version":"1","fee_rate":500.0,"fees_collected":"1000000"}
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && for g in $GO1 $GO2 $GO3 $GINV $GCAN $GRES; do suic --json object $g | jq -c '{id: .objectId, bet: .content.bet, fee_rate: .content.fee_rate, state: .content.state["@variant"], stake: .content.stake}'; done
+{"id":"0xbe55a245ae88a863828e5dad3e0341cd3dd4dfff253f7e765d35e1c77de282f2","bet":"10000000","fee_rate":500.0,"state":"Pending","stake":"10000000"}
+{"id":"0x587647517a9bd91dbd67347f73efc74476f83d49accbe4db7e37beeeb152ffbb","bet":"10000000","fee_rate":500.0,"state":"Pending","stake":"10000000"}
+{"id":"0x6e231361b311063024dcbd16b2ad41dd18f1b7e4cd30afc5d2439d212fbb2e12","bet":"10000000","fee_rate":500.0,"state":"Pending","stake":"10000000"}
+{"id":"0x109d456b5e46959e92bb723ae5139264279604096619870d93e3a692ae7979f8","bet":"10000000","fee_rate":500.0,"state":"Pending","stake":"10000000"}
+{"id":"0x3d3c31bec0cc1a88b1eaa6db16cb0c672f7dfb090fb7e4f9fd5d91d30c2d00e1","bet":"10000000","fee_rate":500.0,"state":"Cancelled","stake":"0"}
+{"id":"0x13ddbe227a5517f80c376b01e78a665fd087b324ca9fd9e6ba9ac331fccf453f","bet":"10000000","fee_rate":500.0,"state":"Resolved","stake":"0"}
+exit=0
+exit=0
+$ bash -c cat 13_upgrade_B.txt
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && suic --json object $HOUSE | jq -c '{type: .objType, version: .content.version, fee_rate: .content.fee_rate, fees_collected: .content.fees_collected, min_bet: .content.min_bet, max_bet: .content.max_bet}'
+{"type":"0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::house::House","version":"1","fee_rate":500.0,"fees_collected":"1000000","min_bet":"1000000","max_bet":"50000000000"}
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs upgrade --network localnet --pubfile-path <SMOKE_DIR>/Pub.v1.repo.toml --dry-run
+Dry run ok. Gas estimado: 86667363 MIST.
+Directorio temporal: <SMOKE_DIR>/tmp/battleship-upgrade-B6rFzG (bórralo cuando termines)
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs upgrade --network localnet --pubfile-path <SMOKE_DIR>/Pub.v1.repo.toml
+Upgrade registrado en <repo>/contracts/deployments/localnet.json:
+  packageVersion: 1 → 2
+  packageId: 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4 → 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+  upgrades[0]: version 2, packageId 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b, txDigest 14oaKaode2WzE6UnV3X8CEJbQ3vW5PPjpUmuDs8JFnhG
+  typeOrigins: 24 tipos, 11 definidos en un upgrade
+  sourceCommit: 60d4a3bebb89dae1b28fbc8b31e386b2bc12dd11
+  suiCliVersion: 1.84.0-9dc25070cf2e
+  frameworkRev: e6f43880f4b65e2c1f0397583a9690b4b22c9223
+Directorio temporal con la salida cruda: <SMOKE_DIR>/tmp/battleship-upgrade-9Eqfnx (bórralo cuando termines)
+Siguiente (no lo ejecuta este script; README → Upgrade, pasos de registro y verificación):
+  git diff -- contracts/Published.toml   # solo published-at, version y toolchain-version; si no, STOP
+  node scripts/publish.mjs check
+  verificación independiente de typeOrigins por gRPC o GraphQL público (no con la CLI que la produjo)
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && suic --json object $HOUSE | jq -c '{type: .objType, version: .content.version, fee_rate: .content.fee_rate, fees_collected: .content.fees_collected, min_bet: .content.min_bet, max_bet: .content.max_bet}' && cd <repo>/contracts && "$NODE" scripts/publish.mjs check && jq -c '{packageVersion, packageId, originalPackageId, upgrades, upgradeCapId, sourceCommit, suiCliVersion, frameworkRev, publishTxDigest, typeOrigins: (.typeOrigins|length)}' deployments/localnet.json
+{"type":"0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::house::House","version":"1","fee_rate":500.0,"fees_collected":"1000000","min_bet":"1000000","max_bet":"50000000000"}
+2 despliegue(s) válidos y coherentes con Published.toml
+{"packageVersion":2,"packageId":"0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b","originalPackageId":"0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4","upgrades":[{"version":2,"packageId":"0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b","txDigest":"14oaKaode2WzE6UnV3X8CEJbQ3vW5PPjpUmuDs8JFnhG"}],"upgradeCapId":"0xd27ea4d3565bfacf5709759953f4823bf175676b9a6b397ed5abc3015e2f8b65","sourceCommit":"60d4a3bebb89dae1b28fbc8b31e386b2bc12dd11","suiCliVersion":"1.84.0-9dc25070cf2e","frameworkRev":"e6f43880f4b65e2c1f0397583a9690b4b22c9223","publishTxDigest":"DopHA9reL2AXnYNaVQViicD36s7sioKgwaVRshekFBkz","typeOrigins":24}
+exit=0
+$ bash -c export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && . <SMOKE_DIR>/env.sh && RPC_URL=http://127.0.0.1:19000 "$NODE" <scratchpad>/t5/tools/verify_origins.mjs <repo>/contracts/deployments/localnet.json
+json: 24 tipos; cadena (gRPC getObject package): 24 tipos; diferencias: 0
+  modulo house: definingId = original
+  modulo duel: definingId = upgrade-2
+  modulo coinflip: definingId = upgrade-2
+  modulo game: definingId = original
+exit=0
+$ bash -c cd <repo>/contracts && git diff --exit-code -- Move.lock Published.toml; echo lock+published diff exit=$?; git -C <repo> status --porcelain --untracked-files=all; jq -c '.typeOrigins' deployments/localnet.json | jq -r '.[] | "\(.module)::\(.name) \(.definingId)"' | sed -e 's/0xd07a2b0f.*/original/' | sort | uniq -c | sort -rn | head -30
+lock+published diff exit=0
+      1 house::HouseMigrated original
+      1 house::HouseCapTransferred original
+      1 house::HouseCap original
+      1 house::House original
+      1 house::HOUSE original
+      1 house::FeesWithdrawn original
+      1 house::FeeRateUpdated original
+      1 house::BetLimitsUpdated original
+      1 game::GameState original
+      1 game::GameResolved original
+      1 game::GameCreated original
+      1 game::GameCancelled original
+      1 game::Game original
+      1 duel::DuelTurn 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+      1 duel::DuelTimedOut 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+      1 duel::DuelState 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+      1 duel::DuelResolved 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+      1 duel::DuelExpired 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+      1 duel::DuelCreated 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+      1 duel::DuelCancelled 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+      1 duel::DuelActivated 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+      1 duel::Duel 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+      1 duel::Collected 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+      1 coinflip::Coinflip 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+exit=0
+exit=0
+$ bash -c cat 14_old_after_upgrade.txt
+$ bash -c ROLE=B bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::accept_game @0xbe55a245ae88a863828e5dad3e0341cd3dd4dfff253f7e765d35e1c77de282f2 @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=0
+digest=FsevJCj3tBoKqy7TSGXBuqBspsTynjYTWbagjAvC6Dtz
+status=success
+gas: computationCost=1000000 storageCost=5943200 storageRebate=5456254 nonRefundableStorageFee=546
+created 0x2::coin::Coin<0x2::sui::SUI> 0x8a4f7bcb7fc93c78d6cc8521756dd9216c9b43768bf7985db8a97809edf152db
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameResolved
+exit=0
+$ bash <scratchpad>/t5/tools/evsum.sh FsevJCj3tBoKqy7TSGXBuqBspsTynjYTWbagjAvC6Dtz
+0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameResolved{"acceptor":"B","creator":"A","fee":"1000000","game_id":"0xbe55a245ae88a863828e5dad3e0341cd3dd4dfff253f7e765d35e1c77de282f2","payout":"19000000","pot":"20000000","winner":"A"}
+exit=0
+$ bash -c ROLE=B bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::game::accept_game @0x587647517a9bd91dbd67347f73efc74476f83d49accbe4db7e37beeeb152ffbb @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=0
+digest=B24z3iYAJjuY1uVgDowsnqe2PDU8jSSkn8xvFCGoUi5d
+status=success
+gas: computationCost=1000000 storageCost=5943200 storageRebate=4468353 nonRefundableStorageFee=447
+created 0x2::coin::Coin<0x2::sui::SUI> 0x7ad081b56d207e63602c3d5583e55ee92fdf3829f59bc4fe488609d7f17d78d3
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameResolved
+exit=0
+$ bash <scratchpad>/t5/tools/evsum.sh B24z3iYAJjuY1uVgDowsnqe2PDU8jSSkn8xvFCGoUi5d
+0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameResolved{"acceptor":"B","creator":"A","fee":"1000000","game_id":"0x587647517a9bd91dbd67347f73efc74476f83d49accbe4db7e37beeeb152ffbb","payout":"19000000","pot":"20000000","winner":"B"}
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::game::cancel_game @0x6e231361b311063024dcbd16b2ad41dd18f1b7e4cd30afc5d2439d212fbb2e12
+cli_exit=0
+digest=ECQqrEqZyLH5KuaQHxCK9cziqnKyDAX8mhtk8c2VA3k5
+status=success
+gas: computationCost=1000000 storageCost=3929200 storageRebate=3928807 nonRefundableStorageFee=393
+created 0x2::coin::Coin<0x2::sui::SUI> 0xbce595735b9e074d59f25bc79c48d1dc0896cf9463f36cb9012ba7558bde17e6
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCancelled
+exit=0
+$ bash <scratchpad>/t5/tools/evsum.sh ECQqrEqZyLH5KuaQHxCK9cziqnKyDAX8mhtk8c2VA3k5
+0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCancelled{"cancelled_by":"A","creator":"A","game_id":"0x6e231361b311063024dcbd16b2ad41dd18f1b7e4cd30afc5d2439d212fbb2e12","refund":"10000000"}
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && for g in $GO1 $GO2 $GO3 $GINV; do suic --json object $g | jq -c '{id: .objectId, state: .content.state["@variant"], stake: .content.stake}'; done; suic --json object $HOUSE | jq -c '{version: .content.version, fee_rate: .content.fee_rate, fees_collected: .content.fees_collected}'
+{"id":"0xbe55a245ae88a863828e5dad3e0341cd3dd4dfff253f7e765d35e1c77de282f2","state":"Resolved","stake":"0"}
+{"id":"0x587647517a9bd91dbd67347f73efc74476f83d49accbe4db7e37beeeb152ffbb","state":"Resolved","stake":"0"}
+{"id":"0x6e231361b311063024dcbd16b2ad41dd18f1b7e4cd30afc5d2439d212fbb2e12","state":"Cancelled","stake":"0"}
+{"id":"0x109d456b5e46959e92bb723ae5139264279604096619870d93e3a692ae7979f8","state":"Pending","stake":"10000000"}
+{"version":"1","fee_rate":500.0,"fees_collected":"3000000"}
+exit=0
+exit=0
+$ bash -c cat 15_coinflip_new.txt
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::create @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 none
+cli_exit=0
+digest=5Kw8bWyjzRCWfX4vRvnWaTeozSCFTVPfhMzWx36u9m8J
+status=success
+gas: computationCost=1000000 storageCost=3397200 storageRebate=1975802 nonRefundableStorageFee=198
+created 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip> 0xcfb401554e20ec18f8c7673e7276e38bfc048b7ec163c7fdfb5cfbbafdbda7fb
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash <scratchpad>/t5/tools/evsum.sh 5Kw8bWyjzRCWfX4vRvnWaTeozSCFTVPfhMzWx36u9m8J
+0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>{"bet":"10000000","control":0.0,"creator":"A","duel_id":"0xcfb401554e20ec18f8c7673e7276e38bfc048b7ec163c7fdfb5cfbbafdbda7fb","fee_rate":500.0,"opponent":null,"turn_ms":"0"}
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --move-call '0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::cancel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>' @0xcfb401554e20ec18f8c7673e7276e38bfc048b7ec163c7fdfb5cfbbafdbda7fb
+cli_exit=0
+digest=r2Hx75ZQryi8iquZeAwzh3aVWSqhvokMAvdiVgcjfkM
+status=success
+gas: computationCost=1000000 storageCost=4385200 storageRebate=3396860 nonRefundableStorageFee=340
+created 0x2::coin::Coin<0x2::sui::SUI> 0x23814a8eca874899139838513b707cf9f2618fe8122883b74679934d8473bfa8
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCancelled<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash <scratchpad>/t5/tools/evsum.sh r2Hx75ZQryi8iquZeAwzh3aVWSqhvokMAvdiVgcjfkM
+0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCancelled<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>{"cancelled_by":"A","creator":"A","duel_id":"0xcfb401554e20ec18f8c7673e7276e38bfc048b7ec163c7fdfb5cfbbafdbda7fb","refund":"10000000"}
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::create @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 'some(@{B})'
+cli_exit=0
+digest=FNVPHYSE2R2cpwRL2UPdHsXC37R5WRCcmW5VckF3hvB7
+status=success
+gas: computationCost=1000000 storageCost=3640400 storageRebate=1975802 nonRefundableStorageFee=198
+created 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip> 0x4beb23380ca5667c052ec21ea5f65438850f2ead4ac3fbd4a2971ab787422cac
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash <scratchpad>/t5/tools/evsum.sh FNVPHYSE2R2cpwRL2UPdHsXC37R5WRCcmW5VckF3hvB7
+0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>{"bet":"10000000","control":0.0,"creator":"A","duel_id":"0x4beb23380ca5667c052ec21ea5f65438850f2ead4ac3fbd4a2971ab787422cac","fee_rate":500.0,"opponent":"B","turn_ms":"0"}
+exit=0
+$ bash -c ROLE=B bash <scratchpad>/t5/tools/ptb.sh --move-call '0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::reject<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>' @0x4beb23380ca5667c052ec21ea5f65438850f2ead4ac3fbd4a2971ab787422cac
+cli_exit=0
+digest=EhhtFLbFYpTRqqudJnsC1m1LhCnVsQdLDe7KFinXwWVn
+status=success
+gas: computationCost=1000000 storageCost=4628400 storageRebate=4627937 nonRefundableStorageFee=463
+created 0x2::coin::Coin<0x2::sui::SUI> 0x43fbaa32cd694ef503aaf187f3d75d0389d3d971b10fb5b3c40a92fd56216e3e
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCancelled<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash <scratchpad>/t5/tools/evsum.sh EhhtFLbFYpTRqqudJnsC1m1LhCnVsQdLDe7KFinXwWVn
+0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCancelled<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>{"cancelled_by":"B","creator":"A","duel_id":"0x4beb23380ca5667c052ec21ea5f65438850f2ead4ac3fbd4a2971ab787422cac","refund":"10000000"}
+exit=0
+exit=0
+$ bash -c cat 16_coinflip_fee_copy.txt
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::create @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 none
+cli_exit=0
+digest=G1nQidf547gEeCcDEUZjFgUa5WekLEtnHK2rA8LNvX4S
+status=success
+gas: computationCost=1000000 storageCost=3397200 storageRebate=1975802 nonRefundableStorageFee=198
+created 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip> 0x72531f53dfda06f00262e9a9e2ac7a7d6453f6cd9922f959745f988421c03fd3
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash -c ROLE=ADMIN bash <scratchpad>/t5/tools/ptb.sh --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::house::update_fee_rate @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 @0x66f5b4b77fed9ed7d9324e5713ab843e440750efb46a691e451e64d7534f0e70 300u16
+cli_exit=0
+digest=5He5yyKsqvDnTaTub3obXpus68T339wC9RJkbhPH5Kn8
+status=success
+gas: computationCost=1000000 storageCost=3807600 storageRebate=3807219 nonRefundableStorageFee=381
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::house::FeeRateUpdated
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && suic --json object $HOUSE | jq -c '{version: .content.version, fee_rate: .content.fee_rate, fees_collected: .content.fees_collected}'
+{"version":"1","fee_rate":300.0,"fees_collected":"3000000"}
+exit=0
+$ bash -c ROLE=B bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::accept @0x72531f53dfda06f00262e9a9e2ac7a7d6453f6cd9922f959745f988421c03fd3 @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=0
+digest=FYciU3zi3GTJgUHqzSimomcfZat8cZHCyqNWqjVAYsFN
+status=success
+gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+created 0x2::coin::Coin<0x2::sui::SUI> 0x090fd2fc6e315ff639f48799c71357011df95db463be85bd3904dac5255e4da8
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelActivated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelResolved<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash <scratchpad>/t5/tools/evsum.sh FYciU3zi3GTJgUHqzSimomcfZat8cZHCyqNWqjVAYsFN
+0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelActivated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>{"acceptor":"B","bet":"10000000","creator":"A","deadline_ms":"0","duel_id":"0x72531f53dfda06f00262e9a9e2ac7a7d6453f6cd9922f959745f988421c03fd3","to_move":0.0,"turn_ms":"0"}
+0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelResolved<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>{"acceptor":"B","creator":"A","duel_id":"0x72531f53dfda06f00262e9a9e2ac7a7d6453f6cd9922f959745f988421c03fd3","fee":"1000000","payout":"19000000","pot":"20000000","winner":"B"}
+exit=0
+$ bash -c ROLE=ADMIN bash <scratchpad>/t5/tools/ptb.sh --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::house::update_fee_rate @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 @0x66f5b4b77fed9ed7d9324e5713ab843e440750efb46a691e451e64d7534f0e70 500u16
+cli_exit=0
+digest=FykwmB7cHR7U8Z7pN1Gvyrcp3z9oHTawHMW6ns2WPU2o
+status=success
+gas: computationCost=1000000 storageCost=3807600 storageRebate=3807219 nonRefundableStorageFee=381
+event 0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::house::FeeRateUpdated
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && suic --json object $HOUSE | jq -c '{version: .content.version, fee_rate: .content.fee_rate, fees_collected: .content.fees_collected}'
+{"version":"1","fee_rate":500.0,"fees_collected":"4000000"}
+exit=0
+exit=0
+$ bash -c cat 17b_rounds_fixed_gas_coin.txt
+$ bash -c for i in 1 2 3 4 5 6; do bash <scratchpad>/t5/tools/round.sh 10000000; done
+game=0xb1898410b4180c137bad8a2613561fc1e36c8690ebc1e26f1949f462271fdce2 create=Em2pQfTgdESP5EMF83sxFvHNj6fXzZiSpyTf3k6cFhxm accept=DxoiTvWu7cYtpjGXcGsvEhT7uTVFLPLkPXUaJrXNqBhc status=success winner=B gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+game=0xe8cd094ea20e7e6d1ee8a1f547092c10f5170fc0bef0308d89421695682437d8 create=DZMHYaYookDkYNX4UcuvLybjFFFLwQfoCNxvvJFXWC8r accept=6YurWVp4kscGRL5D1a2eTFv6Tq89usucPibr9fQjKdVC status=success winner=B gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+game=0xf7b1813920edf4747b34c6c7a95a1d5d48044b2e5504e246b8dc00d4d91e4075 create=4P9hvrea6iCQ1Sfy2uUprwYoksZC4dC3nYfkFNWz7LSa accept=FoLsquGTmn3auN589XSL8QvfDY2ZsG7cMh7Br7DkdEyS status=success winner=B gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+game=0xf1580adb1f39c8e63f01a0d9aec0f86b47849fbf96e1e0437d5df26709e04d3b create=2iuA4dtoxYQoA5aAPZYotvJ8YDckupSkMnzUbmCRm2Fp accept=4RybUtpJQ4CVJcVaZSCzs2iVrK3kisYeV3PY27qXnHZ9 status=success winner=A gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+game=0x52bba8f53d71b81c212b90e97a2573bdc6b324a3ae7fbea0663b6c9c9bdefcc5 create=2nuqCq7jc9fX725Dq4Sp2ULvpJRKRg28WrLh3YiZFrSQ accept=DGbXfPXY4HKgtUyucBwqoNmSNuKmRYi76wkMtjxi19PQ status=success winner=A gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+game=0xb00fe384daa7ac2c2be5ebb7f14fdbd47d333faadac2accf039d860d7693b846 create=BrK1s6axheq4x1yE6WAVFZR4UGihQMLsYUoHQFQmNy6y accept=B98zcqssJv8FtjCnmMMswnp8spWfbfTKPwqseym4ZRVW status=success winner=A gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+exit=0
+exit=0
+$ bash -c cat 17_rounds.txt
+$ bash -c for i in 1 2 3 4 5 6 7 8 9 10 11 12; do bash <scratchpad>/t5/tools/round.sh 10000000; done
+game=0x60314769499cbea5c55d915e963acb3e4f9cf6edb93bc1439ed4bd150c3de36b create=FLgxdaRzDHmEViDYAoLj6tGUGdWdtk9D44qynM1TGgbE accept=EqhToxXmKSNANXbGzZ7woFYyjesmDykthAZvQZNB5TGn status=success winner=B gas: computationCost=1000000 storageCost=6399200 storageRebate=5912209 nonRefundableStorageFee=591
+game=0x5c18c3e183f1279c7ff86796b7ecb3a3b93872f73b09412019ed21d3df6a294e create=5suUjRy7tiPsP48CC4mcaFZ5eSmZfFNTcZhAbNkpZQ2y accept=9DyiLRwYiyB37cR7mvV3U6PFb19TEJ21dJxgxZRjjPH9 status=success winner=A gas: computationCost=1000000 storageCost=6399200 storageRebate=5912209 nonRefundableStorageFee=591
+game=0x50d1074fd9ec37ec47fff75eb28cd1bdecb3b390b016e091abc2df815cd5b69a create=7U2DxkBm4kCMF1fVsFLXPgQwuDNRvLS5dwiQwqH8h8rU accept=5dNyzgXc1g1w3DXTkVveLNRnp7asgyKtd52Tj55eMhm1 status=success winner=A gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+game=0x17f333ce74b3e5c016ef6a335d9a62b20ce239c16291838093f9598481edc4fa create=2rSctw3hKxSPGCBSGpFGmDKbecXp8ExNxgxrnMKuBvox accept=HHo1r6X52Un93ECZPDg5s49sXF8iSXAcez3y9FeEoQx status=success winner=B gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+game=0xfdbb0d11c9462b158fbdbddad1e9115c9525f0f67e813c32c98a0f202bdb9d5c create=Hvrk6ZrCHZKwFxHUCtYxvjdXzJ2okhmNK7ASfTUFK113 accept=CeoirLboShpkBmspbraPZ9hSicv2bqgunN5SMjjN3uaj status=success winner=B gas: computationCost=1000000 storageCost=6399200 storageRebate=5912209 nonRefundableStorageFee=591
+game=0x61bdea0ab70edb6a13c07f874846de493047763521de03b85a8034a865e43046 create=HcNxAuMce2TYvUD2vRQrxo4XExBK6FVMCGUfWqbmEExD accept=9saA8krUyZgaMzDFyqvcWtyoCFbxUCS6pgT29RuHvSU5 status=success winner=A gas: computationCost=1000000 storageCost=6399200 storageRebate=5912209 nonRefundableStorageFee=591
+game=0x079916313f92c58044996c7d90d33c29e84047a59ab7ccfdd611042dd79750af create=3wnKWWATWwD9yC4BfoaJvbdu3QHwRzhYDVri5f5FEupL accept=9GErDdFPafBhJ1fHD6Gibs1bjDJyZTLYgYUfSPGj9rFM status=success winner=A gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+game=0x1475ad2f1bfd8adb8cb3bac75983ab7d57c585807ab768ac3eb580a59f95ff3d create=BARXxnuMTQWiTtvJamxj5oTd1wDJxVAk5pTozE2pb2nL accept=6e65BAZqdUhgpFeS11svQSvYq6smoTWjMajVGy57XqQi status=success winner=B gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+game=0xc6ce65f2e4eeafb09d048648789ef446e48603312363b63228c9d8501fdeb188 create=w8pHe2WBksmKagXrKdVde6NB79EA3rVfGg1Hj3iXZmK accept=EoChvtbR1r6QUUvR99Abp2RBfKoQ5EhR8GqXSCgw5tEH status=success winner=A gas: computationCost=1000000 storageCost=6399200 storageRebate=5912209 nonRefundableStorageFee=591
+game=0xc2b6b2868c72f5f0b6c8b6e73560dccfe50fdb59c1fc2bfc524b612fdb05b21c create=3FVY1QMtD7ezTxW7EhyUu2zn5iPRzM8SQm4iTD7Dj2E7 accept=CpQMuY8tZJnfN9nv1eXPv72DeQQRR7H31E6RuMiozbtH status=success winner=A gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+game=0xf657b03068424d70f7093b836c3dd6e1ff2daef156ba6b78dc53a239106a84b5 create=5XgMKgJTtT6dYZJj7LWhftmLRbcQCotuDZFv5ih9Vidg accept=HDQPUzc1y4iS7xKbBBoDxiL4GgCZjHz2YgthxujaeLmG status=success winner=A gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+game=0x6f4cd260f4110d40a596db3c10ece5263b1823023857954d0931eb49ca953b17 create=C2eG7vwr6SGRM1yjv3c67ZjfM8tdT9ogHW6d5nSniyeY accept=4aeSGhfKFfeKT7K5tJLGi1LMBCZGKn2TTZR2cbTWjiSp status=success winner=B gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+exit=0
+exit=0
+$ bash -c cat 18_probe_budget.txt
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::create @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 none
+cli_exit=0
+digest=pun6jGyQ1EyZzrpSC3KwihtX6NPKQgdUqYQaoukMRZx
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=3397200 storageRebate=987901 nonRefundableStorageFee=99
+created 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip> 0x4b7a11535ae8294d6442d699f7980e5976003eb13a835291c9ca2ca4803ea57d
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash -c ROLE=B GAS=1000000 bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::accept @0x4b7a11535ae8294d6442d699f7980e5976003eb13a835291c9ca2ca4803ea57d @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=1
+Error executing transaction 'Fgxqkcvwuv12rcEwXQjmxK8WK2VXr9mB1ffTPp2WEcox': InsufficientGas
+digest=Fgxqkcvwuv12rcEwXQjmxK8WK2VXr9mB1ffTPp2WEcox
+status=failure error=InsufficientGas
+gasPaymentObjects=1 gasBudget=1000000
+gas: computationCost=1000000 storageCost=0 storageRebate=0 nonRefundableStorageFee=0
+exit=0
+$ bash -c ROLE=B GAS=2000000 bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::accept @0x4b7a11535ae8294d6442d699f7980e5976003eb13a835291c9ca2ca4803ea57d @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=1
+Error executing transaction '9Uik1ieACv5bBj5ykp2XX6r3ZGmNz4zPx2V87MPCqEfY': InsufficientGas
+digest=9Uik1ieACv5bBj5ykp2XX6r3ZGmNz4zPx2V87MPCqEfY
+status=failure error=InsufficientGas
+gasPaymentObjects=1 gasBudget=2000000
+gas: computationCost=1000000 storageCost=4924800 storageRebate=4924308 nonRefundableStorageFee=492
+exit=0
+$ bash -c ROLE=B GAS=3000000 bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::accept @0x4b7a11535ae8294d6442d699f7980e5976003eb13a835291c9ca2ca4803ea57d @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=0
+digest=C72gyE3Rn9ons2DZ27hidrSD8wRHemAdP7N768WjehF4
+status=success
+gasPaymentObjects=1 gasBudget=3000000
+gas: computationCost=1000000 storageCost=6399200 storageRebate=4924308 nonRefundableStorageFee=492
+created 0x2::coin::Coin<0x2::sui::SUI> 0xe6f8f0b87b8aa76551b2bc58a332ff1c98ea6ab6c87c094a58540d1fdfa1edcf
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelActivated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelResolved<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash -c ROLE=B GAS=5000000 bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::accept @0x4b7a11535ae8294d6442d699f7980e5976003eb13a835291c9ca2ca4803ea57d @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=1
+Error executing transaction 'C5BTBK4HBRRmduaGm4SCgNpMeNXr7bYiGUqWzuu6Sz2u': 2nd command aborted within function '0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::assert_acceptable' at instruction 78 with code 4
+digest=C5BTBK4HBRRmduaGm4SCgNpMeNXr7bYiGUqWzuu6Sz2u
+status=failure error=MoveAbort(MoveLocation { module: ModuleId { address: a472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b, name: Identifier("duel") }, function: 13, instruction: 78, function_name: Some("assert_acceptable") }, 4) in command 1
+gasPaymentObjects=1 gasBudget=5000000
+gas: computationCost=1000000 storageCost=5411200 storageRebate=5410659 nonRefundableStorageFee=541
+exit=0
+$ bash -c ROLE=B GAS=6000000 bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::accept @0x4b7a11535ae8294d6442d699f7980e5976003eb13a835291c9ca2ca4803ea57d @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=1
+Error executing transaction 'EgjRGpmJZz2rKHpQLAfm5MsEiP9YP7kFFE5Cnz5fL7kA': 2nd command aborted within function '0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::assert_acceptable' at instruction 78 with code 4
+digest=EgjRGpmJZz2rKHpQLAfm5MsEiP9YP7kFFE5Cnz5fL7kA
+status=failure error=MoveAbort(MoveLocation { module: ModuleId { address: a472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b, name: Identifier("duel") }, function: 13, instruction: 78, function_name: Some("assert_acceptable") }, 4) in command 1
+gasPaymentObjects=1 gasBudget=6000000
+gas: computationCost=1000000 storageCost=5411200 storageRebate=5410659 nonRefundableStorageFee=541
+exit=0
+$ bash -c ROLE=B GAS=7000000 bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::accept @0x4b7a11535ae8294d6442d699f7980e5976003eb13a835291c9ca2ca4803ea57d @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=1
+Error executing transaction 'HsNqUYnjeCd5CTzGUaQNDsJovbw1NH4XDXwhZ7kkvMHJ': 2nd command aborted within function '0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::assert_acceptable' at instruction 78 with code 4
+digest=HsNqUYnjeCd5CTzGUaQNDsJovbw1NH4XDXwhZ7kkvMHJ
+status=failure error=MoveAbort(MoveLocation { module: ModuleId { address: a472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b, name: Identifier("duel") }, function: 13, instruction: 78, function_name: Some("assert_acceptable") }, 4) in command 1
+gasPaymentObjects=1 gasBudget=7000000
+gas: computationCost=1000000 storageCost=5411200 storageRebate=5410659 nonRefundableStorageFee=541
+exit=0
+exit=0
+$ bash -c cat 19_sweep_coarse.txt
+$ bash <scratchpad>/t5/tools/sweep.sh 10000000 2400000 10000 2600000
+  budget=2400000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=BorzGkMe9USXjmQkTno39TBhNQxBbHEQjR45U817e2mM
+  budget=2410000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=CEDuwSjdTBC3pWHyYu3KvxFxEVVSwxUYTwzW3SjScR9g
+  budget=2420000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=83RHEZtCeL4U46HbekR45oeJsHcMipNbsr8Sc9vVX7JA
+  budget=2430000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=cJTYFnVvd7yr5qHh1QSAPYgCe9CxejpCjBo2Vr8eMCC
+  budget=2440000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=AjNrbTdGaxMwZz9NxTyVanAWkMUCbnaYGW9XN5owiWAR
+  budget=2450000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=DAuxQiNWyg3yog1b7WnzFMXDZy7xctP7ecqY1mYUbHH2
+  budget=2460000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=2ALD1pnWzDDQ387cezZnNq8Cbiho7ET1dqLAXJpg7QF8
+  budget=2470000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=7ecnCDwEQrkU6NUDy8kzxHc7MCmkrro1UYudX2qWtTmS
+  budget=2480000 status=success comp/storage/rebate=1000000/6399200/4924308 accept=G6vXFBHgbxPao68QE9DvLbdB1de1UTQxZhi9ru46oTvF
+SWEEP game=0xefbf43200e106d44d56eb1148de75d7793b89e19da92a75cd897a3ddca1f887e winner=B lastFail=2470000 firstSuccess=2480000 step=10000
+exit=0
+exit=0
+$ bash -c cat 20_sweep_fine.txt
+$ bash -c for i in 1 2 3 4 5 6 7 8 9 10; do bash <scratchpad>/t5/tools/sweep.sh 10000000 2470000 500 2490000 | grep '^SWEEP\|budget=2474\|budget=2475'; done
+  budget=2474000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=5yYYo9SCz8jSBBbRjtQC4Na8cQD74PhuynyYVtfFNtgU
+  budget=2474500 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=BBTn8SMNw9zuLMda3tjfDBFdVEVjscbBktDSDhCjhDSR
+  budget=2475000 status=success comp/storage/rebate=1000000/6399200/4924308 accept=5nUP7Xq1k3uwQJrdo23hN2vGXmGStTpTweBTyH5q5djt
+SWEEP game=0xfeff8045d00655aadd0884fe184ccfbe6d1e5aa23113dd167d752d4e366f8a3e winner=A lastFail=2474500 firstSuccess=2475000 step=500
+  budget=2474000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=73A2pryCgAZu95huQi5XXtPvMFmTowQ5KbkkLJfYtf7y
+  budget=2474500 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=CGPqeohmHQakaFdiZnaNNhhQsDYisuH965jtceWYGPqL
+  budget=2475000 status=success comp/storage/rebate=1000000/6399200/4924308 accept=CKGq1VXobT5ciDRC5RBK67mJBujeY2mRAzKkjfeqDCZx
+SWEEP game=0x6c488264beba86cc0745d4bc07557429a08776141a6732486222065da789bb80 winner=A lastFail=2474500 firstSuccess=2475000 step=500
+  budget=2474000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=2kYYBoAQAEw4gpmUQQGsXrX4EUYtNxdLk3DPegxN5dm5
+  budget=2474500 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=8CVMTPfEHMAJmtEjoHsFpEz5KUprpQMiUzqyZjoxnQzX
+  budget=2475000 status=success comp/storage/rebate=1000000/6399200/4924308 accept=HwiBZQemDDLUS3jEoyxJcXQjG99t4aqM5nH2VyPSBxXU
+SWEEP game=0xe171624b1e4ae41caac70a676e7976b508725a920acea00003b89d99a4bca867 winner=A lastFail=2474500 firstSuccess=2475000 step=500
+  budget=2474000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=AiSDLpuJp1wNfcDrrEAGBNFWV1taGULbV5M6iFWEcXRa
+  budget=2474500 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=4E1YbtYaK3ShPru5xMTPcK1eP4VRRSSFPxFFd7STCgKg
+  budget=2475000 status=success comp/storage/rebate=1000000/6399200/4924308 accept=BNT9LVFU4NcPGLYrgPGjxZp1R3Kyjk66Miqeb8Z8xPcn
+SWEEP game=0x445ea7744fbd4902997d52056c1be2371af711f777d86ee0ed919914351744bb winner=B lastFail=2474500 firstSuccess=2475000 step=500
+  budget=2474000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=21tReSVNqD7H7F1poxcN9hBxVN9hWJCqcCzFi9BCc2A8
+  budget=2474500 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=4jNWsxngDEXQp5Jgq5Xb82iB54QLyUh3Kxr1ipScSQib
+  budget=2475000 status=success comp/storage/rebate=1000000/6399200/4924308 accept=GUFp9epdmc4PuLWPDDAZRTMEo7FBsVgPby7aNJNqwsny
+SWEEP game=0x01198af52e33c9c7fac98578340df35e0b245ee4e42135b4e7b49a2cca801734 winner=A lastFail=2474500 firstSuccess=2475000 step=500
+  budget=2474000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=JCM7QyHbsaauQFSbDBKDj3EkkCp9NVHeh9HNjmpPo8ih
+  budget=2474500 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=AhghZwEr7ogXLxpYLp1PYj4kkQb3mNZSgxpDYTboPR16
+  budget=2475000 status=success comp/storage/rebate=1000000/6399200/4924308 accept=98ALzD6VaHVoEaVKr7cETuTyDEX59WtQBR6poK1mwG5g
+SWEEP game=0xde8cee13d66defb8fdefee937d402be7020ef55de4c23fb6609e23da36f3724e winner=B lastFail=2474500 firstSuccess=2475000 step=500
+  budget=2474000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=6MhZcxPZobrjVNxdzE1bAAY8oS7sqHtoVCerDHhidkju
+  budget=2474500 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=J4XXSwy6By3HL8U8JyJNbc1G6MhqZ7S3MYyCtAgVZth4
+  budget=2475000 status=success comp/storage/rebate=1000000/6399200/4924308 accept=4Fj7YePCja5ek455sAToS8XsrwmqQJUMtbb4zGbmKcku
+SWEEP game=0x59ea4a02d39943389c53368738cde2b8cc9bdfca0a95799986da528339032c6e winner=B lastFail=2474500 firstSuccess=2475000 step=500
+  budget=2474000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=EzJj2id97gEAawRSe8hgYieAJ2VvbMJbnezrfgqjVEiy
+  budget=2474500 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=Gc1L9hf1oJ955m72CC1ovBY3FTixuNan9ad9r8kkHR9z
+  budget=2475000 status=success comp/storage/rebate=1000000/6399200/4924308 accept=BvgAcRZnAc74poCSoo2pSYvCXPhMmPsKsMy6qRRmZzpX
+SWEEP game=0x78fcd8d8be81b2ae721385e6b2cfc3c2e5b2c98179dfd4dd6afdedeced93337b winner=B lastFail=2474500 firstSuccess=2475000 step=500
+  budget=2474000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=FKKobP8o92Wz3zWfNq8h2BohRzX1h3eL1PqD8HQszXzR
+  budget=2474500 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=q2XCfFVtiBAtbedZxYv8hndXKPg2LsznbxFPzMt78xk
+  budget=2475000 status=success comp/storage/rebate=1000000/6399200/4924308 accept=96us6ukaT1taQQfpGrnvbEgRUTmA8bA4KQdGRCAawoJN
+SWEEP game=0x1aba37c2f591860bcda782f93ff68e84c33c060aca740376ef910b637ea79e69 winner=A lastFail=2474500 firstSuccess=2475000 step=500
+  budget=2474000 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=5YX2ZN6ibyaZTH1AdXuQ7zUhJ4oFUpUzCXtpb4daQCX6
+  budget=2474500 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=EDr99kiURjiCTCYjoWg328gh6xk2CJodwHBYmZvAQiTa
+  budget=2475000 status=success comp/storage/rebate=1000000/6399200/4924308 accept=C8WJbAeu5a4HZaDUzByifMr9bcBGCnj5WYsDKwybC7pB
+SWEEP game=0xffdb30aca55337dc21f973ce3de123be152063c2fab00dcb5f2145c5deb9d0d9 winner=B lastFail=2474500 firstSuccess=2475000 step=500
+exit=0
+exit=0
+$ bash -c cat 21_sweep_exact.txt
+$ bash -c for i in 1 2 3 4 5 6 7 8 9 10; do bash <scratchpad>/t5/tools/sweep.sh 10000000 2474885 1 2474900; done
+  budget=2474885 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=HvT5RRaUj4fxciPywnXY9gjuqokc4QHCLQkwRCiMBt2J
+  budget=2474886 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=CxZJEHjpQTRPnVKq659SqEf9mcTfMEABKm5AiXA9eCPL
+  budget=2474887 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=Hz4M4yWBLsNmKHMoUQyzXGTNKEQF8YGyPWda9PWB4JkR
+  budget=2474888 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=B1DVuy6saAQz7by4T6d6LPP3D77kEUE6An13N2GbuCAT
+  budget=2474889 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=26LK8PGHJUAFdvtuYWzP4oGnQ23TefdrzU19NPbpxBL8
+  budget=2474890 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=6v5nYYQdazbXX6CBDRtwAUGdbHW19tBGTGPu6wDMSxod
+  budget=2474891 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=C7RhKhpbAarFkfTmoxHysbm4DH7pyAzeCotaet3pR7ct
+  budget=2474892 status=success comp/storage/rebate=1000000/6399200/4924308 accept=HcQsrVh2mKS9CU1CUYFDPWRtpczJ9DzL8B6WRsAnn8N1
+SWEEP game=0x0ffbb82256dc75959012a473458dd1100bf5257aefc888ff56dbe5498b13ec5a winner=A lastFail=2474891 firstSuccess=2474892 step=1
+  budget=2474885 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=3WQPynpQkSVSkkyjP9fzmEjA4q4WgZxgWB5HQFESNdv5
+  budget=2474886 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=AWooWhWDzV2udTMyBexG6USQQcvtSR17rXQTq1tWB9fb
+  budget=2474887 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=DEcmvfmxprQ8dkCx2psw1rp8DgMnoT8wZ5AYuQZKA642
+  budget=2474888 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=FfjaLTJLq7MjBwLuWWjFiKG2T8Tg8TUuAY9QKUuagbXv
+  budget=2474889 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=ABuYRnk1iD62ubknJUPgR1QZmAqCeb8HSwTd1gGh245b
+  budget=2474890 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=Db9EuNaUcfuB3ZueuqCxyauBHCTCkziwQ7sGMBVp1NRV
+  budget=2474891 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=GbxadgZqJTYJsD3MjP4kLhnu2saeFf9TMubU5PiStHu
+  budget=2474892 status=success comp/storage/rebate=1000000/6399200/4924308 accept=FKtCaEmSzm8DTjZusTDPdGPK3iBkqEnsmqZvw5Kv9W7x
+SWEEP game=0xea17d83297db098797749fe7605a15f7f4367b3d437128a0066273af1c52aa66 winner=B lastFail=2474891 firstSuccess=2474892 step=1
+  budget=2474885 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=Fb1ZJxV5QiZZotZwXLGDVfbSwLpoyFCcgFm5mUtk7Prx
+  budget=2474886 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=13ffnAiQdQCiJzGcYqmtWkQpffrqfL9VfgZSXXqF679L
+  budget=2474887 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=9DwbRFeMu96ZWZx1rWf8VYvqoq56BWvPnzznseZCcbkW
+  budget=2474888 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=AamTMNLivewdeP4GdZkbdBzJvyaw2WHJ6rufLr2uWXSX
+  budget=2474889 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=36xEsT49ppLFob59LccPh4ezmnoKVdSFNXJEMDV9YkUi
+  budget=2474890 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=6zVaVEN9gJStwFdsuWRUE1x6MLtkLHvj7PbxdWbHJgU5
+  budget=2474891 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=88r1VSqxFoy6kpYRMWJThexu3dabwfNgAV9yNZrGzHLe
+  budget=2474892 status=success comp/storage/rebate=1000000/6399200/4924308 accept=FQ44PkjV2tMd1EKyRUZaXcSgLrH9Fy4oqa2XjvMLci8T
+SWEEP game=0x34476d93de82e5547fb74756e089bf630c4c13177802a983d5a52ddf7459f630 winner=B lastFail=2474891 firstSuccess=2474892 step=1
+  budget=2474885 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=81ibM2LMntTTAHaZSWoNwexZoa3ymyoRPtDgyvEN7NNe
+  budget=2474886 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=FvEKupLrjn8vefAgxmyftgtnaBx5sDHjVdgFxEWfUntr
+  budget=2474887 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=DKvfSX2a9rPTLanmWLYQMYXmmJG45hECaR476GXVBjNi
+  budget=2474888 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=BRJtoxgYLxmhRxatfMCneX94XSNSpajaCJHvxgGy5bqq
+  budget=2474889 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=A9M7JzU4CM3WMgTPvT18cQQcaSDTcA7bMSZsE1oRG24o
+  budget=2474890 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=Cd7uz6tHs6M93pRTCs3Ss7z14Ex9bMW3D3AsehWsJYq7
+  budget=2474891 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=GFYggZUJr9a437st4HaYkSqERfFp9k11vg17rY7XXZkw
+  budget=2474892 status=success comp/storage/rebate=1000000/6399200/4924308 accept=CZcfTCoWZWZej3XPogkSFZ2M3AFvYbTBHw4x5qmPr5BQ
+SWEEP game=0x550ab9a99c4969e234b768b10139e6d7de2364ef201d976b12e8eb6a6b1ecf93 winner=B lastFail=2474891 firstSuccess=2474892 step=1
+  budget=2474885 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=85TGrSjV5MtMXaEVibFJ8TyBL83A6CNJ4Pn9JAn3hBw8
+  budget=2474886 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=5yUs44qQW1d8cc42g6MjfDMP528FtkQuyL5mX9N5kVUW
+  budget=2474887 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=D9JjLX2QKDY8BCFEoz6piEm3sETrcp49pimaTmV9ppT3
+  budget=2474888 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=FC74NWsqoq6dssVFUiFQnq2xBUrYdGDfeQqVWbMNXo8n
+  budget=2474889 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=H4UfEFjtbniH6UuEAvFvSe3EDdwgpZyAZhZ44C4qB2Uh
+  budget=2474890 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=3qzL3ymGNtyPEv3ct5hBhbz4FZk5DwwQbcaBnm5sVYJb
+  budget=2474891 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=4JkhmueafUmS3EGAjjzrdCeZuaZeWbq3uXsNq6NXxq2f
+  budget=2474892 status=success comp/storage/rebate=1000000/6399200/4924308 accept=3fmAcsZJQsFgZaTnuP3EwJrZNJ5MYuf71q6Ykp5LvE8u
+SWEEP game=0x013898393f9d531bb55883e573a57a1343210812b67f1388cb03499389fba678 winner=B lastFail=2474891 firstSuccess=2474892 step=1
+  budget=2474885 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=HHdvvAQWceb3eT3aWKjJ7ZJ8XNuH2Ac13HZbkYA9pXFB
+  budget=2474886 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=BDJPMJ5zmhMGywLKF2gKb4r4PFqhNAhLP1uDzUxuY1K
+  budget=2474887 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=6AVhoanDnLc8j1ehCUC9FTGaPHjyvoVo1PgPnEhJqFpA
+  budget=2474888 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=EPX9dtxvAXTk7WbuZCX2ffJhfK4TaUk1hmwgxwsu7Zsg
+  budget=2474889 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=A2Zsh9GQToopdpuW2j5pYPapDm2YiM56YpTsscYCURkt
+  budget=2474890 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=5RmZY4UFDgzHKEGWUebacYBFSoSRpZH9HGaCgxAQMzFD
+  budget=2474891 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=BFp2MnPcjhWjGpGmPfUX4ADc7aYK7Zgue6y3bX4Z6MEo
+  budget=2474892 status=success comp/storage/rebate=1000000/6399200/4924308 accept=2PPRvMc7n5SVqrT1eNqsrdUYBJNYZBiM1qASGV3jWavs
+SWEEP game=0x6f893c63073f9759b728ea27e5af1da956819a88959c3e5436db3ae4ec94124b winner=B lastFail=2474891 firstSuccess=2474892 step=1
+  budget=2474885 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=FmzGPPF4gF922fqmYdZMcWSeVDHhXer3LXUJotN82eSX
+  budget=2474886 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=4rCCgNj5ByS6M97SLRVTUu8qR4P1gPEoZ2WEcwvEWMmt
+  budget=2474887 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=7YmV7qZk9Ew3vps6JrMtCgJiKvdvYMaGDjeRqQr67Sxq
+  budget=2474888 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=8ntHT3qtrQPMQhHCVqSLA2RSoYQtCxC3Y5RoLb9ndjCD
+  budget=2474889 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=HcPC4HLAewLjWWW44DDVEcu5C4qJ4mfC7QU1qRJGv5fi
+  budget=2474890 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=GjQSvuBcp7i2aSZ5WrGVznF2eQuUMs1hErqJWwpLNTaa
+  budget=2474891 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=EFdiCa6JsL4WmP6qo6zCf7mFkVLLYhtwEfobKa391aH1
+  budget=2474892 status=success comp/storage/rebate=1000000/6399200/4924308 accept=Eg6SCDknVJ7PyXtJKZP6LMBR44gSYggUXyHhxVT2PAVL
+SWEEP game=0x52fbef9467ae4f60b31c197f0bc0dbef190334f815144f8ffc3ec119285941ee winner=B lastFail=2474891 firstSuccess=2474892 step=1
+  budget=2474885 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=LagstyAhpPuPRZDjNVo7opkUXLeyNqgDKP3vyZ7X4cy
+  budget=2474886 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=AMgxFVadrrkANcvw6R3v2RbCZ4RDVBHzxksvBBuW1MKs
+  budget=2474887 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=8dVkLrL6X7qejeM7aqws91wizK2bVEtdzLQPJDMmYQba
+  budget=2474888 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=HYZMLotXZFEMZ2BLDm1ZhFewnApcjbGhtv1U7odSWeTt
+  budget=2474889 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=FeV4GEMDKP7GKTQ7pPFxxLqSgRAyMSYrM465uVyWCshQ
+  budget=2474890 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=44V2QMVHNMXgDPMq6oR5Awv7WUjaJwW2fUyZirXsU7ST
+  budget=2474891 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=4REfSjJGnf1q1UFPqjEhr7Y8ZupkYAE7m7E8R1PK2TML
+  budget=2474892 status=success comp/storage/rebate=1000000/6399200/4924308 accept=554PW3tbB57nUZro4kbZi4wd3BHH1Yhgob8ysMRMTX2W
+SWEEP game=0x356b0fe80755bc70a44119ed86d6106993178f01b89e295cb2648945584cff1a winner=B lastFail=2474891 firstSuccess=2474892 step=1
+  budget=2474885 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=9NeuZvxXRDXUygzML3DRwt8rbsmvSjCmQSmo6LshDnTi
+  budget=2474886 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=22ZStjBntYwJN1AM5APKU3gnkMH1efW3u7jiszpdY4dX
+  budget=2474887 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=7kEso4zLGKtgQn4QcWKHbMvwWEmxZW68gZN3uW9fSpyv
+  budget=2474888 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=87r54haNVkRSq7Z6XzV6XcZNrrWvhM4TyxAmsEKDAz43
+  budget=2474889 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=7iKacPTH1r2KsWdacadmt7TJtBmCi6QnHrjFHRfTBfBt
+  budget=2474890 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=3YgeXA1yM5zpAFpsb12irhdRpNvsa8cChnnqJr8weS4M
+  budget=2474891 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=4u6KfLD3FrmePm2regWXBirm2i1RunxVnw5ytDCQbByZ
+  budget=2474892 status=success comp/storage/rebate=1000000/6399200/4924308 accept=4EL74L5L1KGAD88zYMqYnBzksKummQARA2qCNABbQt6E
+SWEEP game=0x6d9f50df650ce1a91d467c953cfc8dff8d4f900825a94d890b741593c563caae winner=A lastFail=2474891 firstSuccess=2474892 step=1
+  budget=2474885 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=GHw6jzzd2368eBHeXpsKx4vauZ1MTaakgfvCBwHrQ7x2
+  budget=2474886 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=DW2EsELHkA85BcKTDBFNnidLdmf2CtoZhQ2f16aFXPw6
+  budget=2474887 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=34fJz7EGPcmBtx5zuJFvr1rLrCZbWBPjdehuc5wxadjs
+  budget=2474888 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=6kWkHTooBLbNbe8LwxdCPqxP3tY8qJ8MVeAqGFWdfSj2
+  budget=2474889 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=6K5d8m8zN6aoYjwtStyTmayZFJ5TuoBqQNKihLKM1cnK
+  budget=2474890 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=2fXs7rasxTA36YDTQjvyERwbGDH15j8r5zxXmu4v5WRb
+  budget=2474891 status=failure error=InsufficientGas comp/storage/rebate=1000000/4924800/4924308 accept=EPQY9zgc2MuqJxMJL4LcEYuLgzmRpnkaFRr6ztEvxaMD
+  budget=2474892 status=success comp/storage/rebate=1000000/6399200/4924308 accept=BdSeknXXEumcMZb56iWkuSs1WgikvVJyLRsdrBss1Sdp
+SWEEP game=0xbccfc9e82c39b13784a10f9192f7e36a3e315dd402e7d0a2ff5c470673caacb9 winner=B lastFail=2474891 firstSuccess=2474892 step=1
+exit=0
+exit=0
+$ bash -c cat 22_ptb_attack.txt
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::create @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 none
+cli_exit=0
+digest=674faCEpTEHyuvaLvnGMAGGta3Jrr8Fo4bVCoioLErUr
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=3397200 storageRebate=987901 nonRefundableStorageFee=99
+created 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip> 0x83787807c33460a0ee71d06fe682525943816bba823736338dd14ba2b1586f43
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash <scratchpad>/t5/tools/attack.sh attacker dry 0x83787807c33460a0ee71d06fe682525943816bba823736338dd14ba2b1586f43
+cli_exit=1
+Dry run failed
+Caused by:
+    code: 'Client specified an invalid argument', message: "Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins"
+exit=0
+$ bash <scratchpad>/t5/tools/attack.sh attacker exec 0x83787807c33460a0ee71d06fe682525943816bba823736338dd14ba2b1586f43
+cli_exit=1
+code: 'Client specified an invalid argument', message: "Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins", source: RpcError(Status { code: InvalidArgument, message: "Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins", details: b"\x08\x03\x12|Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins", metadata: MetadataMap { headers: {"content-type": "application/grpc", "date": "Fri, 20 Nov 2026 14:47:22 GMT", "server-timing": "finish_request;dur=0", "access-control-expose-headers": "*", "x-sui-chain-id": "CN6sohq1jfv2z9FSErQZgG71GHLgNxpRxqAPpPEwtsKg", "x-sui-chain": "unknown", "x-sui-epoch": "0", "x-sui-checkpoint-height": "3313", "x-sui-timestamp-ms": "1795186041535", "x-sui-timestamp": "2026-11-20T14:47:21.535Z", "x-sui-lowest-available-checkpoint": "0", "x-sui-lowest-available-checkpoint-objects": "0", "server": "sui-node/unknown", "vary": "origin, access-control-request-method, access-control-request-headers", "access-control-allow-origin": "*"} }, source: None })
+    0: RPC error: code: 'Client specified an invalid argument', message: "Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins"
+    1: code: 'Client specified an invalid argument', message: "Error checking transaction input objects: Commands following a command with Random can only be TransferObjects or MergeCoins"
+sin-digest (la CLI o el nodo rechazaron la transaccion antes de ejecutarla)
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && suic --json object $GATK | jq -c '{state: .content.state["@variant"], stake: .content.stake}'
+{"state":"Pending","stake":"10000000"}
+exit=0
+$ bash <scratchpad>/t5/tools/attack.sh control dry 0x83787807c33460a0ee71d06fe682525943816bba823736338dd14ba2b1586f43
+cli_exit=0
+Dry run completed, execution status: success
+│ Gas Owner: <B>                                                               │
+│ Gas Budget: 200000000 MIST                                                                                                                  │
+│ Gas Price: 1000 MIST                                                                                                                        │
+│ Gas Payment:                                                                                                                                │
+│ │  │ Coin: GasCoin                                                                 │                                                        │
+│ Status: Success                                                                                   │
+│ Gas Object:                                                                                       │
+│ Gas Cost Summary:                                                                                 │
+│    Storage Cost: 7387200 MIST                                                                     │
+│    Computation Cost: 1000000 MIST                                                                 │
+│    Storage Rebate: 4924308 MIST                                                                   │
+exit=0
+$ bash <scratchpad>/t5/tools/attack.sh control exec 0x83787807c33460a0ee71d06fe682525943816bba823736338dd14ba2b1586f43
+cli_exit=0
+digest=71fEXFC3euaPngXj2jdEvKtT5Md98NMukQQ5RNkDv29g
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && suic --json object $GATK | jq -c '{state: .content.state["@variant"], stake: .content.stake}'
+{"state":"Resolved","stake":"0"}
+exit=0
+$ bash <scratchpad>/t5/tools/txsum.sh digest 71fEXFC3euaPngXj2jdEvKtT5Md98NMukQQ5RNkDv29g
+digest=71fEXFC3euaPngXj2jdEvKtT5Md98NMukQQ5RNkDv29g
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=7387200 storageRebate=4924308 nonRefundableStorageFee=492
+created 0x2::coin::Coin<0x2::sui::SUI> 0xa0b27c0e9b7499b33e6bcc0c4d412255569c3eb78fdb4f54bb5aed32f7dacb5a
+created 0x2::coin::Coin<0x2::sui::SUI> 0xddc2f079901e8dd4f8f9c7fe8357fdb36cf0f076c6ffd1480b34261ebe5733f3
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelActivated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelResolved<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash <scratchpad>/t5/tools/evsum.sh 71fEXFC3euaPngXj2jdEvKtT5Md98NMukQQ5RNkDv29g
+0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelActivated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>{"acceptor":"B","bet":"10000000","creator":"A","deadline_ms":"0","duel_id":"0x83787807c33460a0ee71d06fe682525943816bba823736338dd14ba2b1586f43","to_move":0.0,"turn_ms":"0"}
+0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelResolved<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>{"acceptor":"B","creator":"A","duel_id":"0x83787807c33460a0ee71d06fe682525943816bba823736338dd14ba2b1586f43","fee":"1000000","payout":"19000000","pot":"20000000","winner":"B"}
+exit=0
+exit=0
+$ bash -c cat 23_gas_table.txt
+$ bash -c export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && RPC_URL=http://127.0.0.1:19000 node <scratchpad>/t5/tools/gastable.mjs 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+accepts resueltos leidos por gRPC (DuelResolved de 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b): 42
+  comandos=2 monedasDeGas=1 | cómputo=1000000 storage=6399200 rebate=4924308 -> gana el creador: 14, gana el aceptante: 22
+  comandos=2 monedasDeGas=2 | cómputo=1000000 storage=6399200 rebate=5912209 -> gana el creador: 3, gana el aceptante: 2
+  comandos=3 monedasDeGas=1 | cómputo=1000000 storage=7387200 rebate=4924308 -> gana el creador: 0, gana el aceptante: 1
+exit=0
+exit=0
+$ bash -c cat 24_fixture_state.txt
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::create @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 none
+cli_exit=0
+digest=7KdwbcHhbdNCBb2ULaBSSde9L1ihc7ar5xht8w6826Dj
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=3397200 storageRebate=987901 nonRefundableStorageFee=99
+created 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip> 0xdbb7bf907a9c7f935da3a6d3bafd53bc53c50874134d94194bcea96dd6741c71
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash -c ROLE=B bash <scratchpad>/t5/tools/ptb.sh --move-call '0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::cancel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>' @0xdbb7bf907a9c7f935da3a6d3bafd53bc53c50874134d94194bcea96dd6741c71
+cli_exit=1
+Error executing transaction 'AqES5AzVYbFtD13Qi7MvuUUiFxRCsD2xL3uGSYfsSbsJ': 1st command aborted within function '0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::cancel' at instruction 16 with code 3
+digest=AqES5AzVYbFtD13Qi7MvuUUiFxRCsD2xL3uGSYfsSbsJ
+status=failure error=MoveAbort(MoveLocation { module: ModuleId { address: a472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b, name: Identifier("duel") }, function: 1, instruction: 16, function_name: Some("cancel") }, 3) in command 0
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=3397200 storageRebate=3396860 nonRefundableStorageFee=340
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::create @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 'some(@{B})'
+cli_exit=0
+digest=8cQ3g3ZewAV3nUKVgxMshFYNNfDkNkbJFwUkT9pC6cAU
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=3640400 storageRebate=987901 nonRefundableStorageFee=99
+created 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip> 0x4f78a5d2cdb6545aaff9fa445c426d89d01381ab9449f1da9b8bd5e0f16f717c
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash -c ROLE=C bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::accept @0x72531f53dfda06f00262e9a9e2ac7a7d6453f6cd9922f959745f988421c03fd3 @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=1
+Error executing transaction 'EueB9rvEtQDV3EHGL6717qWHKjXXSBMLMucgZNbd2iop': 2nd command aborted within function '0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::assert_acceptable' at instruction 78 with code 4
+digest=EueB9rvEtQDV3EHGL6717qWHKjXXSBMLMucgZNbd2iop
+status=failure error=MoveAbort(MoveLocation { module: ModuleId { address: a472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b, name: Identifier("duel") }, function: 13, instruction: 78, function_name: Some("assert_acceptable") }, 4) in command 1
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=5411200 storageRebate=4422758 nonRefundableStorageFee=442
+exit=0
+$ bash -c ROLE=A bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::create @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 'some(@{B})'
+cli_exit=0
+digest=8t6xZoFhrDPqtqdioMZZWFjLBj1LkFtRb1HyxiNfAd9h
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=3640400 storageRebate=987901 nonRefundableStorageFee=99
+created 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip> 0xe54b3d62fa3e1caac71b00e32078a4307c268959d9ee1f3c21391b55b7b56f7f
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash -c ROLE=B bash <scratchpad>/t5/tools/ptb.sh --split-coins gas '[10000000]' --assign c --move-call 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::accept @0xe54b3d62fa3e1caac71b00e32078a4307c268959d9ee1f3c21391b55b7b56f7f @0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718 c.0 @0x8
+cli_exit=0
+digest=456DSVoicRZwxVdG3rQA5FTPqisjqejEmkTwcX5rX6Fs
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=6642400 storageRebate=5167483 nonRefundableStorageFee=517
+created 0x2::coin::Coin<0x2::sui::SUI> 0xda028a4a8cfad996cef7dd52fe34936728608962aec4665bcb8bed62248627e5
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelActivated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+event 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelResolved<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>
+exit=0
+$ bash <scratchpad>/t5/tools/evsum.sh 456DSVoicRZwxVdG3rQA5FTPqisjqejEmkTwcX5rX6Fs
+0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelActivated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>{"acceptor":"B","bet":"10000000","creator":"A","deadline_ms":"0","duel_id":"0xe54b3d62fa3e1caac71b00e32078a4307c268959d9ee1f3c21391b55b7b56f7f","to_move":0.0,"turn_ms":"0"}
+0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelResolved<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>{"acceptor":"B","creator":"A","duel_id":"0xe54b3d62fa3e1caac71b00e32078a4307c268959d9ee1f3c21391b55b7b56f7f","fee":"1000000","payout":"19000000","pot":"20000000","winner":"B"}
+exit=0
+exit=0
+$ bash -c cat 30_sandbox_v3.txt
+$ bash -c diff -r <repo>/contracts/sources <SMOKE_DIR>/v3/contracts/sources
+diff -r <repo>/contracts/sources/duel.move <SMOKE_DIR>/v3/contracts/sources/duel.move
+68a69,73
+> // SANDBOX_ ONLY (TASK-5 of #73): the id 8 is added (no existing id is redefined) and the grace of `refund_stalled` is
+> // replaced by a sandbox constant, so the clock can be exercised in seconds. Not in the work tree, never committed.
+> const SANDBOX_CONTROL_8_TURN_MS: u64 = 15_000;
+> const SANDBOX_CLAIM_GRACE_MS: u64 = 15_000;
+> 
+470c475
+<     let stalled_from = if (to_move == BOTH_MASK) deadline_ms else deadline_ms + CLAIM_GRACE_MS;
+---
+>     let stalled_from = if (to_move == BOTH_MASK) deadline_ms else deadline_ms + SANDBOX_CLAIM_GRACE_MS;
+576a582
+>     else if (control == 7) MAX_TURN_MS
+578,579c584,585
+<         assert!(control == 7, EBadControl);
+<         MAX_TURN_MS
+---
+>         assert!(control == 8, EBadControl);
+>         SANDBOX_CONTROL_8_TURN_MS
+Only in <SMOKE_DIR>/v3/contracts/sources: testgame.move
+exit=1
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && act_as "$ADMIN" && cd <SMOKE_DIR>/v3/contracts && suic --json test-upgrade --pubfile-path <SMOKE_DIR>/Pub.v3.toml --build-env testnet --dry-run > <SMOKE_DIR>/v3-dry.json 2> <SMOKE_DIR>/v3-dry.err; echo exit=$?; jq -c '{status: .effects.status}' <SMOKE_DIR>/v3-dry.json; tail -5 <SMOKE_DIR>/v3-dry.err
+exit=0
+{"status":{"status":"success"}}
+67 │ const CLAIM_GRACE_MS: u64 = 604_800_000;
+   │       ^^^^^^^^^^^^^^ The constant 'CLAIM_GRACE_MS' is never used. Consider removing it.
+   │
+   = This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && act_as "$ADMIN" && cd <SMOKE_DIR>/v3/contracts && suic --json test-upgrade --pubfile-path <SMOKE_DIR>/Pub.v3.toml --build-env testnet > <SMOKE_DIR>/v3-upgrade.json 2> <SMOKE_DIR>/v3-upgrade.err; echo exit=$?
+exit=0
+exit=0
+$ bash <scratchpad>/t5/tools/txsum.sh file <SMOKE_DIR>/v3-upgrade.json
+digest=47fRYHF8yF2zY1KbKhZJD9gzXy6Pyv2edzVJa8D4k9Ke
+status=success
+gasPaymentObjects=1 gasBudget=94332563
+gas: computationCost=1000000 storageCost=93966400 storageRebate=2621738 nonRefundableStorageFee=262
+published package v3 0xb713e949cae9253fb1d65f177d2a8f4bfe63903cc1b00e2260d380f5a5319eb9
+exit=0
+exit=0
+$ bash -c cat 31_sandbox_origins.txt
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && suic --json object $PK3 | jq -r '.content.Package.type_origin_table[] | select(.module_name=="testgame" or .module_name=="coinflip" or (.module_name=="duel" and .datatype_name=="Duel") or (.module_name=="house" and .datatype_name=="House")) | "\(.module_name)::\(.datatype_name) definingId=\(.package)"' && suic --json object $UPCAP | jq -c '{version: .content.version, policy: .content.policy, package: .content.package}'
+house::House definingId=0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4
+duel::Duel definingId=0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+coinflip::Coinflip definingId=0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+testgame::Testgame definingId=0xb713e949cae9253fb1d65f177d2a8f4bfe63903cc1b00e2260d380f5a5319eb9
+{"version":"3","policy":0.0,"package":"0xb713e949cae9253fb1d65f177d2a8f4bfe63903cc1b00e2260d380f5a5319eb9"}
+exit=0
+exit=0
+$ bash -c cat 32_sbx_play.txt
+$ bash <scratchpad>/t5/tools/sbx.sh play
+fees_collected antes: 46000000
+[create] rol=A digest=5tdoTA9CBYeL4YHmKexrhmt2w65D4sfvYYiQp3rawEFq status=success events=[DuelCreated] balances: A:-13409299
+[accept(first_to_move=1)] rol=B digest=CxwZzsL4r4wiBpa1gALWB9zYRPQDiAJCkadb7x6Kt3ym status=success events=[DuelActivated] balances: B:-11311940
+[play(next=2)] rol=A digest=E4Pr7JwFAsGJEEJGKAPJpLj9P1tcwMms6cgGE71ZcPdM status=success events=[DuelTurn] balances: A:-1000371
+[play(next=1)] rol=B digest=35Q3339TNtQCKZefRZhJn7aWJ1knXfGNe6zdSrYH64hZ status=success events=[DuelTurn] balances: B:-1000371
+[settle(winner_index=0)] rol=B digest=6cvjb2yyrNHUsLX9C7ZBh2ehvQqKNWwFQSfTjXErT4tU status=success events=[DuelResolved] balances: A:19000000 B:-2163324
+estado final: {"state":"Resolved","stake":"0","to_move":null}  fees_collected despues: 47000000
+GAME=0x68025e801939821af27bf7bb61b4a21c932bd65baf351743100ebe7fa0a6754b
+exit=0
+exit=0
+$ bash -c cat 33_sbx_timeout.txt
+$ bash <scratchpad>/t5/tools/sbx.sh timeout
+fees_collected antes: 47000000
+[create] rol=A digest=5fzVB8DFr9f3bJx4DFmbVDiu9LMsqFHHNTKAS3FyM3W4 status=success events=[DuelCreated] balances: A:-13409299
+[accept(first_to_move=2)] rol=B digest=F3UVLedaMTnkSopQTci1WoAUh5EwvXPneXqhWpV7SNd4 status=success events=[DuelActivated] balances: B:-11311940
+[claim_timeout] rol=C digest=Do1wT59EZ7UGzoRotP2xNcRNBamVreJgu6RHSMee7LFE failure abort=claim_timeout/14 events=[] balances: C:-1988425
+[settle(winner_index=0)] rol=C digest=GMYxbiRfrFchxQmWUfXvt6FApYnFoXjJ27VEtjbfGEvc failure abort=collect/24 events=[] balances: C:-1988425
+plazo vencido (deadline_ms=1795186283798, reloj=1795186283860)
+[play(next=1)] rol=B digest=Bqbv6hx8WFDzeUz3MKYwMdZ6fe8f55vGPw8KXvFHHLpH failure abort=record_move/21 events=[] balances: B:-1000371
+[settle(winner_index=0)] rol=C digest=BpytVw2VpKP66LkhdiL6u3yF9CFepPcBe3gmgiids7x failure abort=collect/24 events=[] balances: C:-1988425
+[claim_timeout] rol=C digest=ZeswhXAe6eaz1zo6Y1ETABVNWtxGLHv8jbdkQJXdNKH status=success events=[DuelTimedOut] balances: A:19000000 C:-3151225
+estado final: {"state":"TimedOut","stake":"0","to_move":null}  fees_collected despues: 48000000
+GAME=0xeff242fd5e20bae22c07a8d924bca785d15b5a94cba9119aad00772dacff0a15
+exit=0
+exit=0
+$ bash -c cat 34_sbx_refund.txt
+$ bash <scratchpad>/t5/tools/sbx.sh refund_both
+[create] rol=A digest=CztwkibyR3sNrWhE1QpF57TYydGWbhnRyaJvLfKtEfwB status=success events=[DuelCreated] balances: A:-13409299
+[accept(first_to_move=3)] rol=B digest=Az7L4paTDtrqVmEoWfDKg74iGWAZa1mrjrLpnLGvzR5k status=success events=[DuelActivated] balances: B:-11311940
+[claim_timeout] rol=C digest=EtH8HJ7t9yC3jdaBEWg46Eq3m8wK5impKiyictJ3tmhf failure abort=claim_timeout/14 events=[] balances: C:-1000524
+plazo vencido (deadline_ms=1795186305686, reloj=1795186305855)
+[claim_timeout] rol=C digest=3tZScpvJHBv5uVZvcVnn83RbqFVAzpr1xTdy1Rf45xa9 failure abort=claim_timeout/22 events=[] balances: C:-1000524
+[refund_stalled] rol=C digest=EGzD7ABYqcDMKGfBDUpWXYPn954ggMoNfbZpD5pXWtVm status=success events=[DuelExpired] balances: A:10000000 B:10000000 C:-2907971
+estado final: {"state":"Expired","stake":"0","to_move":null}  fees_collected: 48000000
+GAME=0x3a15ecfac8493fa6c157a9295cb5cb613030e055cd86f0000528cd1a3977d199
+exit=0
+$ bash <scratchpad>/t5/tools/sbx.sh refund_one
+fees_collected antes: 48000000
+[create] rol=A digest=6jXKWQtswmEiM9cnRCvEKpdyzqSatLUWRDS3AHidy4sW status=success events=[DuelCreated] balances: A:-13409299
+[accept(first_to_move=1)] rol=B digest=B34cJCK4MWc3KMyKtU6LNbBpFBHW7JUcJAB3u5j7LWkn status=success events=[DuelActivated] balances: B:-11311940
+plazo vencido (deadline_ms=1795186323131, reloj=1795186323213); la gracia del sandbox termina en 1795186338131
+[refund_stalled] rol=C digest=12qZ7RcGiHvzAUR9mhbFmdEMc2PuRSpHwULndzLMxE4w failure abort=refund_stalled/23 events=[] balances: C:-1000371
+gracia vencida (reloj=1795186338352)
+[refund_stalled] rol=C digest=Bd4dcTWPh8CAkx292QVt5MVQ7wji49YctNpmrNrS5vrf status=success events=[DuelExpired] balances: A:10000000 B:10000000 C:-2907971
+estado final: {"state":"Expired","stake":"0","to_move":null}  fees_collected despues: 48000000
+GAME=0x94d6c39aa8b73592f72e448c8f5d2fd4f46f306c656ee1ce362dbd864e8ab1f3
+exit=0
+exit=0
+$ bash -c cat 35_sbx_clique.txt
+$ bash <scratchpad>/t5/tools/sbx.sh clique
+[create] rol=A digest=9h72zgUbYxiAzE9ypfpn7K2Ei9KBs74rSyjtaXRPyjw7 status=success events=[DuelCreated] balances: A:-13409299
+[accept(first_to_move=1)] rol=B digest=EfdATeWum6poMxHYYZHEjKj9BtGHV48wJ3VHrd9PMDSz status=success events=[DuelActivated] balances: B:-11311940
+[create] rol=B digest=7Ntx3H6ZqfabMNuajppnYwxzMWT9z4o2j2Af1t2KV2v3 status=success events=[DuelCreated] balances: B:-13409299
+[clique-claim_timeout(D1)] rol=B digest=21863JJVETgJo1bRzLSiY3n6jrhGRvkKSb1A4QSPg4p3 status=failure error=CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1 events=[] balances: B:-1000524
+[clique-refund_stalled(D1)] rol=B digest=8S1K1PX5dUoVYFysA1YDTcbZXPNE6p8pxVDXwwPCLAn1 status=failure error=CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1 events=[] balances: B:-1000524
+[clique-cancel(D1)] rol=B digest=CVpmmQq7wVSmjLF6eZNYFgfRPZ7YvLcxEPUra8U8DFaJ status=failure error=CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1 events=[] balances: B:-1000524
+D1 tras los tres ataques: {"state":"Active","stake":"20000000","to_move":1.0}
+[control-cancel(D2)-entre-collect-y-pay(D1)] rol=B digest=dKqCJ2RvD41JkfRxRJuTSZbiZGHJSEbSPt3tAB1EJkG status=success events=[DuelCancelled,DuelResolved] balances: A:19000000 B:6848435
+D1 tras el control: {"state":"Resolved","stake":"0","to_move":null}   D2: {"state":"Cancelled","stake":"0","to_move":null}
+D1=0xdfaf4a28aa34e6ab06b9f3c3d3038e56afd4b30c1ba33287377a6284236d6805 D2=0xb844f2ee459e77a776fbd52e42a728544f57a35f05fb842ec2e5aaaf01494b02
+exit=0
+exit=0
+$ bash -c cat 36_sbx_leave.txt
+$ bash <scratchpad>/t5/tools/sbx.sh leave
+[create] rol=A digest=CsEcfdduU18TfNE21PfYNZ9hukJNmHvPWHP9sLoDvKBc status=success events=[DuelCreated] balances: A:-13409299
+[create] rol=A digest=3xVCtVUac1tTWeAYXWYSGEEL4E1jyVUCbvqwpmSZFzRr status=success events=[DuelCreated] balances: A:-13409299
+[accept(first_to_move=1)] rol=B digest=3w1d1zaSZE1J1sQGPixPTxcYEuaD7acxSjDQnPbbZzdi status=success events=[DuelActivated] balances: B:-11311940
+PENDING=0x7645106bc1653e0b5da244171599c4ff83890a7300a8210e4e4ed0def0996feb ACTIVE=0x6f8971d840489048b699830839091b499ba4d3e5a50a8f560eee32b1c59165de
+exit=0
+exit=0
+$ bash -c cat 37_sbx_types.txt
+$ bash <scratchpad>/t5/tools/sbx.sh types
+[create-coinflip] rol=A digest=AfvNnELMK2PV6QjKpst9rAV2qYvcekpL27frp7Bio235 status=success events=[DuelCreated] balances: A:-13409299
+[create-coinflip] rol=A digest=8LMKUuvdi9hGMcb1A8zKgp1o5VgESMi6uPkCFNobUB4V status=success events=[DuelCreated] balances: A:-13409299
+[create-coinflip] rol=A digest=96E9ou7yaEeatDSTRZzFDtnRvLrvgUinPskmekksw4Na status=success events=[DuelCreated] balances: A:-13409299
+[create-coinflip] rol=A digest=23ttnNfWmxiB7B34KQRv4dLsQrkG2oQhomNshupHsuKn status=success events=[DuelCreated] balances: A:-13409299
+[create] rol=A digest=DYhP3YNNc7BYXZRDbENTdJaCpuwnPuy22Dsgx6Myosu9 status=success events=[DuelCreated] balances: A:-13409299
+[cancel: target PK3, G=PK2::coinflip (ID de definicion)] rol=A digest=DfqgT1hvEhx4jApLW9G36w9SpFyS9BcS5JcCCGHT8Ceu status=success events=[DuelCancelled] balances: A:8011660
+[cancel: target PK3, G=PK3::coinflip (ID de almacenamiento del ultimo upgrade)] rol=A digest=F7GQnJt3nTjZAS8ugkWyABdj55Xsq1nUchTdipSYCZEU status=success events=[DuelCancelled] balances: A:8011660
+[cancel: target PK2, G=PK2::coinflip (target y tipo con el ID del upgrade que los define)] rol=A digest=3dhsJ5BB1qp3wEd9nAZuyoLFZjmXzHc1xxRTPtoEa6qE status=success events=[DuelCancelled] balances: A:8011660
+[cancel: target PK3, G=PK3::testgame (ID de definicion de testgame)] rol=A digest=C7gjwx7ZjZ1pWo2BAVbkr1TvnUZ5ghBZ9Gs1zKMSrDyB status=success events=[DuelCancelled] balances: A:8011660
+[cancel: target PK3, G=PK2::testgame (ID ANTERIOR a la definicion)] rol=A digest=4TQ9yVpoVBdqEDCQp2oYjLnyWqY9QE7DK1y1w8M9nJ7P status=failure error=TypeArgumentError { argument_idx: 0, kind: TypeNotFound } in command 0 events=[] balances: A:-1000340
+[cancel: target PK3, G=PK1::coinflip (ID original)] rol=A digest=4QPDMsa76spc6Q2TXLsd1kpUb52J8fT2vFZDQsw5ZY4t status=failure error=TypeArgumentError { argument_idx: 0, kind: TypeNotFound } in command 0 events=[] balances: A:-1000340
+[cancel: target PK3, G=PK1::testgame (ID original)] rol=A digest=AtkJDjJoZ4atjaaADh7GRvPs1Ewij3kFpgM1s5QK7CVc status=failure error=TypeArgumentError { argument_idx: 0, kind: TypeNotFound } in command 0 events=[] balances: A:-1000340
+C4 (no consumido) y SPEND siguen: {"state":"Pending","stake":"10000000","to_move":null} {"state":"Pending","stake":"10000000","to_move":null}
+exit=0
+exit=0
+$ bash -c cat 38_sbx_leave2.txt
+$ bash <scratchpad>/t5/tools/sbx.sh leave2
+[create] rol=A digest=8P4yUHC1SRNv5bMhiaFDm2EQiDaRShSdYaiSEERh9tUD status=success events=[DuelCreated] balances: A:-13409299
+[accept(first_to_move=2)] rol=B digest=8ZPj2FwKF4LYf7uzPvH67iEo8kq9x35na6bqg7ckx5GX status=success events=[DuelActivated] balances: B:-11311940
+[claim_timeout] rol=C digest=EjQK3YHpZAbpPBf4RiPQWiJm2Uf2eygFeanZMvMfLiyd failure abort=claim_timeout/14 events=[] balances: C:-1000524
+[create] rol=A digest=HzbQhxXauWve8KZLz8WcYpnMryZ8dD8gkQ1T9K7JtuzX status=success events=[DuelCreated] balances: A:-13409299
+[accept(first_to_move=3)] rol=B digest=AnwfiEHKuakNQHNN9z8d9ocNQtRk4LYe683LBndz3dRq status=success events=[DuelActivated] balances: B:-11311940
+[claim_timeout] rol=C digest=AYHihLZAHgWNP1HPRBoRMUtqcDWVYVYqUQS8ufFCj3aj failure abort=claim_timeout/22 events=[] balances: C:-1000524
+X7D=0x4b7e39d042fe992e714dae6b19463754d34c7f797a7f054ac3f7169207e50a14 XBP=0x2bb693ee3a6115e66cee71e6bb506228f6af24f2bb89f7b7908a0715bd505872  {"state":"Active","stake":"20000000","to_move":2.0} {"state":"Active","stake":"20000000","to_move":3.0}
+exit=0
+exit=0
+$ bash -c cat 40b_capture_reads_rerun.txt
+$ bash -c . <SMOKE_DIR>/env.sh && cd <repo> && "$NODE" app/scripts/capture-duel-reads.mjs --url "$RPC_URL"
+nodo http://127.0.0.1:19000, chain id a8d865ab = despliegue
+typeOrigins: 24 tipos, deployment = cadena
+eventos: 51 DuelCreated, 43 DuelActivated, 5 DuelCancelled, 43 DuelResolved
+escrito contracts/fixtures/duel-reads.localnet.json (3 + 10 frames crudos)
+exit=0
+exit=0
+$ bash -c cat 40_capture_reads.txt
+$ bash -c . <SMOKE_DIR>/env.sh && cd <repo> && "$NODE" app/scripts/capture-duel-reads.mjs --url "$RPC_URL"
+nodo http://127.0.0.1:19000, chain id a8d865ab = despliegue
+typeOrigins: 24 tipos, deployment = cadena
+eventos: 51 DuelCreated, 43 DuelActivated, 5 DuelCancelled, 43 DuelResolved
+escrito contracts/fixtures/duel-reads.localnet.json (3 + 5 frames crudos)
+exit=0
+exit=0
+$ bash -c cat 41b_capture_tx_rerun.txt
+$ bash -c . <SMOKE_DIR>/env.sh && cd <repo> && "$NODE" app/scripts/capture-duel-tx.mjs --url "$RPC_URL"
+nodo http://127.0.0.1:19000, chain id a8d865ab = despliegue
+eventos: 51 DuelCreated, 5 DuelCancelled, 43 DuelResolved
+simulationErrors: 11 casos
+executed: 12 transacciones
+escrito contracts/fixtures/duel-tx.localnet.json
+exit=0
+exit=0
+$ bash -c cat 41_capture_tx.txt
+$ bash -c . <SMOKE_DIR>/env.sh && cd <repo> && "$NODE" app/scripts/capture-duel-tx.mjs --url "$RPC_URL"
+nodo http://127.0.0.1:19000, chain id a8d865ab = despliegue
+eventos: 51 DuelCreated, 5 DuelCancelled, 43 DuelResolved
+simulationErrors: 11 casos
+executed: 12 transacciones
+escrito contracts/fixtures/duel-tx.localnet.json
+exit=0
+exit=0
+$ bash -c cat 42_capture_clock.txt
+$ bash -c . <SMOKE_DIR>/env.sh && cd <repo> && "$NODE" app/scripts/capture-duel-clock.mjs --url "$RPC_URL"
+nodo http://127.0.0.1:19000, chain id a8d865ab = despliegue
+juegos con DuelCreated (prefijo): 2; sandbox: testgame en el paquete 0xb713e949…
+typeOrigins del paquete del sandbox: 25 tipos
+eventos del sandbox: 11 DuelCreated, 8 DuelActivated, 2 DuelTurn, 2 DuelResolved, 1 DuelTimedOut, 2 DuelExpired
+simulationErrors: 7 casos
+executed: 9 transacciones
+escrito contracts/fixtures/duel-clock.localnet.json (4 frames crudos; sandbox = true)
+exit=0
+exit=0
+$ bash -c cat 43_determinism.txt
+$ bash -c . <SMOKE_DIR>/env.sh && cd <repo> && "$NODE" app/scripts/capture-duel-reads.mjs --url "$RPC_URL" | tail -1
+escrito contracts/fixtures/duel-reads.localnet.json (3 + 10 frames crudos)
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && cd <repo> && "$NODE" app/scripts/capture-duel-tx.mjs --url "$RPC_URL" | tail -1
+escrito contracts/fixtures/duel-tx.localnet.json
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && cd <repo> && "$NODE" app/scripts/capture-duel-clock.mjs --url "$RPC_URL" | tail -1
+escrito contracts/fixtures/duel-clock.localnet.json (4 frames crudos; sandbox = true)
+exit=0
+$ bash -c cd <repo>/contracts/fixtures && for f in duel-reads duel-tx duel-clock; do if diff <(jq 'del(._meta.capturedAt)' <SMOKE_DIR>/run1/$f.localnet.json) <(jq 'del(._meta.capturedAt)' $f.localnet.json) > /dev/null; then echo "$f: IGUALES salvo _meta.capturedAt"; else echo "$f: DIFIEREN"; fi; done; for f in duel-reads duel-tx duel-clock; do jq -r '._meta.capturedAt' <SMOKE_DIR>/run1/$f.localnet.json $f.localnet.json | tr '\n' ' '; echo; done
+duel-reads: IGUALES salvo _meta.capturedAt
+duel-tx: IGUALES salvo _meta.capturedAt
+duel-clock: IGUALES salvo _meta.capturedAt
+2026-11-20T14:55:27.729Z 2026-11-20T14:59:07.440Z 
+2026-11-20T14:57:26.995Z 2026-11-20T14:59:08.064Z 
+2026-11-20T14:58:55.522Z 2026-11-20T14:59:08.604Z 
+exit=0
+exit=0
+$ bash -c cat 44_guard.txt
+$ bash -c cd <repo>/contracts/fixtures && for f in duel-reads duel-tx duel-clock; do diff <SMOKE_DIR>/run1/$f.localnet.json $f.localnet.json | grep -c '^[<>]'; done
+2
+2
+2
+exit=0
+$ bash -c cd <repo> && <HOME real>/.nvm/versions/node/v26.13.0/bin/node app/scripts/capture-duel-reads.mjs --url http://192.0.2.1:9000; echo codigo=$?
+capture-duel-reads: solo se captura desde la localnet aislada (http://127.0.0.1:<puerto>, 1024-65535, por defecto 9000); recibido --url http://192.0.2.1:9000. No se hizo ningún pedido.
+codigo=2
+exit=0
+$ bash -c cd <repo> && <HOME real>/.nvm/versions/node/v26.13.0/bin/node app/scripts/capture-duel-reads.mjs --url https://fullnode.testnet.sui.io:443; echo codigo=$?
+capture-duel-reads: solo se captura desde la localnet aislada (http://127.0.0.1:<puerto>, 1024-65535, por defecto 9000); recibido --url https://fullnode.testnet.sui.io:443. No se hizo ningún pedido.
+codigo=2
+exit=0
+$ bash -c cd <repo> && <HOME real>/.nvm/versions/node/v26.13.0/bin/node app/scripts/capture-duel-tx.mjs --url http://192.0.2.1:9000; echo codigo=$?
+capture-duel-tx: solo se captura desde la localnet aislada (http://127.0.0.1:<puerto>, 1024-65535, por defecto 9000); recibido --url http://192.0.2.1:9000. No se hizo ningún pedido.
+codigo=2
+exit=0
+$ bash -c cd <repo> && <HOME real>/.nvm/versions/node/v26.13.0/bin/node app/scripts/capture-duel-tx.mjs --url https://fullnode.testnet.sui.io:443; echo codigo=$?
+capture-duel-tx: solo se captura desde la localnet aislada (http://127.0.0.1:<puerto>, 1024-65535, por defecto 9000); recibido --url https://fullnode.testnet.sui.io:443. No se hizo ningún pedido.
+codigo=2
+exit=0
+$ bash -c cd <repo> && <HOME real>/.nvm/versions/node/v26.13.0/bin/node app/scripts/capture-duel-clock.mjs --url http://192.0.2.1:9000; echo codigo=$?
+capture-duel-clock: solo se captura desde la localnet aislada (http://127.0.0.1:<puerto>, 1024-65535, por defecto 9000); recibido --url http://192.0.2.1:9000. No se hizo ningún pedido.
+codigo=2
+exit=0
+$ bash -c cd <repo> && <HOME real>/.nvm/versions/node/v26.13.0/bin/node app/scripts/capture-duel-clock.mjs --url https://fullnode.testnet.sui.io:443; echo codigo=$?
+capture-duel-clock: solo se captura desde la localnet aislada (http://127.0.0.1:<puerto>, 1024-65535, por defecto 9000); recibido --url https://fullnode.testnet.sui.io:443. No se hizo ningún pedido.
+codigo=2
+exit=0
+$ bash -c cd <repo> && <HOME real>/.nvm/versions/node/v26.13.0/bin/node app/scripts/capture-duel-tx.mjs --url http://127.0.0.1:19000 --foo; echo codigo=$?
+capture-duel-tx: solo se captura desde la localnet aislada (http://127.0.0.1:<puerto>, 1024-65535, por defecto 9000); recibido --url http://127.0.0.1:19000 y argumentos desconocidos: --foo. No se hizo ningún pedido.
+codigo=2
+exit=0
+exit=0
+$ bash -c cat 45_misc_evidence.txt
+$ bash <scratchpad>/t5/tools/txsum.sh digest 14oaKaode2WzE6UnV3X8CEJbQ3vW5PPjpUmuDs8JFnhG
+digest=14oaKaode2WzE6UnV3X8CEJbQ3vW5PPjpUmuDs8JFnhG
+status=success
+gasPaymentObjects=1 gasBudget=87667363
+gas: computationCost=1000000 storageCost=87301200 storageRebate=2621738 nonRefundableStorageFee=262
+published package v2 0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b
+exit=0
+$ bash <scratchpad>/t5/tools/txsum.sh digest Bv9nzv5XZyACtkkkqxZvy4oWTcPSrBZNwcRiasSHBTuV
+digest=Bv9nzv5XZyACtkkkqxZvy4oWTcPSrBZNwcRiasSHBTuV
+status=success
+gasPaymentObjects=1 gasBudget=87667363
+gas: computationCost=1000000 storageCost=87301200 storageRebate=2621738 nonRefundableStorageFee=262
+published package v2 0xa2489a7475e89c951ac881c2df946157fbe5bb2a2652ebeb89af35fab73788db
+exit=0
+$ bash -c export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && . <SMOKE_DIR>/env.sh && RPC_URL=http://127.0.0.1:19000 "$NODE" <scratchpad>/t5/tools/verify_origins.mjs <SMOKE_DIR>/localnet-A.json
+json: 24 tipos; cadena (gRPC getObject package): 24 tipos; diferencias: 0
+  modulo house: definingId = original
+  modulo duel: definingId = upgrade-2
+  modulo coinflip: definingId = upgrade-2
+  modulo game: definingId = original
+exit=0
+$ bash -c . <SMOKE_DIR>/env.sh && . <SMOKE_DIR>/ids.env && smoke_guard && suic --json object $UPCAPA | jq -c '{version: .content.version, policy: .content.policy, package: .content.package}'; suic --json object $UPCAP | jq -c '{version: .content.version, policy: .content.policy, package: .content.package}'
+{"version":"2","policy":0.0,"package":"0xa2489a7475e89c951ac881c2df946157fbe5bb2a2652ebeb89af35fab73788db"}
+{"version":"3","policy":0.0,"package":"0xb713e949cae9253fb1d65f177d2a8f4bfe63903cc1b00e2260d380f5a5319eb9"}
+exit=0
+exit=0
+$ bash -c cat 50_final_gates_app.txt
+$ bash -c export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && node --version && cd <repo> && npm run lint -w app 2>&1 | tail -15; npm run typecheck -w app 2>&1 | tail -5
+v26.13.0
+
+> lint
+> eslint . --max-warnings 0
+
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+exit=0
+$ bash -c cat 60_cierre.txt
+$ bash -c echo PID-de-la-localnet=2874756; kill 2874756; echo kill_exit=$?
+PID-de-la-localnet=2874756
+kill_exit=0
+exit=0
+$ bash -c kill -0 2874756; echo kill0_exit=$?; ps -o pid,args -p 2874756 | tail -1 | cut -c1-80; ss -ltn | grep -c ':19000 '; ss -ltn | grep -c ':9000 '
+bash: line 1: kill: (2874756) - No such process
+kill0_exit=1
+    PID COMMAND
+0
+2
+exit=0
+exit=0
+$ bash -c cat 61_dod_closure.txt
+$ bash -c cd <repo> && git status --porcelain --untracked-files=all && git diff --stat
+ M contracts/README.md
+?? app/scripts/capture-duel-clock.mjs
+?? app/scripts/capture-duel-reads.mjs
+?? app/scripts/capture-duel-tx.mjs
+?? contracts/fixtures/duel-clock.localnet.json
+?? contracts/fixtures/duel-reads.localnet.json
+?? contracts/fixtures/duel-tx.localnet.json
+ contracts/README.md | 44 ++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 44 insertions(+)
+exit=0
+$ bash -c cd <repo> && test ! -e contracts/deployments/localnet.json; echo test_localnet_json=$?; ! compgen -G 'contracts/Pub.*.toml'; echo compgen_Pub=$?; git diff --exit-code -- contracts/sources; echo diff_sources=$?; git diff --exit-code -- contracts/Move.lock contracts/Published.toml contracts/deployments contracts/tests; echo diff_lock_published=$?; git stash list | wc -l
+test_localnet_json=0
+compgen_Pub=0
+diff_sources=0
+diff_lock_published=0
+0
+exit=0
+exit=0
+$ bash -c cat 62_antileak.txt
+$ bash -c cd <repo> && BASE="$(git merge-base master HEAD)"; echo BASE=$BASE; git diff "$BASE" -U0 -- contracts/sources app/src | /usr/bin/grep '^+' | /usr/bin/grep -n 'SANDBOX\|testgame'; echo tracked_grep_exit=$? '(1 = 0 coincidencias)'; git ls-files --others --exclude-standard -- contracts/sources app/src | xargs -r /usr/bin/grep -n 'SANDBOX\|testgame'; echo untracked_grep_exit=$? '(1 = 0 coincidencias; xargs -r sin archivos devuelve 0)'; git ls-files --others --exclude-standard -- contracts/sources app/src | wc -l
+BASE=b0bbef8e55cb3c53416b56c490156c4013d416a1
+tracked_grep_exit=1 (1 = 0 coincidencias)
+untracked_grep_exit=0 (1 = 0 coincidencias; xargs -r sin archivos devuelve 0)
+0
+exit=0
+$ bash -c cd <repo> && for f in contracts/fixtures/duel-reads.localnet.json contracts/fixtures/duel-tx.localnet.json; do echo $f: SANDBOX/testgame/sandbox=$(/usr/bin/grep -ci 'sandbox\|testgame' $f); done; echo clock: _meta.sandbox=$(jq -c '._meta.sandbox, ._meta.sandboxConstants' contracts/fixtures/duel-clock.localnet.json | tr '\n' ' ')
+contracts/fixtures/duel-reads.localnet.json: SANDBOX/testgame/sandbox=1
+contracts/fixtures/duel-tx.localnet.json: SANDBOX/testgame/sandbox=2
+clock: _meta.sandbox=true {"SANDBOX_CONTROL_8_ID":8,"SANDBOX_CONTROL_8_TURN_MS":15000,"SANDBOX_CLAIM_GRACE_MS":15000}
+exit=0
+exit=0
+$ bash -c cat 63_final_gates.txt
+$ bash -c cd <repo> && for f in contracts/fixtures/duel-*.localnet.json; do jq -e . $f > /dev/null && echo "$f JSON valido"; done; for f in duel-reads duel-tx; do echo $f sandbox/testgame: $(/usr/bin/grep -ci 'sandbox\|testgame' contracts/fixtures/$f.localnet.json); done
+contracts/fixtures/duel-clock.localnet.json JSON valido
+contracts/fixtures/duel-reads.localnet.json JSON valido
+contracts/fixtures/duel-tx.localnet.json JSON valido
+duel-reads sandbox/testgame: 0
+duel-tx sandbox/testgame: 0
+exit=0
+$ bash -c export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && node --version && cd <repo>/contracts && node --test scripts/*.test.mjs 2>&1 | tail -9 && node scripts/publish.mjs check
+v26.13.0
+✔ ningún test ni código de upgrade llega a la CLI real: spawn siempre inyectado y SUI_BIN inexistente en los tests de main (2.536629ms)
+ℹ tests 173
+ℹ suites 0
+ℹ pass 173
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 408.832193
+1 despliegue(s) válidos y coherentes con Published.toml
+exit=0
+$ bash -c export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && cd <repo> && npm run lint -w app 2>&1 | tail -4; npm run typecheck -w app 2>&1 | tail -3; npm test -w app 2>&1 | grep -E 'Test Files|Tests ' 
+
+> lint
+> eslint . --max-warnings 0
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+ Test Files  66 passed (66)
+      Tests  1246 passed (1246)
+exit=0
+exit=0
+$ bash -c cat 64_r6_greps.txt
+$ bash -c cd <repo> && for f in app/scripts/capture-duel-clock.mjs app/scripts/capture-duel-reads.mjs app/scripts/capture-duel-tx.mjs contracts/fixtures/duel-clock.localnet.json contracts/fixtures/duel-reads.localnet.json contracts/fixtures/duel-tx.localnet.json; do echo $f: g1=$(/usr/bin/grep -nE '[0-9a-fA-F]{40,64}' $f | wc -l) g2=$(/usr/bin/grep -nE '0x[0-9a-fA-F]{8,}' $f | wc -l) g3=$(/usr/bin/grep -nE 'suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home-' $f | wc -l) g4=$(/usr/bin/grep -nE '[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}' $f | wc -l); done; echo --- git diff README:; git diff -- contracts/README.md | /usr/bin/grep -E '^\+' | /usr/bin/grep -nE '[0-9a-fA-F]{40,64}|0x[0-9a-fA-F]{8,}|suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home-|[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}'; echo readme_greps_exit=$?
+app/scripts/capture-duel-clock.mjs: g1=0 g2=0 g3=0 g4=0
+app/scripts/capture-duel-reads.mjs: g1=0 g2=0 g3=0 g4=0
+app/scripts/capture-duel-tx.mjs: g1=0 g2=0 g3=0 g4=0
+contracts/fixtures/duel-clock.localnet.json: g1=328 g2=320 g3=0 g4=0
+contracts/fixtures/duel-reads.localnet.json: g1=171 g2=171 g3=0 g4=0
+contracts/fixtures/duel-tx.localnet.json: g1=304 g2=297 g3=0 g4=0
+--- git diff README:
+readme_greps_exit=1
+exit=0
+exit=0
+$ bash -c cat 65_r6_classify.txt
+$ bash -c cd <repo>/contracts/fixtures && for f in duel-reads duel-tx duel-clock; do accs=$(jq -r '[.. | objects | (.creator?, .opponent?, .acceptor?, .winner?, .claimed_by?, .AddressOwner?) | select(type=="string")] | unique | .[]' $f.localnet.json | sort -u); n_acc=$(echo "$accs" | grep -c .); all=$(/usr/bin/grep -oE '0x[0-9a-f]{64}' $f.localnet.json | sort -u); n_all=$(echo "$all" | grep -c .); n_other=$(echo "$all" | /usr/bin/grep -vxFf <(echo "$accs") | grep -c .); echo $f: hex64-unicos=$n_all cuentas-efimeras-por-rol=$n_acc ids-de-paquete-objeto=$n_other; done
+duel-reads: hex64-unicos=21 cuentas-efimeras-por-rol=2 ids-de-paquete-objeto=19
+duel-tx: hex64-unicos=36 cuentas-efimeras-por-rol=3 ids-de-paquete-objeto=33
+duel-clock: hex64-unicos=31 cuentas-efimeras-por-rol=3 ids-de-paquete-objeto=28
+exit=0
+exit=0
+$ bash -c cat 66_guard_final.txt
+$ bash -c stat -c '%y %s %n' <config del owner>/client.yaml; ls -la <config del owner>/; sha256sum <config del owner>/client.yaml | cut -c1-12; ps -eo pid,args | grep -c '[s]ui start'; ss -ltn | grep -c ':19000 '; ss -ltn | grep ':9000 ' | wc -l; docker ps -aq | wc -l; docker images -aq | wc -l; test ! -e <SMOKE_DIR> && echo smoke5-no-existe
+2026-10-30 17:52:52.515735237 -0500 244 <config del owner>/client.yaml
+total 12
+drwx------ 2 <user> <user> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <user> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <user>  244 Oct 30 17:52 client.yaml
+ef12fd09615f
+0
+0
+2
+5
+17
+smoke5-no-existe
+exit=0
+exit=0
+
+## CIERRE DEL REPORTE: greps §R-6 sobre este reporte, guarda de ~/.sui tras escribirlo y trazas
+
+Medido con /usr/bin/grep -nE sobre este archivo ya armado (cuerpo + anexos), antes de agregar esta seccion:
+1. [0-9a-fA-F]{40,64}: 259 lineas. Clasificadas: (i) IDs de paquete y de objeto de la genesis desechable (0x + 64 hex: paquetes v1, upgrade y v3, House, HouseCap, UpgradeCap, Publisher, partidas, monedas y los objetos del sistema 0x...01/0x...02; 90 valores unicos de 64 hex en todo el archivo, ninguno es una cuenta: se comparo contra las cuentas efimeras de las fixtures y contra las cuentas de la genesis: 0 apariciones; el unico rol que alguna vez salio en claro, B, esta enmascarado como <B>); (ii) los dos SHA-256 publicos del 1.83.0 (tgz e51168051bca...d7d8 y binario 29e1beb96434...48fa) citados de ci.yml de 88dd53b; (iii) SHAs de commit publicos (HEAD 60d4a3b..., merge-base b0bbef8e..., 26f2676..., frameworkRev e6f43880...); ninguna clave ni frase.
+2. 0x[0-9a-fA-F]{8,}: 238 lineas: los mismos IDs de paquete/objeto (ver 1). Sin cuentas.
+3. suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home-: 2 lineas, las dos son el TEXTO DEL PROPIO PATRON (la descripcion de los greps §R-6 y el comando de A64 que los enumera); 0 rutas personales (los anexos se sanitizaron con sed hacia archivos nuevos: <scratchpad>, <repo>, <HOME real>, <SMOKE_DIR>, <config del owner>, <user>). Esta seccion de cierre nombra el patron otra vez: es texto del patron.
+4. [0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}: 0 coincidencias.
+Sobre el diff y las fixtures nuevas: ver "§R-6" mas arriba (A64, A65).
+
+grep -c 'command not found' sobre este reporte = 0 (antes de esta seccion).
+/usr/bin/grep -nE 'Cannot run genesis|sui_config|Address already in use': 0 coincidencias de "Cannot run genesis" y de "Address already in use" (salvo el texto de esta seccion que los nombra); la ruta de la config del owner se enmascaro como <config del owner> en el anexo A66. Ninguna ejecucion accidental de sui.
+
+Guarda de ~/.sui DESPUES de escribir el reporte (A67): mtime 2026-10-30 17:52:52.515735237 -0500, 244 bytes, ls -A = solo client.yaml, sha256sum de client.yaml = ef12fd09615f = linea base. Docker 5 / 17 sin cambio. git status --porcelain --untracked-files=all = los 7 archivos esperados (README + 3 scripts + 3 fixtures); sin entradas de la corrida.
+$ bash -c cat 67_guard_after_report.txt
+$ bash -c stat -c '%y %s' <config del owner>/client.yaml; ls -A <config del owner>/; sha256sum <config del owner>/client.yaml | cut -c1-12; docker ps -aq | wc -l; docker images -aq | wc -l; cd <repo> && git status --porcelain --untracked-files=all
+2026-10-30 17:52:52.515735237 -0500 244
+client.yaml
+ef12fd09615f
+5
+17
+ M contracts/README.md
+?? app/scripts/capture-duel-clock.mjs
+?? app/scripts/capture-duel-reads.mjs
+?? app/scripts/capture-duel-tx.mjs
+?? contracts/fixtures/duel-clock.localnet.json
+?? contracts/fixtures/duel-reads.localnet.json
+?? contracts/fixtures/duel-tx.localnet.json
+exit=0
+exit=0
+
+~~~~
+
+
+---
+
+## 18. TASK-5 (revisión del MID)
+
+> MID, TASK-5: PASA (sin 🔴 ni 🟠; 2 🟡 y 6 🔵).
+
+PASA
+
+## Revisión TASK-5 (#73, ensayo de punta a punta en la localnet aislada, SEG-5 y fixtures): PASA (sin 🔴 ni 🟠; 2 🟡 y 6 🔵 que no bloquean)
+
+- **Fecha:** 2026-11-20. Handoff v1.2.8, plan v1.3.2, HEAD 60d4a3b; sin commitear: `contracts/README.md` (+44), `app/scripts/capture-duel-{reads,tx,clock}.mjs` y `contracts/fixtures/duel-{reads,tx,clock}.localnet.json`.
+- **Qué leí:** el reporte del DEV (1394 líneas) en sus secciones de veredictos, el smoke de 13 filas, SEG-5, V-12/V-15, fixtures, desviaciones y cierre, y los anexos que respaldan los números; `attack.sh`, `sweep.sh` y `sbx.sh` (en `<scratchpad>/t5/tools`); los tres scripts de captura (`reads` entero, `tx` y `clock` en cabeceras, guarda, selección y metadatos) con `localnet-guard.mjs`; las tres fixtures (cuentas y contenido del sandbox, con un script de lectura); el `git diff` del README.
+- **Qué ejecuté:** solo lecturas y verificaciones con `grep`/`python3 -I` sobre archivos; contrasté el texto de los `_meta` de las fixtures con el de los scripts; leí la fuente de Sui `@testnet-v1.84.1` (`error.rs`) para el mensaje de `PostRandomCommandRestrictions`. No corrí `sui` ni gates.
+- **Resultado:** el task cumple el handoff. Las 13 filas del smoke tienen digest o estado por paso; la evidencia de SEG-5 cumple S-1, N-3 y S-2; V-12 y V-15 están medidos contra el contrato real (el sandbox es solo para lo que el coinflip no puede mostrar); las fixtures son deterministas, sin claves y con solo 3 cuentas efímeras de génesis; el sandbox no tocó el árbol.
+
+## 0. Controles del orquestador: coinciden
+
+`~/.sui` (244 B, `client.yaml`, `ef12fd09615f`) en las tomas del DEV y en la tuya; 0 procesos `sui`; 19000 libre y 9000 ajeno igual; Docker 5/17 antes y después; `git stash list` vacío; worktree = 7 entradas esperadas; sin `contracts/deployments/localnet.json` ni `contracts/Pub.*.toml`; cero diff en `contracts/sources`, `contracts/tests`, `Move.lock`, `Published.toml`, `testnet.json`, `.github` y `app/src`; control anti-fuga en 0; node 173, `check` = 1 despliegue, lint 0, typecheck 0, app 1246 en 66. Yo comprobé además que **ni el repo principal ni el worktree** tienen archivos sueltos con nombre de dirección (la desviación 3 del DEV: dos anexos creados por error con una variable pisada, ya movidos al scratchpad).
+
+**Auditoría mecánica de la transcripción (P-2): lo juzgo 🟡, no 🟠.** 0 `sed -i`, 0 `tee`, 0 `printf` ajeno a `sui`. Los 2 heredocs son un here-string `cat > /dev/null <<< ""` y un `python3 - <<'EOF'` **vacío** (un tropiezo: no escribieron nada y no llevan `sui`); el `echo placeholder > /dev/null` es inútil e inocuo; el `echo $$ > sui.pid` es la receta canónica de la Receta P (excepción a documentar, N-5 de la revisión de TASK-4); el resto de los `echo` es diagnóstico a stdout. Ningún archivo con texto (código, tests, fixtures, README, reporte) se escribió por esas vías (19 `Write` y 31 `Edit`). Sin `sui` ni texto de archivo por esa vía ⇒ **🟡** (higiene), según la regla de C-13.
+
+## 1. Smoke, filas 1-13 (punto 1): respaldadas
+
+| Fila | Veredicto | Respaldo que verifiqué |
+|---|---|---|
+| 1 Receta P, `smoke_guard` y `smoke_guard_v1`, v1 con 1.83.0, `record`, House con comisión | **PASA** | Los dos SHA-256 (tgz y binario) se verificaron **antes** de ejecutar y la primera ejecución del 1.83.0 fue `smoke_guard_v1`; coinciden con `SUI_TGZ_SHA256`/`SUI_BIN_SHA256` de `88dd53b`. Dos v1 publicados con digest (gas de publicar 47 246 000 MIST, igual que §0). `record` sin `--out` de los dos |
+| 2 Partidas viejas | **PASA** | 6 `game::Game` con los estados leídos de los objetos: abiertas, invitación, cancelada, resuelta y `Pending` |
+| 3 `publish.mjs upgrade` A y B + `check` | **PASA** | Dry run `Dry run ok` (86 667 363 MIST estimados); upgrades A y B con digest y `packageVersion` 2, 24 `typeOrigins`; **House intacta medida antes y después** en las dos variantes (A: 0/0; B: `fees_collected` 1 000 000 antes y después, `fee_rate` 500, `version` 1: **mejor que la comparación parcial de TASK-4**); `check` = "2 despliegue(s)"; `Move.lock`/`Published.toml` sin delta; `typeOrigins` json = cadena por gRPC: **24 = 24, 0 diferencias en los paquetes A y B** (anexos A13 y A45) |
+| 4 Partidas viejas tras el upgrade | **PASA** | `accept_game` por el **ID original** y por el **del upgrade** (pot 20 000 000 = payout 19 000 000 + fee 1 000 000 en los dos) y `cancel_game` por el del upgrade; el tipo del evento conserva el ID original; `fees_collected` 1 M → 3 M |
+| 5 Coinflip nuevo | **PASA** | Crear/cancelar, invitar/rechazar, aceptar con **ambos** ganadores (43 `DuelResolved<Coinflip>`), `fee_rate` **copiado al crear** (House 500 → 300 con la partida ya creada: cobró 500 bps) y `fees_collected` de la **misma** House sumando las dos fuentes |
+| 6 y 6b SEG-5 | **PASA** | §2 |
+| 7 a 10 sandbox | **PASA** | §3 |
+| 11 `typeArguments` | **PASA** | §3 (V-12) |
+| 12 Capturas | **PASA** | §4 |
+| 13 Cierre | **PASA** | `kill` por PID, red caída, `<SMOKE_DIR>` borrado (con el 1.83.0, las génesis y los árboles v1, v1a y v3), `~/.sui` idéntico, `localnet.json` y `contracts/build` borrados, árbol limpio |
+
+**Desviación 1 (dos v1 distintos para las variantes A y B): aceptable.** Un upgrade es de un solo sentido y el script **aborta antes de pagar gas** ante un pubfile ya avanzado (comportamiento que TASK-4 fijó con un test), así que cada variante necesita su propio v1 y su json base. Todo lo demás (partidas, sandbox, fixtures) corre sobre el paquete B.
+
+## 2. SEG-5 (punto 2): la evidencia cumple S-1, N-3 y S-2
+
+*(Para el MAYOR, que lo revisa en paralelo: lo que sigue es solo mi lectura de si cumple el handoff.)*
+
+- **S-1, gasto por resultado: cumple.**
+  - **A17b:** 6 rondas con la **moneda de gas fija**, 3 ganadas por cada rol, con idénticos `computationCost`, `storageCost`, `storageRebate` y `nonRefundableStorageFee`: **≥ 2 y ≥ 2** con el mismo `bet` y `fee_rate`.
+  - **A23, lectura independiente por gRPC** (no la CLI que envió las transacciones): 42 `accept`; **36** con la misma forma (2 comandos, 1 moneda de gas) y **idéntico** cómputo/storage/rebate (14 ganados por el creador y 22 por el aceptante). Las otras 6 (2 monedas de gas, o el PTB de control con un comando más) tienen la misma diferencia explicada, sin separar por resultado.
+  - **H-1 (rebate de +987 901):** el DEV lo explicó con evidencia (`tx-block`: la CLI sumó una segunda moneda de gas, "gas smashing", y eliminó una; la diferencia es el rebate de esa moneda) y la **verificó**, la **reparó en el wrapper** (`--gas-coin` fija) y deja visible la columna de monedas. Lo acepto: no depende del resultado (aparece con cualquiera de los dos ganadores) ni lo controla el contrato.
+- **N-3, barrido del presupuesto mínimo: cumple.** 21 partidas (7 ganadas por el creador y 14 por el aceptante; verifiqué los 21 renglones `SWEEP` del reporte: 5+2 y 5+8+1): **todas** con el mismo umbral, `lastFail` 2 474 891 y `firstSuccess` **2 474 892 MIST** con resolución de 1 MIST en las 10 de paso 1 (y 2 475 000 con paso 500), y el umbral coincide con el **costo neto** del `accept` (1 000 000 + 6 399 200 − 4 924 308 = 2 474 892), que es el mismo para los dos resultados. Los intentos fallidos cobran lo mismo (`InsufficientGas`, sin eventos, la partida sigue `Pending`). **No hay diferencial explotable por presupuesto.** El límite declarado (un fallo por gas insuficiente no revela el resultado porque no se conoce; solo se comparan el primer éxito y el último fallo inmediato de cada partida) es honesto y correcto.
+- **S-2, PTB atacante: cumple.** `attack.sh` arma `[SplitCoins del pago, coinflip::accept(duel, House, pago, Random), house::fees_collected(House)]` y el control `[SplitCoins del pago y de una sobrante, accept, TransferObjects]`.
+  - **Atacante RECHAZADO**, con `--dry-run` y **enviado**, con el mensaje exacto "Commands following a command with Random can only be TransferObjects or MergeCoins": coincide palabra por palabra con `UserInputError::PostRandomCommandRestrictions` en `sui-types/src/error.rs` `@testnet-v1.84.1`; la partida sigue `Pending`.
+  - **Control ACEPTADO** (dry run en success y envío con digest `71fEXFC3…`, `DuelActivated` y `DuelResolved`).
+- **¿Un rechazo en la validación de entrada del nodo, sin `FailedTransaction`, cumple "rechazado con el error pegado"? Sí.** El handoff (paso 5b) pide "rechazado, con el error pegado (con `--dry-run` o enviándolo; sin efectos)": se rechazó en las dos formas, con el error del nodo pegado, sin digest, sin gas y sin efectos. Es **distinto** del rechazo del clique caliente (V-15), que **sí** se secuencia como `FailedTransaction` con gas cobrado: el DEV lo distingue (H-2) y **la redacción de §G debe decir cuál es cuál** (propuesta en el hallazgo N-2). Que el rechazo sea previo a la secuenciación es **mejor** para el defensor: el atacante ni siquiera obtiene una transacción que observar.
+
+## 3. V-12, V-15 y el reloj en el sandbox (punto 3)
+
+- **V-12: PASA y es coherente con TASK-1b (H-d).** Con partidas reales (`cancel<G>` de `duel` sobre `Duel<Coinflip>` y `Duel<Testgame>`): pasa el ID de **definición** (con target en PK3 o en PK2) y el de **almacenamiento de una versión ≥ la definición**; falla con `TypeArgumentError { TypeNotFound }` el ID **anterior** a la definición y el **original**. Es la regla de diseño (`typeArguments` desde `typeOrigins`).
+- **V-15: PASA, contra el `claim_timeout`, `refund_stalled` y `cancel` reales** (los `public collect_part`/`pay_part` son solo del sandbox, necesarios para producir un `Collected` vivo que en producción no existe): las tres combinaciones dan `FailedTransaction` con `CommandArgumentError { InvalidArgumentToPrivateEntryFunction }` en el comando 1, **sin eventos**, con gas cobrado, y el `Duel` queda `Active` con `stake 20 000 000`; el **control** (la misma `entry` privada sobre **otro** duelo entre `collect` y `pay`) tiene éxito: **el clique es por objeto**. Coincide con TASK-1b V-15 y con la redacción de H-h.
+- **Reloj en el sandbox v3 (`testgame` fuera del árbol, id de control 8 = 15 s y gracia de 15 s, ambos con marcador `SANDBOX_`):** partida por turnos hasta `collect` + `pay` (el que se rinde, B, paga la derrota; A recibe 19 000 000 y `fees_collected` sube 1 000 000); `claim_timeout` por un **tercero** paga **al rival** (A: +19 000 000) y el tercero **solo paga gas** (`C: −3 151 225`); `refund_stalled` **100/100 sin comisión** con ambos pendientes y con uno tras la gracia (`fees_collected` sin cambio); y antes de la gracia aborta `ENotStalled`.
+- **Abort codes y nombres vs R.3: coinciden todos.** Los ejecutados: `duel/14` `ENotExpired` (`claim_timeout` antes del plazo), `duel/21` `EDeadlinePassed` (`record_move` después), `duel/24` `ENotPlayer` (`collect` de un tercero), `duel/22` `EBothPending`, `duel/23` `ENotStalled`. Los simulados de las fixtures: `duel/16` `EBadControl`, `duel/20` `ENotYourTurn` y los de producción `duel/0, 1, 2, 3, 4, 5, 6, 9, 10` (`EBetTooLow`, `EBetTooHigh`, `ESelfInvite`, `ENotCreator`, `ENotPending`, `ENotInvited`, `ENoInvitation`, `ESelfPlay`, `EWrongStake`). Todos los números y nombres son los de R.3.
+- **El sandbox no tocó el árbol (R2-1): cumple.** El DoD se tomó **después** de borrar el sandbox y cerrar la localnet y **antes** del reporte: `git status --porcelain --untracked-files=all` = solo los 7 archivos esperados, sin `localnet.json` ni `Pub.*.toml`, `git diff --exit-code` de `contracts/sources` = 0 y el control de líneas agregadas contra el merge-base (sin `-i`) = 0; tú lo repetiste. Las barreras funcionales (`test_create_rejects_invalid_control` con el id 8 y los bordes de la gracia en el literal 604 800 000) siguen en los 309 tests.
+
+## 4. Scripts y fixtures (punto 4)
+
+- **Scripts (leídos):** los tres hacen `assertLocalnetUrl` como **primera instrucción ejecutable**, antes de importar el SDK (import dinámico) o hacer ningún pedido; reutilizan `localnet-guard.mjs` como los `capture-*.mjs` existentes (`assertDeployment` además exige que el chain id del nodo coincida con el del json); **no firman nada, no usan claves, no leen variables de entorno** (solo `Transaction.build({ client })` con `setSender` de una cuenta de la génesis, sin firmar); la selección es **determinista por orden de creación**; los filtros de producción usan el **tag completo** `DuelXxx<Coinflip>` con los IDs de definición de `typeOrigins` (S-2: por (módulo, nombre)); el de reloj usa el literal **prefijo** y descubre el juego del sandbox por los eventos. `reads` además exige que la tabla de `typeOrigins` del json (la de la CLI) **sea igual a la de la cadena por gRPC**.
+- **Determinismo y guarda (A43/A44):** dos capturas dan los mismos archivos salvo `_meta.capturedAt` (2 líneas por archivo); los tres scripts salen con código 2 ante `--url` no loopback (`192.0.2.1:9000` y el fullnode público de testnet) **antes de cualquier pedido** y ante argumentos desconocidos.
+- **Cuentas (verificado con un script de lectura sobre las tres fixtures):** **3 cuentas distintas en total**, todas efímeras de la génesis (campos `creator`, `opponent`, `acceptor`, `winner`, `claimed_by`, `owner`), ninguna repetida fuera de esos campos ni presente en ningún otro archivo trackeado. Todo lo demás son IDs de paquete y objeto de la localnet desechable (ya destruida). **Las fixtures de producción no tienen nada del sandbox** (0 coincidencias de `sandbox`/`testgame`, sin distinguir mayúsculas); `duel-clock` lleva `_meta.sandbox = true` y `_meta.sandboxConstants` (`SANDBOX_CONTROL_8_ID` 8, `SANDBOX_CONTROL_8_TURN_MS` 15000, `SANDBOX_CLAIM_GRACE_MS` 15000).
+- **`duel-tx` lee la House en una versión histórica (desviación 6): correcto y bien documentado.** La House de la fixture de producción tiene que ser la que dejó la **última aceptación de producción** (`fees_collected` 46 000 000); si se leyera la vigente, incluiría las comisiones del sandbox de la misma génesis (+3 000 000) y dejaría de ser "producción". Lo hace con `batchGetObjects` con `version` y está explicado en el comentario del script, en el README y en `_meta.method.house`. Para TASK-7a (🔵 N-4): el campo `version` de ese objeto **no es el vigente**; un test no debe asumir que lo es.
+- **Tests:** el handoff (§5) pide solo determinismo y guarda, que se demostraron (A43/A44); el repo ya tiene el test de `localnet-guard` (`app/src/test/localnet-guard.test.ts`) y **no** tests de los scripts de captura existentes, así que no pido tests nuevos; la cobertura real de las fixtures la darán los parsers de TASK-7a/7b.
+
+## 5. README (punto 5)
+
+Exacto contra los scripts (filas de la tabla y subsección "Fixtures de `duel` (#73, TASK-5)": selección determinista por orden de creación, las cuatro condiciones de `D_OPEN`/`D_INV`/`D_CANCEL`/`D_REJ`/`D_ACC1`, el orden de la recaptura, los roles, el sandbox y su declaración, los estados que busca la captura de reloj y el comando con `--url "$RPC_URL"`). **Sin rutas ni cuentas.** El servicio del 9000 aparece solo como "un servicio de otro proyecto". Para TASK-7a falta (🔵 N-1): **una frase que diga que las tres fixtures llevan direcciones de cuentas efímeras de la génesis** (campos `creator`, `opponent`, `acceptor`, `winner`, `claimed_by`, `owner`; sin claves: como el resto de las fixtures de localnet, ya documentado en otro lugar del README) y **el mapa de claves de primer nivel** de cada fixture (`objects.*`, `events.*`, `transactions`, `rawListEventsPages`, `simulationErrors`...), para que el DEV de 7a no tenga que abrir 5800 líneas de JSON.
+
+## 6. Desviaciones (10) y hallazgos H-1..H-5 (punto 6)
+
+| # | Valoración |
+|---|---|
+| 1 Dos v1 | **Aceptable** (arriba) |
+| 2 Wrappers del DEV (no se commitean) | **Aceptable**: resumen sin direcciones, moneda de gas fija, marcadores de rol; cada medición se pegó con `capture.sh` |
+| 3 Variable `A` pisada (dos archivos con nombre de dirección) | **Aceptable**: los movió al scratchpad y verifiqué que **ningún repo** tiene archivos sueltos; 🟡 junto con P-2: lo previene usar nombres de variable de shell que no choquen con los roles (p. ej. `ANX` para la ruta del anexo) |
+| 4 Auditoría P-2 | **🟡** (arriba) |
+| 5 **Edición posterior a la captura de los textos de `_meta`** en fixtures y scripts | **Aceptable, sin recapturar.** Verifiqué que el texto de `_meta.note` y la cola de cada `_meta.method.*` de `duel-reads` y `duel-tx` **coinciden literalmente** con los literales de los scripts correspondientes; el determinismo se probó antes de la edición y el cambio es solo de texto (JSON válido, ningún dato). Como la localnet ya está cerrada, la **prueba posterior** será la próxima recaptura (la de 7b/TASK-8 ya pide "determinismo: solo `capturedAt`"); basta con que el orquestador no diga que A43 se midió después de esa edición |
+| 6 Lectura histórica de la House | **Correcta** (arriba) |
+| 7 README tocado | **Permitido** (el handoff lo admite "si hace falta") |
+| 8 Pubfiles con `Write` (Receta U) | **Correcto** |
+| 9 Binario 1.83.0 del cache de `suiup` con ambos SHA-256 verificados | **Aceptable** (igual que en TASK-1a y 4) |
+| 10 Barrido: renglones filtrados en A20/A21 | **Aceptable**: están el resumen `SWEEP` de **cada** partida (los 21 los conté) y la escalera completa de una partida (A19) |
+| H-1 rebate | **Aceptado** (§2) |
+| H-2 rechazo previo a la secuenciación vs V-15 | **Aceptado**; la redacción de §G debe distinguirlos |
+| H-3 umbral = costo neto | **Aceptado** (§2) |
+| H-4 V-12 | **Aceptado** (§3) |
+| H-5 `sourceCommit` = HEAD con árbol limpio; upgrade neto 85 679 462 MIST | **Aceptado**; dato útil para el runbook (≈ 0,086 SUI de gas del upgrade de testnet, alimenta R-1 de la revisión de TASK-4) |
+
+## 7. Hallazgos
+
+Ninguno 🔴 ni 🟠.
+
+- 🟡 **P-1 (regla P-2):** los dos heredocs vacíos, el `echo` inútil y la variable de shell pisada (ver §0 y §6). Sin consecuencia; el DEV de TASK-7a usa `capture.sh` y nombres de variable que no choquen con los roles.
+- 🟡 **P-2 (receta de la localnet):** el `echo $$ > sui.pid` de la Receta P hace que la auditoría marque siempre una coincidencia; aclarar la excepción en C-13 o reescribir la receta (ya propuesto como N-5 en la revisión de TASK-4).
+- 🔵 **N-1 (README):** agregar las dos frases de §5 (cuentas efímeras y mapa de claves) para que TASK-7a use las fixtures sin abrirlas.
+- 🔵 **N-2 (redacción de §G):** para el punto 12, decir que el rechazo del PTB atacante es **previo a la secuenciación** ("rechazado por el nodo con `PostRandomCommandRestrictions`: sin digest, sin gas y sin efectos") y que el del clique caliente (V-15) es una **`FailedTransaction`** (gas cobrado, sin efectos, ningún comando ejecutado).
+- 🔵 **N-3 (alcance del barrido):** en la compuerta, citar el límite declarado ("un fallo por gas insuficiente no revela el resultado; se comparan primer éxito y último fallo por partida") tal como lo dice el DEV, sin presentarlo como una medición del costo del fallo por resultado.
+- 🔵 **N-4 (TASK-7a):** el objeto House de `duel-tx` es una versión histórica; el `version` de la fixture no es el vigente.
+- 🔵 **N-5 (§G punto 15):** el control permanente (`strings` del bytecode de producción en 0 y las funciones exportadas de `coinflip.mv`/`duel.mv`) no figura en este reporte (no lo pide TASK-5); hay que **correrlo al armar la compuerta** sobre un `build` de producción.
+- 🔵 **N-6 (URL por defecto):** los scripts usan el 9000 si se omite `--url`; el README ya dice "nunca una captura sin `--url`" y `assertDeployment` frena por chain id distinto, así que no es un riesgo real; se mantiene la convención de los scripts existentes.
+
+## 8. Qué commitear
+
+1. **Scripts y fixtures:** `app/scripts/capture-duel-{reads,tx,clock}.mjs` y `contracts/fixtures/duel-{reads,tx,clock}.localnet.json`. Mensaje: `app: add the capture scripts and the real fixtures of the duel base and the coinflip (Refs #73)`.
+2. **README:** `contracts/README.md` (con N-1 si el orquestador lo aplica antes). Mensaje: `docs: describe the duel fixtures and how to recapture them (Refs #73)`.
+3. **Reportes y STATUS:** el reporte del DEV (`<scratchpad>/REPORTE_MULTIGAME_TASK-5.txt`, con sus anexos) y esta revisión en `documents/REPORTES_MULTIGAME.md`, más la fila de STATUS. Mensaje: `docs: add the TASK-5 DEV report and MID review and record the task in STATUS (Refs #73)`.
+4. Los wrappers (`ptb.sh`, `sweep.sh`, `attack.sh`, `sbx.sh`, `gastable.mjs`, `verify_origins.mjs`) **no se commitean**; quedan en el scratchpad como evidencia. Antes del merge: el `grep` de cuerpos de commit por palabras de cierre (`Refs`, no `Closes`) y la revisión de integración publicada en el PR.
+
+**Snippet para STATUS:** "localnet aislada @ `feature/issue-73-multigame` (TASK-5 de #73), CLI `1.84.0-9dc25070cf2e` (red y upgrade) + `1.83.0-16d2dc1e05ed` (v1; SHA-256 del tgz y del binario verificados contra `88dd53b` antes de ejecutar), Node `v26.13.0`, 2026-11-20, puerto 19000 | baseline: 0 warnings / 0 lints / 309 tests PASS; `node --test` 173; `check` 1 despliegue; app 1246 en 66 | v1 (`26f2676`) + `record` + `publish.mjs upgrade` A y B + `check` (2 despliegues): `packageVersion` 2, 24 `typeOrigins` = cadena por gRPC, House intacta antes y después, upgrade neto 85 679 462 MIST | partidas viejas aceptadas (por el ID original y por el del upgrade) y canceladas tras el upgrade; coinflip nuevo con ambos ganadores y `fees_collected` de la misma House (3 M → 46 M); `fee_rate` copiado al crear | **SEG-5: gasto IGUAL por resultado** (42 `accept` por gRPC, 36 de la misma forma: 14 creador y 22 aceptante; 6 + 6 con moneda fija), **umbral de presupuesto IGUAL: 2 474 892 MIST en 21 partidas** (resolución 1 MIST), **PTB atacante `[accept, house::fees_collected]` RECHAZADO por `PostRandomCommandRestrictions`** y control con `TransferObjects` ACEPTADO | V-12 coherente con TASK-1b; V-15 PASA contra `claim_timeout`, `refund_stalled` y `cancel` reales (el clique es por objeto) | v3 sandbox (`testgame`, fuera del árbol): partida por turnos, `claim_timeout` por un tercero paga al rival, `refund_stalled` 100/100 sin comisión, abortes `duel`/14, 21, 22, 23, 24 = R.3 | 3 fixtures deterministas (`duel-reads`, `duel-tx`, `duel-clock` con `_meta.sandbox`), 3 cuentas efímeras de génesis, sin claves | MID: PASA."
+
+## 9. Qué queda de la compuerta §G tras TASK-5
+
+**Entra a §G desde TASK-5:**
+- **Punto 5** (`SMOKE_MULTIGAME.md`, parte localnet en PASA): la tabla de 13 filas con digests; el MID la pasa a `documents/SMOKE_MULTIGAME.md` (parte localnet), con la redacción N-2/N-3.
+- **Punto 6** (`upgrades` y `typeOrigins` reales y `check` en verde): ya con el ensayo completo (24 = 24 por gRPC, `check` = 2 despliegues en la localnet).
+- **Punto 11** (el sandbox no tocó el árbol, R2-1): `git status`, `test ! -e`, `git diff --exit-code contracts/sources` y el control de líneas agregadas, todos con su salida pegada y repetidos por el orquestador.
+- **Punto 12** (SEG-5): `gasUsed` por resultado (A17b y A23), el barrido del presupuesto (A18-A21), el par de PTB (A22), más el grep de R.7 de TASK-3.
+- **V-12 y V-15** (puntos 4 y 13): medidos contra el contrato real.
+
+**Falta:**
+- **TASK-7a, 7b y 8** (app y docs; gates de app y fixtures, punto 8; en TASK-8, README con los 26 códigos y 7 eventos, `max_bet < 2^63`, regla del grep de CI).
+- **El punto 15 (control permanente)** al armar la compuerta, sobre un `build` de producción.
+- **DECISIONES.md** (punto 9) y la parte testnet de `SMOKE_MULTIGAME.md` (punto 14, la redacta el MID).
+- **CI en verde** sobre el head (punto 1).
+- **La revisión de SEG-5 del MAYOR** (en curso en paralelo) y la **autorización explícita del upgrade de testnet** (TASK-6, del owner), pendiente y separada.
+
+## 10. Siguiente paso
+Autorizo **TASK-7a** (capa `sui/` de la app: config, registro, parsers y errores), que consume las fixtures de este task. Le doy el mapa de claves de §5 (N-1), la advertencia de la House histórica (N-4) y que `_meta.sandboxConstants` es la única fuente del `turn_ms` de ensayo (15 000 ms) que tiene que tratar como "fuera del espejo".
+
+## §R-6 sobre esta revisión
+Greps con `/usr/bin/grep` sobre este archivo: hex de 40-64 caracteres, `0x` + 8 hex, claves, rutas personales (incluido el prefijo de las carpetas de sesión y el segmento "home" de su slug), y abreviaturas con puntos suspensivos: el resultado va en el mensaje de entrega. No incluye direcciones de cuenta ni hashes completos; los digests se citan por su prefijo.
+
+
+
+---
+
+## 19. TASK-5 (revisión de SEG-5 y del ensayo del MAYOR)
+
+> MAYOR, evidencia de TASK-5: APPROVE (sin 🔴, 🟠 ni 🟡; 3 🔵).
+
+APPROVE
+
+## Revisión de seguridad del MAYOR: evidencia de TASK-5 de #73 (ensayo de upgrade en la localnet aislada)
+
+- **Fecha:** 2026-11-20.
+- **Ref:** worktree de #73, branch `feature/issue-73-multigame`, HEAD `60d4a3b`. Sin commitear: `app/scripts/capture-duel-{reads,tx,clock}.mjs`, `contracts/fixtures/duel-{reads,tx,clock}.localnet.json` y `contracts/README.md` (+44).
+- **Leído:**
+  - del reporte del DEV: el resumen, la tabla del smoke, gasto por resultado, barrido, PTB atacante, V-12/V-15, sandbox, fixtures, desviaciones, H-1..H-5 y §R-6;
+  - el wrapper `<scratchpad>/t5/tools/attack.sh`;
+  - de los tres scripts de captura: imports, guarda, `assertDeployment`, escritura y omisión de `sender`;
+  - las filas nuevas del README.
+- **Qué ejecuté:** solo lecturas y greps. No corrí `sui`. Los resultados de gates, el control anti-fuga y el estado de `~/.sui` son los que verificó el orquestador.
+- **Veredicto:** la evidencia **cierra** S-1, S-2 y N-3 de mis revisiones anteriores y sostiene V-15/H-14 contra el código real. Sin 🔴, 🟠 ni 🟡: el DEV no tiene nada que cambiar antes del commit. Dejo 3 🔵 y los agregados a la compuerta §G.
+
+---
+
+## 1. SEG-5 / S-1, gasto por resultado: **alcanza; "igual entre resultados" queda probado**
+
+- **A17b** (moneda de gas fija, 3 + 3): cómputo 1 000 000, storage 6 399 200 y rebate 4 924 308 **idénticos** en los dos resultados.
+- **A23** (lectura independiente por gRPC, no la CLI que envió): 36 `accept` de la misma forma (14 ganados por el creador y 22 por el aceptante) con el mismo `gasUsed`. Las 6 que difieren se explican **por la forma de la transacción**, no por el resultado:
+  - 5 tienen una segunda moneda de gas que sumó la CLI (+987 901 de rebate), presentes en **los dos** resultados (3 y 2), y `tx-block` lo confirma (payment de 2 objetos, deleted 1);
+  - 1 es el control de S-2, con un `SplitCoins` y un `TransferObjects` más.
+- Es lo que predice el código: `accept` es un solo bloque, y `pay` crea el mismo objeto del mismo tamaño para cualquier ganador.
+- **H-1 (el rebate depende de las monedas de pago) no abre ningún canal.** Lo que importa es **qué se puede observar antes de que la transacción sea final**:
+  - El gasto, los eventos, el estado del `Duel` y la moneda pagada se vuelven públicos **a la vez**, con los efectos de la transacción ejecutada. Ningún tercero conoce el gasto antes del resultado, y el resultado ya es público en la misma transacción (`DuelResolved`, `Resolved { winner }`).
+  - El único actor que podría sacar provecho de un diferencial **antes** de la finalidad es el **firmante**, haciendo fallar su propia transacción cuando pierde. Eso exige que el gasto o el éxito **dependan del resultado** dentro de la misma ejecución. El barrido (§2) y la regla posterior a `Random` (§3) cierran las dos variantes.
+  - El número de monedas de pago lo elige el firmante antes de firmar y no depende del sorteo.
+  - **Lección metodológica (ya escrita por el DEV):** toda medición por resultado fija la moneda de gas.
+
+## 2. N-3, barrido del presupuesto mínimo: **diseño correcto, y queda CERRADO, no "no concluyente"**
+
+- El diseño mide lo que hay que medir. El ataque por presupuesto es "fijar un presupuesto con el que un resultado termina y el otro se queda sin gas". Si existiera, el **umbral de éxito** dependería del ganador.
+  - Con resolución de **1 MIST**, en **21 partidas** (7 ganadas por el creador y 14 por el aceptante), el umbral es **idéntico**: 2 474 892 MIST = cómputo + storage − rebate.
+  - Con paso de 500 también es idéntico (2 475 000).
+  - Los intentos fallidos cobran lo mismo, revierten todo (incluido el sorteo), no emiten eventos y dejan la partida `Pending`.
+- **Lo que el DEV marca "no concluyente"** (no poder atribuir un fallo a un resultado) **no es un hueco**: es justamente la propiedad buscada. Un fallo por gas no revela el resultado, y el sorteo de ese intento se descarta con la reversión. Reintentar da **otro** sorteo, sin información del anterior. Lo doy por **cerrado**.
+- **No hace falta repetirlo con otro `bet`, `fee_rate`, una invitación o varias monedas.** El diferencial solo podría venir del **tamaño** de lo que se escribe, que no depende de los valores:
+  - los `u64` son de ancho fijo y `add_fees` se llama siempre, también con comisión 0;
+  - una invitación cambia el tamaño del `Duel` (`Option<address>`) **igual** para los dos resultados;
+  - más monedas de pago desplazan el umbral **igual** para los dos resultados (H-1).
+  - La medición confirma en un punto lo que la construcción garantiza en todos.
+
+## 3. S-2, PTB atacante: **correcto y justo; no queda otro canal**
+
+- **`attack.sh` arma el PTB pedido:**
+  - atacante: `[SplitCoins(gas,[bet]), coinflip::accept(duel, House, c.0, @0x8), house::fees_collected(House)]`;
+  - control: `[SplitCoins(gas,[bet, bet/10]), accept(…), TransferObjects([cs.1], B)]`.
+  - **La comparación es justa:** el mismo firmante (B), la misma moneda de gas (la de mayor saldo, fijada con `--gas-coin`), el mismo presupuesto (200 000 000) y la misma House. La única diferencia relevante es el comando que sigue a `accept`.
+  - Resultado: el atacante se **rechaza en la validación de entrada del nodo** ("Commands following a command with Random can only be TransferObjects or MergeCoins"), en el dry run y en el envío, sin digest, sin gas y con la partida `Pending`. El control se **acepta**.
+- **No hay otra forma de observar y abortar dentro de la misma transacción:**
+  - **Después de `accept`** solo se admiten `TransferObjects` y `MergeCoins`. Ninguno de los dos puede **ramificar** ni abortar según un valor: no leen saldos ni estados. La moneda del pago no es un `Result` del PTB (`pay` la transfiere a una dirección), así que no hay nada que pasarles. `accept` no devuelve nada.
+  - **Envolver `accept` en una función propia del atacante es imposible.** Una función `entry` **sin `public`** es privada a su módulo: ningún otro módulo, de este paquete o de otro, puede llamarla. `entry` solo agrega que se pueda invocar como comando de un PTB.
+  - Un contrato del atacante tampoco puede tomar un `&Random` y llamar a `accept` por la misma razón. Además, en producción no existe ninguna `public` que lea `state` o `winner` de un `Duel` (los 4 controles de TASK-3).
+- **H-2: sí, se nombran por separado en §G.** Son dos reglas **del protocolo** distintas de las que depende la seguridad del diseño:
+  - **(a) Restricción posterior a `Random`:** se rechaza en la validación de entrada, sin digest ni gas.
+  - **(b) Clique caliente (H-14):** el PTB se secuencia como `FailedTransaction`, con el gas cobrado y sin efectos.
+  - Las dos se midieron en la PV 142. Como son reglas del protocolo, no del contrato, van a "Modelo de confianza" del README como **dependencias** y se re-verifican en cada task de toolchain que suba la PV (ver §G).
+
+## 4. V-15 / H-14 contra el código real: **cumple el DoD**
+
+- Las tres `entry` privadas reales de `duel`, intercaladas entre `collect_part` y `pay_part` **con el mismo `D1`**, dan `InvalidArgumentToPrivateEntryFunction` en el comando 1. Son `claim_timeout`, `refund_stalled` y `cancel`. `D1` queda `Active` con stake 20 000 000 y sin eventos.
+- `collect_part`/`pay_part` son `public` **solo en el sandbox**, para exponer el potato.
+- **El clique es por objeto, y es lo que quería.** El control con **otro** duelo (`D2`) entre el `collect` y el `pay` de `D1` funciona, y no hay riesgo:
+  - lo que el atacante hace con un `D2` que controla solo mueve los fondos de `D2`, que tienen sus propios invariantes (INV-D1..D7 por objeto);
+  - los fondos de `D1` no se tocan hasta `pay`, y `pay` exige que `Collected.duel_id` = `D1` (`EWrongDuel`).
+- **En producción, además, `Collected` nunca llega a un PTB:** `collect`/`activate_atomic`/`pay` son `public(package)` y se encadenan dentro de una `entry` del juego. H-14 es la segunda línea, y está medida.
+
+## 5. Upgrade y migración, pensando en testnet
+
+El ensayo cubre lo esencial, sobre un v1 = `26f2676` compilado con el **binario 1.83.0 verificado**, que es exactamente la situación de testnet:
+- las variantes A y B del script;
+- `packageVersion` 2;
+- 24 `typeOrigins` = la cadena (0 diferencias, leídos por gRPC);
+- la House intacta;
+- partidas viejas aceptadas por el ID original y por el del upgrade, con el tipo del evento en el ID original;
+- `fees_collected` sumando las dos fuentes;
+- el gas real (85 679 462 MIST netos), coherente con el pedido de saldo de M-2 de TASK-4.
+
+**Lo que el ensayo no puede cubrir, y cómo queda:**
+- **`Random` (`0x8`) y `Clock` (`0x6`) en testnet:** son objetos del sistema que ya existen allí (el coinflip viejo usa `Random` en testnet desde #8). Sin riesgo nuevo.
+- **El reloj real con plazos de días:** no se puede ensayar en vivo. Lo cubren:
+  - los tests con `set_clock_timestamp` (los bordes de `deadline_ms` y de la gracia en 604 800 000 ms);
+  - el sandbox con 15 s, que ejerció `TimedOut`, `Expired` (los dos casos), `record_move` y `collect + pay` contra la base real.
+  - El coinflip de testnet no persiste `Active`, así que en testnet no hay ningún plazo vivo hasta #18.
+- **El `UpgradeCap` `compatible`:** lo verifica U2 del runbook (`policy` 0) y quedó en `compatible` en el ensayo.
+- **El sandbox no puede llegar a producción.** Tres barreras independientes:
+  1. el anti-fuga (`SANDBOX|testgame` = 0 en `contracts/sources` y `app/src`, y en las fixtures de producción);
+  2. la barrera funcional: `test_create_rejects_invalid_control` falla si el id 8 existiera, y los bordes de la gracia en 604 800 000 ms fallan si se colara la de 15 s;
+  3. la v3 vive fuera del árbol y no pasa por `publish.mjs`.
+  - Agrego una cuarta para §G: que `duel.move` no haya cambiado desde su commit revisado.
+
+## 6. Scripts y fixtures (repo público)
+
+- **Scripts:** los tres llaman a `assertLocalnetUrl` como **primera instrucción** (`:21`, `:21`, `:26`) e importan el SDK recién después, con import dinámico. Leen el chain id con `getServiceInfo` y llaman a `assertDeployment` **antes** de cualquier otra lectura (`:69-71`, `:71-73`, `:83-85`), y escriben la fixture una sola vez, al final.
+  - Con `--url` hostil salen con código 2 y "No se hizo ningún pedido" (A44).
+  - Omiten las claves `sender` en todo lo que copian, y el rol C se toma del `sender` **solo en memoria** (nunca se escribe).
+  - Las simulaciones no firman.
+  - Sin `--url`, el default sigue siendo el 9000: la regla de "siempre `--url "$RPC_URL"`" sigue vigente (`agents.md` §3).
+- **Fixtures: de acuerdo con mantener la excepción C-6**, sin reemplazar las cuentas por roles:
+  - las cuentas son efímeras de una génesis de localnet **desechable** (la clave se destruyó con `<SMOKE_DIR>`) y no se pueden vincular a ninguna persona;
+  - las fixtures sirven para probar parsers con la **forma real** (direcciones de 64 hex en `creator`, `winner`…), y un rol rompería esa forma;
+  - es la convención documentada desde #7 (`contracts/README.md`, fixtures).
+  - La regla del owner apunta a las cuentas **reales**: la suya, las de usuarios o las de un despliegue. El control que importa sigue en pie: esas cuentas **no aparecen fuera de las fixtures** (verificado por el orquestador en reporte, README y scripts).
+- **El reporte:** las 3 coincidencias del grep 3 ampliado son **citas del patrón**, no rutas (las revisé). La desviación 2 declara que una línea de comando del primer tramo (A12) llevó la dirección efímera de B en claro, y que la copia anexada está enmascarada. Es correcto que se haya declarado; que el orquestador confirme al transcribir que la copia que entra a `REPORTES_MULTIGAME.md` es la enmascarada.
+
+---
+
+## Hallazgos
+
+| # | Sev. | Dónde | Observación | Qué pido (quién) |
+|---|---|---|---|---|
+| S-1 | 🔵 SUG | `contracts/fixtures/duel-clock.localnet.json` (sandbox, commiteada) | Es la única fixture con un juego (`testgame`) y constantes (id 8, 15 s) que **no existen en producción**. Si TASK-7 la usa para tests de la app, un test podría derivar de ella un control o una gracia que la app no debe conocer. | En TASK-7, todo test que consuma `duel-clock` lee `_meta.sandbox === true` y lo afirma, **no** toma de ella ninguna constante de producción (la tabla de controles y la gracia salen del registro de la app), y el registro de juegos de producción **no** incluye `Testgame`. Una línea en el handoff de TASK-7 (MID). |
+| S-2 | 🔵 SUG | README, "Modelo de confianza" | Las reglas (a) y (b) de §3 son **dependencias del protocolo** de las que depende SEG-5/INV-D1, medidas en la PV 142. | Escribirlas como tales, con la PV en la que se midieron y la regla "se re-verifican en cada task de toolchain que suba la PV". Lo hace el DEV de TASK-8 (docs). |
+| S-3 | 🔵 SUG | Smoke de testnet (TASK-9) | La regla (a) se midió en la localnet 1.84.0. En testnet, el owner puede confirmarla **sin mover fondos ni cambiar estado** con el dry run del PTB atacante (el nodo lo rechaza en la validación de entrada). | Opcional y **solo el owner**, nunca un agente: agregar ese dry run al checklist de TASK-9 si el owner quiere la confirmación en la red real. |
+
+**Nada que el DEV tenga que cambiar antes del commit.**
+
+## Agregados a la compuerta §G (evidencia de TASK-5)
+
+1. **Tabla de gasto por resultado:** A17b (moneda fija, 3 + 3, idéntico) y A23 (36 de la misma forma idénticas; las 6 restantes explicadas por la forma, con el `tx-block` de las monedas de pago).
+2. **Barrido N-3:** umbral 2 474 892 MIST idéntico en 21 partidas (7 y 14), con resolución de 1 MIST, más el cobro de los intentos fallidos (idéntico, sin eventos, partida `Pending`).
+3. **Las dos reglas del protocolo nombradas por separado (H-2):** (a) restricción posterior a `Random`: rechazo en la validación de entrada, sin digest ni gas (`attack.sh`, atacante y control); (b) clique caliente: `FailedTransaction` con gas cobrado, contra las tres `entry` reales. Las dos con la PV 142 en que se midieron.
+4. **Upgrade:** las variantes A y B, `typeOrigins` = cadena (0 diferencias), House intacta, las partidas viejas por los dos IDs, `fees_collected` con las dos fuentes y el gas real del upgrade.
+5. **Anti-fuga del sandbox en el head de §G:** `SANDBOX|testgame` = 0 en `contracts/sources`, `app/src` y las fixtures de producción; `test_create_rejects_invalid_control` y los bordes de 604 800 000 ms en verde; y **`git diff 6ffecf9..<head de §G> -- contracts/sources/duel.move` vacío** (o solo cambios revisados). Así, la `duel.move` que se publica es la revisada en TASK-2/2b, no una copia con constantes de ensayo.
+6. **Determinismo de las 3 capturas** (solo cambia `capturedAt`) y la guarda con `--url` hostil (código 2).
+
+---
+
+### §R-6 sobre esta revisión (`/usr/bin/grep -nE`, grep 3 con `claude-[0-9]+|-home-` agregado)
+
+- `[0-9a-fA-F]{40,64}`: 0.
+- `0x[0-9a-fA-F]{8,}`: 0. Solo aparecen `0x6` y `0x8`, que no coinciden.
+- `suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home-`: 2. Esta línea y el título de esta sección, que citan el patrón. Ninguna es una ruta.
+- `[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}`: 0.
+- Sin direcciones de cuenta, sin rutas personales (`<scratchpad>`), sin nombres de otros proyectos del host y sin palabras de cierre con número.
+
+
+
+---
+
+## 20. TASK-5 (verificación del orquestador)
+
+> Controles independientes antes y después de las revisiones, y N-1 del MID aplicado.
+
+## Verificación independiente del orquestador (TASK-5)
+
+Hecha sobre el árbol sin commitear (HEAD `60d4a3b`) antes de pasar el reporte al MID y al MAYOR, y repetida al commitear.
+
+| Control | Resultado |
+|---|---|
+| `git status --porcelain --untracked-files=all` | 7 entradas: `contracts/README.md` (modificado), 3 scripts `app/scripts/capture-duel-*.mjs` y 3 fixtures `contracts/fixtures/duel-*.localnet.json` |
+| `git diff --exit-code` sobre `contracts/sources`, `contracts/tests`, `Move.lock`, `Published.toml`, `deployments/testnet.json`, `.github`, `app/src` | 0 (ningún cambio de contrato) |
+| `contracts/deployments/localnet.json` y `contracts/Pub.*.toml` | ausentes |
+| Control anti-fuga del DoD (`SANDBOX\|testgame`, sin `-i`) sobre lo agregado desde el merge-base y los archivos nuevos de `contracts/sources` y `app/src` | 0 coincidencias |
+| `sandbox`/`testgame` (con y sin `-i`) en `duel-reads` y `duel-tx` | 0 |
+| `~/.sui` | 244 bytes, mtime 2026-10-30 17:52:52, solo `client.yaml`, `ef12fd09615f` |
+| Procesos `sui`; puerto 19000; puerto 9000 de otro proyecto | 0; libre; igual que al empezar |
+| Docker | 5 contenedores / 17 imágenes |
+| `node --test scripts/*.test.mjs` y `node scripts/publish.mjs check` | 173 PASS; "1 despliegue(s) válidos y coherentes con Published.toml" |
+| `npm run lint -w app`, `typecheck`, `npm test -w app` | 0 problemas, 0 errores, 1246 tests en 66 archivos |
+| §R-6 (4 greps, grep 3 con `claude-[0-9]+\|-home-`) sobre los scripts y el diff del README | 0 coincidencias en los cuatro |
+| §R-6 sobre las fixtures | solo IDs de paquete y objeto (0x + 64 hex, 62 únicos en las tres) y **3 cuentas efímeras de la génesis desechable**; esas 3 cuentas no aparecen en el reporte del DEV, el README, los scripts ni en ningún otro archivo trackeado (`git grep`); `sender` de cada caso = rol (`A`, `B`, `C`, `ADMIN`); 0 coincidencias de los grep 3 y 4 |
+| Reporte del DEV (1394 líneas), leído entero | las 3 coincidencias del grep 3 son el texto del propio patrón; la dirección efímera de B que una línea de comando del anexo A12 llevó en claro está enmascarada (`<B>`) en la copia anexada; ninguna cuenta de las fixtures aparece en él |
+| Auditoría mecánica de la transcripción del DEV (`audit_dev.sh`, P-2) | 295 líneas Bash; 0 `sed -i`, 0 `tee`, 0 `printf` ajeno a `sui`; 2 heredocs (un here-string a `/dev/null` y un `python3 - <<'EOF'` vacío), ningún texto de archivo por esas vías; `echo` de diagnóstico, un `echo placeholder > /dev/null` inútil y el `echo $$ > sui.pid` de la Receta P; 19 `Write` y 31 `Edit` |
+| `attack.sh` (leído) | el atacante es `[SplitCoins, coinflip::accept, house::fees_collected]` y el control `[SplitCoins, accept, TransferObjects]`, mismo firmante, moneda de gas y presupuesto |
+
+**Aplicado antes del commit (N-1 del MID):** `contracts/README.md` suma dos viñetas en "Fixtures de `duel`": las cuentas efímeras de las fixtures (campos, sin claves, `sender` = rol) y el mapa de claves de primer nivel de cada fixture, con la advertencia de la House histórica de `duel-tx` (N-4) y de que `_meta.sandboxConstants` es la única fuente del `turn_ms` de ensayo.
+
+**Nota sobre la desviación 5 del DEV:** los dos textos de `_meta` de `duel-reads` y `duel-tx` se editaron con la herramienta de edición después de la captura (el determinismo de A43 se probó antes de esa edición). El MID comprobó que el texto de las fixtures coincide con los literales de los scripts; la próxima recaptura (TASK-7b/8) lo confirma. No se afirma que A43 se midió después de esa edición.
+
+**Pendientes que no entran en este commit:** N-2/N-3 (redacción de §G: el rechazo del PTB atacante es previo a la secuenciación y el clique caliente es una transacción fallida con gas cobrado; citar el límite del barrido tal como lo declara el DEV), N-5 (control permanente de §G al armar la compuerta), S-1/S-2/S-3 del MAYOR (TASK-7: tests que consuman `duel-clock` afirman `_meta.sandbox`; README "Modelo de confianza" con las dos reglas del protocolo; dry run opcional del owner en TASK-9) y los 🟡 de proceso (nombres de variable que no choquen con los roles; excepción `echo $$ > sui.pid` en C-13).
+
