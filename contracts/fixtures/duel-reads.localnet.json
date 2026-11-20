@@ -1,0 +1,1392 @@
+{
+  "_meta": {
+    "suiCliVersion": "1.84.0-9dc25070cf2e",
+    "sdkVersion": "2.37.0",
+    "capturedAt": "2026-11-20T14:59:07.440Z",
+    "network": "localnet",
+    "method": {
+      "objects": "SuiGrpcClient.getObjects({ objectIds, include: { content: true, json: true, previousTransaction: true } }) de los Duel<Coinflip>; content en base64 (BCS de los campos del struct)",
+      "events": "SuiGrpcClient.listEvents({ filter: { eventType: '<definingId>::duel::<Evento><<definingId>::coinflip::Coinflip>' } }) ascendente (tag completo, IDs de definición de typeOrigins; nunca el prefijo, para no mezclar otros juegos); EventEntry con bcs en base64 y sin sender",
+      "transactions": "SuiGrpcClient.getTransaction({ digest }) → { digest, timestampMs, checkpoint }",
+      "typeOrigins": "client.ledgerService.getObject({ objectId: packageId, readMask: { paths: ['package'] } }).response.object.package.typeOrigins → { module, name, definingId } con IDs a 64 hex, ordenado por (module, name); exigido igual a typeOrigins de deployments/localnet.json (que produjo la CLI)",
+      "rawListEventsPages": "client.ledgerService.listEvents crudo, startCheckpoint = checkpoint de la publicación del v1, readMask package_id, module, event_type, contents, json, checkpoint, transaction_digest, event_index (sin sender); duelCreatedOnly = un literal DuelCreated<Coinflip> (descendente, limit 3); union = dos literales en un solo pedido (GameCreated con el ID original y DuelCreated<Coinflip>; ascendente, limit 10: trae las dos fuentes); frames con bigint → string y bytes → base64",
+      "selection": "cada variante es el primer duelo (por orden de creación) que la cumple, leída del objeto; resolvedCreatorWins / resolvedAcceptorWins = primer DuelResolved con winner = creator / acceptor"
+    },
+    "note": "Captura de una localnet aislada y desechable (agents.md §3), después del upgrade del script. Las direcciones e IDs son de cuentas efímeras de la génesis; sin claves ni frases. Solo producción."
+  },
+  "ids": {
+    "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+    "originalPackageId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4",
+    "packageVersion": 2,
+    "upgrades": [
+      {
+        "version": 2,
+        "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+        "txDigest": "14oaKaode2WzE6UnV3X8CEJbQ3vW5PPjpUmuDs8JFnhG"
+      }
+    ],
+    "duelType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+    "coinflipTag": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip"
+  },
+  "typeOrigins": [
+    {
+      "module": "coinflip",
+      "name": "Coinflip",
+      "definingId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b"
+    },
+    {
+      "module": "duel",
+      "name": "Collected",
+      "definingId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b"
+    },
+    {
+      "module": "duel",
+      "name": "Duel",
+      "definingId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b"
+    },
+    {
+      "module": "duel",
+      "name": "DuelActivated",
+      "definingId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b"
+    },
+    {
+      "module": "duel",
+      "name": "DuelCancelled",
+      "definingId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b"
+    },
+    {
+      "module": "duel",
+      "name": "DuelCreated",
+      "definingId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b"
+    },
+    {
+      "module": "duel",
+      "name": "DuelExpired",
+      "definingId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b"
+    },
+    {
+      "module": "duel",
+      "name": "DuelResolved",
+      "definingId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b"
+    },
+    {
+      "module": "duel",
+      "name": "DuelState",
+      "definingId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b"
+    },
+    {
+      "module": "duel",
+      "name": "DuelTimedOut",
+      "definingId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b"
+    },
+    {
+      "module": "duel",
+      "name": "DuelTurn",
+      "definingId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b"
+    },
+    {
+      "module": "game",
+      "name": "Game",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "game",
+      "name": "GameCancelled",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "game",
+      "name": "GameCreated",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "game",
+      "name": "GameResolved",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "game",
+      "name": "GameState",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "house",
+      "name": "BetLimitsUpdated",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "house",
+      "name": "FeeRateUpdated",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "house",
+      "name": "FeesWithdrawn",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "house",
+      "name": "House",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "house",
+      "name": "HOUSE",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "house",
+      "name": "HouseCap",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "house",
+      "name": "HouseCapTransferred",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    },
+    {
+      "module": "house",
+      "name": "HouseMigrated",
+      "definingId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4"
+    }
+  ],
+  "objects": {
+    "pendingOpen": {
+      "objectId": "0xdbb7bf907a9c7f935da3a6d3bafd53bc53c50874134d94194bcea96dd6741c71",
+      "version": "1339",
+      "digest": "9LMpGwLsrQBUCeqhwqZJF3VAsc8nGvd96TZve31gbd4f",
+      "owner": {
+        "$kind": "Shared",
+        "Shared": {
+          "initialSharedVersion": "1338"
+        }
+      },
+      "type": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "previousTransaction": "AqES5AzVYbFtD13Qi7MvuUUiFxRCsD2xL3uGSYfsSbsJ",
+      "json": {
+        "bet": "10000000",
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "fee_rate": 500,
+        "house_id": "0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718",
+        "id": "0xdbb7bf907a9c7f935da3a6d3bafd53bc53c50874134d94194bcea96dd6741c71",
+        "opponent": null,
+        "stake": "10000000",
+        "state": {
+          "@variant": "Pending"
+        },
+        "turn_ms": "0",
+        "version": "1"
+      },
+      "content": "27e/kHqcf5Ndo6bTuv1TvFPFCHQTTZQZS86pbdZ0HHEBAAAAAAAAAE0xqOwBlrPRSfB77NK76vqlusOClprIHzPXKfQNDscYmWowvH/ViYqUV+BnxAGhRPvBQWKR1UILEegpHpj18NgAgJaYAAAAAACAlpgAAAAAAPQBAAAAAAAAAAAA"
+    },
+    "pendingInvite": {
+      "objectId": "0x4f78a5d2cdb6545aaff9fa445c426d89d01381ab9449f1da9b8bd5e0f16f717c",
+      "version": "1339",
+      "digest": "6yaVeAjRjeJNev626EWwnxyfVrukXFLLe3J7yyEv25We",
+      "owner": {
+        "$kind": "Shared",
+        "Shared": {
+          "initialSharedVersion": "1339"
+        }
+      },
+      "type": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "previousTransaction": "8cQ3g3ZewAV3nUKVgxMshFYNNfDkNkbJFwUkT9pC6cAU",
+      "json": {
+        "bet": "10000000",
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "fee_rate": 500,
+        "house_id": "0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718",
+        "id": "0x4f78a5d2cdb6545aaff9fa445c426d89d01381ab9449f1da9b8bd5e0f16f717c",
+        "opponent": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3",
+        "stake": "10000000",
+        "state": {
+          "@variant": "Pending"
+        },
+        "turn_ms": "0",
+        "version": "1"
+      },
+      "content": "T3il0s22VFqv+fpEXEJtidATgauUSfHam4vV4PFvcXwBAAAAAAAAAE0xqOwBlrPRSfB77NK76vqlusOClprIHzPXKfQNDscYmWowvH/ViYqUV+BnxAGhRPvBQWKR1UILEegpHpj18NgBvAbV2Myq1i22nmbu8WguqOV1SF+SZ/Ck8uy3NoqlSsOAlpgAAAAAAICWmAAAAAAA9AEAAAAAAAAAAAA="
+    },
+    "cancelledByCreator": {
+      "objectId": "0xcfb401554e20ec18f8c7673e7276e38bfc048b7ec163c7fdfb5cfbbafdbda7fb",
+      "version": "457",
+      "digest": "DwMHCnDh4KCSjHmqdRgSTjLG4HHiJmh8kNKTuma8rN5y",
+      "owner": {
+        "$kind": "Shared",
+        "Shared": {
+          "initialSharedVersion": "456"
+        }
+      },
+      "type": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "previousTransaction": "r2Hx75ZQryi8iquZeAwzh3aVWSqhvokMAvdiVgcjfkM",
+      "json": {
+        "bet": "10000000",
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "fee_rate": 500,
+        "house_id": "0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718",
+        "id": "0xcfb401554e20ec18f8c7673e7276e38bfc048b7ec163c7fdfb5cfbbafdbda7fb",
+        "opponent": null,
+        "stake": "0",
+        "state": {
+          "@variant": "Cancelled"
+        },
+        "turn_ms": "0",
+        "version": "1"
+      },
+      "content": "z7QBVU4g7Bj4x2c+cnbji/wEi37BY8f9+1z7uv29p/sBAAAAAAAAAE0xqOwBlrPRSfB77NK76vqlusOClprIHzPXKfQNDscYmWowvH/ViYqUV+BnxAGhRPvBQWKR1UILEegpHpj18NgAgJaYAAAAAAAAAAAAAAAAAPQBAAAAAAAAAAAB"
+    },
+    "cancelledByInvitee": {
+      "objectId": "0x4beb23380ca5667c052ec21ea5f65438850f2ead4ac3fbd4a2971ab787422cac",
+      "version": "459",
+      "digest": "HCbo9ADP7xWAYhsBCGHKGueyw5cKGwtaazLQqAsfXbvu",
+      "owner": {
+        "$kind": "Shared",
+        "Shared": {
+          "initialSharedVersion": "458"
+        }
+      },
+      "type": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "previousTransaction": "EhhtFLbFYpTRqqudJnsC1m1LhCnVsQdLDe7KFinXwWVn",
+      "json": {
+        "bet": "10000000",
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "fee_rate": 500,
+        "house_id": "0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718",
+        "id": "0x4beb23380ca5667c052ec21ea5f65438850f2ead4ac3fbd4a2971ab787422cac",
+        "opponent": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3",
+        "stake": "0",
+        "state": {
+          "@variant": "Cancelled"
+        },
+        "turn_ms": "0",
+        "version": "1"
+      },
+      "content": "S+sjOAylZnwFLsIepfZUOIUPLq1Kw/vUopcat4dCLKwBAAAAAAAAAE0xqOwBlrPRSfB77NK76vqlusOClprIHzPXKfQNDscYmWowvH/ViYqUV+BnxAGhRPvBQWKR1UILEegpHpj18NgBvAbV2Myq1i22nmbu8WguqOV1SF+SZ/Ck8uy3NoqlSsOAlpgAAAAAAAAAAAAAAAAA9AEAAAAAAAAAAAE="
+    },
+    "resolvedCreatorWins": {
+      "objectId": "0x5c18c3e183f1279c7ff86796b7ecb3a3b93872f73b09412019ed21d3df6a294e",
+      "version": "578",
+      "digest": "47Nyp4cuxRbNCg3dV65HFupAokHBQHyEYwUVopaD2fYJ",
+      "owner": {
+        "$kind": "Shared",
+        "Shared": {
+          "initialSharedVersion": "576"
+        }
+      },
+      "type": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "previousTransaction": "9DyiLRwYiyB37cR7mvV3U6PFb19TEJ21dJxgxZRjjPH9",
+      "json": {
+        "bet": "10000000",
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "fee_rate": 500,
+        "house_id": "0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718",
+        "id": "0x5c18c3e183f1279c7ff86796b7ecb3a3b93872f73b09412019ed21d3df6a294e",
+        "opponent": null,
+        "stake": "0",
+        "state": {
+          "@variant": "Resolved",
+          "acceptor": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3",
+          "winner": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+        },
+        "turn_ms": "0",
+        "version": "1"
+      },
+      "content": "XBjD4YPxJ5x/+GeWt+yzo7k4cvc7CUEgGe0h099qKU4BAAAAAAAAAE0xqOwBlrPRSfB77NK76vqlusOClprIHzPXKfQNDscYmWowvH/ViYqUV+BnxAGhRPvBQWKR1UILEegpHpj18NgAgJaYAAAAAAAAAAAAAAAAAPQBAAAAAAAAAAADvAbV2Myq1i22nmbu8WguqOV1SF+SZ/Ck8uy3NoqlSsOZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2A=="
+    },
+    "resolvedAcceptorWins": {
+      "objectId": "0x72531f53dfda06f00262e9a9e2ac7a7d6453f6cd9922f959745f988421c03fd3",
+      "version": "1453",
+      "digest": "Frz51n4yYbgAa88e5qpvjrmjfQ5pbVCqYeGiZdmisbNp",
+      "owner": {
+        "$kind": "Shared",
+        "Shared": {
+          "initialSharedVersion": "460"
+        }
+      },
+      "type": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::Duel<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "previousTransaction": "EueB9rvEtQDV3EHGL6717qWHKjXXSBMLMucgZNbd2iop",
+      "json": {
+        "bet": "10000000",
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "fee_rate": 500,
+        "house_id": "0x4d31a8ec0196b3d149f07becd2bbeafaa5bac382969ac81f33d729f40d0ec718",
+        "id": "0x72531f53dfda06f00262e9a9e2ac7a7d6453f6cd9922f959745f988421c03fd3",
+        "opponent": null,
+        "stake": "0",
+        "state": {
+          "@variant": "Resolved",
+          "acceptor": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3",
+          "winner": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3"
+        },
+        "turn_ms": "0",
+        "version": "1"
+      },
+      "content": "clMfU9/aBvACYump4qx6fWRT9s2ZIvlZdF+YhCHAP9MBAAAAAAAAAE0xqOwBlrPRSfB77NK76vqlusOClprIHzPXKfQNDscYmWowvH/ViYqUV+BnxAGhRPvBQWKR1UILEegpHpj18NgAgJaYAAAAAAAAAAAAAAAAAPQBAAAAAAAAAAADvAbV2Myq1i22nmbu8WguqOV1SF+SZ/Ck8uy3NoqlSsO8BtXYzKrWLbaeZu7xaC6o5XVIX5Jn8KTy7Lc2iqVKww=="
+    }
+  },
+  "events": {
+    "duelCreatedOpen": {
+      "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+      "module": "coinflip",
+      "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "bcs": "27e/kHqcf5Ndo6bTuv1TvFPFCHQTTZQZS86pbdZ0HHGZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQBAAAAAAAAAAAA",
+      "json": {
+        "bet": "10000000",
+        "control": 0,
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "duel_id": "0xdbb7bf907a9c7f935da3a6d3bafd53bc53c50874134d94194bcea96dd6741c71",
+        "fee_rate": 500,
+        "opponent": null,
+        "turn_ms": "0"
+      },
+      "checkpoint": "3560",
+      "transactionDigest": "7KdwbcHhbdNCBb2ULaBSSde9L1ihc7ar5xht8w6826Dj",
+      "eventIndex": 0
+    },
+    "duelCreatedInvite": {
+      "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+      "module": "coinflip",
+      "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "bcs": "T3il0s22VFqv+fpEXEJtidATgauUSfHam4vV4PFvcXyZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2AG8BtXYzKrWLbaeZu7xaC6o5XVIX5Jn8KTy7Lc2iqVKw4CWmAAAAAAA9AEAAAAAAAAAAAA=",
+      "json": {
+        "bet": "10000000",
+        "control": 0,
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "duel_id": "0x4f78a5d2cdb6545aaff9fa445c426d89d01381ab9449f1da9b8bd5e0f16f717c",
+        "fee_rate": 500,
+        "opponent": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3",
+        "turn_ms": "0"
+      },
+      "checkpoint": "3566",
+      "transactionDigest": "8cQ3g3ZewAV3nUKVgxMshFYNNfDkNkbJFwUkT9pC6cAU",
+      "eventIndex": 0
+    },
+    "duelCancelledByCreator": {
+      "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+      "module": "duel",
+      "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCancelled<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "bcs": "z7QBVU4g7Bj4x2c+cnbji/wEi37BY8f9+1z7uv29p/uZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2JlqMLx/1YmKlFfgZ8QBoUT7wUFikdVCCxHoKR6Y9fDYgJaYAAAAAAA=",
+      "json": {
+        "cancelled_by": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "duel_id": "0xcfb401554e20ec18f8c7673e7276e38bfc048b7ec163c7fdfb5cfbbafdbda7fb",
+        "refund": "10000000"
+      },
+      "checkpoint": "1343",
+      "transactionDigest": "r2Hx75ZQryi8iquZeAwzh3aVWSqhvokMAvdiVgcjfkM",
+      "eventIndex": 0
+    },
+    "duelCancelledByInvitee": {
+      "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+      "module": "duel",
+      "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCancelled<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "bcs": "S+sjOAylZnwFLsIepfZUOIUPLq1Kw/vUopcat4dCLKyZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2LwG1djMqtYttp5m7vFoLqjldUhfkmfwpPLstzaKpUrDgJaYAAAAAAA=",
+      "json": {
+        "cancelled_by": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3",
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "duel_id": "0x4beb23380ca5667c052ec21ea5f65438850f2ead4ac3fbd4a2971ab787422cac",
+        "refund": "10000000"
+      },
+      "checkpoint": "1349",
+      "transactionDigest": "EhhtFLbFYpTRqqudJnsC1m1LhCnVsQdLDe7KFinXwWVn",
+      "eventIndex": 0
+    },
+    "duelActivatedCreatorWins": {
+      "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+      "module": "coinflip",
+      "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelActivated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "bcs": "XBjD4YPxJ5x/+GeWt+yzo7k4cvc7CUEgGe0h099qKU6ZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2LwG1djMqtYttp5m7vFoLqjldUhfkmfwpPLstzaKpUrDgJaYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "json": {
+        "acceptor": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3",
+        "bet": "10000000",
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "deadline_ms": "0",
+        "duel_id": "0x5c18c3e183f1279c7ff86796b7ecb3a3b93872f73b09412019ed21d3df6a294e",
+        "to_move": 0,
+        "turn_ms": "0"
+      },
+      "checkpoint": "1424",
+      "transactionDigest": "9DyiLRwYiyB37cR7mvV3U6PFb19TEJ21dJxgxZRjjPH9",
+      "eventIndex": 0
+    },
+    "duelResolvedCreatorWins": {
+      "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+      "module": "coinflip",
+      "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelResolved<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "bcs": "XBjD4YPxJ5x/+GeWt+yzo7k4cvc7CUEgGe0h099qKU6ZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2LwG1djMqtYttp5m7vFoLqjldUhfkmfwpPLstzaKpUrDmWowvH/ViYqUV+BnxAGhRPvBQWKR1UILEegpHpj18NgALTEBAAAAAEBCDwAAAAAAwOohAQAAAAA=",
+      "json": {
+        "acceptor": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3",
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "duel_id": "0x5c18c3e183f1279c7ff86796b7ecb3a3b93872f73b09412019ed21d3df6a294e",
+        "fee": "1000000",
+        "payout": "19000000",
+        "pot": "20000000",
+        "winner": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+      },
+      "checkpoint": "1424",
+      "transactionDigest": "9DyiLRwYiyB37cR7mvV3U6PFb19TEJ21dJxgxZRjjPH9",
+      "eventIndex": 1
+    },
+    "duelResolvedAcceptorWins": {
+      "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+      "module": "coinflip",
+      "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelResolved<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+      "bcs": "clMfU9/aBvACYump4qx6fWRT9s2ZIvlZdF+YhCHAP9OZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2LwG1djMqtYttp5m7vFoLqjldUhfkmfwpPLstzaKpUrDvAbV2Myq1i22nmbu8WguqOV1SF+SZ/Ck8uy3NoqlSsMALTEBAAAAAEBCDwAAAAAAwOohAQAAAAA=",
+      "json": {
+        "acceptor": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3",
+        "creator": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8",
+        "duel_id": "0x72531f53dfda06f00262e9a9e2ac7a7d6453f6cd9922f959745f988421c03fd3",
+        "fee": "1000000",
+        "payout": "19000000",
+        "pot": "20000000",
+        "winner": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3"
+      },
+      "checkpoint": "1387",
+      "transactionDigest": "FYciU3zi3GTJgUHqzSimomcfZat8cZHCyqNWqjVAYsFN",
+      "eventIndex": 1
+    }
+  },
+  "transactions": {
+    "duelCreatedOpen": {
+      "digest": "7KdwbcHhbdNCBb2ULaBSSde9L1ihc7ar5xht8w6826Dj",
+      "timestampMs": 1795186094960,
+      "checkpoint": "3560"
+    },
+    "publish": {
+      "digest": "DopHA9reL2AXnYNaVQViicD36s7sioKgwaVRshekFBkz",
+      "timestampMs": 1795185412301,
+      "checkpoint": "401"
+    },
+    "upgrade": {
+      "digest": "14oaKaode2WzE6UnV3X8CEJbQ3vW5PPjpUmuDs8JFnhG",
+      "timestampMs": 1795185527801,
+      "checkpoint": "934"
+    }
+  },
+  "rawListEventsPages": {
+    "duelCreatedOnly": {
+      "request": {
+        "readMask": {
+          "paths": [
+            "package_id",
+            "module",
+            "event_type",
+            "contents",
+            "json",
+            "checkpoint",
+            "transaction_digest",
+            "event_index"
+          ]
+        },
+        "startCheckpoint": "401",
+        "filter": {
+          "terms": [
+            {
+              "literals": [
+                {
+                  "negated": false,
+                  "predicate": {
+                    "oneofKind": "eventType",
+                    "eventType": {
+                      "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "limit": 3,
+          "ordering": 1
+        }
+      },
+      "frames": [
+        {
+          "event": {
+            "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+            "module": "coinflip",
+            "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+            "contents": {
+              "name": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+              "value": "oczwRDbkYMKqIsIzVL3d35b6iQw1blch92Jwo5do2ZWZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQBAAAAAAAAAAAA"
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "control": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 0
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "duel_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0xa1ccf04436e460c2aa22c23354bddddf96fa890c356e5721f76270a39768d995"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "nullValue",
+                        "nullValue": 0
+                      }
+                    },
+                    "turn_ms": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "4837",
+            "transactionDigest": "23ttnNfWmxiB7B34KQRv4dLsQrkG2oQhomNshupHsuKn",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBhCfzgIYAEoFCOUlEAM=",
+            "checkpoint": "4838"
+          }
+        },
+        {
+          "event": {
+            "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+            "module": "coinflip",
+            "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+            "contents": {
+              "name": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+              "value": "Ry3TmRA95k0PjAnMHIYkp0WJDVOeYdb+Ei1P20ryK5+ZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQBAAAAAAAAAAAA"
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "control": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 0
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "duel_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x472dd399103de64d0f8c09cc1c8624a745890d539e61d6fe122d4fdb4af22b9f"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "nullValue",
+                        "nullValue": 0
+                      }
+                    },
+                    "turn_ms": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "4834",
+            "transactionDigest": "96E9ou7yaEeatDSTRZzFDtnRvLrvgUinPskmekksw4Na",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBhCCzgIYAEoFCOIlEAE=",
+            "checkpoint": "4835"
+          }
+        },
+        {
+          "event": {
+            "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+            "module": "coinflip",
+            "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+            "contents": {
+              "name": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+              "value": "k5419MwqvYkYd/vSVX4601Yj45VKXGT4D4wA4yiol6OZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQBAAAAAAAAAAAA"
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "control": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 0
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "duel_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x939e35f4cc2abd891877fbd2557e3ad35623e3954a5c64f80f8c00e328a897a3"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "nullValue",
+                        "nullValue": 0
+                      }
+                    },
+                    "turn_ms": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "4831",
+            "transactionDigest": "8LMKUuvdi9hGMcb1A8zKgp1o5VgESMi6uPkCFNobUB4V",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBhDpzQIYAEoFCN8lEAM=",
+            "checkpoint": "4832"
+          },
+          "end": {
+            "reason": 1
+          }
+        }
+      ]
+    },
+    "union": {
+      "request": {
+        "readMask": {
+          "paths": [
+            "package_id",
+            "module",
+            "event_type",
+            "contents",
+            "json",
+            "checkpoint",
+            "transaction_digest",
+            "event_index"
+          ]
+        },
+        "startCheckpoint": "401",
+        "filter": {
+          "terms": [
+            {
+              "literals": [
+                {
+                  "negated": false,
+                  "predicate": {
+                    "oneofKind": "eventType",
+                    "eventType": {
+                      "eventType": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "literals": [
+                {
+                  "negated": false,
+                  "predicate": {
+                    "oneofKind": "eventType",
+                    "eventType": {
+                      "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "limit": 10,
+          "ordering": 0
+        }
+      },
+      "frames": [
+        {
+          "event": {
+            "packageId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4",
+            "module": "game",
+            "eventType": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+            "contents": {
+              "name": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+              "value": "vlWiRa6IqGOCjl2tPgNBzT3U3/8lP352XTXhx33igvKZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQB"
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "game_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0xbe55a245ae88a863828e5dad3e0341cd3dd4dfff253f7e765d35e1c77de282f2"
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "nullValue",
+                        "nullValue": 0
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "609",
+            "transactionDigest": "BXoAWB18ucez6YFqPcRHDw6kVqJLLQXhbwP3VwzX9jvD",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBRC3KRgASgUI4QQQAQ==",
+            "checkpoint": "608"
+          }
+        },
+        {
+          "event": {
+            "packageId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4",
+            "module": "game",
+            "eventType": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+            "contents": {
+              "name": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+              "value": "WHZHUXqb2R29ZzR/c+/HRHb4PUmsy+Tbfje+7rFS/7uZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQB"
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "game_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x587647517a9bd91dbd67347f73efc74476f83d49accbe4db7e37beeeb152ffbb"
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "nullValue",
+                        "nullValue": 0
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "612",
+            "transactionDigest": "BMnia4UqdELpuFrQs9DYpmiAQC4qV1dJWeDKwJYbL2Yo",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBRDSKRgASgUI5AQQAQ==",
+            "checkpoint": "611"
+          }
+        },
+        {
+          "event": {
+            "packageId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4",
+            "module": "game",
+            "eventType": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+            "contents": {
+              "name": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+              "value": "biMTYbMRBjAk3L0Wsq1B3Rjxt+TNMK/F0kOdIS+7LhKZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQB"
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "game_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x6e231361b311063024dcbd16b2ad41dd18f1b7e4cd30afc5d2439d212fbb2e12"
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "nullValue",
+                        "nullValue": 0
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "615",
+            "transactionDigest": "2EynGfyFmzwBiUA4gTSw8Xgs4Ckc8J1ZkgvqCUZrDU3Z",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBRDvKRgASgUI5wQQAQ==",
+            "checkpoint": "614"
+          }
+        },
+        {
+          "event": {
+            "packageId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4",
+            "module": "game",
+            "eventType": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+            "contents": {
+              "name": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+              "value": "EJ1Fa15GlZ6Su3I65ROSZCeWBAlmGYcNk+Omkq55efiZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2AG8BtXYzKrWLbaeZu7xaC6o5XVIX5Jn8KTy7Lc2iqVKw4CWmAAAAAAA9AE="
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "game_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x109d456b5e46959e92bb723ae5139264279604096619870d93e3a692ae7979f8"
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "618",
+            "transactionDigest": "36HR4h25efLE8E9ndnsGPTcJoSxUUn4LEZm8vij7xDbD",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBRCKKhgASgUI6gQQAQ==",
+            "checkpoint": "617"
+          }
+        },
+        {
+          "event": {
+            "packageId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4",
+            "module": "game",
+            "eventType": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+            "contents": {
+              "name": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+              "value": "PTwxvsDMGoix6qbbFssMZy99+wkPt+T5/V2R0wwtAOGZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQB"
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "game_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x3d3c31bec0cc1a88b1eaa6db16cb0c672f7dfb090fb7e4f9fd5d91d30c2d00e1"
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "nullValue",
+                        "nullValue": 0
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "621",
+            "transactionDigest": "3kKjSoVJMM3TJJ8FYno3WKDDUUUpYRrayXaYXR9aLcHF",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBRCnKhgASgUI7QQQAw==",
+            "checkpoint": "620"
+          }
+        },
+        {
+          "event": {
+            "packageId": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4",
+            "module": "game",
+            "eventType": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+            "contents": {
+              "name": "0xd07a2b0f30993dfa2cac9e4b11324398f2c56647b7b988c4751ea719d586b5d4::game::GameCreated",
+              "value": "E92+InpVF/gMN2sB54pmX9CHsyTKn9nmuprDMfzPRT+ZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQB"
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "game_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x13ddbe227a5517f80c376b01e78a665fd087b324ca9fd9e6ba9ac331fccf453f"
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "nullValue",
+                        "nullValue": 0
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "843",
+            "transactionDigest": "HaJksoSHAJyUXYyWhntW56bwEsDWgcGZxND6ZgBcCSrH",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBRDFORgASgUIywYQAw==",
+            "checkpoint": "842"
+          }
+        },
+        {
+          "event": {
+            "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+            "module": "coinflip",
+            "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+            "contents": {
+              "name": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+              "value": "z7QBVU4g7Bj4x2c+cnbji/wEi37BY8f9+1z7uv29p/uZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQBAAAAAAAAAAAA"
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "control": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 0
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "duel_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0xcfb401554e20ec18f8c7673e7276e38bfc048b7ec163c7fdfb5cfbbafdbda7fb"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "nullValue",
+                        "nullValue": 0
+                      }
+                    },
+                    "turn_ms": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "1340",
+            "transactionDigest": "5Kw8bWyjzRCWfX4vRvnWaTeozSCFTVPfhMzWx36u9m8J",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBRDJWxgASgUIvAoQAQ==",
+            "checkpoint": "1339"
+          }
+        },
+        {
+          "event": {
+            "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+            "module": "coinflip",
+            "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+            "contents": {
+              "name": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+              "value": "S+sjOAylZnwFLsIepfZUOIUPLq1Kw/vUopcat4dCLKyZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2AG8BtXYzKrWLbaeZu7xaC6o5XVIX5Jn8KTy7Lc2iqVKw4CWmAAAAAAA9AEAAAAAAAAAAAA="
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "control": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 0
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "duel_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x4beb23380ca5667c052ec21ea5f65438850f2ead4ac3fbd4a2971ab787422cac"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0xbc06d5d8ccaad62db69e66eef1682ea8e575485f9267f0a4f2ecb7368aa54ac3"
+                      }
+                    },
+                    "turn_ms": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "1346",
+            "transactionDigest": "FNVPHYSE2R2cpwRL2UPdHsXC37R5WRCcmW5VckF3hvB7",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBRCFXBgASgUIwgoQBw==",
+            "checkpoint": "1345"
+          }
+        },
+        {
+          "event": {
+            "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+            "module": "coinflip",
+            "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+            "contents": {
+              "name": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+              "value": "clMfU9/aBvACYump4qx6fWRT9s2ZIvlZdF+YhCHAP9OZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQBAAAAAAAAAAAA"
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "control": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 0
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "duel_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x72531f53dfda06f00262e9a9e2ac7a7d6453f6cd9922f959745f988421c03fd3"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "nullValue",
+                        "nullValue": 0
+                      }
+                    },
+                    "turn_ms": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "1380",
+            "transactionDigest": "G1nQidf547gEeCcDEUZjFgUa5WekLEtnHK2rA8LNvX4S",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBRCnXhgASgUI5AoQBQ==",
+            "checkpoint": "1379"
+          }
+        },
+        {
+          "event": {
+            "packageId": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b",
+            "module": "coinflip",
+            "eventType": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+            "contents": {
+              "name": "0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::duel::DuelCreated<0xa472f94230605dd40398ab0a3ded6304a25c8ceaaff0454f283e2356433d203b::coinflip::Coinflip>",
+              "value": "YDFHaUmcvqXFXZFeljrLPk+c9u25O8FDntS9FQw942uZajC8f9WJipRX4GfEAaFE+8FBYpHVQgsR6CkemPXw2ACAlpgAAAAAAPQBAAAAAAAAAAAA"
+            },
+            "json": {
+              "kind": {
+                "oneofKind": "structValue",
+                "structValue": {
+                  "fields": {
+                    "bet": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "10000000"
+                      }
+                    },
+                    "control": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 0
+                      }
+                    },
+                    "creator": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x996a30bc7fd5898a9457e067c401a144fbc1416291d5420b11e8291e98f5f0d8"
+                      }
+                    },
+                    "duel_id": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0x60314769499cbea5c55d915e963acb3e4f9cf6edb93bc1439ed4bd150c3de36b"
+                      }
+                    },
+                    "fee_rate": {
+                      "kind": {
+                        "oneofKind": "numberValue",
+                        "numberValue": 500
+                      }
+                    },
+                    "opponent": {
+                      "kind": {
+                        "oneofKind": "nullValue",
+                        "nullValue": 0
+                      }
+                    },
+                    "turn_ms": {
+                      "kind": {
+                        "oneofKind": "stringValue",
+                        "stringValue": "0"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "checkpoint": "1413",
+            "transactionDigest": "FLgxdaRzDHmEViDYAoLj6tGUGdWdtk9D44qynM1TGgbE",
+            "eventIndex": 0
+          },
+          "watermark": {
+            "cursor": "KAFCBRDJYBgASgUIhQsQAQ==",
+            "checkpoint": "1412"
+          },
+          "end": {
+            "reason": 1
+          }
+        }
+      ]
+    }
+  }
+}
