@@ -17,6 +17,9 @@ código discrepan, manda el código y se corrige la tabla en el mismo PR (`agent
 | `fixtures/game-reads.localnet.json` | Lecturas gRPC reales de cada variante de `Game` y de sus eventos, capturadas en una localnet desechable con `app/scripts/capture-read-fixtures.mjs` (#10, ver "Lectura desde la app") |
 | `fixtures/game-tx.localnet.json` | Transacciones reales de crear, cancelar, rechazar (#11) y aceptar (#12): éxitos (con cada ganador y sobre una invitación), dos fallos `MoveAbort` ejecutados y 11 `SimulationError` de simulaciones sin firmar, y el objeto House, capturados en una localnet desechable con `app/scripts/capture-tx-fixtures.mjs` (ver "Lectura desde la app") |
 | `fixtures/house-admin.localnet.json` | Panel de la House (#14): listado real del `HouseCap` por tipo (`listOwnedObjects`), su `getObject`, 4 `SimulationError` de `house`/0, 1, 1, 2 y la preflight sin el cap, las transacciones de admin ejecutadas (`update_fee_rate`, `update_bet_limits`, `withdraw_fees` + `TransferObjects`) y la House después del retiro, capturados en una localnet desechable con `app/scripts/capture-house-fixtures.mjs` (ver "Lectura desde la app") |
+| `fixtures/duel-reads.localnet.json` | Lecturas gRPC reales del coinflip nuevo (`Duel<Coinflip>`, #73): objetos `Pending`/`Cancelled`/`Resolved` (con cada ganador), sus eventos, la tabla de orígenes por lectura (`typeOrigins`), la publicación y el upgrade, y páginas crudas de `ListEvents` (un literal y la unión del coinflip anterior y el nuevo), capturadas **después** del upgrade con `app/scripts/capture-duel-reads.mjs` (ver "Fixtures de `duel`") |
+| `fixtures/duel-tx.localnet.json` | Transacciones reales del coinflip nuevo (#73): crear, cancelar, rechazar y aceptar (ambos ganadores y una invitación), dos fallos `MoveAbort` ejecutados (`duel`/3 y `duel`/4), 11 `SimulationError` de simulaciones sin firmar, la House con las comisiones de las dos fuentes y las partidas anteriores (`game::Game`) aceptadas y canceladas después del upgrade desde el ID original y desde el del upgrade, capturadas con `app/scripts/capture-duel-tx.mjs` |
+| `fixtures/duel-clock.localnet.json` | **SANDBOX** (`_meta.sandbox = true` y `_meta.sandboxConstants`): el reloj por jugada de `duel` con un juego de ensayo (`testgame`) de una v3 que NO está en el repo: objetos `Active`/`TimedOut`/`Expired`/`Resolved`, eventos `DuelActivated`/`DuelTurn`/`DuelTimedOut`/`DuelExpired`, la tabla de orígenes con IDs de definición de upgrades distintos, una página cruda con el literal prefijo (dos instanciaciones de `G`), 7 `SimulationError` y las transacciones de reclamar y reembolsar, capturados con `app/scripts/capture-duel-clock.mjs`. Sus tiempos (control 8 = 15 s, gracia de 15 s) **no** son los de producción |
 
 **Gates (build, lint, test, coverage):** forma canónica en `agents.md` §3 (desde `contracts/`, con
 `-e testnet` y `printf 'n\n' |` delante). Baselines vigentes en `documents/STATUS.md`.
@@ -581,6 +584,61 @@ transacción (cómputo + storage − rebate de `effects.gasUsed`).
   que aborta con `ENotPending` sobre una partida resuelta sube la versión del objeto y pasa a ser su
   `previousTransaction` (sonda P6 de #10; la fixture `resolved` lo muestra). Por eso el detalle lo llama "Última
   actividad".
+
+### Fixtures de `duel` (#73, TASK-5)
+
+Tres fixtures capturadas **después** del upgrade con el script de despliegue (v1 publicado con el binario 1.83.0, `publish.mjs record`
+y `publish.mjs upgrade` variante B: `contracts/deployments/localnet.json` con `upgrades` y `typeOrigins`), por gRPC y bajo
+`localnet-guard.mjs` (código 2 ante una `--url` que no sea `http://127.0.0.1:<puerto>`, antes de cualquier pedido). Cada script es
+determinista: dos capturas seguidas dan el mismo archivo salvo `_meta.capturedAt`.
+
+| Script | Archivo | Qué es |
+|---|---|---|
+| `app/scripts/capture-duel-reads.mjs` | `fixtures/duel-reads.localnet.json` | Producción. Objetos y eventos de `Duel<Coinflip>` (filtros con el tag completo `DuelXxx<Coinflip>` y los IDs de definición de `typeOrigins`, nunca el prefijo), `typeOrigins` leída por gRPC (exigida igual a la del json que produjo la CLI) y dos páginas crudas de `ListEvents` (un literal y la unión del coinflip anterior y el nuevo en un solo pedido) |
+| `app/scripts/capture-duel-tx.mjs` | `fixtures/duel-tx.localnet.json` | Producción. Transacciones ejecutadas, 11 `SimulationError` (`duel`/0, 1, 2, 3, 4, 5, 6, 9, 10), la House **en la versión que dejó la última aceptación de producción** (lectura histórica: las comisiones que cobre el sandbox no la cambian) y las partidas anteriores tocadas después del upgrade (la primera desde el ID original, las otras desde el del upgrade; se verifica por los comandos) |
+| `app/scripts/capture-duel-clock.mjs` | `fixtures/duel-clock.localnet.json` | **Sandbox**: `_meta.sandbox = true` y `_meta.sandboxConstants` (`SANDBOX_CONTROL_8_ID`, `SANDBOX_CONTROL_8_TURN_MS`, `SANDBOX_CLAIM_GRACE_MS`). Descubre el juego por los eventos con el literal **prefijo** de `DuelCreated` |
+
+- **Roles** (los casos llevan el rol, nunca la dirección): `A` crea, `B` es el invitado y el que acepta, `C` es un tercero (los
+  scripts lo toman como sender de un fallo ejecutado), `ADMIN` publicó y tiene la `HouseCap`; cuatro cuentas distintas de la
+  génesis desechable.
+- **Cuentas en las fixtures:** las tres llevan direcciones de cuentas efímeras de esa génesis (tres distintas en total, en los campos
+  `creator`, `opponent`, `acceptor`, `winner`, `claimed_by` y en los `AddressOwner` de los efectos), sin claves y sin valor, como el
+  resto de las fixtures de localnet; un parser de la app las trata como direcciones de 64 hex cualesquiera, nunca como una cuenta
+  conocida. El `sender` de cada caso (`simulationErrors`, `executed`) es el **rol** (`A`, `B`, `C`, `ADMIN`), nunca la dirección.
+- **Mapa de claves de primer nivel** (para no abrir los JSON enteros): `duel-reads` = `_meta`, `ids`, `typeOrigins` (24 tipos),
+  `objects` (`pendingOpen`, `pendingInvite`, `cancelledByCreator`, `cancelledByInvitee`, `resolvedCreatorWins`,
+  `resolvedAcceptorWins`), `events` (7 variantes), `transactions` (`publish`, `upgrade`, `duelCreatedOpen`) y `rawListEventsPages`
+  (`duelCreatedOnly`, `union`); `duel-tx` = `_meta`, `ids`, `house` (**versión histórica**: su `version` de objeto **no es la
+  vigente**, un test no debe suponer que lo es), `simulationErrors` (11), `executed` (12) y `cliErrorText`; `duel-clock` = `_meta`
+  (`sandbox`, `sandboxConstants`), `ids`, `typeOrigins` (25 tipos), `objects` (`pending`, `activeOnePending`, `activeBothPending`,
+  `activeSevenDays`, `timedOut`, `expiredBothPending`, `expiredOnePending`, `resolved`), `events` (7), `rawListEventsPage`,
+  `simulationErrors` (7) y `executed` (9). En `duel-clock`, `_meta.sandboxConstants` es la **única** fuente del `turn_ms` de ensayo
+  (15 000 ms): la app lo trata como un valor fuera del espejo de controles, y ningún test toma de esa fixture una constante de
+  producción.
+- **Producción (`duel-reads` y `duel-tx`)** — selección determinista por orden de creación, sobre el coinflip nuevo: `D_OPEN` = primer
+  duelo abierto `Pending` (su última transacción tiene que ser el `duel::cancel` de `B` con presupuesto explícito, `duel`/3), `D_INV` =
+  primera invitación `Pending`, `D_CANCEL` = primer abierto cancelado por su creador, `D_REJ` = primero rechazado por su invitado,
+  `D_ACC1` = primer abierto `Resolved` (su última transacción tiene que ser el `coinflip::accept` de `C` con presupuesto explícito,
+  `duel`/4), más una aceptación de un abierto con cada ganador y la de una invitación. Orden de la recaptura: `D_CANCEL`
+  (crear y cancelar) y `D_REJ` (invitar a `B` y que rechace) **antes** que `D_ACC1`; después las rondas hasta tener cada ganador;
+  `D_OPEN` (el `cancel` fallido de `B`), `D_INV` y el `accept` fallido de `C` sobre `D_ACC1`; y una invitación aceptada por `B`.
+  Las partidas anteriores (`game::Game`) se aceptan (una desde el ID original y otra desde el del upgrade) y se cancelan (desde el del
+  upgrade) **después** del upgrade.
+- **Sandbox (`duel-clock`)**: el coinflip no persiste `Active`, así que el reloj se ejerce con una v3 de ensayo que **no está en el repo**:
+  `git archive HEAD contracts` en `<SMOKE_DIR>/v3`, un módulo `testgame` mínimo (`create` con control, `accept` con `activate`, `play`
+  con `record_move`, `settle` = `collect` + `pay` y dos `public` solo de ensayo para probar el clique del hot potato) y, en su copia de
+  `duel.move`, el id de control 8 (`SANDBOX_CONTROL_8_TURN_MS` = 15 000 ms; ningún id existente cambia) y la gracia de
+  `refund_stalled` (`SANDBOX_CLAIM_GRACE_MS` = 15 000 ms); su upgrade va por la CLI directa con la Receta U (`agents.md` §3), nunca por
+  `publish.mjs`. Se borra al cerrar la localnet. Los valores reales de producción los cubren los tests de contrato: esta fixture
+  prueba el *mecanismo* (eventos, objetos, BCS, tipos con IDs de upgrades distintos, aborts). La app trata un `turn_ms` fuera del
+  espejo de controles como formato genérico, nunca como un error de configuración.
+- **Estados que la captura de reloj busca** (por orden de creación): `Active` con control 8 y un jugador pendiente (plazo vencido),
+  `Active` con el control 7 (7 días: no vence) cuya última transacción es un `claim_timeout` fallido (`duel`/14), `Active` con ambos
+  pendientes y plazo vencido cuya última transacción es un `claim_timeout` fallido (`duel`/22), `TimedOut` (reclamado por un tercero),
+  `Expired` con ambos pendientes y `Expired` con un jugador pendiente tras la gracia, `Resolved` por `collect` + `pay`, y un `Pending`
+  cuya última transacción es un `cancel` con un `typeArgument` de un ID anterior a la definición del tipo (`TypeNotFound`).
+- **Comando** (dentro de la localnet aislada, desde `<repo>`, con Node 26): `node app/scripts/capture-duel-reads.mjs --url "$RPC_URL"`
+  (y los otros dos igual). Con el 9000 ocupado por un servicio de otro proyecto, **nunca** una captura sin `--url`.
 
 ## Despliegues (#7)
 
