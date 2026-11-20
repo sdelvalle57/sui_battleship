@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { gameEventType } from './events';
 import { HISTORY_FLOOR_MARGIN_CHECKPOINTS, type EventScanClient } from './eventScan';
 import { parseGameObject, type GameObjectInput } from './game';
+import { buildGameRegistry } from './gameRegistry';
 import { fetchLobbyPage, LOBBY_EVENTS_PER_REQUEST, LOBBY_MAX_REQUESTS_PER_PAGE, LOBBY_PAGE_TARGET } from './lobby';
 import { PaginationStalledError, ReadDataError } from './readErrors';
 import { shouldRetryRead } from './readPolicy';
@@ -29,6 +30,8 @@ const fixture = import.meta.glob<Fixture>('../../../contracts/fixtures/game-read
 const PKG = fixture.objects.pendingOpen.type.split('::')[0] ?? '';
 const CREATED_TYPE = gameEventType(PKG, 'GameCreated');
 const TESTNET_CHAIN_ID_BASE58 = '69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD';
+// Sin upgrades (`packageVersion` 1): el registro solo tiene la fuente `legacy`, como el lobby de antes de #73.
+const LEGACY_REGISTRY = buildGameRegistry({ originalPackageId: PKG });
 
 // ---------- Objetos y eventos derivados de la fixture ----------
 type SdkObject = GameObjectInput & { objectId: string };
@@ -144,7 +147,7 @@ const request = (mock: ReturnType<typeof makeClient>['listEvents'], i: number): 
   return args[0];
 };
 const fetchPage = (client: EventScanClient, opts: { publishCheckpoint?: bigint | null; before?: string | null } = {}) =>
-  fetchLobbyPage(client, { originalPackageId: PKG, publishCheckpoint: opts.publishCheckpoint ?? 59n, before: opts.before ?? null });
+  fetchLobbyPage(client, { registry: LEGACY_REGISTRY, publishCheckpoint: opts.publishCheckpoint ?? 59n, before: opts.before ?? null });
 
 // ---------- Tests ----------
 describe('calibrated constants', () => {

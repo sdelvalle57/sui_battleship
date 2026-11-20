@@ -83,7 +83,9 @@ export function useExecuteTransaction<T>(view: TxView): UseExecuteTransaction<T>
   const [staged, setStaged] = useState<{ key: string; stage: TxStage }>({ key: view.targetHash, stage: 'idle' });
   const [runId, setRunId] = useState<number | null>(null);
 
-  const ids = { packageId: config.packageId, originalPackageId: config.originalPackageId };
+  // La `config` completa, con `upgrades[]`: un abort informa el ID de la versión **ejecutada** (V-5), que puede ser cualquiera
+  // de las versiones del paquete; con solo `packageId` y `originalPackageId`, el abort de una versión intermedia se vería crudo.
+  const ids = config;
 
   async function applyKeys(reset: QueryKey[], invalidate: QueryKey[]): Promise<void> {
     await Promise.all([

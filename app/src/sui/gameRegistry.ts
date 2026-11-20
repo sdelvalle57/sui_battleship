@@ -1,7 +1,9 @@
 import { normalizeStructTag } from '@mysten/sui/utils';
 import { duelType, parseDuelObject, type Duel, type DuelObjectInput } from './duel';
 import {
+  duelEventPrefix,
   duelEventType,
+  eventTypeFamily,
   gameEventType,
   parseDuelActivated,
   parseDuelCancelled,
@@ -27,7 +29,7 @@ import {
   type GameResolvedEvent,
   type RawGameEvent,
 } from './events';
-import { gameType, parseGameObject, type Game, type GameObjectInput } from './game';
+import { gameType, isExactType, parseGameObject, type Game, type GameObjectInput } from './game';
 
 // Registro de juegos de la plataforma multijuego (#73, TASK-7a; plan §8.1). Único lugar que arma los tipos de los objetos y
 // de los eventos de cada juego: ningún componente arma tags ni targets (ARQ-1). Los tipos salen de `typeOrigins` por
@@ -207,6 +209,11 @@ export type DuelSource = {
     timedOut: string;
     expired: string;
   };
+  /**
+   * Literales **prefijo** (sin parámetros de tipo) de los eventos que lee el lobby y "Mis partidas" (#73, TASK-7b): casan con
+   * todas las instanciaciones de `G`, el literal de "Todos" (`eventLiterals`). El ID es el de definición de **ese** evento.
+   */
+  eventPrefixes: { created: string; resolved: string };
   /** Eventos que "envía" un jugador: la creación (creador) y la resolución (aceptante, en el camino atómico del coinflip). */
   sentEventTypes: readonly string[];
   parseObject: (object: DuelObjectInput) => Duel;
@@ -297,6 +304,10 @@ function buildDuelSource(config: RegistryConfig): DuelSource {
     objectType,
     gameTag,
     eventTypes,
+    eventPrefixes: {
+      created: duelEventPrefix(resolveDefiningId(config, DUEL_MODULE, 'DuelCreated'), 'DuelCreated'),
+      resolved: duelEventPrefix(resolveDefiningId(config, DUEL_MODULE, 'DuelResolved'), 'DuelResolved'),
+    },
     sentEventTypes: [eventTypes.created, eventTypes.resolved],
     parseObject: (object) => parseDuelObject(object, objectType),
     parseCreated: (raw) => parseDuelCreated(raw, eventTypes.created),
@@ -329,4 +340,65 @@ export function buildGameRegistry(config: RegistryConfig): GameRegistry {
       sources,
     },
   ];
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Listados multi-fuente (#73, TASK-7b): qué literales de evento pide un listado y a qué fuente pertenece cada evento
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** Qué juegos lista una pantalla (lobby, "Mis partidas"): todos, por defecto, o uno. */
+export type GameSelection = 'all' | GameKey;
+
+/** Los eventos que "envía" un jugador y que leen los listados: la creación y la resolución. */
+export type SentEventName = 'created' | 'resolved';
+
+const SENT_EVENT_NAMES: readonly SentEventName[] = ['created', 'resolved'];
+
+/** Los juegos de la selección, en el orden del registro. */
+export function selectedGames(registry: GameRegistry, selection: GameSelection): GameRegistry {
+  const keys: readonly GameKey[] = selection === 'all' ? registry.map((game) => game.key) : [selection];
+  return registry.filter((game) => keys.includes(game.key));
+}
+
+/**
+ * Literales `eventType` de un evento para un listado (sin repetidos, en el orden del registro): el tag exacto de la fuente
+ * `legacy` y, para la fuente `duel`, **un literal por evento** con "Todos" (el prefijo sin parámetros de tipo, que casa con
+ * todos los `G`, también los que el registro no conoce: `matchEvent` los ignora) o el **tag completo** de `G` cuando se
+ * elige un juego. Siempre con IDs de **definición** (el de almacenamiento posterior o el original devuelve 0 eventos, V-4);
+ * nunca `emitModule`, que depende de la versión emisora.
+ */
+export function eventLiterals(registry: GameRegistry, selection: GameSelection, name: SentEventName): string[] {
+  const literals = new Set<string>();
+  for (const game of selectedGames(registry, selection)) {
+    for (const source of game.sources) {
+      literals.add(source.kind === 'duel' && selection === 'all' ? source.eventPrefixes[name] : source.eventTypes[name]);
+    }
+  }
+  return [...literals];
+}
+
+/**
+ * A qué fuente pertenece un evento que trajo un listado: `source` si su tipo es exactamente el de una fuente registrada
+ * (con el evento lógico `created`/`resolved`); `foreign` si es de la familia de un evento de `duel` pero de un `G` que el
+ * registro no conoce (S-1: con el literal prefijo el nodo devuelve todas las instanciaciones, también las de un juego
+ * futuro; se ignora, no es una fila rota); `unknown` si nada del registro lo explica (una fila ilegible).
+ */
+export type EventMatch =
+  | { kind: 'source'; game: GameDef; source: GameSource; event: SentEventName }
+  | { kind: 'foreign' }
+  | { kind: 'unknown' };
+
+/** Clasifica el tipo de un evento contra el registro (ver `EventMatch`). */
+export function matchEvent(registry: GameRegistry, eventType: string): EventMatch {
+  const family = eventTypeFamily(eventType);
+  let foreign = false;
+  for (const game of registry) {
+    for (const source of game.sources) {
+      for (const event of SENT_EVENT_NAMES) {
+        if (isExactType(eventType, source.eventTypes[event])) return { kind: 'source', game, source, event };
+        if (source.kind === 'duel' && family !== null && family === source.eventPrefixes[event]) foreign = true;
+      }
+    }
+  }
+  return foreign ? { kind: 'foreign' } : { kind: 'unknown' };
 }

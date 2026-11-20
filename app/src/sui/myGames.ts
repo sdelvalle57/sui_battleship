@@ -1,15 +1,17 @@
 import type { GrpcTypes } from '@mysten/sui/grpc';
 import { normalizeSuiAddress } from '@mysten/sui/utils';
-import { gameEventType, parseGameCreated, parseGameResolved, type GameCreatedEvent, type RawGameEvent } from './events';
+import type { Duel } from './duel';
+import type { RawGameEvent } from './events';
 import {
-  eventTypeFilter,
+  eventTypesFilter,
   historyLowerBound,
   requestOrPruned,
   type EventScanClient,
   type EventsPage,
   type HistoryLowerBound,
 } from './eventScan';
-import { isExactType, parseGameObject, type Game } from './game';
+import type { Game } from './game';
+import { eventLiterals, matchEvent, type GameKey, type GameRegistry, type GameSelection, type GameSource } from './gameRegistry';
 import { sameAddress } from './ids';
 import { LOBBY_EVENTS_PER_REQUEST, LOBBY_MAX_REQUESTS_PER_PAGE, LOBBY_PAGE_TARGET } from './lobby';
 import { fetchNodeInfo } from './nodeInfo';
@@ -36,11 +38,30 @@ export type MyGameItem =
   | { kind: 'unreadable'; gameId: string | null; role: MyGameRole | null; txDigest: string; checkpoint: bigint | null };
 
 /**
- * Una página de una fuente. `endCursor` en base64 (serializable como `pageParam`). `unreadableEvents` cuenta los eventos
- * ilegibles que no dan fila: solo los de las invitaciones (MINOR-4); en la actividad son filas y vale 0.
+ * Fila de un duelo de la fuente nueva (`Duel<G>`, #73 TASK-7b): el objeto con su versión (Lamport, como en `MyGameItem`), el
+ * juego al que pertenece y el evento que lo trajo. Un duelo conserva su estado completo (`Active`, `TimedOut`, `Expired`
+ * incluidos): no se proyecta a `Game`, que no los tiene.
+ */
+export type MyDuelItem = {
+  kind: 'duel';
+  duel: Duel;
+  gameKey: GameKey;
+  objectVersion: bigint;
+  role: MyGameRole;
+  txDigest: string;
+  checkpoint: bigint | null;
+};
+
+/** Una fila de "Mis partidas" de cualquiera de las dos fuentes del coinflip (o la ilegible). */
+export type MyGameEntry = MyGameItem | MyDuelItem;
+
+/**
+ * Una página de una fuente. `endCursor` serializable como `pageParam` (el del nodo, o la lista de los de cada trozo si el
+ * filtro se partió). `unreadableEvents` cuenta los eventos ilegibles que no dan fila: solo los de las invitaciones
+ * (MINOR-4); en la actividad son filas y vale 0.
  */
 export type MyGamesPage = {
-  items: MyGameItem[];
+  items: MyGameEntry[];
   endCursor: string | null;
   hasNextPage: boolean;
   lowerBound: HistoryLowerBound;
@@ -48,9 +69,13 @@ export type MyGamesPage = {
   unreadableEvents: number;
 };
 
-/** Argumentos de una página de cualquiera de las dos fuentes. */
+/**
+ * Argumentos de una página de cualquiera de las dos fuentes: el registro de juegos (los tipos de todas sus fuentes) y los
+ * juegos que se listan ("Todos" por defecto).
+ */
 type SourcePageArgs = {
-  originalPackageId: string;
+  registry: GameRegistry;
+  games?: GameSelection;
   address: string;
   publishCheckpoint: bigint | null;
   before: string | null;
@@ -59,7 +84,7 @@ type SourcePageArgs = {
 
 /** Lo que una fuente saca de un evento: una candidata (se lee el objeto), una fila ilegible, nada, o un ilegible contado. */
 type Classified =
-  | { kind: 'candidate'; gameId: string; role: MyGameRole; txDigest: string; checkpoint: bigint | null }
+  | { kind: 'candidate'; gameId: string; role: MyGameRole; txDigest: string; checkpoint: bigint | null; source: GameSource; gameKey: GameKey }
   | { kind: 'unreadable'; gameId: string | null; role: MyGameRole | null; txDigest: string; checkpoint: bigint | null }
   | { kind: 'skip' }
   | { kind: 'unreadable_event' };
@@ -76,15 +101,20 @@ type Source = {
 const literal = (predicate: GrpcTypes.EventLiteral['predicate']): GrpcTypes.EventLiteral => ({ negated: false, predicate });
 
 /**
- * Filtro de la actividad propia (DL-1 (A)): `[sender = cuenta ∧ tipo = GameCreated] ∨ [sender = cuenta ∧ tipo =
- * GameResolved]`, con los tipos del paquete original (DL-9 de #10). El nodo lo resuelve por índice (V-2, V-9).
+ * Filtro de la actividad propia (DL-1 (A)): un término `[sender = cuenta ∧ tipo = <creación>]` y otro `[sender = cuenta ∧
+ * tipo = <resolución>]` por cada literal de evento de los juegos elegidos (`eventLiterals`: el tag exacto de la fuente
+ * anterior y, de la nueva, el literal prefijo con "Todos" o el tag completo con un juego), con IDs de definición (DL-9 de
+ * #10, V-4). El nodo lo resuelve por índice (V-2, V-9). Cada término cuenta 2 literales: con las dos fuentes del coinflip
+ * son 8 (≤ 10); con más juegos supera `MAX_FILTER_LITERALS` y `requestOrPruned` lo parte en trozos (M-5).
  */
-export function myActivityFilter(originalPackageId: string, address: string): GrpcTypes.EventFilter {
+export function myActivityFilter(registry: GameRegistry, address: string, games: GameSelection = 'all'): GrpcTypes.EventFilter {
   const sender = literal({ oneofKind: 'sender', sender: { address: normalizeSuiAddress(address) } });
-  const term = (name: 'GameCreated' | 'GameResolved'): GrpcTypes.EventTerm => ({
-    literals: [sender, literal({ oneofKind: 'eventType', eventType: { eventType: gameEventType(originalPackageId, name) } })],
-  });
-  return { terms: [term('GameCreated'), term('GameResolved')] };
+  const terms = (['created', 'resolved'] as const).flatMap((name) =>
+    eventLiterals(registry, games, name).map(
+      (eventType): GrpcTypes.EventTerm => ({ literals: [sender, literal({ oneofKind: 'eventType', eventType: { eventType } })] }),
+    ),
+  );
+  return { terms };
 }
 
 /**
@@ -149,7 +179,7 @@ async function fetchSourcePage(client: EventScanClient, args: SourcePageArgs, so
         ).objects;
   const objectById = new Map(objectIds.map((id, i) => [id, objects[i]]));
 
-  const items: MyGameItem[] = [];
+  const items: MyGameEntry[] = [];
   for (const row of rows) {
     const { txDigest, checkpoint } = row;
     if (row.kind === 'unreadable') {
@@ -159,15 +189,19 @@ async function fetchSourcePage(client: EventScanClient, args: SourcePageArgs, so
     const object = objectById.get(row.gameId);
     // `ObjectError` (no existe o borrado): se omite, no es una partida que mostrar.
     if (object === undefined || object instanceof Error) continue;
-    let game: Game;
     try {
-      game = parseGameObject(object, args.originalPackageId);
+      // El parser de objeto es el de la fuente que trajo el evento: exige **su** tipo exacto.
+      if (row.source.kind === 'legacy') {
+        const game = row.source.parseObject(object);
+        items.push({ kind: 'game', game, objectVersion: BigInt(object.version), role: row.role, txDigest, checkpoint });
+      } else {
+        const duel = row.source.parseObject(object);
+        items.push({ kind: 'duel', duel, gameKey: row.gameKey, objectVersion: BigInt(object.version), role: row.role, txDigest, checkpoint });
+      }
     } catch (error) {
       if (!(error instanceof ReadDataError)) throw error;
       items.push({ kind: 'unreadable', gameId: row.gameId, role: row.role, txDigest, checkpoint });
-      continue;
     }
-    items.push({ kind: 'game', game, objectVersion: BigInt(object.version), role: row.role, txDigest, checkpoint });
   }
 
   return { items, endCursor: cursor, hasNextPage, lowerBound, end, unreadableEvents };
@@ -178,22 +212,30 @@ async function fetchSourcePage(client: EventScanClient, args: SourcePageArgs, so
  * `acceptor` (es `ctx.sender()`, y el filtro es por remitente). Si no, o si no se puede leer, la fila es ilegible y
  * nunca se muestra como propia (SEG-10); el `gameId` va si se pudo leer, y el rol, si se reconoce el tipo.
  */
-function classifyActivity(raw: RawGameEvent, originalPackageId: string, address: string): Classified {
+function classifyActivity(raw: RawGameEvent, registry: GameRegistry, address: string): Classified {
   const base = { txDigest: raw.transactionDigest, checkpoint: raw.checkpoint };
-  const role: MyGameRole | null = isExactType(raw.eventType, gameEventType(originalPackageId, 'GameCreated'))
-    ? 'creator'
-    : isExactType(raw.eventType, gameEventType(originalPackageId, 'GameResolved'))
-      ? 'acceptor'
-      : null;
-  if (role === null) return { kind: 'unreadable', gameId: null, role: null, ...base };
+  const match = matchEvent(registry, raw.eventType);
+  // S-1: con el literal prefijo llegan eventos de un `G` que el registro no conoce; no son una fila rota.
+  if (match.kind === 'foreign') return { kind: 'skip' };
+  if (match.kind === 'unknown') return { kind: 'unreadable', gameId: null, role: null, ...base };
+  const role: MyGameRole = match.event === 'created' ? 'creator' : 'acceptor';
+  const { source, game } = match;
   let event: { gameId: string; player: string };
   try {
-    if (role === 'creator') {
-      const created = parseGameCreated(raw, originalPackageId);
-      event = { gameId: created.gameId, player: created.creator };
+    if (source.kind === 'legacy') {
+      if (role === 'creator') {
+        const created = source.parseCreated(raw);
+        event = { gameId: created.gameId, player: created.creator };
+      } else {
+        const resolved = source.parseResolved(raw);
+        event = { gameId: resolved.gameId, player: resolved.acceptor };
+      }
+    } else if (role === 'creator') {
+      const created = source.parseCreated(raw);
+      event = { gameId: created.duelId, player: created.creator };
     } else {
-      const resolved = parseGameResolved(raw, originalPackageId);
-      event = { gameId: resolved.gameId, player: resolved.acceptor };
+      const resolved = source.parseResolved(raw);
+      event = { gameId: resolved.duelId, player: resolved.acceptor };
     }
   } catch (error) {
     if (!(error instanceof ReadDataError)) throw error;
@@ -201,7 +243,7 @@ function classifyActivity(raw: RawGameEvent, originalPackageId: string, address:
   }
   // Invariante del filtro (`ReadDataError` `invariant` en el plan): un evento de otra cuenta es una fila ilegible.
   if (!sameAddress(event.player, address)) return { kind: 'unreadable', gameId: event.gameId, role, ...base };
-  return { kind: 'candidate', gameId: event.gameId, role, ...base };
+  return { kind: 'candidate', gameId: event.gameId, role, source, gameKey: game.key, ...base };
 }
 
 /**
@@ -211,11 +253,11 @@ function classifyActivity(raw: RawGameEvent, originalPackageId: string, address:
  */
 export async function fetchMyActivityPage(client: EventScanClient, args: SourcePageArgs): Promise<MyGamesPage> {
   return fetchSourcePage(client, args, {
-    filter: myActivityFilter(args.originalPackageId, args.address),
+    filter: myActivityFilter(args.registry, args.address, args.games),
     limit: MY_ACTIVITY_EVENTS_PER_REQUEST,
     maxRequests: MY_ACTIVITY_MAX_REQUESTS_PER_PAGE,
     target: Number.POSITIVE_INFINITY,
-    classify: (raw) => classifyActivity(raw, args.originalPackageId, args.address),
+    classify: (raw) => classifyActivity(raw, args.registry, args.address),
   });
 }
 
@@ -227,20 +269,38 @@ export async function fetchMyActivityPage(client: EventScanClient, args: SourceP
  */
 export async function fetchInvitationsPage(client: EventScanClient, args: SourcePageArgs): Promise<MyGamesPage> {
   return fetchSourcePage(client, args, {
-    filter: eventTypeFilter(gameEventType(args.originalPackageId, 'GameCreated')),
+    filter: eventTypesFilter(eventLiterals(args.registry, args.games ?? 'all', 'created')),
     limit: LOBBY_EVENTS_PER_REQUEST,
     maxRequests: LOBBY_MAX_REQUESTS_PER_PAGE,
     target: LOBBY_PAGE_TARGET,
     classify: (raw) => {
-      let created: GameCreatedEvent;
+      const match = matchEvent(args.registry, raw.eventType);
+      // S-1: un `G` fuera del registro se ignora (no es una fila rota ni un evento ilegible).
+      if (match.kind === 'foreign') return { kind: 'skip' };
+      if (match.kind === 'unknown' || match.event !== 'created') return { kind: 'unreadable_event' };
+      let invited: { gameId: string; opponent: string | null };
       try {
-        created = parseGameCreated(raw, args.originalPackageId);
+        if (match.source.kind === 'legacy') {
+          const created = match.source.parseCreated(raw);
+          invited = { gameId: created.gameId, opponent: created.opponent };
+        } else {
+          const created = match.source.parseCreated(raw);
+          invited = { gameId: created.duelId, opponent: created.opponent };
+        }
       } catch (error) {
         if (!(error instanceof ReadDataError)) throw error;
         return { kind: 'unreadable_event' };
       }
-      if (created.opponent === null || !sameAddress(created.opponent, args.address)) return { kind: 'skip' };
-      return { kind: 'candidate', gameId: created.gameId, role: 'invitee', txDigest: raw.transactionDigest, checkpoint: raw.checkpoint };
+      if (invited.opponent === null || !sameAddress(invited.opponent, args.address)) return { kind: 'skip' };
+      return {
+        kind: 'candidate',
+        gameId: invited.gameId,
+        role: 'invitee',
+        source: match.source,
+        gameKey: match.game.key,
+        txDigest: raw.transactionDigest,
+        checkpoint: raw.checkpoint,
+      };
     },
   });
 }
@@ -250,12 +310,34 @@ export type MyGamesSection = 'invitations' | 'pending' | 'finished';
 /** Sección fijada por `gameId` mientras la página está montada (DL-5). */
 export type MyGamesPins = ReadonlyMap<string, MyGamesSection>;
 /** Filas de cada sección, en el orden en que se muestran. */
-export type MyGamesSections = Record<MyGamesSection, MyGameItem[]>;
+export type MyGamesSections = Record<MyGamesSection, MyGameEntry[]>;
 
 /** Clave de deduplicación y de fijado: el `gameId` normalizado, o `null` si la fila no lo tiene. */
-export function myGameKey(item: MyGameItem): string | null {
-  const id = item.kind === 'game' ? item.game.id : item.gameId;
+export function myGameKey(item: MyGameEntry): string | null {
+  const id = item.kind === 'game' ? item.game.id : item.kind === 'duel' ? item.duel.id : item.gameId;
   return id === null ? null : normalizeSuiAddress(id);
+}
+
+/**
+ * Sección natural de una fila de la fuente nueva (misma regla que `naturalSection` para un `Game`, #73 TASK-7b): un
+ * duelo `Active` es de quien lo juega (`pending`: en curso); `Resolved`, `TimedOut` y `Expired` son de los dos jugadores;
+ * `Cancelled`, del creador. Un rol `acceptor` con el objeto en `Pending` contradice el contrato ⇒ `null`.
+ */
+function duelSection({ duel, role }: MyDuelItem, address: string): MyGamesSection | null {
+  const isCreator = sameAddress(duel.creator, address);
+  switch (duel.state.kind) {
+    case 'pending':
+      if (role === 'invitee') return 'invitations';
+      return role === 'creator' ? 'pending' : null;
+    case 'active':
+      return isCreator || sameAddress(duel.state.acceptor, address) ? 'pending' : null;
+    case 'resolved':
+    case 'timed_out':
+    case 'expired':
+      return isCreator || sameAddress(duel.state.acceptor, address) ? 'finished' : null;
+    case 'cancelled':
+      return isCreator ? 'finished' : null;
+  }
 }
 
 /**
@@ -265,8 +347,9 @@ export function myGameKey(item: MyGameItem): string | null {
  * `acceptor` con el objeto en `Pending` contradice el contrato (aceptar es resolver) ⇒ `null`. Ilegibles: las de rol
  * `invitee` ⇒ `invitations`; el resto ⇒ `finished`, nunca `pending` (DL-3).
  */
-export function naturalSection(item: MyGameItem, address: string): MyGamesSection | null {
+export function naturalSection(item: MyGameEntry, address: string): MyGamesSection | null {
   if (item.kind === 'unreadable') return item.role === 'invitee' ? 'invitations' : 'finished';
+  if (item.kind === 'duel') return duelSection(item, address);
   const { game, role } = item;
   switch (game.state.kind) {
     case 'pending':
@@ -280,7 +363,7 @@ export function naturalSection(item: MyGameItem, address: string): MyGamesSectio
 }
 
 /** Orden de eventos: positivo si `a` es más nuevo que `b` (checkpoint mayor; `null` es el más viejo; empate por digest). */
-function compareEvents(a: MyGameItem, b: MyGameItem): number {
+function compareEvents(a: MyGameEntry, b: MyGameEntry): number {
   if (a.checkpoint !== b.checkpoint) {
     if (a.checkpoint === null) return -1;
     if (b.checkpoint === null) return 1;
@@ -294,10 +377,10 @@ function compareEvents(a: MyGameItem, b: MyGameItem): number {
  * `game` de la mayor `objectVersion` (empate ⇒ cualquiera: es el mismo objeto), con rol `acceptor` si alguna lo trae y
  * el evento más nuevo; entre ilegibles, la del evento más nuevo.
  */
-function mergeTwo(a: MyGameItem, b: MyGameItem): MyGameItem {
-  if (a.kind !== b.kind) return a.kind === 'game' ? a : b;
+function mergeTwo(a: MyGameEntry, b: MyGameEntry): MyGameEntry {
   const newer = compareEvents(a, b) >= 0 ? a : b;
-  if (a.kind === 'unreadable' || b.kind === 'unreadable') return newer;
+  if (a.kind === 'unreadable') return b.kind === 'unreadable' ? newer : b;
+  if (b.kind === 'unreadable') return a;
   const read = b.objectVersion > a.objectVersion ? b : a;
   const role = a.role === 'acceptor' || b.role === 'acceptor' ? 'acceptor' : read.role;
   return { ...read, role, txDigest: newer.txDigest, checkpoint: newer.checkpoint };
@@ -307,8 +390,8 @@ function mergeTwo(a: MyGameItem, b: MyGameItem): MyGameItem {
  * Deduplica las dos fuentes por `gameId` (MINOR-5, H-2): una invitación que la cuenta aceptó llega por las dos y es una
  * sola fila. Las ilegibles sin `gameId` no se deduplican. Conserva el orden de primera aparición.
  */
-export function mergeMyGames(activity: readonly MyGameItem[], invitations: readonly MyGameItem[]): MyGameItem[] {
-  const merged: MyGameItem[] = [];
+export function mergeMyGames(activity: readonly MyGameEntry[], invitations: readonly MyGameEntry[]): MyGameEntry[] {
+  const merged: MyGameEntry[] = [];
   const indexByKey = new Map<string, number>();
   for (const item of [...activity, ...invitations]) {
     const key = myGameKey(item);
@@ -330,7 +413,7 @@ export function mergeMyGames(activity: readonly MyGameItem[], invitations: reado
  * misma instancia** si no hay nada nuevo que fijar (el hook la guarda en su estado sin re-render), o un `Map` nuevo con
  * los anteriores más los nuevos; nunca muta el recibido.
  */
-export function extendPins(pins: MyGamesPins, items: readonly MyGameItem[], address: string): MyGamesPins {
+export function extendPins(pins: MyGamesPins, items: readonly MyGameEntry[], address: string): MyGamesPins {
   const added = new Map<string, MyGamesSection>();
   for (const item of items) {
     const key = myGameKey(item);
@@ -353,8 +436,8 @@ export function groupMyGames({
   address,
   pins,
 }: {
-  activity: readonly MyGameItem[];
-  invitations: readonly MyGameItem[];
+  activity: readonly MyGameEntry[];
+  invitations: readonly MyGameEntry[];
   address: string;
   pins: MyGamesPins;
 }): MyGamesSections {

@@ -10,8 +10,10 @@ import {
   groupMyGames,
   mergeMyGames,
   myGameKey,
+  type MyGameItem,
   type MyGamesPage,
   type MyGamesPins,
+  type MyGamesSection,
   type MyGamesSections,
 } from '../sui/myGames';
 import { PaginationStalledError } from '../sui/readErrors';
@@ -20,6 +22,7 @@ import { deriveReadStatus, type ReadStatus } from '../sui/readStatus';
 import { queryKeys } from './queryKeys';
 import { liveTxGameIds, mountSnapshot, toTxGameEntry } from './txSession';
 import { useAppConfig } from './useAppConfig';
+import { useGameRegistry } from './useGameRegistry';
 import { usePublishCheckpoint } from './useLobby';
 import { useWalletAccount } from './useWalletAccount';
 
@@ -44,12 +47,24 @@ export type MyGamesSource = {
   retry: () => void;
 };
 
+/**
+ * Las tres secciones con las filas de la fuente anterior (`game::Game`) y las ilegibles: la vista que dibujan hoy los
+ * componentes. Las filas de la fuente nueva (`Duel<G>`) van en `allSections` y las dibuja TASK-8.
+ */
+export type LegacyMyGamesSections = Record<MyGamesSection, MyGameItem[]>;
+
+function legacyRows(rows: MyGamesSections[MyGamesSection]): MyGameItem[] {
+  return rows.filter((row): row is MyGameItem => row.kind !== 'duel');
+}
+
 /** Lo que dibuja la página: sin cuenta, nada que consultar; con cuenta, las tres secciones y el estado de cada fuente. */
 export type UseMyGamesResult =
   | { kind: 'no_account' }
   | {
       kind: 'ready';
-      sections: MyGamesSections;
+      sections: LegacyMyGamesSections;
+      /** Las tres secciones con las filas de las dos fuentes del coinflip (anteriores, nuevas e ilegibles). */
+      allSections: MyGamesSections;
       unreadableEvents: number;
       activity: MyGamesSource;
       invitations: MyGamesSource;
@@ -121,6 +136,7 @@ function toSource(query: UseInfiniteQueryResult<InfiniteData<MyGamesPage>>, publ
  */
 export function useMyGames(): UseMyGamesResult {
   const config = useAppConfig();
+  const registry = useGameRegistry();
   const client = useCurrentClient();
   const queryClient = useQueryClient();
   const { address } = useWalletAccount();
@@ -137,7 +153,7 @@ export function useMyGames(): UseMyGamesResult {
   const publishCheckpoint = publish.data ?? null;
   const enabled = publish.isSuccess && address !== null;
   const pageArgs = (before: string | null, signal: AbortSignal) => ({
-    originalPackageId: config.originalPackageId,
+    registry,
     address: keyAddress,
     publishCheckpoint,
     before,
@@ -187,9 +203,11 @@ export function useMyGames(): UseMyGamesResult {
 
   if (address === null) return { kind: 'no_account' };
 
+  const allSections = groupMyGames({ activity: activityItems, invitations: invitationItems, address, pins: next });
   return {
     kind: 'ready',
-    sections: groupMyGames({ activity: activityItems, invitations: invitationItems, address, pins: next }),
+    sections: { invitations: legacyRows(allSections.invitations), pending: legacyRows(allSections.pending), finished: legacyRows(allSections.finished) },
+    allSections,
     unreadableEvents: (invitationsQuery.data?.pages ?? []).reduce((total, page) => total + page.unreadableEvents, 0),
     activity: toSource(activityQuery, publish),
     invitations: toSource(invitationsQuery, publish),

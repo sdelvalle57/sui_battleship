@@ -122,3 +122,55 @@ describe('transactionInvalidations of the House actions (T3-6, H-5 of #14)', () 
     expect(invalidate).toEqual([HOUSE_KEY, HOUSE_CAP]);
   });
 });
+
+// #73, TASK-7b: reclamar por tiempo y reembolsar se invalidan como aceptar (plan §8.3).
+describe('transactionInvalidations of claim and refundStalled (#73)', () => {
+  it.each(['claim', 'refundStalled'] as const)(
+    '%s: resets the lobby and invalidates the game, the balance of the caller, the House and my games, like accept',
+    (kind) => {
+      expect(transactionInvalidations({ kind, gameId: GAME }, CTX)).toEqual({
+        reset: [queryKeys.lobby('testnet', PKG)],
+        invalidate: [queryKeys.game('testnet', GAME), queryKeys.balance('testnet', ADDRESS), queryKeys.house('testnet', HOUSE), MY_GAMES],
+      });
+      expect(transactionInvalidations({ kind, gameId: GAME }, CTX)).toEqual(transactionInvalidations({ kind: 'accept', gameId: GAME }, CTX));
+    },
+  );
+
+  it.each(['claim', 'refundStalled'] as const)('%s ends with my games of the account and never touches immutable keys', (kind) => {
+    const keys = transactionInvalidations({ kind, gameId: GAME }, CTX);
+    expect(keys.invalidate.at(-1)).toEqual(MY_GAMES);
+    const all = JSON.stringify(keys);
+    for (const key of ['nodeInfo', 'txInfo', 'publishCheckpoint', 'checkpointTime']) expect(all).not.toContain(key);
+  });
+
+  it.each(['claim', 'refundStalled'] as const)('%s without account invalidates neither my games nor a balance', (kind) => {
+    expect(transactionInvalidations({ kind, gameId: GAME }, { ...CTX, address: null })).toEqual({
+      reset: [queryKeys.lobby('testnet', PKG)],
+      invalidate: [queryKeys.game('testnet', GAME), queryKeys.house('testnet', HOUSE)],
+    });
+  });
+});
+
+describe('queryKeys with the game dimension (#73)', () => {
+  const prefix = ['sui', 'localnet', 'lobby', PKG];
+
+  it('lobby: "Todos" is the base key and the prefix of every game; a game adds its key at the end', () => {
+    expect(queryKeys.lobby('localnet', PKG)).toEqual(prefix);
+    expect(queryKeys.lobby('localnet', PKG, 'all')).toEqual(prefix);
+    expect(queryKeys.lobby('localnet', PKG, 'coinflip')).toEqual([...prefix, 'coinflip']);
+  });
+
+  it('my activity and my invitations: the same, always under the myGames prefix of the account', () => {
+    const myGames = queryKeys.myGames('localnet', PKG, '0xb');
+    expect(queryKeys.myActivity('localnet', PKG, '0xb', 'coinflip')).toEqual([...myGames, 'activity', 'coinflip']);
+    expect(queryKeys.myInvitations('localnet', PKG, '0xb', 'coinflip')).toEqual([...myGames, 'invitations', 'coinflip']);
+    expect(queryKeys.myActivity('localnet', PKG, '0xb', 'all')).toEqual([...myGames, 'activity']);
+  });
+
+  it('the base key of the lobby matches (as a prefix) the key of any game, so a reset reaches every filter', () => {
+    const base = queryKeys.lobby('localnet', PKG);
+    const keyOfGame = queryKeys.lobby('localnet', PKG, 'coinflip');
+    expect(keyOfGame.slice(0, base.length)).toEqual(base);
+    expect(queryKeys.lobby('localnet', PKG, 'coinflip')).not.toEqual(queryKeys.lobby('localnet', PKG));
+  });
+});

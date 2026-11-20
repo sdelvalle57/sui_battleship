@@ -5,7 +5,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppConfig } from '../sui/config';
 import type { Game, GameState } from '../sui/game';
-import { fetchInvitationsPage, fetchMyActivityPage, type MyGameItem, type MyGameRole, type MyGamesPage } from '../sui/myGames';
+import { fetchInvitationsPage, fetchMyActivityPage, type MyDuelItem, type MyGameEntry, type MyGameItem, type MyGameRole, type MyGamesPage } from '../sui/myGames';
 import { PaginationStalledError } from '../sui/readErrors';
 import { fetchPublishCheckpoint } from '../sui/transactionInfo';
 import { advance, createPolicyQueryClient, queryWrapper } from '../test/queryHarness';
@@ -60,7 +60,7 @@ function game(n: number, { creator = ME, opponent = null, state = { kind: 'pendi
 function item(g: Game, role: MyGameRole, { version = 4n, cp = 100n }: { version?: bigint; cp?: bigint } = {}): MyGameItem {
   return { kind: 'game', game: g, objectVersion: version, role, txDigest: `tx-${g.id.slice(-2)}-${role}`, checkpoint: cp };
 }
-function page(items: MyGameItem[], next: string | null = null, overrides: Partial<MyGamesPage> = {}): MyGamesPage {
+function page(items: MyGameEntry[], next: string | null = null, overrides: Partial<MyGamesPage> = {}): MyGamesPage {
   return {
     items,
     endCursor: next,
@@ -624,5 +624,69 @@ describe('useAccountTxBusy (T4-11)', () => {
     vi.mocked(useWalletAccount).mockReturnValue({ address: OTHER.toUpperCase().replace('0X', '0x'), short: 'other' });
     hook.rerender();
     expect(hook.result.current.busy).toBe(true);
+  });
+});
+
+// #73, TASK-7b: el registro de juegos y las filas de la fuente nueva.
+describe('useMyGames and the two sources (#73)', () => {
+  const duelItem = (n: number, role: MyGameRole): MyDuelItem => ({
+    kind: 'duel',
+    gameKey: 'coinflip',
+    objectVersion: 5n,
+    role,
+    txDigest: `tx-duel-${String(n)}-${role}`,
+    checkpoint: BigInt(2000 - n),
+    duel: {
+      id: gid(0x200 + n),
+      version: 1n,
+      houseId: CONFIG.houseId,
+      creator: ME,
+      opponent: null,
+      bet: 1_000_000n,
+      stake: 1_000_000n,
+      feeRate: 250,
+      turnMs: 0n,
+      state: { kind: 'pending' },
+    },
+  });
+
+  it('passes the registry built from the whole config (and no originalPackageId) to both sources', async () => {
+    activityMock.mockResolvedValue(page([]));
+    invitationsMock.mockResolvedValue(page([]));
+    render();
+    await advance(0);
+    for (const mock of [activityMock, invitationsMock]) {
+      const [, args] = mock.mock.calls[0] ?? [];
+      expect(args).toMatchObject({ address: ME, publishCheckpoint: 59n, before: null });
+      expect(args).not.toHaveProperty('originalPackageId');
+      expect(args?.registry[0]?.sources.map((source) => source.kind)).toEqual(['legacy']);
+    }
+  });
+
+  it('allSections has the rows of both sources while sections (what the components draw today) only has the legacy rows', async () => {
+    activityMock.mockResolvedValue(page([ownPending(1), duelItem(1, 'creator')]));
+    invitationsMock.mockResolvedValue(page([]));
+    const hook = render();
+    await advance(0);
+    const result = ready(hook);
+    expect(result.allSections.pending.map((row) => row.kind)).toEqual(['duel', 'game']);
+    expect(result.sections.pending.map((row) => row.kind)).toEqual(['game']);
+    expect(ids(result.sections.pending)).toEqual([gid(1)]);
+  });
+
+  it('pins a duel row in its section like a legacy one: it does not move when the object changes state', async () => {
+    activityMock.mockResolvedValueOnce(page([duelItem(1, 'creator')]));
+    invitationsMock.mockResolvedValue(page([]));
+    const hook = render();
+    await advance(0);
+    expect(ready(hook).allSections.pending).toHaveLength(1);
+    const open = duelItem(1, 'creator');
+    const resolved: MyDuelItem = { ...open, objectVersion: 9n, duel: { ...open.duel, stake: 0n, state: { kind: 'resolved', acceptor: OTHER, winner: ME } } };
+    activityMock.mockResolvedValue(page([resolved]));
+    act(() => {
+      ready(hook).refresh();
+    });
+    await advance(0);
+    expect(ready(hook).allSections.finished.map((row) => row.kind)).toEqual(['duel']);
   });
 });

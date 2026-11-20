@@ -1,6 +1,7 @@
 import { useCurrentClient } from '@mysten/dapp-kit-react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HistoryLowerBound } from '../sui/eventScan';
+import type { GameSelection } from '../sui/gameRegistry';
 import { sameAddress } from '../sui/ids';
 import { fetchLobbyPage, type LobbyItem, type LobbyPage } from '../sui/lobby';
 import { PaginationStalledError } from '../sui/readErrors';
@@ -8,10 +9,18 @@ import { deriveReadStatus, type ReadStatus } from '../sui/readStatus';
 import { fetchPublishCheckpoint } from '../sui/transactionInfo';
 import { queryKeys } from './queryKeys';
 import { useAppConfig } from './useAppConfig';
+import { useGameRegistry } from './useGameRegistry';
 import { useWalletAccount } from './useWalletAccount';
 
-/** Fila del lobby con la marca de si la creó la cuenta conectada. */
-export type LobbyRow = LobbyItem & { isMine: boolean };
+/**
+ * Fila del lobby con la marca de si la creó la cuenta conectada: la vista que dibujan hoy los componentes, solo con las
+ * filas de la fuente anterior (`game::Game`) y las ilegibles. Las de la fuente nueva (`Duel<G>`) van en `entries`
+ * (`LobbyEntry`): los componentes las dibujan en TASK-8 (rótulo "anterior"/"nueva" y control de tiempo).
+ */
+export type LobbyRow = Exclude<LobbyItem, { kind: 'duel' }> & { isMine: boolean };
+
+/** Fila del lobby de cualquiera de las dos fuentes (con `isMine`), en el orden del lobby. */
+export type LobbyEntry = LobbyItem & { isMine: boolean };
 
 /** Lo que el lobby necesita para mostrarse: filas, estado combinado, paginación y acciones. */
 export type UseLobbyResult = {
@@ -45,37 +54,49 @@ export function usePublishCheckpoint() {
 
 /** Clave de deduplicación de una fila: el ID de la partida, si se conoce. */
 function rowGameId(item: LobbyItem): string | null {
-  return item.kind === 'game' ? item.game.id : item.gameId;
+  return item.kind === 'game' ? item.game.id : item.kind === 'duel' ? item.duel.id : item.gameId;
 }
 
+/** El creador de una fila legible de cualquiera de las dos fuentes (las ilegibles no tienen). */
+function rowCreator(item: LobbyItem): string | null {
+  return item.kind === 'game' ? item.game.creator : item.kind === 'duel' ? item.duel.creator : null;
+}
+
+/** Lo que devuelve `useLobbyEntries`: lo de `UseLobbyResult` salvo `items`, y todas las filas en `entries`. */
+export type UseLobbyEntriesResult = Omit<UseLobbyResult, 'items'> & {
+  /** Todas las filas (anteriores, nuevas e ilegibles), deduplicadas y en el orden del lobby. */
+  entries: LobbyEntry[];
+};
+
 /**
- * Lobby de partidas abiertas (DL-2, DL-3, DL-4): páginas descendentes con `fetchLobbyPage`, cada "cargar más" con el
- * `endCursor` anterior. Espera a la publicación (su cota) y combina su estado (MINOR-1 de v1.1): mientras no terminó,
- * manda el suyo; si falló, `error` con ese error, nunca "cargando" para siempre. Sin intervalo ni refetch al foco;
- * `refresh` vuelve a pedir la publicación si falló y reinicia el lobby a la primera página. Aplana, deduplica por
- * partida y marca `isMine` con la cuenta conectada.
+ * Lobby de partidas abiertas de las dos fuentes del coinflip (DL-2, DL-3, DL-4; #73 TASK-7b): páginas descendentes con
+ * `fetchLobbyPage` sobre el registro de juegos, cada "cargar más" con el `endCursor` anterior, para "Todos" (por defecto)
+ * o un juego (con su propia clave de consulta). Espera a la publicación (su cota) y combina su estado (MINOR-1 de v1.1):
+ * mientras no terminó, manda el suyo; si falló, `error` con ese error, nunca "cargando" para siempre. Sin intervalo ni
+ * refetch al foco; `refresh` vuelve a pedir la publicación si falló y reinicia el lobby a la primera página. Aplana,
+ * deduplica por partida y marca `isMine` con la cuenta conectada.
  */
-export function useLobby(): UseLobbyResult {
+export function useLobbyEntries(games: GameSelection = 'all'): UseLobbyEntriesResult {
   const config = useAppConfig();
+  const registry = useGameRegistry();
   const client = useCurrentClient();
   const queryClient = useQueryClient();
   const { address } = useWalletAccount();
   const publish = usePublishCheckpoint();
-  const queryKey = queryKeys.lobby(config.network, config.originalPackageId);
+  const queryKey = queryKeys.lobby(config.network, config.originalPackageId, games);
   const publishCheckpoint = publish.data ?? null;
 
   const query = useInfiniteQuery({
     queryKey,
     enabled: publish.isSuccess,
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam, signal }) =>
-      fetchLobbyPage(client, { originalPackageId: config.originalPackageId, publishCheckpoint, before: pageParam, signal }),
+    queryFn: ({ pageParam, signal }) => fetchLobbyPage(client, { registry, games, publishCheckpoint, before: pageParam, signal }),
     getNextPageParam: (page) => (page.hasNextPage ? (page.endCursor ?? undefined) : undefined),
     refetchOnWindowFocus: false,
   });
 
   const seen = new Set<string>();
-  const items: LobbyRow[] = [];
+  const entries: LobbyEntry[] = [];
   for (const page of query.data?.pages ?? []) {
     for (const item of page.items) {
       const gameId = rowGameId(item);
@@ -83,8 +104,9 @@ export function useLobby(): UseLobbyResult {
         if (seen.has(gameId)) continue;
         seen.add(gameId);
       }
-      const isMine = item.kind === 'game' && address !== null && sameAddress(item.game.creator, address);
-      items.push({ ...item, isMine });
+      const creator = rowCreator(item);
+      const isMine = creator !== null && address !== null && sameAddress(creator, address);
+      entries.push({ ...item, isMine });
     }
   }
 
@@ -102,7 +124,7 @@ export function useLobby(): UseLobbyResult {
   const lastPage = query.data?.pages.at(-1);
 
   return {
-    items,
+    entries,
     status,
     hasNextPage: query.hasNextPage && !stalled,
     isFetchingNextPage: query.isFetchingNextPage,
@@ -119,4 +141,15 @@ export function useLobby(): UseLobbyResult {
       void queryClient.resetQueries({ queryKey });
     },
   };
+}
+
+/**
+ * Lobby de "Todos" para los componentes de hoy: lo de `useLobbyEntries` con `items` = solo las filas de la fuente
+ * anterior (`game::Game`) y las ilegibles, que son las que saben dibujar y accionar hoy (aceptar, cancelar y rechazar
+ * llaman a `game::*`). Las filas de la fuente nueva llegan por `useLobbyEntries` cuando TASK-8 sume su rótulo, su control
+ * de tiempo y sus acciones.
+ */
+export function useLobby(): UseLobbyResult {
+  const { entries, ...rest } = useLobbyEntries('all');
+  return { ...rest, items: entries.filter((entry): entry is LobbyRow => entry.kind !== 'duel') };
 }

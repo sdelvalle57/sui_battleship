@@ -8,7 +8,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { AppConfig } from '../sui/config';
-import { transactionErrorMessage } from '../sui/errors';
+import { findMoveAbort, transactionErrorMessage } from '../sui/errors';
 import {
   confirmTransaction,
   PREFLIGHT_NETWORK_MESSAGE,
@@ -483,6 +483,37 @@ describe('useExecuteTransaction: wallet abort without digest (T3-13, NIT-2)', ()
     expect(resetKeys()).toEqual([LOBBY]);
     expect(invalidatedKeys()).toEqual([queryKeys.game('localnet', fixture.ids.games.open), BALANCE, MY_GAMES]);
     expect(confirmTransaction).not.toHaveBeenCalled();
+  });
+
+  it('#73: translates the abort of an INTERMEDIATE version of a 3-version package (the hook passes the whole config, with upgrades[])', async () => {
+    const sim = fixture.simulationErrors.cancelNotCreator;
+    if (sim === undefined) throw new Error('fixture');
+    const executedPackage = findMoveAbort(new Error(sim.message))?.packageId;
+    if (executedPackage === undefined) throw new Error('la fixture no trae un abort');
+    // Un paquete con tres versiones: el abort informa el ID de la versión 2, que no es ni el vigente ni el original.
+    const current = `0x${'3'.repeat(64)}`;
+    const original = `0x${'1'.repeat(64)}`;
+    vi.mocked(useAppConfig).mockReturnValue({
+      ...CONFIG,
+      packageId: current,
+      originalPackageId: original,
+      upgrades: [
+        { version: 2, packageId: executedPackage, txDigest: OPEN_DIGEST },
+        { version: 3, packageId: current, txDigest: OPEN_DIGEST },
+      ],
+    });
+    signAndExecuteTransaction.mockRejectedValue(new Error(sim.message));
+    const { result } = await runToOutcome(input(action));
+    expect(result.current.outcome).toMatchObject({ kind: 'failure', message: 'Solo quien creó la partida puede cancelarla. (código game/3)' });
+  });
+
+  it('#73: the same abort from a package that is none of the config shows the raw package (it is not ours)', async () => {
+    const sim = fixture.simulationErrors.cancelNotCreator;
+    if (sim === undefined) throw new Error('fixture');
+    vi.mocked(useAppConfig).mockReturnValue({ ...CONFIG, packageId: `0x${'3'.repeat(64)}`, originalPackageId: `0x${'1'.repeat(64)}` });
+    signAndExecuteTransaction.mockRejectedValue(new Error(sim.message));
+    const { result } = await runToOutcome(input(action));
+    expect(result.current.outcome).toMatchObject({ kind: 'failure', message: expect.stringContaining('La transacción abortó en') as string });
   });
 
   it('does not invalidate anything when the wallet error has no abort', async () => {

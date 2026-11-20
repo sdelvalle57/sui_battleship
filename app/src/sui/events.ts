@@ -1,6 +1,6 @@
 import { bcs } from '@mysten/sui/bcs';
 import type { SuiClientTypes } from '@mysten/sui/client';
-import { normalizeStructTag } from '@mysten/sui/utils';
+import { normalizeStructTag, parseStructTag } from '@mysten/sui/utils';
 import { assertWinner, isValidToMove } from './duel';
 import { isExactType, parseExactBcs } from './game';
 import { ReadDataError } from './readErrors';
@@ -310,6 +310,30 @@ const DuelExpiredBcs = bcs.struct('DuelExpired', {
  */
 export function duelEventType(definingId: string, name: DuelEventName, gameTag: string): string {
   return normalizeStructTag(`${definingId}::duel::${name}<${gameTag}>`);
+}
+
+/**
+ * Literal **prefijo** de un evento de `duel` (#73, TASK-7b): `<ID de definición del evento>::duel::<Evento>` **sin** parámetros
+ * de tipo. En un filtro `eventType` de `ListEvents` casa con todas las instanciaciones de `G` (V-4, H-i de TASK-1b), así que
+ * el lobby "Todos" usa un solo literal por evento, también para un juego que la app todavía no registra (S-1: el parser lo
+ * ignora, `eventTypeFamily`). `definingId` es el de ese evento en `typeOrigins` (búsqueda por módulo + nombre, S-2).
+ */
+export function duelEventPrefix(definingId: string, name: DuelEventName): string {
+  return normalizeStructTag(`${definingId}::duel::${name}`);
+}
+
+/**
+ * Tipo de un evento **sin** sus parámetros de tipo (`<dirección>::<módulo>::<Nombre>`, normalizado), o `null` si no es un tag
+ * válido. Con el literal prefijo, el nodo devuelve eventos de cualquier `G`: así se reconoce la familia de un evento (para
+ * ignorar un `G` desconocido sin tratarlo como una fila rota) sin comparar el tag completo.
+ */
+export function eventTypeFamily(eventType: string): string | null {
+  try {
+    const { address, module, name } = parseStructTag(eventType);
+    return normalizeStructTag(`${address}::${module}::${name}`);
+  } catch {
+    return null;
+  }
 }
 
 /** El pozo siempre se reparte en pago y comisión (`pot == payout + fee`). */
