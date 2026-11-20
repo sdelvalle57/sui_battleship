@@ -919,3 +919,12 @@ Los fixtures de `contracts/scripts/fixtures/` son el stdout crudo de una localne
 dirección y la firma de una cuenta efímera de la génesis, sin valor y con la clave destruida. Al recapturarlos (por
 ejemplo al subir la CLI) se usa siempre el procedimiento de `agents.md` §3; nunca salida de testnet ni de una cuenta
 del owner.
+
+Fixtures del upgrade (#73, TASK-1a): `localnet-upgrade.json` y `localnet-upgrade-dry-run.json` son el stdout `--json` real
+de `sui client test-upgrade` (1.84.0) y de su `--dry-run` sobre un paquete publicado con la 1.83.0 al que se le agrega un
+módulo de ensayo (`sandbox_fees`, con el tipo `SandboxMarker`); **ese módulo no es de producción**: las fixtures sirven
+solo por su **forma** (comandos del PTB, `published`, `UpgradeCap`). `Published.upgrade-before.localnet.toml` y
+`Published.upgrade.localnet.toml` son el pubfile efímero de `test-publish` antes y después del upgrade (`source.local` con
+el placeholder `<SMOKE_DIR>`); `localnet-upgrade-retry-error.txt` es el error real de reintentar el upgrade con el pubfile
+viejo (`PackageIDDoesNotMatch`). Llevan la cuenta efímera de la misma génesis desechable, sin valor y con la clave
+destruida.
