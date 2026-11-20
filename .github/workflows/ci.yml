@@ -19,10 +19,10 @@ env:
   # Única fuente de la versión de la Sui CLI en CI: debe coincidir con documents/STATUS.md (Toolchain).
   # Al subir de versión: SUI_TGZ_SHA256 = gh api repos/MystenLabs/sui/releases/tags/testnet-v<versión> --jq '.assets[] | .name + " " + .digest'
   #                      SUI_BIN_SHA256 = sha256sum del binario `sui` de esa versión instalado en local con suiup
-  SUI_VERSION: "1.83.0"
-  SUI_COMMIT: "16d2dc1e05ed"
-  SUI_TGZ_SHA256: "e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8"
-  SUI_BIN_SHA256: "29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa"
+  SUI_VERSION: "1.84.0"
+  SUI_COMMIT: "9dc25070cf2e"
+  SUI_TGZ_SHA256: "0f006fb4408bb2f867698a193d5f22f166acb9b89e0eb027c1e1b445b3b62127"
+  SUI_BIN_SHA256: "ac657ec16feafe3e1a6db93b09ae922f6e5e601cf41ea35ff9b7905781d35ab0"
 
 jobs:
   contracts:

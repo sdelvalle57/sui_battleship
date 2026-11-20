@@ -42,7 +42,8 @@ la app muestra la pantalla "La app no está configurada" con la causa y la acci�
 ### Localnet
 
 1. Localnet **aislada** de `agents.md` §3 ("Localnet aislada (smokes)"), con la publicación del paso 4 en la
-   **variante B** (sin `--out`): escribe `contracts/deployments/localnet.json` (ignorado por git).
+   **variante B** (sin `--out`): escribe `contracts/deployments/localnet.json` (ignorado por git). Aviso: el navegador
+   (`npm run dev` con `VITE_SUI_NETWORK=localnet`) solo conecta al puerto 9000 (`app/src/sui/networks.ts:11`), mientras que las capturas de `app/scripts` aceptan `http://127.0.0.1:<puerto>`; seguimiento: #77.
 2. `VITE_SUI_NETWORK=localnet npm run dev -w app` y abrir `http://localhost:5173`. Si `localnet.json` se crea (o se
    vuelve a crear) con `vite` dev ya arrancado, la app sigue en "La app no está configurada" aunque se recargue:
    reiniciar `npm run dev -w app` (`vite` ve los cambios y el borrado del archivo, pero no uno nuevo fuera de `app/`;
@@ -325,7 +326,7 @@ src/
 ├── test/        # setup de Vitest, arneses de TanStack Query, de la máquina de transacciones y del escaneo de eventos
 └── App.tsx      # rutas (appRoutes) + RouterProvider
 scripts/
-├── localnet-guard.mjs          # guarda compartida de las capturas: solo http://127.0.0.1:9000 y la génesis del despliegue
+├── localnet-guard.mjs          # guarda compartida de las capturas: solo loopback http://127.0.0.1:<puerto> (1024-65535; por defecto 9000) y la génesis del despliegue
 ├── capture-read-fixtures.mjs   # captura de las fixtures reales de lectura (ver "Fixtures de lectura")
 ├── capture-tx-fixtures.mjs     # captura de las fixtures reales de transacciones (ver "Fixtures de lectura")
 └── capture-house-fixtures.mjs  # (#14) captura de la fixture real del panel de la House (ver "Fixtures de lectura")
@@ -837,7 +838,7 @@ del encabezado aparece **solo** cuando se sabe que la cuenta tiene el cap.
 `contracts/fixtures/game-reads.localnet.json` (5 variantes de `Game`, sus eventos y una página cruda de `ListEvents`,
 capturadas en una localnet desechable) la usan los tests de `sui/`. Cómo recapturarla:
 `contracts/README.md`, "Lectura desde la app" (`node app/scripts/capture-read-fixtures.mjs` dentro de la localnet
-aislada; solo acepta `http://127.0.0.1:9000`).
+aislada; solo acepta loopback `http://127.0.0.1:<puerto>`, 1024-65535, por defecto 9000).
 
 `contracts/fixtures/game-tx.localnet.json` (#11 y #12: House, 11 `SimulationError` reales, 9 transacciones ejecutadas
 con dos `MoveAbort` reales, entre ellas aceptaciones con cada ganador y sobre una invitación, y el texto Rust del abort)

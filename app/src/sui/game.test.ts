@@ -104,20 +104,20 @@ describe('parseGameObject on the real fixture', () => {
 
   it('parses an invitation with the invited address', () => {
     const game = parseGameObject(input('pendingInvite'), PKG);
-    expect(game.bet).toBe(1_000_002n);
+    expect(game.bet).toBe(2_000_002n);
     expect(game.opponent).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
   it.each([
-    ['cancelledByCreator', 1_000_003n],
-    ['cancelledByInvitee', 1_000_004n],
+    ['cancelledByCreator', 3_000_003n],
+    ['cancelledByInvitee', 4_000_004n],
   ] as const)('parses %s with stake 0', (name, bet) => {
     expect(parseGameObject(input(name), PKG)).toMatchObject({ bet, stake: 0n, state: { kind: 'cancelled' } });
   });
 
   it('parses a resolved game with acceptor and winner', () => {
     const game = parseGameObject(input('resolved'), PKG);
-    expect(game).toMatchObject({ bet: 1_000_005n, stake: 0n });
+    expect(game).toMatchObject({ bet: 1_000_001n, stake: 0n });
     expect(game.state.kind).toBe('resolved');
     if (game.state.kind === 'resolved') expect([game.creator, game.state.acceptor]).toContain(game.state.winner);
   });

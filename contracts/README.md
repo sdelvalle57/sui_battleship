@@ -12,7 +12,7 @@ código discrepan, manda el código y se corrige la tabla en el mismo PR (`agent
 | `tests/game_tests.move` | Suite de `battleship::game` (`sui::test_scenario`) |
 | `scripts/publish.mjs` | Publicación con guardas, `record` y `check` de los despliegues (#7, ver "Despliegues") |
 | `scripts/deployment.mjs` | Formato de `deployments/<red>.json`: funciones puras que usan el script y la CI |
-| `scripts/*.test.mjs`, `scripts/fixtures/` | Tests (`node --test`) y salidas reales de la CLI 1.83.0 en una localnet desechable |
+| `scripts/*.test.mjs`, `scripts/fixtures/` | Tests (`node --test`) y salidas reales de la CLI 1.84.0 en una localnet desechable |
 | `deployments/<red>.json`, `Published.toml` | Datos de cada publicación (testnet desde #8) |
 | `fixtures/game-reads.localnet.json` | Lecturas gRPC reales de cada variante de `Game` y de sus eventos, capturadas en una localnet desechable con `app/scripts/capture-read-fixtures.mjs` (#10, ver "Lectura desde la app") |
 | `fixtures/game-tx.localnet.json` | Transacciones reales de crear, cancelar, rechazar (#11) y aceptar (#12): éxitos (con cada ganador y sobre una invitación), dos fallos `MoveAbort` ejecutados y 11 `SimulationError` de simulaciones sin firmar, y el objeto House, capturados en una localnet desechable con `app/scripts/capture-tx-fixtures.mjs` (ver "Lectura desde la app") |
@@ -462,8 +462,10 @@ transacción (cómputo + storage − rebate de `effects.gasUsed`).
   `u64` como string, `u16` como número, `Balance` aplanado a su valor, `Option` como `null` o la dirección y el enum
   como `{"@variant": "Resolved", "acceptor": "0x…", "winner": "0x…"}`. En los eventos, igual.
 - **Recaptura:** dentro de la localnet aislada (`agents.md` §3, publicación variante B y las transacciones de partidas),
-  con Node 26 (prefijo de `agents.md` §3, "App (`app/`)"): `node app/scripts/capture-read-fixtures.mjs` desde `<repo>`. El script solo
-  acepta `http://127.0.0.1:9000` (con otra `--url` sale con error antes de cualquier pedido), exige que el chain id del
+  con Node 26 (prefijo de `agents.md` §3, "App (`app/`)"): `node app/scripts/capture-read-fixtures.mjs` desde `<repo>` (con `--url "$RPC_URL"` si la localnet no
+  corre en el puerto por defecto, `agents.md` §3 paso 4). El script solo
+  acepta `http://127.0.0.1:<puerto>` (loopback, 1024-65535; por defecto 9000) y con cualquier otra `--url` sale con error
+  antes de cualquier pedido, exige que el chain id del
   nodo coincida con `contracts/deployments/localnet.json` y es determinista: dos corridas sobre la misma red dan el mismo
   archivo salvo `_meta.capturedAt`. Un cambio de la fixture al recapturar se declara en el PR.
 - **Fixture de transacciones (#11, aceptar en #12):** `contracts/fixtures/game-tx.localnet.json` = `ids` (paquete, House
@@ -496,7 +498,14 @@ transacción (cómputo + storage − rebate de `effects.gasUsed`).
   6. `A` crea `G_ACCINV` invitando a `B` (1000001) y `B` la acepta;
   7. `C` acepta `G_ACC1` (ya resuelta) con `--gas-budget 100000000` ⇒ fallo ejecutado `game`/4.
 
-  Después, con el mismo prefijo de Node 26: `node app/scripts/capture-tx-fixtures.mjs` desde `<repo>`. Comparte la
+  El número de aceptaciones de las partidas `G_ACC` lo decide la moneda aleatoria (se acepta hasta tener un ganador
+  creador y uno aceptante), así que `house.json.fees_collected` de `game-tx.localnet.json` (aceptaciones × la comisión) y el
+  literal `feesCollected` de `app/src/sui/house.test.ts` cambian entre recapturas: se actualizan con
+  `jq -r '.house.json.fees_collected' contracts/fixtures/game-tx.localnet.json`. La captura de #75 dio 4 aceptaciones
+  (200000); la de #12, 3 (150000) (seguimiento: #78).
+
+  Después, con el mismo prefijo de Node 26: `node app/scripts/capture-tx-fixtures.mjs` desde `<repo>` (con
+  `--url "$RPC_URL"` fuera del puerto por defecto). Comparte la
   guarda con el script de #10 (`app/scripts/localnet-guard.mjs`: sin SDK ni red en el nivel superior; con otra `--url`
   sale con código 2 antes de cualquier pedido) y es determinista igual (solo cambia `_meta.capturedAt`). Selección (por
   orden de creación): `G_OPEN` = primera abierta pendiente, `G_INV` = primera invitación pendiente, `G_CANCEL` = primera
@@ -663,7 +672,7 @@ su `network`, si una red no-localnet no tiene su `[published.<red>]` (o al revé
   SUI_CONFIG_DIR=<dir>/net sui start --network.config <dir>/net      # en otra terminal
   ```
 
-  Agentes: el procedimiento completo de `agents.md` §3 ("Localnet aislada (smokes)").
+  Agentes: el procedimiento completo de `agents.md` §3 ("Localnet aislada (smokes)"). Si el 9000 lo ocupa otro servicio del host, la localnet aislada corre en otro puerto con `--fullnode-rpc-port <puerto>`: génesis → `sui start` con el flag → recién después `suic`/`publish.mjs` (`agents.md` §3, paso 4).
 - Publicación con el script, desde `contracts/` y con un `--pubfile-path` **nuevo por génesis** (uno de otra génesis
   hace fallar a la CLI):
 
@@ -720,7 +729,7 @@ nvm use && node --version               # v26.x; con otra versión el script sal
 export SUI_CONFIG_DIR=<su dir>          # solo en esta shell
 case "$(realpath -m "$SUI_CONFIG_DIR")/" in "$(realpath -m ~/.sui)"/*) echo "ABORTA: config dentro de ~/.sui";; *) echo "config fuera de ~/.sui";; esac
 suio() { printf 'n\n' | SUI_CONFIG_DIR="${SUI_CONFIG_DIR:?exporta tu SUI_CONFIG_DIR}" sui client "$@"; }
-printf 'n\n' | sui --version            # sui 1.83.0-16d2dc1e05ed (= SUI_VERSION/SUI_COMMIT de ci.yml)
+printf 'n\n' | sui --version            # sui 1.84.0-9dc25070cf2e (= SUI_VERSION/SUI_COMMIT de ci.yml)
 suio active-env                         # testnet
 suio active-address                     # la dirección de su wallet; no se pega
 suio gas                                # saldo; no se pega

@@ -90,8 +90,8 @@ Layout completo en [repositorio](agents.md#2-repositorio-monorepo).
 
 - **Node 26** (`.nvmrc`, `nvm use`) y npm 11, todo desde la raíz (npm workspaces). Con otra versión `npm ci` falla con
   `EBADENGINE`.
-- **Sui CLI `1.83.0`**, la de `SUI_VERSION` en [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
-  `suiup install sui@testnet-1.83.0`, con [suiup](https://github.com/MystenLabs/suiup).
+- **Sui CLI `1.84.0`**, la de `SUI_VERSION` en [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+  `suiup install sui@testnet-1.84.0`, con [suiup](https://github.com/MystenLabs/suiup).
 - **Docker (opcional):** solo para verificar en local la imagen de Railway
   ([verificar la imagen](app/README.md#verificar-la-imagen-appscriptscheck-deploy-imagesh)).
 - **Aviso de la CLI:** sin `~/.sui/sui_config/client.yaml`, `sui move …` ofrece crear una config y genera una clave
