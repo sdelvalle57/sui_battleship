@@ -4,7 +4,17 @@
 #[test_only]
 module battleship::duel_tests;
 
-use battleship::duel::{Self, Duel, DuelCreated, DuelCancelled, DuelActivated, DuelResolved};
+use battleship::duel::{
+    Self,
+    Duel,
+    DuelCreated,
+    DuelCancelled,
+    DuelActivated,
+    DuelResolved,
+    DuelTurn,
+    DuelTimedOut,
+    DuelExpired
+};
 use battleship::game::{Self, Game};
 use battleship::house::{Self, House, HouseCap};
 use sui::clock;
@@ -612,6 +622,13 @@ fun test_create_reports_version_before_bet() {
 fun test_create_reports_bet_error_before_self_invite() {
     let scenario = publish();
     create_expecting_abort(scenario, MIN_BET - 1, option::some(CREATOR), CONTROL_NONE);
+}
+
+// T-2: a bet ABOVE the maximum is reported before the self-invitation (the test above uses a low bet).
+#[test, expected_failure(abort_code = battleship::duel::EBetTooHigh)]
+fun test_create_reports_bet_too_high_before_self_invite() {
+    let scenario = publish();
+    create_expecting_abort(scenario, MAX_BET + 1, option::some(CREATOR), CONTROL_NONE);
 }
 
 #[test, expected_failure(abort_code = battleship::duel::ESelfInvite)]
@@ -1640,6 +1657,21 @@ fun test_collect_reports_not_player_before_deadline() {
     scenario.end();
 }
 
+// T-2: a duel of an older version AND another House in the same call: the version mismatch comes first.
+#[test, expected_failure(abort_code = battleship::duel::EVersionMismatch)]
+fun test_collect_reports_version_mismatch_before_wrong_house() {
+    let mut scenario = publish();
+    let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_RAPID_10);
+    activate(&mut scenario, duel_id, ACCEPTOR, BET, TO_CREATOR);
+    set_duel_version(&mut scenario, duel_id, OLDER_VERSION);
+    let second_house_id = other_house(&mut scenario);
+
+    scenario.next_tx(CREATOR);
+    collect_on_house_now(&mut scenario, duel_id, second_house_id, WINNER_CREATOR);
+
+    scenario.end();
+}
+
 #[test, expected_failure(abort_code = battleship::duel::EDeadlinePassed)]
 fun test_collect_reports_deadline_before_version() {
     let mut scenario = publish();
@@ -1973,5 +2005,1412 @@ fun test_fee_is_charged_only_when_resolving() {
     activate(&mut scenario, active_id, ACCEPTOR, BET, TO_BOTH);
 
     assert!(fees_of_house(&mut scenario) == 0);
+    scenario.end();
+}
+
+// =============================================================================================
+// Clock per move (TASK-2b): `record_move`, `claim_timeout`, `refund_stalled`
+//
+// Every duel below is a `TestGame` duel with the control RAPID_10 (600_000 ms per move) activated by
+// ACCEPTOR at 1_000_000 ms, so its first `deadline_ms` is 1_600_000. The boundary tests write the
+// deadline and the grace (604_800_000 ms) as literals, not through the constants of the module: they are
+// the functional barrier against a shortened clock (R2-1).
+// =============================================================================================
+
+// ---------------------------------------------------------------------------------------------
+// Helpers of the clock suite and the test game
+// ---------------------------------------------------------------------------------------------
+
+// Calls `record_move` as the sender of the CURRENT transaction. The transaction stays open.
+fun record_now(scenario: &mut Scenario, duel_id: ID, next_to_move: u8) {
+    let mut duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    duel::record_move(TestGame {}, &mut duel, next_to_move, scenario.ctx());
+    test_scenario::return_shared(duel);
+}
+
+// `record_now` as `sender` with the Clock at exactly `ms`.
+fun record(scenario: &mut Scenario, duel_id: ID, sender: address, ms: u64, next_to_move: u8) {
+    at(scenario, sender, ms);
+    record_now(scenario, duel_id, next_to_move);
+}
+
+// Calls `claim_timeout` as the sender of the CURRENT transaction against the House `house_id` (none = the
+// only House). The transaction stays open.
+fun claim_with(scenario: &mut Scenario, duel_id: ID, house_id: Option<ID>) {
+    let mut duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    let mut house = take_house(scenario, house_id);
+    duel::claim_timeout(&mut duel, &mut house, scenario.ctx());
+    test_scenario::return_shared(duel);
+    test_scenario::return_shared(house);
+}
+
+// `claim_with` against the only House, as `sender` with the Clock at exactly `ms`.
+fun claim(scenario: &mut Scenario, duel_id: ID, sender: address, ms: u64) {
+    at(scenario, sender, ms);
+    claim_with(scenario, duel_id, option::none());
+}
+
+// Calls `refund_stalled` as the sender of the CURRENT transaction. The transaction stays open.
+fun refund_now(scenario: &mut Scenario, duel_id: ID) {
+    let mut duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    duel::refund_stalled(&mut duel, scenario.ctx());
+    test_scenario::return_shared(duel);
+}
+
+// `refund_now` as `sender` with the Clock at exactly `ms`.
+fun refund(scenario: &mut Scenario, duel_id: ID, sender: address, ms: u64) {
+    at(scenario, sender, ms);
+    refund_now(scenario, duel_id);
+}
+
+// A RAPID_10 duel created by CREATOR and activated by ACCEPTOR at `activated_ms` with `first_to_move`:
+// `deadline_ms = activated_ms + 600_000`. The activation transaction stays open.
+fun active_duel_at(scenario: &mut Scenario, first_to_move: u8, activated_ms: u64): ID {
+    let duel_id = create(scenario, CREATOR, BET, option::none(), CONTROL_RAPID_10);
+    at(scenario, ACCEPTOR, activated_ms);
+    activate_now(scenario, duel_id, BET, first_to_move);
+    duel_id
+}
+
+// `active_duel_at` with the activation at 1_000_000 ms (deadline 1_600_000).
+fun active_duel(scenario: &mut Scenario, first_to_move: u8): ID {
+    active_duel_at(scenario, first_to_move, 1_000_000)
+}
+
+// Breaks `stake == 2 × bet` of an `Active` duel (+1 MIST), which the API never allows.
+fun break_stake(scenario: &mut Scenario, duel_id: ID) {
+    scenario.next_tx(PUBLISHER);
+    let mut duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    duel.add_to_stake_for_testing(coin::mint_for_testing<SUI>(1, scenario.ctx()));
+    test_scenario::return_shared(duel);
+}
+
+// A `Resolved` duel (settled by play at 1_200_000). The settlement transaction stays open.
+fun resolved_duel(scenario: &mut Scenario): ID {
+    let duel_id = active_duel(scenario, TO_CREATOR);
+    at(scenario, CREATOR, 1_200_000);
+    collect_now(scenario, duel_id, WINNER_CREATOR);
+    duel_id
+}
+
+// A `TimedOut` duel (the creator did not move; the acceptor claimed at the deadline). The transaction
+// stays open.
+fun timed_out_duel(scenario: &mut Scenario): ID {
+    let duel_id = active_duel(scenario, TO_CREATOR);
+    claim(scenario, duel_id, ACCEPTOR, 1_600_000);
+    duel_id
+}
+
+// An `Expired` duel (nobody moved; a third party refunded at the deadline). The transaction stays open.
+fun expired_duel(scenario: &mut Scenario): ID {
+    let duel_id = active_duel(scenario, TO_BOTH);
+    refund(scenario, duel_id, OTHER, 1_600_000);
+    duel_id
+}
+
+// The mask of the rival of `player`. The test game below hands the turn to the rival after every move.
+fun rival_mask(player: address): u8 {
+    if (player == CREATOR) TO_ACCEPTOR else TO_CREATOR
+}
+
+// Test game, by turns: `mover` plays at `ms` and the turn goes to the rival (a full new plazo).
+fun play_turn(scenario: &mut Scenario, duel_id: ID, mover: address, ms: u64) {
+    record(scenario, duel_id, mover, ms, rival_mask(mover));
+}
+
+// Test game, simultaneous phase: the FIRST player to commit leaves the other one pending (`next` = the
+// other's bit, the only value `record_move` accepts then).
+fun commit_first(scenario: &mut Scenario, duel_id: ID, player: address, ms: u64) {
+    record(scenario, duel_id, player, ms, rival_mask(player));
+}
+
+// Test game, simultaneous phase: the LAST player to commit closes the phase and chooses who moves first.
+fun commit_last(
+    scenario: &mut Scenario,
+    duel_id: ID,
+    player: address,
+    ms: u64,
+    first_mover: u8,
+) {
+    record(scenario, duel_id, player, ms, first_mover);
+}
+
+// The state of an `Active` duel: `to_move`, `deadline_ms` and `stake == 2 × bet`. The duel is taken, so
+// it has to run in a transaction where the duel was not returned yet (after a `next_tx`).
+fun assert_clock(scenario: &Scenario, duel_id: ID, to_move: u8, deadline_ms: u64) {
+    let duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    assert!(duel.is_active_for_testing());
+    assert!(duel.to_move_for_testing() == option::some(to_move));
+    assert!(duel.deadline_ms_for_testing() == option::some(deadline_ms));
+    assert!(duel.stake_value_for_testing() == 2 * duel.bet_for_testing());
+    test_scenario::return_shared(duel);
+}
+
+// Right after a `record_move`, in the still-open transaction: the `DuelTurn` event and the state it left.
+fun assert_turn(
+    scenario: &mut Scenario,
+    duel_id: ID,
+    actor: address,
+    to_move: u8,
+    deadline_ms: u64,
+) {
+    let turn_events = event::events_by_type<DuelTurn<TestGame>>();
+    scenario.next_tx(actor);
+    let expected = duel::new_duel_turn_for_testing<TestGame>(duel_id, actor, to_move, deadline_ms);
+    assert!(turn_events == vector[expected]);
+    assert_clock(scenario, duel_id, to_move, deadline_ms);
+}
+
+// Checks the claim by time right after `claim_timeout`, in the still-open transaction (SEG-4):
+// `DuelTimedOut`, one coin of `payout` for the winner (who must have no other coin) as the only transfer
+// of the transaction, House fees up by `fee`, empty stake, `TimedOut { acceptor, winner }` and
+// `payout + fee == 2 × bet`.
+fun assert_timed_out(
+    scenario: &mut Scenario,
+    duel_id: ID,
+    acceptor: address,
+    winner: address,
+    claimed_by: address,
+    fee: u64,
+    payout: u64,
+    fees_before: u64,
+) {
+    let timed_out_events = event::events_by_type<DuelTimedOut<TestGame>>();
+    let effects = scenario.next_tx(winner);
+    let transfers = test_scenario::transferred_to_account(&effects);
+    assert!(transfers.length() == 1);
+    let (_, recipient) = transfers.get_entry_by_idx(0);
+    assert!(*recipient == winner);
+    let duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    let creator = duel.creator_for_testing();
+    let pot = 2 * duel.bet_for_testing();
+    assert!(payout + fee == pot);
+    let expected = duel::new_duel_timed_out_for_testing<TestGame>(
+        duel_id,
+        creator,
+        acceptor,
+        winner,
+        claimed_by,
+        pot,
+        fee,
+        payout,
+    );
+    assert!(timed_out_events == vector[expected]);
+    assert!(duel.stake_value_for_testing() == 0);
+    assert!(duel.is_timed_out_for_testing());
+    assert!(!duel.is_resolved_for_testing());
+    assert!(!duel.is_expired_for_testing());
+    assert!(!duel.is_active_for_testing());
+    assert!(!duel.is_pending_for_testing());
+    assert!(!duel.is_cancelled_for_testing());
+    assert!(duel.acceptor_for_testing() == option::some(acceptor));
+    assert!(duel.winner_for_testing() == option::some(winner));
+    assert!(duel.to_move_for_testing().is_none());
+    assert!(duel.deadline_ms_for_testing().is_none());
+    test_scenario::return_shared(duel);
+    let house = scenario.take_shared<House>();
+    assert!(house.fees_collected() == fees_before + fee);
+    test_scenario::return_shared(house);
+    assert_single_coin(scenario, winner, payout);
+}
+
+// Checks the refund right after `refund_stalled`, in the still-open transaction (SEG-4): `DuelExpired`
+// with `refund_each == bet`, exactly two transfers (one to each stored player, nothing to the caller),
+// one coin of `creator_refund` for the creator and one of `acceptor_refund` for the acceptor (neither may
+// hold another coin), empty stake and `Expired { acceptor }`. The fees of the House are checked by the
+// caller (`fees_of_house`): a House of another version cannot be read.
+fun assert_expired(
+    scenario: &mut Scenario,
+    duel_id: ID,
+    acceptor: address,
+    creator_refund: u64,
+    acceptor_refund: u64,
+) {
+    let expired_events = event::events_by_type<DuelExpired<TestGame>>();
+    let effects = scenario.next_tx(PUBLISHER);
+    let transfers = test_scenario::transferred_to_account(&effects);
+    let duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    let creator = duel.creator_for_testing();
+    let bet = duel.bet_for_testing();
+    assert!(transfers.length() == 2);
+    let (_, first) = transfers.get_entry_by_idx(0);
+    let (_, second) = transfers.get_entry_by_idx(1);
+    let in_order = *first == creator && *second == acceptor;
+    let reversed = *first == acceptor && *second == creator;
+    assert!(in_order || reversed);
+    let expected = duel::new_duel_expired_for_testing<TestGame>(duel_id, creator, acceptor, bet);
+    assert!(expired_events == vector[expected]);
+    assert!(duel.stake_value_for_testing() == 0);
+    assert!(duel.is_expired_for_testing());
+    assert!(!duel.is_timed_out_for_testing());
+    assert!(!duel.is_resolved_for_testing());
+    assert!(!duel.is_active_for_testing());
+    assert!(!duel.is_pending_for_testing());
+    assert!(!duel.is_cancelled_for_testing());
+    assert!(duel.acceptor_for_testing() == option::some(acceptor));
+    assert!(duel.winner_for_testing().is_none());
+    assert!(duel.to_move_for_testing().is_none());
+    assert!(duel.deadline_ms_for_testing().is_none());
+    test_scenario::return_shared(duel);
+    assert_single_coin(scenario, creator, creator_refund);
+    assert_single_coin(scenario, acceptor, acceptor_refund);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Edge of the deadline, on both sides, for every function with a deadline (T-1, INV-D6)
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fun test_record_move_passes_one_ms_before_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    play_turn(&mut scenario, duel_id, CREATOR, 1_599_999);
+
+    // deadline_ms of the next move = 1_599_999 + 600_000
+    assert_turn(&mut scenario, duel_id, CREATOR, TO_ACCEPTOR, 2_199_999);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotExpired)]
+fun test_claim_timeout_rejects_one_ms_before_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 1_599_999);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EDeadlinePassed)]
+fun test_record_move_rejects_at_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    play_turn(&mut scenario, duel_id, CREATOR, 1_600_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EDeadlinePassed)]
+fun test_record_move_rejects_after_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    play_turn(&mut scenario, duel_id, CREATOR, 2_000_000);
+
+    scenario.end();
+}
+
+// The edge of the claim with the acceptor pending (`to_move = 2`): one ms before the deadline it is early.
+#[test, expected_failure(abort_code = battleship::duel::ENotExpired)]
+fun test_claim_timeout_rejects_one_ms_before_deadline_when_acceptor_pending() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_ACCEPTOR);
+
+    claim(&mut scenario, duel_id, CREATOR, 1_599_999);
+
+    scenario.end();
+}
+
+// Both pending, well past the deadline: the refund is open (and stays open).
+#[test]
+fun test_refund_stalled_both_pending_succeeds_after_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    refund(&mut scenario, duel_id, OTHER, 2_000_000);
+
+    assert_expired(&mut scenario, duel_id, ACCEPTOR, BET, BET);
+    assert!(sum_coins(&scenario, OTHER) == 0);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EDeadlinePassed)]
+fun test_collect_rejects_at_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+    at(&mut scenario, CREATOR, 1_600_000);
+
+    collect_now(&mut scenario, duel_id, WINNER_CREATOR);
+
+    scenario.end();
+}
+
+#[test]
+fun test_claim_timeout_succeeds_at_deadline() {
+    let mut scenario = publish();
+    set_fee_rate(&mut scenario, 250);
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 1_600_000);
+
+    assert_timed_out(&mut scenario, duel_id, ACCEPTOR, ACCEPTOR, ACCEPTOR, 500_000, 19_500_000, 0);
+    scenario.end();
+}
+
+#[test]
+fun test_collect_passes_one_ms_before_deadline() {
+    let mut scenario = publish();
+    set_fee_rate(&mut scenario, 250);
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+    at(&mut scenario, CREATOR, 1_599_999);
+
+    collect_now(&mut scenario, duel_id, WINNER_ACCEPTOR);
+
+    assert_resolved(&mut scenario, duel_id, ACCEPTOR, ACCEPTOR, 500_000, 19_500_000, 0);
+    scenario.end();
+}
+
+// ---------------------------------------------------------------------------------------------
+// claim_timeout
+// ---------------------------------------------------------------------------------------------
+
+// Creator pending => the acceptor wins by time, with each fee rate and an odd pot (2_000_002).
+#[test]
+fun test_claim_timeout_pays_acceptor_when_creator_pending() {
+    let mut scenario = publish();
+    let rates = vector[0u16, 250, 1000];
+    let fees = vector[0u64, 50_000, 200_000]; // floor(2_000_002 × rate / 10_000)
+    let payouts = vector[2_000_002u64, 1_950_002, 1_800_002];
+    let acceptors = vector[@0x20, @0x21, @0x22];
+    let mut total_fees = 0;
+    let mut i = 0;
+    while (i < rates.length()) {
+        set_fee_rate(&mut scenario, rates[i]);
+        let duel_id = create(&mut scenario, CREATOR, ODD_BET, option::none(), CONTROL_RAPID_10);
+        let base = 10_000_000 * (i + 1);
+        at(&mut scenario, acceptors[i], base);
+        activate_now(&mut scenario, duel_id, ODD_BET, TO_CREATOR);
+        claim(&mut scenario, duel_id, acceptors[i], base + 600_000);
+        assert_timed_out(
+            &mut scenario,
+            duel_id,
+            acceptors[i],
+            acceptors[i],
+            acceptors[i],
+            fees[i],
+            payouts[i],
+            total_fees,
+        );
+        total_fees = total_fees + fees[i];
+        i = i + 1;
+    };
+    assert!(fees_of_house(&mut scenario) == 250_000);
+    // The pending creator only ever put its bets in.
+    assert!(sum_coins(&scenario, CREATOR) == 0);
+    scenario.end();
+}
+
+// Acceptor pending => the creator wins by time, with each fee rate and an odd pot (2_000_002).
+#[test]
+fun test_claim_timeout_pays_creator_when_acceptor_pending() {
+    let mut scenario = publish();
+    let rates = vector[0u16, 250, 1000];
+    let fees = vector[0u64, 50_000, 200_000];
+    let payouts = vector[2_000_002u64, 1_950_002, 1_800_002];
+    let creators = vector[@0x30, @0x31, @0x32];
+    let mut total_fees = 0;
+    let mut i = 0;
+    while (i < rates.length()) {
+        set_fee_rate(&mut scenario, rates[i]);
+        let duel_id = create(&mut scenario, creators[i], ODD_BET, option::none(), CONTROL_RAPID_10);
+        let base = 10_000_000 * (i + 1);
+        at(&mut scenario, ACCEPTOR, base);
+        activate_now(&mut scenario, duel_id, ODD_BET, TO_ACCEPTOR);
+        claim(&mut scenario, duel_id, creators[i], base + 600_000);
+        assert_timed_out(
+            &mut scenario,
+            duel_id,
+            ACCEPTOR,
+            creators[i],
+            creators[i],
+            fees[i],
+            payouts[i],
+            total_fees,
+        );
+        total_fees = total_fees + fees[i];
+        i = i + 1;
+    };
+    assert!(fees_of_house(&mut scenario) == 250_000);
+    // The pending acceptor only ever put its bets in.
+    assert!(sum_coins(&scenario, ACCEPTOR) == 0);
+    scenario.end();
+}
+
+// S-3: anyone sends the claim and the pay goes to the rival of the pending player, never to the caller.
+#[test]
+fun test_claim_timeout_by_third_party_pays_the_rival_not_the_caller() {
+    let mut scenario = publish();
+    set_fee_rate(&mut scenario, 250);
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    claim(&mut scenario, duel_id, OTHER, 1_600_000);
+
+    assert_timed_out(&mut scenario, duel_id, ACCEPTOR, ACCEPTOR, OTHER, 500_000, 19_500_000, 0);
+    assert!(sum_coins(&scenario, OTHER) == 0);
+    assert!(sum_coins(&scenario, CREATOR) == 0);
+    scenario.end();
+}
+
+// The player that let the plazo pass cannot redirect the pot to itself by sending the claim.
+#[test]
+fun test_claim_timeout_by_the_pending_player_still_pays_the_rival() {
+    let mut scenario = publish();
+    set_fee_rate(&mut scenario, 1000);
+    let duel_id = active_duel(&mut scenario, TO_ACCEPTOR);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 1_700_000);
+
+    assert_timed_out(
+        &mut scenario,
+        duel_id,
+        ACCEPTOR,
+        CREATOR,
+        ACCEPTOR,
+        2_000_000,
+        18_000_000,
+        0,
+    );
+    assert!(sum_coins(&scenario, ACCEPTOR) == 0);
+    scenario.end();
+}
+
+#[test]
+fun test_claim_timeout_stores_timed_out_state_and_event() {
+    let mut scenario = publish();
+    set_fee_rate(&mut scenario, 250);
+    let duel_id = active_duel(&mut scenario, TO_ACCEPTOR);
+
+    claim(&mut scenario, duel_id, OTHER, 1_650_000);
+
+    let timed_out_events = event::events_by_type<DuelTimedOut<TestGame>>();
+    let expected = duel::new_duel_timed_out_for_testing<TestGame>(
+        duel_id,
+        CREATOR,
+        ACCEPTOR,
+        CREATOR, // winner: the rival of the pending acceptor
+        OTHER, // claimed_by
+        20_000_000,
+        500_000,
+        19_500_000,
+    );
+    assert!(timed_out_events == vector[expected]);
+    scenario.next_tx(OTHER);
+    let duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    assert!(duel.is_timed_out_for_testing());
+    assert!(!duel.is_active_for_testing());
+    assert!(duel.acceptor_for_testing() == option::some(ACCEPTOR));
+    assert!(duel.winner_for_testing() == option::some(CREATOR));
+    assert!(duel.to_move_for_testing().is_none());
+    assert!(duel.deadline_ms_for_testing().is_none());
+    assert!(duel.stake_value_for_testing() == 0);
+    test_scenario::return_shared(duel);
+    assert_single_coin(&scenario, CREATOR, 19_500_000);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EBothPending)]
+fun test_claim_timeout_rejects_both_pending() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 1_600_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_claim_timeout_rejects_not_active() {
+    let mut scenario = publish();
+    let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_RAPID_10);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 1_600_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENoClock)]
+fun test_claim_timeout_rejects_clockless_duel() {
+    let mut scenario = publish();
+    let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_NONE);
+    scenario.next_tx(ACCEPTOR);
+    let mut duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    let mut house = scenario.take_shared<House>();
+    let payment = coin::mint_for_testing<SUI>(BET, scenario.ctx());
+    // `Active` without clock exists only between `activate_atomic` and `pay`.
+    let c = duel::activate_atomic(TestGame {}, &mut duel, &mut house, payment, scenario.ctx());
+
+    duel::claim_timeout(&mut duel, &mut house, scenario.ctx());
+
+    duel::pay(TestGame {}, &mut duel, c, WINNER_CREATOR, scenario.ctx());
+    test_scenario::return_shared(duel);
+    test_scenario::return_shared(house);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EWrongHouse)]
+fun test_claim_timeout_rejects_other_house() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+    let second_house_id = other_house(&mut scenario);
+
+    at(&mut scenario, ACCEPTOR, 1_600_000);
+    claim_with(&mut scenario, duel_id, option::some(second_house_id));
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EVersionMismatch)]
+fun test_claim_timeout_rejects_duel_of_older_version() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+    set_duel_version(&mut scenario, duel_id, OLDER_VERSION);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 1_600_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EBrokenStake)]
+fun test_claim_timeout_rejects_broken_stake() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+    break_stake(&mut scenario, duel_id);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 1_600_000);
+
+    scenario.end();
+}
+
+// A House written by a newer package version cuts the claim off (it charges a fee, so it reads the House
+// with its version): the exit in that case is `refund_stalled`.
+#[test, expected_failure(abort_code = battleship::house::EWrongVersion)]
+fun test_claim_timeout_aborts_with_house_of_other_version() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+    set_house_version(&mut scenario, NEWER_VERSION);
+    set_duel_version(&mut scenario, duel_id, NEWER_VERSION);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 1_600_000);
+
+    scenario.end();
+}
+
+// Order of aborts of `claim_timeout` (R.4): House version, state, clock, version, House, deadline, both
+// pending, stake.
+#[test, expected_failure(abort_code = battleship::house::EWrongVersion)]
+fun test_claim_timeout_reports_house_version_first() {
+    let mut scenario = publish();
+    let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_RAPID_10);
+    set_house_version(&mut scenario, NEWER_VERSION);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 1_600_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENoClock)]
+fun test_claim_timeout_reports_no_clock_before_version_mismatch() {
+    let mut scenario = publish();
+    let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_NONE);
+    scenario.next_tx(ACCEPTOR);
+    let mut duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    let mut house = scenario.take_shared<House>();
+    let payment = coin::mint_for_testing<SUI>(BET, scenario.ctx());
+    let c = duel::activate_atomic(TestGame {}, &mut duel, &mut house, payment, scenario.ctx());
+    duel.set_version_for_testing(OLDER_VERSION);
+
+    duel::claim_timeout(&mut duel, &mut house, scenario.ctx());
+
+    duel::pay(TestGame {}, &mut duel, c, WINNER_CREATOR, scenario.ctx());
+    test_scenario::return_shared(duel);
+    test_scenario::return_shared(house);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EVersionMismatch)]
+fun test_claim_timeout_reports_version_mismatch_before_wrong_house() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+    set_duel_version(&mut scenario, duel_id, OLDER_VERSION);
+    let second_house_id = other_house(&mut scenario);
+
+    at(&mut scenario, ACCEPTOR, 1_600_000);
+    claim_with(&mut scenario, duel_id, option::some(second_house_id));
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EWrongHouse)]
+fun test_claim_timeout_reports_wrong_house_before_not_expired() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+    let second_house_id = other_house(&mut scenario);
+
+    at(&mut scenario, ACCEPTOR, 1_200_000);
+    claim_with(&mut scenario, duel_id, option::some(second_house_id));
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotExpired)]
+fun test_claim_timeout_reports_not_expired_before_both_pending() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 1_599_999);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EBothPending)]
+fun test_claim_timeout_reports_both_pending_before_broken_stake() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+    break_stake(&mut scenario, duel_id);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 1_600_000);
+
+    scenario.end();
+}
+
+// ---------------------------------------------------------------------------------------------
+// refund_stalled
+// ---------------------------------------------------------------------------------------------
+
+// Both pending (nobody moved): from the deadline on, each player gets its bet back, without fee, from a
+// third party's transaction.
+#[test]
+fun test_refund_stalled_refunds_both_when_both_pending_at_deadline() {
+    let mut scenario = publish();
+    // A fee rate that would show if a fee were charged.
+    set_fee_rate(&mut scenario, 250);
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    refund(&mut scenario, duel_id, OTHER, 1_600_000);
+
+    assert_expired(&mut scenario, duel_id, ACCEPTOR, BET, BET);
+    assert!(sum_coins(&scenario, OTHER) == 0);
+    assert!(fees_of_house(&mut scenario) == 0);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotStalled)]
+fun test_refund_stalled_rejects_one_pending_before_grace() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    // Just past the deadline: the rival can claim, but the refund waits for the grace.
+    refund(&mut scenario, duel_id, CREATOR, 1_600_000);
+
+    scenario.end();
+}
+
+// Barrier against a shortened grace (R2-1): the literal 604_800_000 ms, not the constant.
+// deadline 1_600_000 + 604_800_000 = 606_400_000
+#[test, expected_failure(abort_code = battleship::duel::ENotStalled)]
+fun test_refund_stalled_one_pending_rejects_one_ms_before_grace() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    refund(&mut scenario, duel_id, CREATOR, 606_399_999);
+
+    scenario.end();
+}
+
+#[test]
+fun test_refund_stalled_one_pending_succeeds_at_deadline_plus_grace() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    refund(&mut scenario, duel_id, OTHER, 606_400_000);
+
+    assert_expired(&mut scenario, duel_id, ACCEPTOR, BET, BET);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotStalled)]
+fun test_refund_stalled_both_pending_rejects_one_ms_before_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    refund(&mut scenario, duel_id, OTHER, 1_599_999);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotStalled)]
+fun test_refund_stalled_rejects_both_pending_before_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    refund(&mut scenario, duel_id, OTHER, 1_200_000);
+
+    scenario.end();
+}
+
+// The documented race: past the grace the winner can still claim, if the refund did not come first.
+#[test]
+fun test_claim_timeout_still_succeeds_after_grace() {
+    let mut scenario = publish();
+    set_fee_rate(&mut scenario, 250);
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 606_400_001);
+
+    assert_timed_out(&mut scenario, duel_id, ACCEPTOR, ACCEPTOR, ACCEPTOR, 500_000, 19_500_000, 0);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_claim_timeout_after_refund_stalled_aborts_not_active() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+    refund(&mut scenario, duel_id, OTHER, 606_400_000);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 606_500_000);
+
+    scenario.end();
+}
+
+#[test]
+fun test_refund_stalled_refunds_both_after_grace_with_one_pending() {
+    let mut scenario = publish();
+    set_fee_rate(&mut scenario, 1000);
+    let duel_id = active_duel(&mut scenario, TO_ACCEPTOR);
+
+    // The pending player itself sends it: it only gets its own bet back, not the pot.
+    refund(&mut scenario, duel_id, ACCEPTOR, 700_000_000);
+
+    assert_expired(&mut scenario, duel_id, ACCEPTOR, BET, BET);
+    assert!(fees_of_house(&mut scenario) == 0);
+    scenario.end();
+}
+
+#[test]
+fun test_refund_stalled_by_third_party_pays_only_the_players() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    refund(&mut scenario, duel_id, INVITEE, 606_400_000);
+
+    assert_expired(&mut scenario, duel_id, ACCEPTOR, BET, BET);
+    assert!(sum_coins(&scenario, INVITEE) == 0);
+    scenario.end();
+}
+
+// No `assert` on `stake == 2 × bet`: whatever sits in the stake leaves it (the creator gets `bet`, the
+// acceptor the rest); an abort here would lock funds.
+#[test]
+fun test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+    break_stake(&mut scenario, duel_id);
+
+    refund(&mut scenario, duel_id, OTHER, 1_600_000);
+
+    assert_expired(&mut scenario, duel_id, ACCEPTOR, BET, BET + 1);
+    scenario.end();
+}
+
+// A fee already collected stays in the House and the refund of another duel adds nothing to it.
+#[test]
+fun test_refund_stalled_charges_no_fee() {
+    let mut scenario = publish();
+    set_fee_rate(&mut scenario, 1000);
+    let settled_id = active_duel_at(&mut scenario, TO_CREATOR, 1_000_000);
+    at(&mut scenario, CREATOR, 1_100_000);
+    collect_now(&mut scenario, settled_id, WINNER_CREATOR);
+    assert_resolved(&mut scenario, settled_id, ACCEPTOR, CREATOR, 2_000_000, 18_000_000, 0);
+    let stalled_id = active_duel_at(&mut scenario, TO_CREATOR, 2_000_000);
+
+    // deadline 2_000_000 + 600_000, grace 604_800_000
+    refund(&mut scenario, stalled_id, OTHER, 607_400_000);
+
+    scenario.next_tx(PUBLISHER);
+    let stalled = scenario.take_shared_by_id<Duel<TestGame>>(stalled_id);
+    assert!(stalled.is_expired_for_testing());
+    assert!(stalled.stake_value_for_testing() == 0);
+    test_scenario::return_shared(stalled);
+    assert!(fees_of_house(&mut scenario) == 2_000_000);
+    assert_single_coin(&scenario, ACCEPTOR, BET);
+    // The creator won the first duel (18_000_000) and got its bet back from the second one.
+    assert!(sum_coins(&scenario, CREATOR) == 18_000_000 + BET);
+    scenario.end();
+}
+
+// INV-D2: `refund_stalled` takes no House and reads no version, so it works with a House and a duel
+// written by other package versions (the cut-off that blocks `claim_timeout` does not reach it).
+#[test]
+fun test_refund_stalled_works_with_house_of_other_version() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+    set_house_version(&mut scenario, NEWER_VERSION);
+    set_duel_version(&mut scenario, duel_id, OLDER_VERSION);
+
+    refund(&mut scenario, duel_id, OTHER, 1_600_000);
+
+    assert_expired(&mut scenario, duel_id, ACCEPTOR, BET, BET);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_refund_stalled_rejects_not_active() {
+    let mut scenario = publish();
+    let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_RAPID_10);
+
+    refund(&mut scenario, duel_id, OTHER, 700_000_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENoClock)]
+fun test_refund_stalled_rejects_clockless_duel() {
+    let mut scenario = publish();
+    let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_NONE);
+    scenario.next_tx(ACCEPTOR);
+    let mut duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    let mut house = scenario.take_shared<House>();
+    let payment = coin::mint_for_testing<SUI>(BET, scenario.ctx());
+    let c = duel::activate_atomic(TestGame {}, &mut duel, &mut house, payment, scenario.ctx());
+
+    duel::refund_stalled(&mut duel, scenario.ctx());
+
+    duel::pay(TestGame {}, &mut duel, c, WINNER_CREATOR, scenario.ctx());
+    test_scenario::return_shared(duel);
+    test_scenario::return_shared(house);
+    scenario.end();
+}
+
+// ---------------------------------------------------------------------------------------------
+// record_move: the rule of bits and the order of aborts (R4-1)
+// ---------------------------------------------------------------------------------------------
+
+// `rem == 0`, `next` = the rival: the plazo restarts from now.
+#[test]
+fun test_record_move_turn_handoff_resets_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    play_turn(&mut scenario, duel_id, CREATOR, 1_200_000);
+
+    assert_turn(&mut scenario, duel_id, CREATOR, TO_ACCEPTOR, 1_800_000);
+    scenario.end();
+}
+
+// `rem == 0`, `next` = the same player: it also gets a full new plazo.
+#[test]
+fun test_record_move_same_player_continuing_also_resets_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    record(&mut scenario, duel_id, CREATOR, 1_200_000, TO_CREATOR);
+
+    assert_turn(&mut scenario, duel_id, CREATOR, TO_CREATOR, 1_800_000);
+    scenario.end();
+}
+
+// Simultaneous phase, the creator first: the acceptor stays pending with the plazo it already had.
+#[test]
+fun test_record_move_simultaneous_phase_first_a_keeps_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    commit_first(&mut scenario, duel_id, CREATOR, 1_200_000);
+
+    assert_turn(&mut scenario, duel_id, CREATOR, TO_ACCEPTOR, 1_600_000);
+    scenario.end();
+}
+
+// Simultaneous phase, the acceptor first: the creator stays pending with the plazo it already had.
+#[test]
+fun test_record_move_simultaneous_phase_first_b_keeps_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    commit_first(&mut scenario, duel_id, ACCEPTOR, 1_200_000);
+
+    assert_turn(&mut scenario, duel_id, ACCEPTOR, TO_CREATOR, 1_600_000);
+    scenario.end();
+}
+
+// The case of the MAYOR: whoever commits LAST closes the phase and gets a full plazo, whatever `next` is
+// (the closer itself, the rival or both).
+#[test]
+fun test_record_move_phase_close_resets_deadline_even_if_closer_moves_next() {
+    let mut scenario = publish();
+    let masks = vector[TO_ACCEPTOR, TO_CREATOR, TO_BOTH];
+    let mut i = 0;
+    while (i < masks.length()) {
+        let base = 10_000_000 * (i + 1);
+        let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_RAPID_10);
+        at(&mut scenario, ACCEPTOR, base);
+        activate_now(&mut scenario, duel_id, BET, TO_BOTH);
+        commit_first(&mut scenario, duel_id, CREATOR, base + 100_000);
+        assert_turn(&mut scenario, duel_id, CREATOR, TO_ACCEPTOR, base + 600_000);
+        // The acceptor closes the phase just before its plazo ends: the new one is complete.
+        commit_last(&mut scenario, duel_id, ACCEPTOR, base + 500_000, masks[i]);
+        assert_turn(&mut scenario, duel_id, ACCEPTOR, masks[i], base + 1_100_000);
+        i = i + 1;
+    };
+    scenario.end();
+}
+
+// `rem = 2` (the creator moves, the acceptor is pending): `next` must be exactly 2.
+#[test, expected_failure(abort_code = battleship::duel::EPhaseMismatch)]
+fun test_record_move_rejects_next_other_than_rem_in_simultaneous_phase() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    record(&mut scenario, duel_id, CREATOR, 1_200_000, TO_CREATOR);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EPhaseMismatch)]
+fun test_record_move_rejects_next_both_in_simultaneous_phase() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    record(&mut scenario, duel_id, CREATOR, 1_200_000, TO_BOTH);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EPhaseMismatch)]
+fun test_record_move_rejects_next_zero_in_simultaneous_phase() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    record(&mut scenario, duel_id, CREATOR, 1_200_000, 0);
+
+    scenario.end();
+}
+
+// `rem = 1` (the acceptor moves, the creator is pending): `next` must be exactly 1.
+#[test, expected_failure(abort_code = battleship::duel::EPhaseMismatch)]
+fun test_record_move_rejects_next_other_than_rem_when_rem_is_creator() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    record(&mut scenario, duel_id, ACCEPTOR, 1_200_000, TO_ACCEPTOR);
+
+    scenario.end();
+}
+
+// The player that already committed cannot commit twice to stretch the phase: its bit is not in
+// `to_move` any more.
+#[test, expected_failure(abort_code = battleship::duel::ENotYourTurn)]
+fun test_record_move_rejects_second_commit_in_simultaneous_phase() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+    commit_first(&mut scenario, duel_id, CREATOR, 1_200_000);
+
+    commit_first(&mut scenario, duel_id, CREATOR, 1_300_000);
+
+    scenario.end();
+}
+
+// `rem == 0`: the mask must be in 1..=3.
+#[test, expected_failure(abort_code = battleship::duel::EBadMask)]
+fun test_record_move_rejects_next_zero_or_above_three() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    record(&mut scenario, duel_id, CREATOR, 1_200_000, 0);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EBadMask)]
+fun test_record_move_rejects_next_above_three() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    record(&mut scenario, duel_id, CREATOR, 1_200_000, 4);
+
+    scenario.end();
+}
+
+// Closing a simultaneous phase is `rem == 0` too: the mask is checked there.
+#[test, expected_failure(abort_code = battleship::duel::EBadMask)]
+fun test_record_move_rejects_next_zero_when_closing_a_simultaneous_phase() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+    commit_first(&mut scenario, duel_id, CREATOR, 1_200_000);
+
+    commit_last(&mut scenario, duel_id, ACCEPTOR, 1_300_000, 0);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotYourTurn)]
+fun test_record_move_rejects_player_outside_to_move() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    play_turn(&mut scenario, duel_id, ACCEPTOR, 1_200_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotPlayer)]
+fun test_record_move_rejects_third_party() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    record(&mut scenario, duel_id, OTHER, 1_200_000, TO_CREATOR);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_record_move_rejects_not_active() {
+    let mut scenario = publish();
+    let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_RAPID_10);
+
+    record(&mut scenario, duel_id, CREATOR, 1_200_000, TO_ACCEPTOR);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENoClock)]
+fun test_record_move_rejects_clockless_duel() {
+    let mut scenario = publish();
+    let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_NONE);
+    scenario.next_tx(ACCEPTOR);
+    let mut duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    let mut house = scenario.take_shared<House>();
+    let payment = coin::mint_for_testing<SUI>(BET, scenario.ctx());
+    // Inside the transaction of `activate_atomic` the duel is `Active { to_move = 0, deadline_ms = 0 }`:
+    // `ENoClock` has to come before the turn and the deadline checks.
+    let c = duel::activate_atomic(TestGame {}, &mut duel, &mut house, payment, scenario.ctx());
+
+    duel::record_move(TestGame {}, &mut duel, TO_CREATOR, scenario.ctx());
+
+    duel::pay(TestGame {}, &mut duel, c, WINNER_CREATOR, scenario.ctx());
+    test_scenario::return_shared(duel);
+    test_scenario::return_shared(house);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_record_move_reports_not_active_before_not_player() {
+    let mut scenario = publish();
+    let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_RAPID_10);
+
+    record(&mut scenario, duel_id, OTHER, 1_200_000, TO_CREATOR);
+
+    scenario.end();
+}
+
+// A third party is not in `to_move` either, after the deadline and with a bad mask: `ENotPlayer` is first.
+#[test, expected_failure(abort_code = battleship::duel::ENotPlayer)]
+fun test_record_move_reports_not_player_before_not_your_turn() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    record(&mut scenario, duel_id, OTHER, 1_600_000, 0);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotYourTurn)]
+fun test_record_move_reports_not_your_turn_before_deadline() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    play_turn(&mut scenario, duel_id, ACCEPTOR, 1_600_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EDeadlinePassed)]
+fun test_record_move_reports_deadline_before_mask() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    record(&mut scenario, duel_id, CREATOR, 1_600_000, 0);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::EDeadlinePassed)]
+fun test_record_move_reports_deadline_before_phase_mismatch() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    record(&mut scenario, duel_id, CREATOR, 1_600_000, TO_CREATOR);
+
+    scenario.end();
+}
+
+// `turn_ms` is the one stored at creation (20 minutes here), never the one of a move: every plazo is
+// computed from it and it does not change.
+#[test]
+fun test_turn_ms_is_never_changed_by_record_move() {
+    let mut scenario = publish();
+    let duel_id = create(&mut scenario, CREATOR, BET, option::none(), CONTROL_RAPID_20);
+    at(&mut scenario, ACCEPTOR, 1_000_000);
+    activate_now(&mut scenario, duel_id, BET, TO_CREATOR);
+
+    play_turn(&mut scenario, duel_id, CREATOR, 1_100_000);
+    assert_turn(&mut scenario, duel_id, CREATOR, TO_ACCEPTOR, 2_300_000);
+    // The acceptor keeps the turn: another full plazo of 1_200_000.
+    record(&mut scenario, duel_id, ACCEPTOR, 1_500_000, TO_ACCEPTOR);
+    assert_turn(&mut scenario, duel_id, ACCEPTOR, TO_ACCEPTOR, 2_700_000);
+    play_turn(&mut scenario, duel_id, ACCEPTOR, 2_000_000);
+    assert_turn(&mut scenario, duel_id, ACCEPTOR, TO_CREATOR, 3_200_000);
+
+    scenario.next_tx(CREATOR);
+    let duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    assert!(duel.turn_ms_for_testing() == RAPID_20_MS);
+    test_scenario::return_shared(duel);
+    scenario.end();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Complete matches with the test game
+// ---------------------------------------------------------------------------------------------
+
+// By turns: three alternating moves restart the plazo each time; the last mover wins and settles by play
+// (`collect` + `pay`) before its own plazo ends.
+#[test]
+fun test_turn_based_game_runs_to_resolution_by_collect_and_pay() {
+    let mut scenario = publish();
+    set_fee_rate(&mut scenario, 250);
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+
+    play_turn(&mut scenario, duel_id, CREATOR, 1_200_000);
+    assert_turn(&mut scenario, duel_id, CREATOR, TO_ACCEPTOR, 1_800_000);
+    play_turn(&mut scenario, duel_id, ACCEPTOR, 1_500_000);
+    assert_turn(&mut scenario, duel_id, ACCEPTOR, TO_CREATOR, 2_100_000);
+    play_turn(&mut scenario, duel_id, CREATOR, 1_900_000);
+    assert_turn(&mut scenario, duel_id, CREATOR, TO_ACCEPTOR, 2_500_000);
+    at(&mut scenario, ACCEPTOR, 2_000_000);
+    collect_now(&mut scenario, duel_id, WINNER_ACCEPTOR);
+
+    assert_resolved(&mut scenario, duel_id, ACCEPTOR, ACCEPTOR, 500_000, 19_500_000, 0);
+    assert!(sum_coins(&scenario, CREATOR) == 0);
+    scenario.end();
+}
+
+// Simultaneous phase first (both commit, the acceptor closes it and the creator moves first), then turns,
+// and the acceptor lets its plazo pass: the creator claims by time.
+#[test]
+fun test_simultaneous_phase_then_turns_then_claim_timeout() {
+    let mut scenario = publish();
+    set_fee_rate(&mut scenario, 1000);
+    let duel_id = active_duel(&mut scenario, TO_BOTH);
+
+    commit_first(&mut scenario, duel_id, CREATOR, 1_100_000);
+    assert_turn(&mut scenario, duel_id, CREATOR, TO_ACCEPTOR, 1_600_000);
+    commit_last(&mut scenario, duel_id, ACCEPTOR, 1_500_000, TO_CREATOR);
+    assert_turn(&mut scenario, duel_id, ACCEPTOR, TO_CREATOR, 2_100_000);
+    play_turn(&mut scenario, duel_id, CREATOR, 2_000_000);
+    assert_turn(&mut scenario, duel_id, CREATOR, TO_ACCEPTOR, 2_600_000);
+    // The acceptor does not move: at exactly its deadline only the claim is possible.
+    claim(&mut scenario, duel_id, CREATOR, 2_600_000);
+
+    assert_timed_out(
+        &mut scenario,
+        duel_id,
+        ACCEPTOR,
+        CREATOR,
+        CREATOR,
+        2_000_000,
+        18_000_000,
+        0,
+    );
+    assert!(sum_coins(&scenario, ACCEPTOR) == 0);
+    scenario.end();
+}
+
+// A surrender is made out of turn and before the deadline: the player that has just moved gives up and
+// the rival, who has the turn, wins.
+#[test]
+fun test_surrender_out_of_turn_before_deadline_resolves() {
+    let mut scenario = publish();
+    set_fee_rate(&mut scenario, 250);
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+    play_turn(&mut scenario, duel_id, CREATOR, 1_200_000);
+    // to_move = acceptor, deadline_ms = 1_800_000: the creator surrenders at the last ms.
+    at(&mut scenario, CREATOR, 1_799_999);
+
+    collect_now(&mut scenario, duel_id, WINNER_ACCEPTOR);
+
+    assert_resolved(&mut scenario, duel_id, ACCEPTOR, ACCEPTOR, 500_000, 19_500_000, 0);
+    assert!(sum_coins(&scenario, CREATOR) == 0);
+    scenario.end();
+}
+
+// ---------------------------------------------------------------------------------------------
+// The three barriers of `claim_timeout` between `collect` and `pay`
+// ---------------------------------------------------------------------------------------------
+
+// (a) Inside one transaction the clock is one, so `collect` (before the deadline) and `claim_timeout` (from
+// the deadline) cannot both pass: INV-D6. With `fee_rate = 0`, `collect` leaves the stake in `2 × bet`, so
+// `EBrokenStake` would not stop a claim in between: only this barrier does (and H-14, V-15, off-chain).
+#[test, expected_failure(abort_code = battleship::duel::ENotExpired)]
+fun test_claim_timeout_between_collect_and_pay_aborts_not_expired() {
+    let mut scenario = publish();
+    let duel_id = active_duel(&mut scenario, TO_CREATOR);
+    at(&mut scenario, CREATOR, 1_599_999);
+    let mut duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    let mut house = scenario.take_shared<House>();
+    let c = duel::collect(TestGame {}, &mut duel, &mut house, scenario.ctx());
+    assert!(duel.stake_value_for_testing() == 2 * BET);
+
+    duel::claim_timeout(&mut duel, &mut house, scenario.ctx());
+
+    duel::pay(TestGame {}, &mut duel, c, WINNER_CREATOR, scenario.ctx());
+    test_scenario::return_shared(duel);
+    test_scenario::return_shared(house);
+    scenario.end();
+}
+
+// (b) `pay` with a `Collected` on a duel that is no longer `Active` aborts, so a transaction that changed
+// the state in between reverts whole: here a `TimedOut` duel.
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_pay_rejects_timed_out_duel() {
+    let mut scenario = publish();
+    let duel_id = timed_out_duel(&mut scenario);
+    scenario.next_tx(CREATOR);
+    let mut duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    // No function of the API produces a `Collected` for a `TimedOut` duel: forged for the test.
+    let c = duel::new_collected_for_testing(duel_id, 2 * BET, 0);
+
+    duel::pay(TestGame {}, &mut duel, c, WINNER_CREATOR, scenario.ctx());
+
+    test_scenario::return_shared(duel);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_pay_rejects_expired_duel() {
+    let mut scenario = publish();
+    let duel_id = expired_duel(&mut scenario);
+    scenario.next_tx(CREATOR);
+    let mut duel = scenario.take_shared_by_id<Duel<TestGame>>(duel_id);
+    let c = duel::new_collected_for_testing(duel_id, 2 * BET, 0);
+
+    duel::pay(TestGame {}, &mut duel, c, WINNER_CREATOR, scenario.ctx());
+
+    test_scenario::return_shared(duel);
+    scenario.end();
+}
+
+// ---------------------------------------------------------------------------------------------
+// After a final state, every function of the clock aborts `ENotActive`
+// ---------------------------------------------------------------------------------------------
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_claim_timeout_rejects_resolved_duel() {
+    let mut scenario = publish();
+    let duel_id = resolved_duel(&mut scenario);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 2_000_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_claim_timeout_rejects_timed_out_duel() {
+    let mut scenario = publish();
+    let duel_id = timed_out_duel(&mut scenario);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 2_000_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_claim_timeout_rejects_expired_duel() {
+    let mut scenario = publish();
+    let duel_id = expired_duel(&mut scenario);
+
+    claim(&mut scenario, duel_id, ACCEPTOR, 2_000_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_refund_stalled_rejects_resolved_duel() {
+    let mut scenario = publish();
+    let duel_id = resolved_duel(&mut scenario);
+
+    refund(&mut scenario, duel_id, OTHER, 700_000_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_refund_stalled_rejects_timed_out_duel() {
+    let mut scenario = publish();
+    let duel_id = timed_out_duel(&mut scenario);
+
+    refund(&mut scenario, duel_id, OTHER, 700_000_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_refund_stalled_rejects_expired_duel() {
+    let mut scenario = publish();
+    let duel_id = expired_duel(&mut scenario);
+
+    refund(&mut scenario, duel_id, OTHER, 700_000_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_record_move_rejects_resolved_duel() {
+    let mut scenario = publish();
+    let duel_id = resolved_duel(&mut scenario);
+
+    play_turn(&mut scenario, duel_id, CREATOR, 1_300_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_record_move_rejects_timed_out_duel() {
+    let mut scenario = publish();
+    let duel_id = timed_out_duel(&mut scenario);
+
+    play_turn(&mut scenario, duel_id, CREATOR, 2_000_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_record_move_rejects_expired_duel() {
+    let mut scenario = publish();
+    let duel_id = expired_duel(&mut scenario);
+
+    play_turn(&mut scenario, duel_id, CREATOR, 2_000_000);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_collect_rejects_timed_out_duel() {
+    let mut scenario = publish();
+    let duel_id = timed_out_duel(&mut scenario);
+
+    collect(&mut scenario, duel_id, CREATOR, WINNER_CREATOR);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = battleship::duel::ENotActive)]
+fun test_collect_rejects_expired_duel() {
+    let mut scenario = publish();
+    let duel_id = expired_duel(&mut scenario);
+
+    collect(&mut scenario, duel_id, CREATOR, WINNER_CREATOR);
+
     scenario.end();
 }

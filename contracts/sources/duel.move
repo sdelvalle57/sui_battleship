@@ -20,9 +20,7 @@ use sui::coin::{Self, Coin};
 use sui::event;
 use sui::sui::SUI;
 
-// Abort codes: stable numbers, never reused for another condition (PROY-2). The numbers 14, 20, 22, 23 and
-// 25 belong to the clock functions (`claim_timeout`, `record_move`, `refund_stalled`) and are declared
-// together with them.
+// Abort codes: stable numbers, never reused for another condition (PROY-2). One cause per code (LIM-8).
 const EBetTooLow: u64 = 0; // stake value < house.min_bet()
 const EBetTooHigh: u64 = 1; // stake value > house.max_bet()
 const ESelfInvite: u64 = 2; // opponent == some(sender)
@@ -37,13 +35,18 @@ const EWrongStake: u64 = 10; // payment value != duel.bet
 const ENotActive: u64 = 11; // duel state != Active
 const EWrongDuel: u64 = 12; // collected.duel_id != object::id(duel)
 const EBadWinnerIndex: u64 = 13; // winner_index > 1
+const ENotExpired: u64 = 14; // claim_timeout before deadline_ms: now < deadline_ms
 const EBrokenStake: u64 = 15; // an Active duel whose stake != 2 × bet
 const EBadControl: u64 = 16; // control id outside the table of time controls
 const ENoClock: u64 = 17; // activate / collect on a duel without clock (turn_ms == 0)
 const EHasClock: u64 = 18; // activate_atomic on a duel with clock (turn_ms != 0)
 const EBadMask: u64 = 19; // to_move mask outside 1..=3
+const ENotYourTurn: u64 = 20; // record_move by a player whose bit is not in to_move
 const EDeadlinePassed: u64 = 21; // now >= deadline_ms: from the deadline on, only a claim is possible
+const EBothPending: u64 = 22; // claim_timeout with to_move == 3: nobody moved, there is no rival to pay
+const ENotStalled: u64 = 23; // refund_stalled before the deadline (both pending) or before the grace
 const ENotPlayer: u64 = 24; // sender is neither the creator nor the acceptor
+const EPhaseMismatch: u64 = 25; // record_move in a simultaneous phase: next_to_move != the other's pending bit
 
 const BPS_DENOMINATOR: u128 = 10_000; // basis points per unit
 
@@ -59,9 +62,14 @@ const DAILY_1_DAY_MS: u64 = 86_400_000; // id 5
 const DAILY_3_DAYS_MS: u64 = 259_200_000; // id 6
 const MAX_TURN_MS: u64 = 604_800_000; // id 7: daily 7 days, the longest plazo
 
+// Time the rival has to claim by time before `refund_stalled` opens for a single pending player (D13, S-2):
+// 7 days. After it, anyone refunds each player its bet, so a House cut-off can never lock funds in `Active`.
+const CLAIM_GRACE_MS: u64 = 604_800_000;
+
 // `to_move` mask, fixed for every future version (P-13 (v)): 1 = creator, 2 = acceptor, 3 = both. The
 // value 0 exists only inside the transaction of an `activate_atomic`.
 const CREATOR_MASK: u8 = 1;
+const ACCEPTOR_MASK: u8 = 2;
 const BOTH_MASK: u8 = 3;
 
 /// One shared match of the game `G`. No `store`: only this module can share it, so nobody can transfer,
@@ -87,7 +95,10 @@ public struct Duel<phantom G> has key {
 }
 
 /// Lifecycle: `Pending` -> `Cancelled` (cancel, reject) | `Active` -> `Resolved` (decided by the game),
-/// `TimedOut` (a player let the deadline pass) or `Expired` (nobody moved: both get their bet back).
+/// `TimedOut` (a player let the deadline pass and the rival claimed the pot minus the fee) or `Expired`.
+/// `Expired` is reached when nobody moved (both players still pending after `deadline_ms`) **or** when one
+/// player is still pending after `deadline_ms + CLAIM_GRACE_MS` and nobody claimed (`refund_stalled`): in
+/// both cases each player recovers its bet, without fee.
 /// The six variants and their order are frozen by the first publication.
 public enum DuelState has copy, drop, store {
     Pending,
@@ -143,6 +154,35 @@ public struct DuelResolved<phantom G> has copy, drop {
     pot: u64,
     fee: u64,
     payout: u64,
+}
+
+/// Emitted by `record_move`: `actor` is the player that moved, `to_move` and `deadline_ms` the state after.
+public struct DuelTurn<phantom G> has copy, drop {
+    duel_id: ID,
+    actor: address,
+    to_move: u8,
+    deadline_ms: u64,
+}
+
+/// Emitted by `claim_timeout` (`pot == payout + fee`); `claimed_by` is whoever sent the transaction, which
+/// may not be the winner.
+public struct DuelTimedOut<phantom G> has copy, drop {
+    duel_id: ID,
+    creator: address,
+    acceptor: address,
+    winner: address,
+    claimed_by: address,
+    pot: u64,
+    fee: u64,
+    payout: u64,
+}
+
+/// Emitted by `refund_stalled`: `refund_each` is the bet each player got back.
+public struct DuelExpired<phantom G> has copy, drop {
+    duel_id: ID,
+    creator: address,
+    acceptor: address,
+    refund_each: u64,
 }
 
 /// Creates a duel of the game `G` with the whole `stake` as the bet (open if `opponent` is none, or an
@@ -321,6 +361,125 @@ public(package) fun pay<G: drop>(
         payout: payout.value(),
     });
     transfer::public_transfer(coin::from_balance(payout, ctx), winner);
+}
+
+/// Records a valid move of the player that signs the transaction and hands the turn over: the clock of the
+/// duel is applied here, by the base, for every game (INV-D6). The game calls it once per valid move, after
+/// its own rules accepted it, and passes in `next_to_move` the mask of who has to move next (1 = creator,
+/// 2 = acceptor, 3 = both). Possible only before `deadline_ms`. Emits `DuelTurn`.
+///
+/// With `rem = to_move` without the mover's bit: if `rem != 0` (a simultaneous phase where the other player
+/// is still pending) `next_to_move` must be exactly `rem`, `to_move` becomes `rem` and `deadline_ms` does
+/// **not** move (the other player keeps the plazo they had); if `rem == 0` (the mover closes its turn or the
+/// phase) `next_to_move` must be in `1..=3` and `deadline_ms = now + turn_ms`, also when the same player
+/// keeps the turn: each valid move gets a full plazo. `turn_ms` always comes from the duel.
+///
+/// `public(package)` with the witness by value: only the game that owns `G` records its moves. It reads
+/// `ctx.sender()` itself instead of taking an `actor` from the game: "the mover is the signer" is then a
+/// property of the base, not of every game (relayers and referees are out of scope, plan §2.5).
+public(package) fun record_move<G: drop>(
+    _: G,
+    duel: &mut Duel<G>,
+    next_to_move: u8,
+    ctx: &TxContext,
+) {
+    // Abort order of R.4. `ENotActive` goes first (the acceptor is only known inside `Active`), then the
+    // authZ checks, then the clock, and the mask last: a caller that cannot move never learns more.
+    let (acceptor, to_move, deadline_ms) = duel.active_state();
+    assert!(duel.turn_ms != 0, ENoClock);
+    let actor = ctx.sender();
+    assert!(actor == duel.creator || actor == acceptor, ENotPlayer);
+    // The creator and the acceptor are different addresses (`ESelfPlay`), so the bit is unambiguous.
+    let bit = if (actor == duel.creator) CREATOR_MASK else ACCEPTOR_MASK;
+    assert!((to_move & bit) != 0, ENotYourTurn);
+    let now = now_ms();
+    assert!(now < deadline_ms, EDeadlinePassed);
+    // Move has no bitwise NOT: `BOTH_MASK ^ bit` is `!bit` inside the two valid bits.
+    let rem = to_move & (BOTH_MASK ^ bit);
+    let (new_to_move, new_deadline_ms) = if (rem != 0) {
+        assert!(next_to_move == rem, EPhaseMismatch);
+        (rem, deadline_ms)
+    } else {
+        assert!(next_to_move >= CREATOR_MASK && next_to_move <= BOTH_MASK, EBadMask);
+        (next_to_move, now + duel.turn_ms)
+    };
+    duel.state =
+        DuelState::Active { acceptor, to_move: new_to_move, deadline_ms: new_deadline_ms };
+    event::emit(DuelTurn<G> {
+        duel_id: object::id(duel),
+        actor,
+        to_move: new_to_move,
+        deadline_ms: new_deadline_ms,
+    });
+}
+
+/// Claims a victory by time: once `deadline_ms` has passed with a single player pending (`to_move` 1 or 2),
+/// the rival of that player wins the pot minus the fee and the duel becomes `TimedOut { acceptor, winner }`
+/// (`to_move = 1` => the acceptor wins, `2` => the creator). **Anyone** can send it (the winner may have no
+/// gas or be offline): the destination and the amount are fixed by the state, so the caller gets nothing
+/// unless it is the winner. With both players pending (`to_move == 3`) nobody moved and there is no winner:
+/// the way out is `refund_stalled`. Emits `DuelTimedOut`.
+///
+/// Generic `entry` without `public`: no other module can compose it in a transaction with a `Collected` of
+/// the same duel (the hot-potato clique, H-14, V-15). It reads the House with its version (the fee goes to
+/// `fees_collected`), so a version cut-off blocks it; `refund_stalled` is the exit that no cut-off blocks.
+entry fun claim_timeout<G>(duel: &mut Duel<G>, house: &mut House, ctx: &mut TxContext) {
+    // Version-checked House read first (discarded value), as in `assert_acceptable`.
+    let _ = house.min_bet();
+    let (acceptor, to_move, deadline_ms) = duel.active_state();
+    assert!(duel.turn_ms != 0, ENoClock);
+    assert!(duel.version == house.version(), EVersionMismatch);
+    assert!(object::id(house) == duel.house_id, EWrongHouse);
+    // `collect` needs `now < deadline_ms` and this needs `now >= deadline_ms`: disjoint (INV-D6).
+    assert!(now_ms() >= deadline_ms, ENotExpired);
+    assert!(to_move != BOTH_MASK, EBothPending);
+    assert!(duel.stake.value() == duel.bet * 2, EBrokenStake);
+    // The winner is the rival of the player that has to move; never `ctx.sender()`.
+    let winner = if (to_move == CREATOR_MASK) acceptor else duel.creator;
+    // This function settles the duel itself, so it consumes the `Collected` by destructuring it (only this
+    // module can) instead of handing it to `pay`: the potato never reaches a caller.
+    let Collected { duel_id, pot, fee } = duel.collect_fee(house);
+    let payout = duel.stake.withdraw_all();
+    duel.state = DuelState::TimedOut { acceptor, winner };
+    event::emit(DuelTimedOut<G> {
+        duel_id,
+        creator: duel.creator,
+        acceptor,
+        winner,
+        claimed_by: ctx.sender(),
+        pot,
+        fee,
+        payout: payout.value(),
+    });
+    transfer::public_transfer(coin::from_balance(payout, ctx), winner);
+}
+
+/// Refunds each player its bet, without fee, when the duel is stalled: with both players pending
+/// (`to_move == 3`, nobody moved) from `deadline_ms` on; with a single player pending, from
+/// `deadline_ms + CLAIM_GRACE_MS` on, when the rival did not claim in time. The creator gets `bet` and the
+/// acceptor the rest of the stake; `Active` -> `Expired { acceptor }`. **Anyone** can send it; the payments
+/// go to the stored players. Emits `DuelExpired`.
+///
+/// Generic `entry` without `public`, no House and no version read: no cut-off can block this exit
+/// (INV-D2, INV-D3). It does **not** assert `stake == 2 × bet` on purpose: an abort here would lock funds,
+/// so whatever is in the stake leaves it. Before the grace a lone pending player cannot use it to escape a
+/// claim by time: the rival has `CLAIM_GRACE_MS` to claim (a documented race afterwards).
+entry fun refund_stalled<G>(duel: &mut Duel<G>, ctx: &mut TxContext) {
+    let (acceptor, to_move, deadline_ms) = duel.active_state();
+    assert!(duel.turn_ms != 0, ENoClock);
+    let stalled_from = if (to_move == BOTH_MASK) deadline_ms else deadline_ms + CLAIM_GRACE_MS;
+    assert!(now_ms() >= stalled_from, ENotStalled);
+    let creator_refund = duel.stake.split(duel.bet);
+    let acceptor_refund = duel.stake.withdraw_all();
+    duel.state = DuelState::Expired { acceptor };
+    event::emit(DuelExpired<G> {
+        duel_id: object::id(duel),
+        creator: duel.creator,
+        acceptor,
+        refund_each: duel.bet,
+    });
+    transfer::public_transfer(coin::from_balance(creator_refund, ctx), duel.creator);
+    transfer::public_transfer(coin::from_balance(acceptor_refund, ctx), acceptor);
 }
 
 // Refunds the whole stake to the creator, without fee. Takes no House and checks no version on purpose:
@@ -505,6 +664,22 @@ public fun is_resolved_for_testing<G>(duel: &Duel<G>): bool {
     }
 }
 
+#[test_only]
+public fun is_timed_out_for_testing<G>(duel: &Duel<G>): bool {
+    match (&duel.state) {
+        DuelState::TimedOut { .. } => true,
+        _ => false,
+    }
+}
+
+#[test_only]
+public fun is_expired_for_testing<G>(duel: &Duel<G>): bool {
+    match (&duel.state) {
+        DuelState::Expired { .. } => true,
+        _ => false,
+    }
+}
+
 // `to_move` and `deadline_ms` exist only inside `Active` (INV-D7): `none` in every other state.
 #[test_only]
 public fun to_move_for_testing<G>(duel: &Duel<G>): Option<u8> {
@@ -527,14 +702,18 @@ public fun acceptor_for_testing<G>(duel: &Duel<G>): Option<address> {
     match (&duel.state) {
         DuelState::Active { acceptor, .. } => option::some(*acceptor),
         DuelState::Resolved { acceptor, .. } => option::some(*acceptor),
+        DuelState::TimedOut { acceptor, .. } => option::some(*acceptor),
+        DuelState::Expired { acceptor } => option::some(*acceptor),
         _ => option::none(),
     }
 }
 
+// The winner of a `Resolved` or `TimedOut` duel (`Expired` has none: both players get their bet back).
 #[test_only]
 public fun winner_for_testing<G>(duel: &Duel<G>): Option<address> {
     match (&duel.state) {
         DuelState::Resolved { winner, .. } => option::some(*winner),
+        DuelState::TimedOut { winner, .. } => option::some(*winner),
         _ => option::none(),
     }
 }
@@ -614,4 +793,38 @@ public fun new_duel_resolved_for_testing<G>(
     payout: u64,
 ): DuelResolved<G> {
     DuelResolved { duel_id, creator, acceptor, winner, pot, fee, payout }
+}
+
+#[test_only]
+public fun new_duel_turn_for_testing<G>(
+    duel_id: ID,
+    actor: address,
+    to_move: u8,
+    deadline_ms: u64,
+): DuelTurn<G> {
+    DuelTurn { duel_id, actor, to_move, deadline_ms }
+}
+
+#[test_only]
+public fun new_duel_timed_out_for_testing<G>(
+    duel_id: ID,
+    creator: address,
+    acceptor: address,
+    winner: address,
+    claimed_by: address,
+    pot: u64,
+    fee: u64,
+    payout: u64,
+): DuelTimedOut<G> {
+    DuelTimedOut { duel_id, creator, acceptor, winner, claimed_by, pot, fee, payout }
+}
+
+#[test_only]
+public fun new_duel_expired_for_testing<G>(
+    duel_id: ID,
+    creator: address,
+    acceptor: address,
+    refund_each: u64,
+): DuelExpired<G> {
+    DuelExpired { duel_id, creator, acceptor, refund_each }
 }
