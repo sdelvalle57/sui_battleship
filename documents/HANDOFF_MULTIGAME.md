@@ -1,5 +1,5 @@
 # HANDOFF_MULTIGAME
-> Plan: PLAN_MULTIGAME v1.3.2 (v1.3.1 aprobada por el MAYOR en la ronda 4 y errata v1.3.2 aprobada en su revisión de delta, APPROVE CON CAMBIOS aplicados) | Issue: #73 | Branch: `feature/issue-73-multigame` | Versión: v1.2.5 | Fecha: 2026-11-20
+> Plan: PLAN_MULTIGAME v1.3.2 (v1.3.1 aprobada por el MAYOR en la ronda 4 y errata v1.3.2 aprobada en su revisión de delta, APPROVE CON CAMBIOS aplicados) | Issue: #73 | Branch: `feature/issue-73-multigame` | Versión: v1.2.6 | Fecha: 2026-11-20
 > Un solo archivo consolidado. Lo que el DEV ve de #73 está acá: si algo del plan y de este handoff discrepan, **manda el plan** y la duda es un STOP (§C-9).
 > Alcance: TASK-1a, TASK-1b, TASK-2, TASK-2b, TASK-3, TASK-4, TASK-5, TASK-7a, TASK-7b y TASK-8. **PRE-1 (toolchain a la CLI `1.84.0`) NO va acá:** es un issue y un PR propios, sobre `master`, con su propio handoff. TASK-6 (upgrade) y TASK-9 (smoke de testnet) son **del owner** (§H, sin handoff de implementación).
 
@@ -9,6 +9,16 @@
 
 **Scope en una frase:** implementar, por tasks de una sesión cada uno, la base `duel` (custodia, ciclo y reloj por jugada), el coinflip nuevo sobre ella, el script y el esquema de upgrade, el ensayo de punta a punta en la localnet aislada y la capa `sui/` y los componentes mínimos de la app, sin tocar `house.move` ni `game.move`.
 **Lo que NO entrega:** el juego Battleship (#18), el rediseño visual (#72), el historial más allá de la ventana del fullnode (#51), juegos de terceros, mainnet, el toolchain a la CLI `1.84.0` (PRE-1) ni el upgrade y el smoke de testnet (del owner).
+
+## Cambios de v1.2.5 a v1.2.6
+
+Recoge la revisión del MID de TASK-2b (hallazgo P-2 y el contexto de TASK-3). **Solo tocan C-13, el §8 de TASK-3, TASK-4, TASK-5, TASK-7a, TASK-7b y TASK-8, la plantilla §R, el "Contexto" y el "Tocar/NO tocar" y el DoD de TASK-3 y este encabezado: no cambian TASK-2b, R.1-R.7 ni §0.** No cambia el plan ni ninguna decisión del owner.
+
+| Origen | Resolución en v1.2.6 | Dónde |
+|---|---|---|
+| **P-2** (R-12 sin ambigüedad) | "Todo texto que se escribe en un archivo (reportes, borradores, scripts, código Move o TypeScript, documentación), **con o sin `sui`**, se escribe solo con las herramientas de escribir/editar archivos; nunca con heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo`; los resultados de un comando se anexan con `cat <archivo-generado> >> <reporte>` (sin expansión)": TASK-2 y TASK-2b ya mostraron que "texto que contenga `sui`" es difícil de auditar | C-13, §8 de TASK-3, 4, 5, 7a, 7b y 8, plantilla §R |
+| **Contexto de TASK-3** | `duel.move` está commiteado (`6ffecf9`) y es la fuente de verdad (26 códigos; `record_move`/`claim_timeout`/`refund_stalled` no se tocan); baseline **269** tests (no 185); el coinflip usa `activate_atomic` + `pay` y **no** el reloj (R.7), con la lista de visibilidades que exige el MAYOR | TASK-3 §2, §7 |
+| **N-2 y N-4** (🔵 opcional) | Comentarios desactualizados de `duel.move` y un comentario cruzado con `pay`: solo si TASK-3 toca `duel.move`, solo comentarios, declarado | TASK-3 §2, §4, §7 |
 
 ## Cambios de v1.2.4 a v1.2.5
 
@@ -137,7 +147,7 @@ Fuente: `documents/STATUS.md` ("Baselines de gates", filas de #75: toolchain, lo
 - **C-10 Estándares.** Se trabaja contra `documents/ESTANDARES.md` (ARQ/SEG/LIM/PROY): `///` en toda función/struct pública (LIM-7), constantes nombradas (LIM-6), un abort code por condición (LIM-8), sin código muerto ni debug (LIM-3, LIM-4), tests con nombre = comportamiento (LIM-11), montos `bigint` (PROY-12). Fuentes Move con la cabecera `// Copyright (c) 2025-2026 sdelvalle57` + `// SPDX-License-Identifier: Apache-2.0` (D-20261030-14, también `tests/`).
 - **C-11 Mensajes de commit** (los propone el MID; el orquestador commitea): `<área>: <imperativo> (#73)`. **Nunca** `Closes/Fixes/Resolves #N` en commits ni PRs hasta el PR final (los cierra el orquestador con la decisión del owner).
 - **C-12 Inicio de sesión.** `git status` limpio, rama correcta, `agents.md`, `documents/STATUS.md`, `documents/DECISIONES.md` (D-20261119-05), `documents/ESTANDARES.md`, `documents/PLAN_MULTIGAME.md` y este archivo leídos; baseline medido (§0) antes de tocar nada.
-- **C-13 Cómo se escriben los reportes (R-12, #75).** Los reportes `.txt`, los borradores y las ediciones de docs con comandos de `sui` o `suiup` se escriben **solo con las herramientas de escribir/editar archivos** del harness. **Nunca** con un heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo` para texto que contenga `sui`, `suiup` o acentos graves: un heredoc sin comillas ejecutó por sustitución de comandos un `sui start` a secas con el HOME real en TASK-2a de #75 (lo contuvo solo que `~/.sui/sui_config/` no estaba vacío). **Guarda de `~/.sui`** (`stat -c '%y %s %n'` y `ls -la` de `<HOME real>/.sui/sui_config/` y `sha256sum` de `client.yaml`, **nunca `cat`**; del hash alcanzan los primeros 12 hex o "igual a la línea base"): se corre **al inicio, después de escribir cada reporte o borrador, después de cerrar cada génesis y al final**. Sobre **cada borrador**: `grep -c 'command not found'` (debe dar 0) y `/usr/bin/grep -nE 'Cannot run genesis|sui_config|Address already in use'` (rastros de una ejecución accidental). **Ante cualquier ejecución accidental de `sui`: parar, verificar `~/.sui/` y declararlo en el reporte.** Detalle: `agents.md` §3, paso 8, y `documents/agentes/AGENTE_DEV.md` ("Reporte de task").
+- **C-13 Cómo se escriben los reportes (R-12, #75; P-2).** **Todo texto que se escribe en un archivo** (reportes `.txt`, borradores, scripts, código Move o TypeScript, ediciones de documentación), **con o sin `sui`, `suiup` o acentos graves**, se escribe **solo con las herramientas de escribir/editar archivos** del harness. **Nunca** con un heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo`. Los resultados de un comando se anexan a un reporte con `cat <archivo-generado> >> <reporte>` (sin expansión). Motivo: "el texto no contiene `sui`" es más difícil de auditar que "no se usó un heredoc", y escribir código por la vía del shell salta las validaciones de la herramienta de edición. Origen: un heredoc sin comillas ejecutó por sustitución de comandos un `sui start` a secas con el HOME real en TASK-2a de #75 (lo contuvo solo que `~/.sui/sui_config/` no estaba vacío). **Guarda de `~/.sui`** (`stat -c '%y %s %n'` y `ls -la` de `<HOME real>/.sui/sui_config/` y `sha256sum` de `client.yaml`, **nunca `cat`**; del hash alcanzan los primeros 12 hex o "igual a la línea base"): se corre **al inicio, después de escribir cada reporte o borrador, después de cerrar cada génesis y al final**. Sobre **cada borrador**: `grep -c 'command not found'` (debe dar 0) y `/usr/bin/grep -nE 'Cannot run genesis|sui_config|Address already in use'` (rastros de una ejecución accidental). **Ante cualquier ejecución accidental de `sui`: parar, verificar `~/.sui/` y declararlo en el reporte.** Detalle: `agents.md` §3, paso 8, y `documents/agentes/AGENTE_DEV.md` ("Reporte de task").
 
 ## Receta P: localnet aislada con puerto alternativo (vale para todo smoke de este handoff; fuente: `agents.md` §3 vigente)
 
@@ -527,6 +537,10 @@ Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-2b.txt` con: output de los
 ### 2. Contexto
 - Modelo: `game.move` (`create_game` 88-117, `accept_game` 142-159, comentarios SEG-5), `game_tests.move` (aleatoriedad: `random_ready` 99, `random_round` 109, `accept_forced` 156, `test_accept_with_random_resolves_and_conserves_funds` 845, `test_accept_with_random_reaches_both_outcomes` 884, `SEED` y `RANDOM_SEEDS` 30-38).
 - Plan: R.7 (SEG-5), §2.7, §5 (migración), D3.
+- **`duel.move` está commiteado (`6ffecf9`) y es la fuente de verdad** (TASK-2 y TASK-2b, ya en PASA): los **26** abort codes, `create`, `activate_atomic`, `collect`, `pay`, `record_move`, `claim_timeout` y `refund_stalled`, los 7 eventos y la tabla de controles **no se tocan**; léelo entero antes de escribir el coinflip. **Baseline de este task = 269 tests** (83 de `house`/`game` + 102 de TASK-2 + 84 de TASK-2b), no 185: el DoD es 269 + N.
+- **El coinflip usa `activate_atomic` + `pay` y NO el reloj** (R.7): crea con **control 0** (`turn_ms == 0`) y nunca llama a `record_move`, `collect`, `claim_timeout` ni `refund_stalled` (las dos últimas son `entry` de `duel`, privadas: no se pueden llamar desde otro módulo).
+- **Visibilidades que exige el MAYOR para el coinflip** (se verifican con `grep` sobre `contracts/sources/coinflip.move` y se pegan en el reporte, 🟠 si fallan): (1) `create` y `accept` son `entry fun` **sin `public`**; (2) **`activate_atomic` y `pay` se llaman dentro de una misma `entry` no `public`** (`accept`): el `Collected` nace y se consume en esa función y **nunca** se devuelve ni se guarda; (3) **`Random` solo en esa `entry` no `public`**, con el orden **validar → cobrar (`activate_atomic`) → sortear → pagar (`pay`)** (SEG-5: entre el sorteo y `pay` nada que dependa del resultado puede abortar), el generador creado adentro y sorteo por índice sin ramas; (4) **sin `#[allow(lint(public_random))]`**, sin struct con un campo `RandomGenerator`, ninguna `public fun` de producción en el módulo; (5) `Coinflip` con `drop` solamente, sin `copy`/`store` ni constructor `public`.
+- **🔵 Opcional (N-2 y N-4 de la revisión de TASK-2b):** solo **si TASK-3 necesita tocar `duel.move`** (no es la intención), el DEV puede aprovechar para corregir **solo comentarios**: el doc del módulo (no solo los reembolsos van sin witness: también `claim_timeout`), el doc de `Collected` (lo consume `pay` y, por desestructuración dentro de `duel`, `claim_timeout`), el doc de `house_id` (también `claim_timeout` la exige) y un comentario cruzado "mantener en sintonía con `pay`" en `claim_timeout`. **Ningún cambio de código**: el diff de `duel.move` debe ser solo líneas de comentario (`//`, `///`), se declara en el reporte y el MID lo comprueba. Si no hace falta, no se toca.
 
 ### 3. Qué implementar
 - `contracts/sources/coinflip.move`: `public struct Coinflip has drop {}` (nombre **`Coinflip`**, sin constructor `public`); `entry fun create(house: &House, stake: Coin<SUI>, opponent: Option<address>, ctx)` → `duel::create(Coinflip {}, house, stake, opponent, 0 /* sin reloj */, ctx)`; `entry fun accept(duel: &mut Duel<Coinflip>, house: &mut House, payment: Coin<SUI>, r: &Random, ctx)` con el orden **`duel::activate_atomic` (valida y cobra) → `r.new_generator(ctx)` → `generate_u8_in_range(0, 1)` → `duel::pay(…, índice, ctx)`** (como `game.move:149-158`). `accept` **no** es `public` (lint `public_random`); el generador se crea adentro; nada que pueda abortar entre el sorteo y `pay`.
@@ -534,7 +548,7 @@ Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-2b.txt` con: output de los
 
 ### 4. Archivos a tocar / NO tocar
 - **Tocar (nuevos):** `contracts/sources/coinflip.move`, `contracts/tests/coinflip_tests.move`.
-- **NO tocar:** `house.move`, `game.move`, `duel.move` (si hace falta algo de la base, STOP), `Move.lock` (delta ⇒ declarar), tests existentes.
+- **NO tocar:** `house.move`, `game.move`, `duel.move` (si hace falta algo de la base, STOP; la **única** excepción son los comentarios 🔵 opcionales de "Contexto", sin cambio de código y declarados), `Move.lock` (delta ⇒ declarar), tests existentes.
 
 ### 5. Tests obligatorios (`contracts/tests/coinflip_tests.move`)
 `test_create_makes_clockless_pending_duel_and_emits_event` (control 0, `turn_ms == 0`), `test_create_invite_duel`, `test_accept_with_random_resolves_and_conserves_funds`, `test_accept_with_random_reaches_both_outcomes` (4 semillas, ambos resultados), `test_accept_creator_wins_pays_payout_and_fee` / `…_acceptor_wins_…` (con el ganador forzado), `test_accept_with_zero_fee_pays_whole_pot`, `test_accept_with_max_fee_charges_ten_percent`, `test_accept_rounds_fee_down_on_indivisible_pot`, `test_accept_huge_pot_needs_u128_intermediate`, `test_accept_uses_fee_rate_copied_at_creation`, **`test_accept_never_leaves_duel_active`** (INV-D5: tras `accept` el `Duel` está `Resolved` y `stake == 0`), `test_accept_rejects_own_duel` (`ESelfPlay`), `test_accept_rejects_non_invited` (`ENotInvited`), `test_accept_rejects_lower_stake` / `…_higher_stake` (`EWrongStake`), `test_accept_rejects_cancelled_duel` / `…_resolved_duel` (`ENotPending`), `test_accept_rejects_other_house` (`EWrongHouse`), `test_accept_from_other_house_version_aborts_before_the_draw` (`house::EWrongVersion` en `activate_atomic`, antes del sorteo), `test_cancel_and_reject_work_on_coinflip_duels` (usando las `entry` genéricas con el tipo `Duel<Coinflip>`), `test_fees_from_coinflip_and_legacy_game_accumulate_in_same_house`.
@@ -543,10 +557,10 @@ Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-2b.txt` con: output de los
 No aplica (unit); TASK-5 lo juega en la localnet.
 
 ### 7. Criterios de aceptación (DoD)
-Gates de `contracts` en verde (`--lint` incluido: `public_random` no dispara); **grep de R.7 sobre `contracts/sources` con la salida pegada** (`/usr/bin/grep -rn "allow(lint(public_random))\|RandomGenerator" contracts/sources`: solo la creación del generador dentro de `accept`, ningún `allow` y ningún struct con un campo `RandomGenerator`); `accept` es `entry` no `public`; `Coinflip` sin `copy`/`store` ni nombre en mayúsculas del módulo; el gasto es el mismo en ambos resultados (mismo camino; se explica en un comentario como `game.move:207-209`); `house.move`/`game.move`/`duel.move` sin diff de este task; greps §R-6.
+Gates de `contracts` en verde (**269 + N tests**, `--lint` incluido: `public_random` no dispara); **grep de R.7 sobre `contracts/sources` con la salida pegada** (`/usr/bin/grep -rn "allow(lint(public_random))\|RandomGenerator" contracts/sources`: solo la creación del generador dentro de `accept`, ningún `allow` y ningún struct con un campo `RandomGenerator`); `accept` es `entry` no `public`; `Coinflip` sin `copy`/`store` ni nombre en mayúsculas del módulo; el gasto es el mismo en ambos resultados (mismo camino; se explica en un comentario como `game.move:207-209`); `house.move`/`game.move` sin diff y `duel.move` sin diff **o solo con líneas de comentario** (los 🔵 opcionales, declarados); la lista de visibilidades de "Contexto" pegada con su `grep`; greps §R-6.
 
 ### 8. Al terminar
-Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-3.txt`; sin commits.
+Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-3.txt`; sin commits. **R-12 / C-13 (P-2):** todo texto que se escribe en un archivo (reportes, borradores, scripts, código Move, documentación), con o sin `sui`, se escribe solo con las herramientas de escribir/editar archivos; nunca con heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo`; los resultados de un comando se anexan con `cat <archivo-generado> >> <reporte>`. El reporte lista `docker ps -aq`/`images -aq` antes y después.
 
 ---
 
@@ -596,7 +610,7 @@ Con la **Receta P** (puerto alternativo) y el prefijo de la localnet aislada, co
 `node --test scripts/*.test.mjs` y `node scripts/publish.mjs check` en verde (104 + N tests; `check` = "1 despliegue(s)" con el `testnet.json` actual); sin cambios en `contracts/deployments/testnet.json` ni `Published.toml`; el runbook y la tabla de campos documentados; V-6 y V-11 resueltos con evidencia; ningún camino testnet ejecutable por un agente; greps §R-6.
 
 ### 8. Al terminar
-Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-4.txt` con el output pegado de `node --test` y `check`; sin commits.
+Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-4.txt` con el output pegado de `node --test` y `check`; sin commits. **R-12 / C-13 (P-2):** todo texto que se escribe en un archivo (reportes, borradores, scripts, código, documentación), con o sin `sui`, se escribe solo con las herramientas de escribir/editar archivos; nunca con heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo`; los resultados de un comando se anexan con `cat <archivo-generado> >> <reporte>`.
 
 ---
 
@@ -665,7 +679,7 @@ git ls-files --others --exclude-standard -- contracts/sources app/src | xargs -r
 - Medidas de gasto por resultado pegadas (H-3).
 
 ### 8. Al terminar
-Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-5.txt` con la tabla de resultados; sin commits.
+Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-5.txt` con la tabla de resultados; sin commits. **R-12 / C-13 (P-2):** todo texto que se escribe en un archivo (reportes, borradores, scripts de la sonda y de la corrida, código, documentación), con o sin `sui`, se escribe solo con las herramientas de escribir/editar archivos; nunca con heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo`; los resultados de un comando se anexan con `cat <archivo-generado> >> <reporte>`.
 
 ---
 
@@ -701,7 +715,7 @@ No aplica aquí (sin red); el smoke de lectura es el de TASK-7b.
 `npm ci`, `npm audit signatures`, `npm audit --omit=dev --audit-level=high`, `npm run lint -w app`, `npm run typecheck -w app`, `npm test -w app` (1156 + N tests, 0 fallos), `VITE_SUI_NETWORK=testnet npm run build -w app` y `git status --porcelain --untracked-files=all` solo con los archivos del task; con el `testnet.json` actual (`packageVersion` 1) el build es válido y solo hay fuente `legacy`; sin `any`; montos `bigint`; ningún componente arma tags ni targets (ARQ-1); el control de líneas agregadas del sandbox (TASK-5 §7: `SANDBOX\|testgame`) en 0; greps §R-6.
 
 ### 8. Al terminar
-Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-7a.txt` con el output pegado de los gates y el tamaño del bundle; sin commits.
+Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-7a.txt` con el output pegado de los gates y el tamaño del bundle; sin commits. **R-12 / C-13 (P-2):** todo texto que se escribe en un archivo (reportes, borradores, código TypeScript, documentación), con o sin `sui`, se escribe solo con las herramientas de escribir/editar archivos; nunca con heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo`; los resultados de un comando se anexan con `cat <archivo-generado> >> <reporte>`.
 
 ---
 
@@ -734,7 +748,7 @@ Con la localnet aislada del TASK-5 reconstruida con la **Receta P** (puerto alte
 Los gates de TASK-7a (más los tests nuevos: 0 fallos) y `git status --porcelain --untracked-files=all` solo con los archivos del task; builders con `Random` último; ningún componente arma tags ni targets; sin dependencias nuevas; `app/README.md` y `agents.md` §5 coherentes; el control de líneas agregadas del sandbox (TASK-5 §7) en 0; greps §R-6.
 
 ### 8. Al terminar
-Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-7b.txt` con el output pegado de los gates; sin commits.
+Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-7b.txt` con el output pegado de los gates; sin commits. **R-12 / C-13 (P-2):** todo texto que se escribe en un archivo (reportes, borradores, código TypeScript, documentación), con o sin `sui`, se escribe solo con las herramientas de escribir/editar archivos; nunca con heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo`; los resultados de un comando se anexan con `cat <archivo-generado> >> <reporte>`.
 
 ---
 
@@ -786,7 +800,7 @@ Lobby: fila con control, rótulo y filtro por juego; formulario: 7 controles sol
 Gates de app completos como en TASK-7a/7b (más los tests nuevos) con el build de testnet válido con el `testnet.json` actual; smoke en PASA (el 7 es opcional y se declara; los pasos 🌐 según la decisión del STOP de TASK-8); candado y "sin confirmar" sin regresión; **docs del DEV actualizados** (`contracts/README.md`, `app/README.md`, `agents.md`) y, en el reporte, los cambios de `ESTANDARES.md` redactados y el snippet de STATUS (el orquestador los aplica); sin cambios visuales de #72; `git diff --exit-code` sobre lo que no es del task, `git stash list` vacío y el control de líneas agregadas del sandbox (TASK-5 §7) en 0; greps §R-6.
 
 ### 8. Al terminar
-Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-8.txt` con output pegado, resultados del smoke (con la decisión del STOP de TASK-8 y cómo se resolvió el navegador) y la lista de docs tocados; sin commits.
+Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-8.txt` con output pegado, resultados del smoke (con la decisión del STOP de TASK-8 y cómo se resolvió el navegador) y la lista de docs tocados; sin commits. **R-12 / C-13 (P-2):** todo texto que se escribe en un archivo (reportes, borradores, scripts, código TypeScript, documentación), con o sin `sui`, se escribe solo con las herramientas de escribir/editar archivos; nunca con heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo`; los resultados de un comando se anexan con `cat <archivo-generado> >> <reporte>`.
 
 ---
 
@@ -841,7 +855,7 @@ Archivo `.txt` en el scratchpad (ruta absoluta completa en la respuesta del DEV)
 ### Riesgos / pendientes (o "ninguno")
 ### §R-6: los 4 greps sobre el diff y sobre este reporte, con la clasificación de cada coincidencia
 ### Cierre de la localnet (si hubo): kill por PID, ~/.sui/ idéntico a la línea base, git status sin entradas, <puerto> libre y el 9000 ajeno como estaba
-### Guarda de ~/.sui (C-13, R-12): stat/ls/primeros 12 hex del sha256sum de client.yaml al inicio, tras cada reporte/borrador, tras cada génesis y al final (igual a la línea base); grep -c 'command not found' = 0 y grep de rastros ('Cannot run genesis|sui_config|Address already in use') vacío sobre cada borrador; ejecución accidental de sui: "ninguna" o declarada
+### Guarda de ~/.sui (C-13, R-12; todo texto escrito en archivos con las herramientas de archivos, con o sin `sui`, sin heredoc, `printf`, `echo` ni `sed -i`): stat/ls/primeros 12 hex del sha256sum de client.yaml al inicio, tras cada reporte/borrador, tras cada génesis y al final (igual a la línea base); grep -c 'command not found' = 0 y grep de rastros ('Cannot run genesis|sui_config|Address already in use') vacío sobre cada borrador; ejecución accidental de sui: "ninguna" o declarada
 
 ### Documentación
 - READMEs / agents.md actualizados: sí / no aplica (obligatorio si cambió arquitectura, layout, comandos, contrato o tests — PROY-20)
