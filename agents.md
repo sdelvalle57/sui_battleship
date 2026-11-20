@@ -249,7 +249,8 @@ Navegador (app React) ──wallet (firma)──▶ Sui fullnode (gRPC-web) ─�
 - **Indexado:** las listas (partidas abiertas, mis partidas) salen de **eventos** del paquete; no hay
   registros globales en objetos compartidos (PROY-6). "Mis partidas" (#13): la actividad propia con el filtro por
   remitente del nodo y las invitaciones por escaneo de `GameCreated`, con el estado vigente leído del objeto. En testnet
-  solo cubren la ventana del fullnode (≈ 14,6 días, D-20261103-03; seguimiento en #51).
+  solo cubren la ventana del fullnode (D-20261103-03; seguimiento en #51). La retención la fija el operador del nodo:
+  ≈ 14,6 días en #10; el 2026-11-19, 11 épocas al medir y 12 a las 21:54Z (poda por época, ≈ 10-12 días; #17).
 
 ## 5. Contrato on-chain ↔ UI
 

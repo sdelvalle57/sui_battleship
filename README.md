@@ -41,8 +41,9 @@ navegador.
 - **Recorrido:** el lobby lista las partidas abiertas; desde ahí se crea una partida, se acepta otra y se ve el
   resultado. "Mis partidas" (`#/my-games`) reúne las propias y las invitaciones recibidas, y deja abrir una partida por
   su ID ([mis partidas](app/README.md#mis-partidas-13)). Cada transacción enlaza al explorador (Suiscan).
-- **Límite:** en testnet las listas cubren la ventana del fullnode (≈ 14,6 días, D-20261103-03; seguimiento en
-  [#51](https://github.com/sdelvalle57/sui_battleship/issues/51)), y lo avisan con la nota
+- **Límite:** en testnet las listas cubren la ventana del fullnode (D-20261103-03; seguimiento en
+  [#51](https://github.com/sdelvalle57/sui_battleship/issues/51)). La retención la fija el operador del nodo: ≈ 14,6
+  días en #10; el 2026-11-19, 11 épocas al medir y 12 a las 21:54Z (poda por época, ≈ 10-12 días). Lo avisan con la nota
   `historial disponible del nodo (desde <fecha>)`. Una partida más vieja se abre por su enlace o su ID
   ([límite sin indexador](app/README.md#límite-sin-indexador)).
 - **IDs de testnet** (`packageId`, `houseId`): en
@@ -160,7 +161,8 @@ y [retiro de comisiones](contracts/README.md#retiro-de-comisiones).
 
 ## Roadmap
 
-Estado al 2026-11-19. El estado vivo está en los issues y en [`documents/STATUS.md`](documents/STATUS.md).
+Estado al 2026-11-19: **MVP cerrado** con el smoke de punta a punta en testnet (#17, 30/30). El estado vivo está en los
+issues y en [`documents/STATUS.md`](documents/STATUS.md).
 
 | Fase | Issue | Tema | Estado |
 |---|---|---|---|
@@ -181,7 +183,7 @@ Estado al 2026-11-19. El estado vivo está en los issues y en [`documents/STATUS
 | Testnet y cierre | [#8](https://github.com/sdelvalle57/sui_battleship/issues/8) | Publicación del paquete en testnet (owner) y `testnet.json` | Hecho |
 | Testnet y cierre | [#15](https://github.com/sdelvalle57/sui_battleship/issues/15) | App en Railway: imagen con CSP y cabeceras, publicada desde `master` | Hecho |
 | Testnet y cierre | [#16](https://github.com/sdelvalle57/sui_battleship/issues/16) | Este README | Hecho |
-| Testnet y cierre | [#17](https://github.com/sdelvalle57/sui_battleship/issues/17) | Smoke de punta a punta en testnet con wallets reales | En curso |
+| Testnet y cierre | [#17](https://github.com/sdelvalle57/sui_battleship/issues/17) | Smoke de punta a punta en testnet con wallets reales | Hecho |
 | Post-MVP | [#18](https://github.com/sdelvalle57/sui_battleship/issues/18) | Mecánica real de batalla naval en lugar del coinflip | Post-MVP |
 | Post-MVP | [#51](https://github.com/sdelvalle57/sui_battleship/issues/51) | Historial completo en las listas de testnet, más allá de la ventana del fullnode | Post-MVP |
 | Post-MVP | [#53](https://github.com/sdelvalle57/sui_battleship/issues/53) | Un solo bucle de páginas de eventos para el lobby y Mis partidas | Post-MVP |
@@ -190,6 +192,10 @@ Estado al 2026-11-19. El estado vivo está en los issues y en [`documents/STATUS
 | Post-MVP | [#58](https://github.com/sdelvalle57/sui_battleship/issues/58) | Code-splitting del bundle de testnet | Post-MVP |
 | Post-MVP | [#60](https://github.com/sdelvalle57/sui_battleship/issues/60) | Panel de la House: releer la House antes de firmar | Post-MVP |
 | Post-MVP | [#35](https://github.com/sdelvalle57/sui_battleship/issues/35) | Actualizar ESLint por el aviso de `minimatch` (solo desarrollo) | Post-MVP |
+| Post-MVP | [#70](https://github.com/sdelvalle57/sui_battleship/issues/70) | Panel de la House: "Retirar" deshabilitado sin aviso tras un pedido a la wallet que no terminó | Post-MVP |
+| Post-MVP | [#71](https://github.com/sdelvalle57/sui_battleship/issues/71) | Panel de la House: los campos vuelven a los valores on-chain mientras la wallet pide la firma | Post-MVP |
+| Post-MVP | [#72](https://github.com/sdelvalle57/sui_battleship/issues/72) | Rediseño de UI/UX de la app | Post-MVP |
+| Post-MVP | [#73](https://github.com/sdelvalle57/sui_battleship/issues/73) | Plataforma multijuego: lo común separado de la lógica de cada juego | Post-MVP |
 
 ## Documentación
 

@@ -536,7 +536,8 @@ transacción (cómputo + storage − rebate de `effects.gasUsed`).
 - **Listas (lobby, #10):** las partidas se descubren por eventos con `eventType` = `<originalPackageId>::game::<Evento>`
   (dirección **completa**: con `0x3` corto el nodo responde `INVALID_ARGUMENT`). En el fullnode público, `listEvents` del
   SDK (sin rango) falla con `OUT_OF_RANGE` ("requested data below earliest available"): el historial está podado
-  (≈ 14,6 días, medido en #10; `lowestAvailableCheckpoint` de `getServiceInfo`). Por eso el lobby usa el crudo
+  (`lowestAvailableCheckpoint` de `getServiceInfo`; la retención la fija el operador del nodo: ≈ 14,6 días en #10; el
+  2026-11-19, 11 épocas al medir y 12 a las 21:54Z, poda por época, ≈ 10-12 días, #17). Por eso el lobby usa el crudo
   `client.ledgerService.listEvents` descendente con `startCheckpoint` = máx(checkpoint de la publicación, piso + margen)
   (#10, D-20261102-04): el escaneo termina con `QueryEndReason.CHECKPOINT_BOUND` al
   llegar a la cota, sin eventos anteriores.
@@ -558,7 +559,8 @@ transacción (cómputo + storage − rebate de `effects.gasUsed`).
       `CHECKPOINT_BOUND` (fin normal);
     - `object.version` es una versión Lamport (4 → 415 al aceptar; compartida por los objetos de una misma
       transacción): solo se compara entre lecturas del mismo objeto.
-  - **Límite:** en testnet cubren solo la ventana del fullnode (≈ 14,6 días, D-20261103-03): ver `app/README.md`, "Mis
+  - **Límite:** en testnet cubren solo la ventana del fullnode (D-20261103-03; ≈ 14,6 días en #10, ≈ 10-12 días el
+    2026-11-19: 11 épocas al medir y 12 a las 21:54Z, poda por época): ver `app/README.md`, "Mis
     partidas (#13)" → "Límite sin indexador" (seguimiento en #51).
 - El parser de #10 usa **un** formato y trata una variante desconocida como error, nunca como `Pending` (SEG-10).
 - El resultado de aceptar se lee del evento `GameResolved` de la transacción o del objeto
