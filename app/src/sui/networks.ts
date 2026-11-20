@@ -1,14 +1,17 @@
 import { fromBase58, toHex } from '@mysten/sui/utils';
+import { LOCALNET_URL } from './localnetUrl.mjs';
 
 /** Redes que admite un build de la app (D-20261102-02 (2)): mainnet queda fuera a propósito. */
 export type Network = 'localnet' | 'testnet';
 
 /**
  * Endpoints por red: `grpcUrl` para `SuiGrpcClient` (gRPC-web) y `explorerBase` para los links al explorador
- * (Suiscan en testnet; `null` en localnet, que no tiene explorador público — D-20261102-02 (6)).
+ * (Suiscan en testnet; `null` en localnet, que no tiene explorador público — D-20261102-02 (6)). El `grpcUrl` es el **por
+ * defecto** de la red: el endpoint efectivo es el `grpcUrl` de `AppConfig`, que en localnet puede ser otro puerto de
+ * loopback (#77, `config.ts`). Solo `config.ts` lo lee.
  */
 export const NETWORKS: Record<Network, { grpcUrl: string; explorerBase: string | null }> = {
-  localnet: { grpcUrl: 'http://127.0.0.1:9000', explorerBase: null },
+  localnet: { grpcUrl: LOCALNET_URL, explorerBase: null },
   testnet: { grpcUrl: 'https://fullnode.testnet.sui.io:443', explorerBase: 'https://suiscan.xyz/testnet' },
 };
 

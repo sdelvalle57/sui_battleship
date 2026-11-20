@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { LOCALNET_URL } from './localnetUrl.mjs';
 import { isNetwork, NETWORKS, shortChainId } from './networks';
 
 describe('NETWORKS', () => {
   it('maps localnet to the local gRPC endpoint without explorer', () => {
     expect(NETWORKS.localnet).toEqual({ grpcUrl: 'http://127.0.0.1:9000', explorerBase: null });
+  });
+
+  it('takes the default localnet endpoint from the shared LOCALNET_URL', () => {
+    expect(NETWORKS.localnet.grpcUrl).toBe(LOCALNET_URL);
   });
 
   it('maps testnet to the public fullnode and Suiscan', () => {
