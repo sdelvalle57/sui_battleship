@@ -2360,3 +2360,1108 @@ Autorizo **TASK-3** (coinflip sobre `duel`), que depende de TASK-2 y TASK-2b en 
 ## §R-6 sobre esta revisión
 Greps con `/usr/bin/grep` sobre este archivo: hex de 40-64 caracteres, `0x` + 8 hex, claves y rutas personales, abreviaturas con puntos suspensivos: el resultado va en el mensaje de entrega. No incluye direcciones de cuenta ni hashes completos; las direcciones de prueba de los tests no se citan.
 
+
+
+---
+
+## 9. TASK-3 (reporte del DEV)
+
+> DEV, TASK-3: battleship::coinflip sobre duel (aleatoriedad, SEG-5).
+
+~~~~text
+## Task completado: HANDOFF_MULTIGAME — TASK-3 (`coinflip` sobre `duel`)
+
+Convenciones: `<repo>` = el worktree de la branch, `<HOME real>` = el HOME del usuario, `<scratchpad>` = el scratchpad de la sesion, `<paquete>` = el ID de paquete sin publicar que imprime el desensamblador.
+Todo texto de este reporte, de los borradores, del codigo Move y de los tests se escribio con las herramientas de escribir/editar archivos (C-13 / R-12 / P-2); los resultados de comandos se anexan con `cat <archivo> >> / cat a b c > reporte` (sin expansion). No se uso heredoc ni `sed -i` ni `printf`/`echo` para escribir codigo, tests, prosa del reporte o borradores. UNICA EXCEPCION, declarada en "Desviaciones" (item 8): los rotulos `$ comando` de los archivos de salida de comandos (ANEXOS) se generaron con `{ echo '$ …'; <comando>; } > archivo` (texto entre comillas simples, sin expansion, ningun `sui` dentro de un `echo`).
+
+### Branch (con SHA corto del HEAD)
+- Branch `feature/issue-73-multigame`, HEAD `61dc932` (docs: handoff multigame v1.2.6). Worktree = `<repo>` (el worktree de `feature/issue-73-multigame`).
+- Arbol de partida: `git status --short` vacio (limpio). `git merge-base --is-ancestor 8cc35ab HEAD` = 0 (PRE-1 / #75 integrado). CLI `1.84.0-9dc25070cf2e`.
+- Nada commiteado, nada `git add`-eado, nada pusheado.
+
+### Baseline medido (primero, antes de escribir una linea) y arbol de partida
+Baseline = 269 tests (83 house/game + 102 de TASK-2 + 84 de TASK-2b), PASS; salida pegada abajo (ANEXO 1). DoD de este task = 269 + N.
+
+### Archivos creados / modificados (ANEXO 2: `git status` y `git diff --stat`)
+- NUEVO `contracts/sources/coinflip.move` (93 lineas).
+- NUEVO `contracts/tests/coinflip_tests.move` (1042 lineas, 40 tests).
+- Sin cambios: `house.move`, `game.move`, `duel.move` (ni siquiera comentarios: TASK-3 no necesito tocar `duel.move`; los 🔵 opcionales N-2/N-4 NO se aplicaron), tests existentes, `Move.toml`, `Move.lock` (git diff exit 0), `Published.toml`, `deployments/*`, `app/*`, `.github/*`, `documents/*`.
+- `contracts/build/` lo cree yo con los gates (esta ignorado por git); se borra al cerrar (ver "Guarda" al final).
+
+### Que se implemento (3 lineas)
+`battleship::coinflip` (sin `init`, sin `public fun` de produccion): witness `public struct Coinflip has drop {}`, `entry fun create` (delega en `duel::create` con control 0) y `entry fun accept` con el orden `duel::activate_atomic` (valida y cobra) -> `r.new_generator(ctx)` -> `generate_u8_in_range(0, 1)` -> `duel::pay`.
+El `Collected` nace y se consume dentro de `accept` (nunca se devuelve ni se guarda); sin ramas ni aborts propios entre el sorteo y `pay`; el gasto es el mismo en ambos resultados (comentado como `game.move:207-209`).
+`#[test_only] accept_with_winner_for_testing` fija el ganador sin `Random` (verificado ausente del bytecode de produccion) y 40 tests (los 22 nombres obligatorios del handoff §5 y 18 mas).
+
+### Tests y gates (output pegado; forma canonica de `agents.md` §3, siempre con `printf 'n\n' |`)
+- Tests agregados (40, todos en `contracts/tests/coinflip_tests.move`):
+  create: `test_create_makes_clockless_pending_duel_and_emits_event` (OBL), `test_create_invite_duel` (OBL), `test_create_copies_fee_rate_at_creation`, `test_create_accepts_bet_equal_to_min_bet`, `test_create_accepts_bet_equal_to_max_bet`, `test_create_rejects_bet_below_min` (EBetTooLow), `test_create_rejects_bet_above_max` (EBetTooHigh), `test_create_rejects_self_invite` (ESelfInvite), `test_create_rejects_house_with_wrong_version` (house::EWrongVersion).
+  liquidacion (ganador forzado): `test_accept_creator_wins_pays_payout_and_fee` (OBL), `test_accept_acceptor_wins_pays_payout_and_fee` (OBL), `test_accept_invite_by_invitee_resolves`, `test_accept_with_zero_fee_pays_whole_pot` (OBL), `test_accept_with_max_fee_charges_ten_percent` (OBL), `test_accept_rounds_fee_down_on_indivisible_pot` (OBL), `test_accept_max_bet_with_max_fee_does_not_overflow`, `test_accept_huge_pot_needs_u128_intermediate` (OBL), `test_accept_uses_fee_rate_copied_at_creation` (OBL), `test_fees_from_two_coinflips_accumulate_and_withdraw_exactly`, `test_fees_from_coinflip_and_legacy_game_accumulate_in_same_house` (OBL).
+  sorteo real (`Random`): `test_accept_with_random_resolves_and_conserves_funds` (OBL), `test_accept_with_random_reaches_both_outcomes` (OBL, 4 semillas, ambos resultados), `test_accept_with_random_maps_draw_to_the_players_per_seed` (pin del ganador por semilla), `test_accept_with_random_by_invitee_resolves`, `test_accept_never_leaves_duel_active` (OBL, INV-D5).
+  aborts de `accept` en el orden de `activate_atomic`: `test_accept_rejects_own_duel` (ESelfPlay, OBL), `…_non_invited` (ENotInvited, OBL), `…_lower_stake` / `…_higher_stake` (EWrongStake, OBL), `…_cancelled_duel` / `…_resolved_duel` (ENotPending, OBL), `…_other_house` (EWrongHouse, OBL), `test_accept_rejects_duel_of_older_version` (EVersionMismatch), `test_accept_from_other_house_version_aborts_before_the_draw` (house::EWrongVersion, OBL), `test_accept_from_old_package_aborts_before_the_draw` (house::EWrongVersion), `test_accept_reports_house_version_before_house_and_authz` (house::EWrongVersion), `test_accept_reports_house_before_authz` (EWrongHouse), `test_accept_reports_state_before_stake` (ENotPending).
+  cancel/reject genericos de `duel` sobre `Duel<Coinflip>`: `test_cancel_and_reject_work_on_coinflip_duels` (OBL), `test_cancel_and_reject_refund_coinflips_regardless_of_versions` (INV-D2).
+  Cada abort usa `#[expected_failure(abort_code = battleship::duel::E…)]` o `battleship::house::EWrongVersion` (siempre el codigo nombrado). Conservacion exacta por actor, `fees_collected` y evento en cada liquidacion (`assert_resolved`: un unico transfer = el pago al ganador, el perdedor 0 monedas, `payout + fee == 2 × bet`, `stake == 0`, `Resolved { acceptor, winner }`).
+- Contracts (los tres gates con `--warnings-are-errors`; salidas completas en el ANEXO 3): `sui --version` = `1.84.0-9dc25070cf2e`; build exit 0 (0 warnings); `--lint` exit 0 (0 lints, no dispara `public_random`); test exit 0: **309 tests, 309 PASS, 0 FAIL = 269 + 40** (40 de `coinflip_tests`).
+- Scripts / App: no aplica (TASK-3 solo toca `contracts/sources` y `contracts/tests`; no corri `node --test`, `publish.mjs check` ni los gates de la app).
+- Tablas de contrato (`contracts/README.md`) y `app/src/sui/`: NO sincronizadas en este task (el handoff asigna la documentacion y la capa de la app a TASK-7a/7b/8; TASK-3 NO debe tocar `documents/*` ni `app/*`). Pendiente declarado para TASK-8: README de `contracts/` (modulo `coinflip`: `create`/`accept`, witness `Coinflip`, abort codes de `duel` que ve el coinflip, mapeo por modulo + codigo).
+- `git diff --exit-code -- contracts/sources/house.move contracts/sources/game.move contracts/sources/duel.move contracts/Move.lock` = exit 0 (ANEXO 2). Tests existentes, `Move.toml` y `Published.toml` tambien sin diff.
+
+### Verificacion manual (localnet / lecturas publicas)
+No aplica: unit tests con `test_scenario`, sin localnet, sin testnet, sin faucet. El smoke de punta a punta (incluido `gasUsed` por resultado) es TASK-5.
+
+### Evidencias especificas del task
+
+#### E-1. Visibilidades exigidas por el MAYOR (ANEXO 4, salidas de `/usr/bin/grep` sobre `contracts/sources/coinflip.move`)
+1. `create` y `accept` son `entry fun` SIN `public` (lineas 37 y 67). La unica `public fun` del archivo es `accept_with_winner_for_testing` (linea 84), precedida de `#[test_only]` (linea 83): no existe en el bytecode de produccion (E-3: `strings | grep -c _for_testing` = 0). Ninguna `public fun` ni `public(package) fun` de produccion en el modulo.
+2. `activate_atomic` (linea 74) y `pay` (linea 77) se llaman DENTRO de la misma `entry` `accept`; el `Collected` es la variable local `collected` (linea 74 -> 77): no se devuelve (`accept` no devuelve nada), no se guarda en ningun struct (el modulo solo tiene el struct `Coinflip`) y no sale de la funcion. El bytecode lo confirma (E-3): `StLoc[5](collected: Collected)` ... `MoveLoc[5](collected)` -> `Call duel::pay`.
+3. `Random` solo aparece en `accept` (parametro `r: &Random`, linea 71), con el orden validar -> cobrar -> sortear -> pagar: linea 74 `duel::activate_atomic` (valida y cobra), 75 `r.new_generator(ctx)`, 76 `generate_u8_in_range(0, 1)`, 77 `duel::pay`. El generador se crea adentro (no se recibe ni se guarda). En el bytecode: `Call activate_atomic` (instruccion 7) < `Call new_generator` (11) < `Call generate_u8_in_range` (16) < `Call pay` (24).
+4. `/usr/bin/grep -rn "allow(lint(public_random))\|RandomGenerator" contracts/sources` = sin coincidencias (exit 1). Ni un `allow(` en todo `sources/`. Ninguna `public fun` de produccion. La creacion del generador (`new_generator` / `generate_u8`) en `sources/`: solo `coinflip.move:75-76` (dentro de `accept`) y `game.move:156-157` (el modelo viejo, sin tocar). No hay struct con un campo `RandomGenerator` (el tipo ni siquiera se nombra: el generador es una variable local de tipo inferido).
+5. `Coinflip` = `public struct Coinflip has drop {}`: solo `drop` (sin `copy`, sin `store`, sin `key`), sin constructor `public` (en Move solo el modulo que lo define puede construirlo), nombre `Coinflip` y no `COINFLIP` (no es candidato a OTW). En el bytecode: `struct Coinflip has drop { dummy_field: bool }`.
+Ademas: el modulo no tiene `init` (`grep "fun init" sources/` solo da `house.move`).
+
+#### E-2. Orden SEG-5 y por que es seguro (resumen; detalle en el comentario `///` de `accept`)
+- Todo lo que puede abortar sin depender del resultado esta ANTES del sorteo, dentro de `duel::activate_atomic`: lectura de la House con version (`house::EWrongVersion`), `EVersionMismatch`, `EWrongHouse`, `ESelfPlay`, `ENotInvited`, `ENotPending`, `EWrongStake`, `EHasClock` y el `add_fees` (cuyo chequeo de version tambien aborta antes).
+- Entre el sorteo y `pay` no hay nada que dependa del resultado y pueda abortar: el indice solo selecciona una direccion guardada dentro de `pay`; los chequeos de `pay` (`EWrongDuel`, `ENotActive`, `EBadWinnerIndex`) son deterministas (el `Collected` es de este mismo `Duel`, que acaba de quedar `Active`, y el indice es 0 o 1). `generate_u8_in_range(0, 1)` con constantes no puede abortar por rango.
+- `accept` es `entry` sin `public` y el generador se crea adentro: otro modulo (o un PTB) no puede componer el sorteo ni abortar al perder. El `Collected` (sin abilities) nace y se consume en la misma funcion: una transaccion no puede terminar entre el cobro de la comision y el pago.
+- Gasto igual en ambos resultados: `accept` es un solo bloque basico sin saltos (E-3: el desensamblado no tiene `Br*`/`Jump`); `pay` elige la direccion por indice (`players.borrow(index)`) y ejecuta el mismo cambio de estado, evento y transferencia en los dos casos. Explicado en el comentario de `accept` (como `game.move:207-209`). En unit tests no se mide gas real: TASK-5 mide `gasUsed` (computo y almacenamiento) de un `accept` ganado por el creador y de otro ganado por el aceptante en la localnet y exige que sean iguales.
+
+#### E-3. Verificacion de bytecode de produccion (ANEXO 5)
+Build de produccion (sin tests) tras `rm -rf contracts/build`: `strings .../coinflip.mv | grep -c _for_testing` = 0 y `duel.mv` = 0 (tambien `game.mv` y `house.mv` = 0); `strings coinflip.mv | grep -i "testing|test_only"` = nada. `sui move disassemble coinflip.mv` muestra SOLO dos funciones exportadas, ambas `entry` (`entry create`, `entry accept`), la struct `Coinflip has drop` y las llamadas en orden `activate_atomic` -> `new_generator` -> `generate_u8_in_range` -> `pay`, sin ningun salto.
+
+#### E-4. Mutaciones (en COPIAS del scratchpad `<scratchpad>/t3/mut/<mN>/contracts`, nunca en el worktree; ANEXO 6; cada corrida = `printf 'n\n' | sui move test -e testnet --warnings-are-errors`)
+| # | Mutacion | Resultado | Tests rojos |
+|---|---|---|---|
+| M1 | `accept`: indice del ganador invertido (`pay(..., 1 - winner_index, ...)`) | 308/309, 1 FAIL | `test_accept_with_random_maps_draw_to_the_players_per_seed` (el pin del ganador por semilla; los demas tests del sorteo no distinguen el sentido porque comparan contra el ganador real) |
+| M2 | `accept`: sorteo siempre 0 (`generate_u8_in_range(0, 0)`) | 307/309, 2 FAIL | `test_accept_with_random_reaches_both_outcomes`, `test_accept_with_random_maps_draw_to_the_players_per_seed` |
+| M3 | NO cobrar la comision (en la base: `collect_fee` usa `fee_amount(pot, 0)`; copia de `duel.move`) | 274/309, 35 FAIL | 12 de `coinflip_tests` (`test_accept_creator_wins_pays_payout_and_fee`, `…_acceptor_wins_…`, `…_with_max_fee_charges_ten_percent`, `…_rounds_fee_down_…`, `…_huge_pot_…`, `…_uses_fee_rate_copied_at_creation`, `test_fees_from_coinflip_and_legacy_game_accumulate_in_same_house`, etc.) y 23 de `duel_tests` |
+| M4 | `create` con control 1 en vez de 0 (`NO_CLOCK = 1`: un duelo con reloj) | 290/309, 19 FAIL | `test_create_makes_clockless_pending_duel_and_emits_event`, `test_create_invite_duel`, `test_accept_never_leaves_duel_active` y todos los `accept` (la base aborta `EHasClock`) |
+| M5 | SORTEAR ANTES de validar (`new_generator` + `generate_u8_in_range` antes de `activate_atomic`) | 309/309 PASS: **SOBREVIVE** | ninguno |
+M5 sobrevive y es esperado: el orden validar -> cobrar -> sortear es una propiedad de seguridad/gas que un unit test no puede observar (un aborto revierte toda la transaccion, el generador no tiene efectos laterales visibles y su semilla no depende de lo que haga `activate_atomic`, que no crea objetos). Control compensatorio: orden de lineas y de instrucciones del bytecode en E-1 (3) y E-3, la regla de revision R.7 y el MAYOR (§G), mas la medicion de gas de TASK-5. NO se agrega un test falso para esto.
+
+#### E-5. Matriz test <-> invariante (R.6; INV-D3 y D6 no aplican: el coinflip no tiene reloj)
+| INV | Tests (coinflip) |
+|---|---|
+| D1 (el unico SUI esta en `stake`: `== bet` Pending, `== 0` en estado final) | `test_create_makes_clockless_pending_duel_and_emits_event` y `…_invite_duel` (`stake == bet`); todos los `test_accept_*` de liquidacion (`assert_resolved`: `stake == 0`, `payout + fee == 2 × bet`, un unico transfer, perdedor 0); `test_accept_with_random_resolves_and_conserves_funds`, `…_reaches_both_outcomes` (conservacion por actor y suma de pagos); `test_fees_from_two_coinflips_accumulate_and_withdraw_exactly`; `test_cancel_and_reject_work_on_coinflip_duels` (`stake == 0`) |
+| D2 (cancel/reject sin House ni version) | `test_cancel_and_reject_refund_coinflips_regardless_of_versions` (House y `Duel` en otra version); `test_cancel_and_reject_work_on_coinflip_duels` (reembolso entero al creador, sin comision, `fees_collected` igual, el invitado no recibe nada) |
+| D4 (comision solo al terminar en `Resolved`; `payout + fee == 2 × bet`; `fees_collected` sube `fee`) | `test_accept_creator_wins_…`, `…_acceptor_wins_…`, `…_zero_fee_…`, `…_max_fee_…`, `…_rounds_fee_down_…`, `…_max_bet_with_max_fee_…`, `…_huge_pot_needs_u128_…`, `…_uses_fee_rate_copied_at_creation`, `test_fees_from_coinflip_and_legacy_game_accumulate_in_same_house`; los aborts (`test_accept_rejects_*`, `…aborts_before_the_draw`) revierten sin cobrar (la tx entera aborta) |
+| D5 (ninguna `entry` termina con un `Duel` `Active`) | `test_accept_never_leaves_duel_active` (sorteo real y dos ganadores forzados: tras la tx el `Duel` esta `Resolved`, no `Active` ni `Pending`, `stake == 0`, `to_move` y `deadline_ms` ausentes, `turn_ms == 0`; el evento `DuelActivated` muestra `to_move = 0` y `deadline_ms = 0`, que solo existieron dentro de la tx); `play_random_games` (usado por los tests de semillas) tambien exige `is_resolved` y `stake == 0` |
+| D7 (`to_move`/`deadline_ms` solo dentro de `Active` con reloj) | `test_accept_never_leaves_duel_active`, `assert_resolved` (`to_move_for_testing().is_none()` y `deadline_ms_for_testing().is_none()`), `test_create_makes_clockless_pending_duel_and_emits_event` (`turn_ms == 0`, control 0) |
+| SEG-5 (aleatoriedad) | `test_accept_with_random_reaches_both_outcomes`, `…_maps_draw_to_the_players_per_seed`, `…_resolves_and_conserves_funds`, `test_accept_from_other_house_version_aborts_before_the_draw`, `test_accept_from_old_package_aborts_before_the_draw` + E-1/E-2/E-3 (estructura) |
+
+#### E-6. Cobertura informativa (en una COPIA del scratchpad, nunca en el worktree; ANEXO 7)
+`coinflip` 100.00 %; `duel` 99.48 % (modulo sin tocar: el baseline de TASK-2b; sus ramas sin cubrir no son de este task), `game` 100 %, `house` 100 %; total 99.67 %. Ninguna rama de `coinflip` sin cubrir.
+
+### Desviaciones del handoff
+1. **Mas tests que los obligatorios (no menos):** 40 en lugar de 22 (se agregan abort por limites de apuesta/auto-invitacion/version en `create`, ordenes de abort, invitado con sorteo real, el pin por semilla, la conservacion con dos coinflips y el reembolso sin version). Detalle arriba.
+2. **`accept_with_winner_for_testing` recibe `winner_index: u8`** (el handoff lo modela sobre `game.move:316-327`, que usa `u64`): aqui el indice pasa tal cual a `pay`, que lo exige `u8`. Es un nombre/tipo interno `#[test_only]` (C-9).
+3. **El grep R.7 (`RandomGenerator`) da CERO coincidencias,** no "solo la creacion del generador dentro de `accept`" (el handoff esperaba que apareciera): el tipo `RandomGenerator` nunca se nombra en el codigo (el generador es una variable local con tipo inferido). La creacion del generador se comprueba con el grep complementario de `new_generator` (solo `coinflip.move:75` dentro de `accept`, y `game.move:156`).
+4. **`test_accept_from_other_house_version_aborts_before_the_draw`:** el `house::EWrongVersion` se produce en la PRIMERA lectura con version de la House dentro de `assert_acceptable` (`house.min_bet()`), no solo en `add_fees` como dice el handoff: con la House en otra version ya aborta ahi. Se agrego `test_accept_from_old_package_aborts_before_the_draw` (House y `Duel` escritos por una version nueva) para ejercer la misma condicion que `test_accept_from_old_package_aborts_in_fee_collection` del `game` viejo. Que el aborto ocurra ANTES del sorteo no es observable en un unit test (ver M5): se garantiza por el orden del codigo.
+5. **Test con ganador fijado por semilla** (`…_maps_draw_to_the_players_per_seed`, `[ACCEPTOR, ACCEPTOR, CREATOR, CREATOR]` medido con las semillas `RANDOM_SEEDS` y el generador del framework de la PV 142): es un test de regresion que hace falta para matar M1; si cambia el generador del framework hay que re-medir el pin. No es un test que dependa de que el azar "sea justo".
+6. Constante `NO_CLOCK: u8 = 0` en `coinflip.move` (LIM-6) en lugar del literal `0 /* sin reloj */`: mismo valor.
+7. `duel.move` sin tocar y sin sondas de compilacion nuevas (no las pide TASK-3).
+8. **Incumplimiento parcial de C-13/P-2 (declarado, para que el MID lo juzgue):** para armar los archivos de salida de comandos que luego se anexaron con `cat`, los rotulos de cada bloque (la linea `$ comando` y marcas como "exit=0") se escribieron con `echo '…'` (comillas simples, sin sustitucion de comandos) dentro de `{ …; } > archivo`, en lugar de escribirlos con la herramienta de archivos. NO se escribio asi ningun codigo, test, prosa del reporte ni borrador; ningun `echo`/`printf` contenia `sui`; la guarda de `~/.sui` quedo igual a la linea base (ANEXO 9) y los greps de rastros dan vacio. Si el MID lo considera una violacion de P-2, el contenido de los ANEXOS son salidas crudas ya pegadas y solo habria que re-rotular a mano.
+
+### Riesgos / pendientes
+- M5 (orden del sorteo) no es verificable con unit tests: depende de la revision (E-1/E-3) y de TASK-5 (gas por resultado).
+- El pin por semilla depende del generador del framework; esta fijado a la CLI `1.84.0` / PV 142 (re-medir si cambia el toolchain).
+- PROY-5 / TASK-7b: el PTB de `accept` debe llevar la llamada con `Random` como ULTIMO `MoveCall` (el contrato no lo puede forzar); la app lo arma asi.
+- El mapeo de errores de la app por modulo + codigo (TASK-7a): el coinflip aborta con codigos de `duel` (0-25) y de `house` (3, `EWrongVersion`); no define abort codes propios (coinflip no tiene constantes `E…`).
+- Un modulo del MISMO paquete podria crear un `Duel<G>` con su propio witness (R.7 / V-14): regla de revision, no de compilador. No hay ningun otro juego hoy.
+- La documentacion (`contracts/README.md`, `agents.md` §8, `ESTANDARES.md`) queda para TASK-8; nada de eso se toca aqui.
+
+
+==================================================================================================
+ANEXO 1 — Baseline medido primero (269)
+==================================================================================================
+$ cd <repo>/contracts && printf 'n\n' | sui move test -e testnet --warnings-are-errors   (ANTES de escribir nada; solo con duel.move/game.move/house.move y sus tests)
+Test result: OK. Total tests: 269; passed: 269; failed: 0
+
+==================================================================================================
+ANEXO 2 — Archivos: git status, git diff --stat y git diff --exit-code (house/game/duel/Move.lock y tests existentes)
+==================================================================================================
+$ git status --short
+?? contracts/sources/coinflip.move
+?? contracts/tests/coinflip_tests.move
+$ git diff --stat   (archivos nuevos sin trackear: el diff de tracked esta vacio)
+(exit 0)
+$ wc -l contracts/sources/coinflip.move contracts/tests/coinflip_tests.move
+   93 contracts/sources/coinflip.move
+ 1042 contracts/tests/coinflip_tests.move
+ 1135 total
+$ git diff --exit-code -- contracts/sources/house.move contracts/sources/game.move contracts/sources/duel.move contracts/Move.lock
+exit=0
+$ git diff --exit-code -- contracts/tests/house_tests.move contracts/tests/game_tests.move contracts/tests/duel_tests.move contracts/Move.toml contracts/Published.toml
+exit=0
+
+==================================================================================================
+ANEXO 3 — Los tres gates de contracts (salida completa) y el conteo 269 + 40 = 309
+==================================================================================================
+$ printf 'n\n' | sui --version
+sui 1.84.0-9dc25070cf2e
+$ printf 'n\n' | sui move build -e testnet --warnings-are-errors
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+$ printf 'n\n' | sui move build -e testnet --lint --warnings-are-errors
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0 (sin ESL, sin public_random)
+$ printf 'n\n' | sui move test -e testnet --warnings-are-errors
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+Running Move unit tests
+[ PASS    ] battleship::house_tests::test_add_fees_accumulates_balance
+[ PASS    ] battleship::house_tests::test_add_fees_rejects_wrong_version
+[ PASS    ] battleship::house_tests::test_fee_rate_rejects_wrong_version
+[ PASS    ] battleship::house_tests::test_fees_collected_rejects_wrong_version
+[ PASS    ] battleship::house_tests::test_init_sends_single_house_cap_to_publisher
+[ PASS    ] battleship::house_tests::test_init_shares_exactly_one_house_with_defaults
+[ PASS    ] battleship::duel_tests::test_activate_accepts_each_valid_first_to_move
+[ PASS    ] battleship::house_tests::test_max_bet_rejects_wrong_version
+[ PASS    ] battleship::duel_tests::test_activate_atomic_aborts_with_house_of_other_version
+[ PASS    ] battleship::house_tests::test_migrate_bumps_version_and_emits_event
+[ PASS    ] battleship::house_tests::test_migrate_rejects_current_version
+[ PASS    ] battleship::house_tests::test_migrate_rejects_house_newer_than_package
+[ PASS    ] battleship::house_tests::test_min_bet_rejects_wrong_version
+[ PASS    ] battleship::duel_tests::test_activate_atomic_collects_fee_and_pay_conserves_funds
+[ PASS    ] battleship::house_tests::test_transfer_house_cap_moves_cap_and_emits_event
+[ PASS    ] battleship::house_tests::test_transferred_cap_lets_new_holder_administer
+[ PASS    ] battleship::house_tests::test_update_bet_limits_accepts_equal_min_and_max
+[ PASS    ] battleship::duel_tests::test_activate_atomic_invite_by_invitee
+[ PASS    ] battleship::house_tests::test_update_bet_limits_rejects_min_above_max
+[ PASS    ] battleship::house_tests::test_update_bet_limits_rejects_wrong_version
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_cancelled_duel
+[ PASS    ] battleship::house_tests::test_update_bet_limits_rejects_zero_min
+[ PASS    ] battleship::house_tests::test_update_bet_limits_sets_limits_and_emits_event
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_clocked_duel
+[ PASS    ] battleship::house_tests::test_update_fee_rate_accepts_max_fee
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_duel_of_older_version
+[ PASS    ] battleship::house_tests::test_update_fee_rate_rejects_fee_above_max
+[ PASS    ] battleship::house_tests::test_update_fee_rate_rejects_wrong_version
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_higher_stake
+[ PASS    ] battleship::house_tests::test_update_fee_rate_sets_rate_and_emits_event
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_lower_stake
+[ PASS    ] battleship::house_tests::test_version_reads_house_with_wrong_version
+[ PASS    ] battleship::house_tests::test_withdraw_fees_rejects_empty_house
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_non_invited
+[ PASS    ] battleship::house_tests::test_withdraw_fees_rejects_wrong_version
+[ PASS    ] battleship::house_tests::test_withdraw_fees_returns_all_fees_and_emits_event
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_other_house
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_own_duel
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_resolved_duel
+[ PASS    ] battleship::duel_tests::test_activate_atomic_reports_stake_before_has_clock
+[ PASS    ] battleship::duel_tests::test_activate_atomic_state_inside_tx_has_zero_mask_and_pending_fee_taken
+[ PASS    ] battleship::duel_tests::test_activate_invite_by_invitee
+[ PASS    ] battleship::coinflip_tests::test_accept_acceptor_wins_pays_payout_and_fee
+[ PASS    ] battleship::duel_tests::test_activate_joins_stake_and_sets_clock_state
+[ PASS    ] battleship::duel_tests::test_activate_rejects_active_duel
+[ PASS    ] battleship::coinflip_tests::test_accept_creator_wins_pays_payout_and_fee
+[ PASS    ] battleship::duel_tests::test_activate_rejects_cancelled_duel
+[ PASS    ] battleship::coinflip_tests::test_accept_from_old_package_aborts_before_the_draw
+[ PASS    ] battleship::duel_tests::test_activate_rejects_clockless_duel
+[ PASS    ] battleship::duel_tests::test_activate_rejects_duel_of_older_version
+[ PASS    ] battleship::coinflip_tests::test_accept_from_other_house_version_aborts_before_the_draw
+[ PASS    ] battleship::duel_tests::test_activate_rejects_first_to_move_above_both
+[ PASS    ] battleship::duel_tests::test_activate_rejects_higher_stake
+[ PASS    ] battleship::coinflip_tests::test_accept_huge_pot_needs_u128_intermediate
+[ PASS    ] battleship::duel_tests::test_activate_rejects_house_of_newer_version
+[ PASS    ] battleship::coinflip_tests::test_accept_invite_by_invitee_resolves
+[ PASS    ] battleship::duel_tests::test_activate_rejects_invalid_first_to_move
+[ PASS    ] battleship::duel_tests::test_activate_rejects_lower_stake
+[ PASS    ] battleship::coinflip_tests::test_accept_max_bet_with_max_fee_does_not_overflow
+[ PASS    ] battleship::duel_tests::test_activate_rejects_non_invited
+[ PASS    ] battleship::duel_tests::test_activate_rejects_other_house
+[ PASS    ] battleship::duel_tests::test_activate_rejects_own_duel
+[ PASS    ] battleship::duel_tests::test_activate_reports_authz_before_state
+[ PASS    ] battleship::coinflip_tests::test_accept_never_leaves_duel_active
+[ PASS    ] battleship::duel_tests::test_activate_reports_house_before_authz
+[ PASS    ] battleship::duel_tests::test_activate_reports_house_version_first
+[ PASS    ] battleship::duel_tests::test_activate_reports_no_clock_before_bad_mask
+[ PASS    ] battleship::game_tests::test_accept_by_creator_on_cancelled_game_reports_self_play
+[ PASS    ] battleship::coinflip_tests::test_accept_rejects_cancelled_duel
+[ PASS    ] battleship::duel_tests::test_activate_reports_stake_before_no_clock
+[ PASS    ] battleship::game_tests::test_accept_by_creator_on_own_invite_reports_self_play
+[ PASS    ] battleship::duel_tests::test_activate_reports_state_before_stake
+[ PASS    ] battleship::coinflip_tests::test_accept_rejects_duel_of_older_version
+[ PASS    ] battleship::game_tests::test_accept_by_other_on_cancelled_invite_reports_not_invited
+[ PASS    ] battleship::duel_tests::test_activate_reports_version_before_house
+[ PASS    ] battleship::duel_tests::test_cancel_by_other_on_cancelled_duel_reports_not_creator
+[ PASS    ] battleship::game_tests::test_accept_from_old_package_aborts_in_fee_collection
+[ PASS    ] battleship::coinflip_tests::test_accept_rejects_higher_stake
+[ PASS    ] battleship::duel_tests::test_cancel_invite_duel_by_creator
+[ PASS    ] battleship::game_tests::test_accept_huge_pot_needs_u128_intermediate
+[ PASS    ] battleship::duel_tests::test_cancel_refunds_full_stake_and_emits_event
+[ PASS    ] battleship::game_tests::test_accept_invite_by_invitee_resolves
+[ PASS    ] battleship::coinflip_tests::test_accept_rejects_lower_stake
+[ PASS    ] battleship::duel_tests::test_cancel_refunds_regardless_of_versions
+[ PASS    ] battleship::duel_tests::test_cancel_rejects_active_duel
+[ PASS    ] battleship::game_tests::test_accept_max_bet_with_max_fee_does_not_overflow
+[ PASS    ] battleship::duel_tests::test_cancel_rejects_cancelled_duel
+[ PASS    ] battleship::coinflip_tests::test_accept_rejects_non_invited
+[ PASS    ] battleship::game_tests::test_accept_open_game_acceptor_wins_pays_payout_and_fee
+[ PASS    ] battleship::duel_tests::test_cancel_rejects_invitee
+[ PASS    ] battleship::duel_tests::test_cancel_rejects_other_address
+[ PASS    ] battleship::game_tests::test_accept_open_game_creator_wins_pays_payout_and_fee
+[ PASS    ] battleship::duel_tests::test_claim_timeout_aborts_with_house_of_other_version
+[ PASS    ] battleship::coinflip_tests::test_accept_rejects_other_house
+[ PASS    ] battleship::game_tests::test_accept_rejects_cancelled_game
+[ PASS    ] battleship::duel_tests::test_claim_timeout_after_refund_stalled_aborts_not_active
+[ PASS    ] battleship::game_tests::test_accept_rejects_game_of_older_version
+[ PASS    ] battleship::coinflip_tests::test_accept_rejects_own_duel
+[ PASS    ] battleship::duel_tests::test_claim_timeout_between_collect_and_pay_aborts_not_expired
+[ PASS    ] battleship::game_tests::test_accept_rejects_higher_stake
+[ PASS    ] battleship::game_tests::test_accept_rejects_house_of_newer_version
+[ PASS    ] battleship::duel_tests::test_claim_timeout_by_the_pending_player_still_pays_the_rival
+[ PASS    ] battleship::coinflip_tests::test_accept_rejects_resolved_duel
+[ PASS    ] battleship::game_tests::test_accept_rejects_lower_stake
+[ PASS    ] battleship::duel_tests::test_claim_timeout_by_third_party_pays_the_rival_not_the_caller
+[ PASS    ] battleship::game_tests::test_accept_rejects_non_invited
+[ PASS    ] battleship::coinflip_tests::test_accept_reports_house_before_authz
+[ PASS    ] battleship::game_tests::test_accept_rejects_other_house
+[ PASS    ] battleship::game_tests::test_accept_rejects_own_game
+[ PASS    ] battleship::duel_tests::test_claim_timeout_pays_acceptor_when_creator_pending
+[ PASS    ] battleship::coinflip_tests::test_accept_reports_house_version_before_house_and_authz
+[ PASS    ] battleship::game_tests::test_accept_rejects_resolved_game
+[ PASS    ] battleship::coinflip_tests::test_accept_reports_state_before_stake
+[ PASS    ] battleship::game_tests::test_accept_reports_house_before_authz
+[ PASS    ] battleship::duel_tests::test_claim_timeout_pays_creator_when_acceptor_pending
+[ PASS    ] battleship::game_tests::test_accept_reports_state_before_stake
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_both_pending
+[ PASS    ] battleship::coinflip_tests::test_accept_rounds_fee_down_on_indivisible_pot
+[ PASS    ] battleship::game_tests::test_accept_reports_version_before_authz
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_broken_stake
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_clockless_duel
+[ PASS    ] battleship::game_tests::test_accept_reports_version_before_house
+[ PASS    ] battleship::coinflip_tests::test_accept_uses_fee_rate_copied_at_creation
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_duel_of_older_version
+[ PASS    ] battleship::game_tests::test_accept_rounds_fee_down_on_indivisible_pot
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_expired_duel
+[ PASS    ] battleship::coinflip_tests::test_accept_with_max_fee_charges_ten_percent
+[ PASS    ] battleship::game_tests::test_accept_uses_fee_rate_copied_at_creation
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_not_active
+[ PASS    ] battleship::game_tests::test_accept_with_max_fee_charges_ten_percent
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_one_ms_before_deadline
+[ PASS    ] battleship::coinflip_tests::test_accept_with_random_by_invitee_resolves
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_one_ms_before_deadline_when_acceptor_pending
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_other_house
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_resolved_duel
+[ PASS    ] battleship::game_tests::test_accept_with_random_reaches_both_outcomes
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_timed_out_duel
+[ PASS    ] battleship::game_tests::test_accept_with_random_resolves_and_conserves_funds
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_both_pending_before_broken_stake
+[ PASS    ] battleship::game_tests::test_accept_with_zero_fee_pays_whole_pot
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_house_version_first
+[ PASS    ] battleship::game_tests::test_cancel_by_other_on_cancelled_game_reports_not_creator
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_no_clock_before_version_mismatch
+[ PASS    ] battleship::game_tests::test_cancel_invite_game_by_creator
+[ PASS    ] battleship::coinflip_tests::test_accept_with_random_maps_draw_to_the_players_per_seed
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_not_expired_before_both_pending
+[ PASS    ] battleship::game_tests::test_cancel_refunds_full_stake_and_emits_event
+[ PASS    ] battleship::game_tests::test_cancel_refunds_regardless_of_versions
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_version_mismatch_before_wrong_house
+[ PASS    ] battleship::game_tests::test_cancel_rejects_cancelled_game
+[ PASS    ] battleship::game_tests::test_cancel_rejects_invitee
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_wrong_house_before_not_expired
+[ PASS    ] battleship::game_tests::test_cancel_rejects_other_address
+[ PASS    ] battleship::game_tests::test_cancel_rejects_rejected_game
+[ PASS    ] battleship::duel_tests::test_claim_timeout_still_succeeds_after_grace
+[ PASS    ] battleship::game_tests::test_cancel_rejects_resolved_game
+[ PASS    ] battleship::game_tests::test_create_accepts_bet_equal_to_max_bet
+[ PASS    ] battleship::duel_tests::test_claim_timeout_stores_timed_out_state_and_event
+[ PASS    ] battleship::game_tests::test_create_accepts_bet_equal_to_min_bet
+[ PASS    ] battleship::coinflip_tests::test_accept_with_random_reaches_both_outcomes
+[ PASS    ] battleship::duel_tests::test_claim_timeout_succeeds_at_deadline
+[ PASS    ] battleship::game_tests::test_create_copies_fee_rate_at_creation
+[ PASS    ] battleship::game_tests::test_create_invite_game_stores_opponent
+[ PASS    ] battleship::duel_tests::test_clock_helper_sets_exact_timestamp_with_sender_change
+[ PASS    ] battleship::game_tests::test_create_open_game_stores_fields_and_emits_event
+[ PASS    ] battleship::duel_tests::test_collect_aborts_in_fee_collection_with_house_of_other_version
+[ PASS    ] battleship::game_tests::test_create_rejects_bet_above_max
+[ PASS    ] battleship::coinflip_tests::test_accept_with_random_resolves_and_conserves_funds
+[ PASS    ] battleship::game_tests::test_create_rejects_bet_below_min
+[ PASS    ] battleship::game_tests::test_create_rejects_house_with_wrong_version
+[ PASS    ] battleship::game_tests::test_create_rejects_self_invite
+[ PASS    ] battleship::duel_tests::test_collect_by_player_out_of_turn_succeeds
+[ PASS    ] battleship::game_tests::test_create_reports_bet_error_before_self_invite
+[ PASS    ] battleship::coinflip_tests::test_accept_with_zero_fee_pays_whole_pot
+[ PASS    ] battleship::duel_tests::test_collect_passes_one_ms_before_deadline
+[ PASS    ] battleship::game_tests::test_fees_from_two_games_accumulate_and_withdraw_exactly
+[ PASS    ] battleship::duel_tests::test_collect_rejects_after_deadline
+[ PASS    ] battleship::game_tests::test_games_of_same_creator_are_independent
+[ PASS    ] battleship::coinflip_tests::test_cancel_and_reject_refund_coinflips_regardless_of_versions
+[ PASS    ] battleship::game_tests::test_reject_by_other_on_cancelled_invite_reports_not_invited
+[ PASS    ] battleship::duel_tests::test_collect_rejects_at_deadline
+[ PASS    ] battleship::game_tests::test_reject_refunds_creator_and_emits_event
+[ PASS    ] battleship::duel_tests::test_collect_rejects_broken_stake
+[ PASS    ] battleship::coinflip_tests::test_cancel_and_reject_work_on_coinflip_duels
+[ PASS    ] battleship::game_tests::test_reject_refunds_regardless_of_versions
+[ PASS    ] battleship::duel_tests::test_collect_rejects_clockless_duel
+[ PASS    ] battleship::game_tests::test_reject_rejects_cancelled_game
+[ PASS    ] battleship::coinflip_tests::test_create_accepts_bet_equal_to_max_bet
+[ PASS    ] battleship::duel_tests::test_collect_rejects_duel_of_older_version
+[ PASS    ] battleship::game_tests::test_reject_rejects_creator
+[ PASS    ] battleship::game_tests::test_reject_rejects_open_game
+[ PASS    ] battleship::coinflip_tests::test_create_accepts_bet_equal_to_min_bet
+[ PASS    ] battleship::duel_tests::test_collect_rejects_expired_duel
+[ PASS    ] battleship::game_tests::test_reject_rejects_other_address
+[ PASS    ] battleship::duel_tests::test_collect_rejects_invitee_that_did_not_accept
+[ PASS    ] battleship::game_tests::test_reject_rejects_resolved_game
+[ PASS    ] battleship::coinflip_tests::test_create_copies_fee_rate_at_creation
+[ PASS    ] battleship::duel_tests::test_collect_rejects_not_active
+[ PASS    ] battleship::coinflip_tests::test_create_invite_duel
+[ PASS    ] battleship::duel_tests::test_collect_rejects_other_house
+[ PASS    ] battleship::coinflip_tests::test_create_makes_clockless_pending_duel_and_emits_event
+[ PASS    ] battleship::duel_tests::test_collect_rejects_resolved_duel
+[ PASS    ] battleship::coinflip_tests::test_create_rejects_bet_above_max
+[ PASS    ] battleship::duel_tests::test_collect_rejects_third_party
+[ PASS    ] battleship::coinflip_tests::test_create_rejects_bet_below_min
+[ PASS    ] battleship::duel_tests::test_collect_rejects_timed_out_duel
+[ PASS    ] battleship::coinflip_tests::test_create_rejects_house_with_wrong_version
+[ PASS    ] battleship::duel_tests::test_collect_reports_deadline_before_version
+[ PASS    ] battleship::coinflip_tests::test_create_rejects_self_invite
+[ PASS    ] battleship::duel_tests::test_collect_reports_house_before_broken_stake
+[ PASS    ] battleship::duel_tests::test_collect_reports_not_active_before_not_player
+[ PASS    ] battleship::duel_tests::test_collect_reports_not_player_before_deadline
+[ PASS    ] battleship::coinflip_tests::test_fees_from_coinflip_and_legacy_game_accumulate_in_same_house
+[ PASS    ] battleship::duel_tests::test_collect_reports_version_mismatch_before_wrong_house
+[ PASS    ] battleship::duel_tests::test_collect_reports_version_mismatch_for_house_of_newer_version
+[ PASS    ] battleship::coinflip_tests::test_fees_from_two_coinflips_accumulate_and_withdraw_exactly
+[ PASS    ] battleship::duel_tests::test_collect_then_pay_resolves_by_play_and_conserves_funds
+[ PASS    ] battleship::duel_tests::test_create_accepts_bet_equal_to_max_bet
+[ PASS    ] battleship::duel_tests::test_create_accepts_bet_equal_to_min_bet
+[ PASS    ] battleship::duel_tests::test_create_copies_fee_rate_and_turn_ms
+[ PASS    ] battleship::duel_tests::test_create_invite_duel_stores_opponent
+[ PASS    ] battleship::duel_tests::test_create_open_duel_stores_fields_and_emits_event
+[ PASS    ] battleship::duel_tests::test_create_rejects_bet_above_max
+[ PASS    ] battleship::duel_tests::test_create_rejects_bet_below_min
+[ PASS    ] battleship::duel_tests::test_create_rejects_control_255
+[ PASS    ] battleship::duel_tests::test_create_rejects_house_with_wrong_version
+[ PASS    ] battleship::duel_tests::test_create_rejects_invalid_control
+[ PASS    ] battleship::duel_tests::test_create_rejects_self_invite
+[ PASS    ] battleship::duel_tests::test_create_reports_bet_error_before_self_invite
+[ PASS    ] battleship::duel_tests::test_create_reports_bet_too_high_before_self_invite
+[ PASS    ] battleship::duel_tests::test_create_reports_self_invite_before_control
+[ PASS    ] battleship::duel_tests::test_create_reports_version_before_bet
+[ PASS    ] battleship::duel_tests::test_create_sets_turn_ms_for_each_control
+[ PASS    ] battleship::duel_tests::test_duels_of_different_games_are_independent
+[ PASS    ] battleship::duel_tests::test_duels_of_same_creator_are_independent
+[ PASS    ] battleship::duel_tests::test_fee_is_charged_only_when_resolving
+[ PASS    ] battleship::duel_tests::test_fee_is_floor_of_pot_times_rate
+[ PASS    ] battleship::duel_tests::test_fee_is_floor_of_pot_times_rate_when_settling_by_play
+[ PASS    ] battleship::duel_tests::test_fee_rate_copied_at_creation_is_the_one_charged
+[ PASS    ] battleship::duel_tests::test_fee_with_max_bet_and_max_fee_does_not_overflow
+[ PASS    ] battleship::duel_tests::test_fee_with_max_bet_and_max_fee_does_not_overflow_when_settling_by_play
+[ PASS    ] battleship::duel_tests::test_fees_from_duel_and_game_accumulate_in_same_house
+[ PASS    ] battleship::duel_tests::test_pay_pays_acceptor_when_index_is_one
+[ PASS    ] battleship::duel_tests::test_pay_pays_creator_when_index_is_zero
+[ PASS    ] battleship::duel_tests::test_pay_rejects_bad_winner_index
+[ PASS    ] battleship::duel_tests::test_pay_rejects_collected_of_other_duel
+[ PASS    ] battleship::duel_tests::test_pay_rejects_expired_duel
+[ PASS    ] battleship::duel_tests::test_pay_rejects_not_active
+[ PASS    ] battleship::duel_tests::test_pay_rejects_timed_out_duel
+[ PASS    ] battleship::duel_tests::test_pay_reports_not_active_before_bad_winner_index
+[ PASS    ] battleship::duel_tests::test_pay_reports_wrong_duel_before_not_active
+[ PASS    ] battleship::duel_tests::test_record_move_passes_one_ms_before_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_phase_close_resets_deadline_even_if_closer_moves_next
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_after_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_at_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_clockless_duel
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_expired_duel
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_above_three
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_both_in_simultaneous_phase
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_other_than_rem_in_simultaneous_phase
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_other_than_rem_when_rem_is_creator
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_zero_in_simultaneous_phase
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_zero_or_above_three
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_zero_when_closing_a_simultaneous_phase
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_not_active
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_player_outside_to_move
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_resolved_duel
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_second_commit_in_simultaneous_phase
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_third_party
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_timed_out_duel
+[ PASS    ] battleship::duel_tests::test_record_move_reports_deadline_before_mask
+[ PASS    ] battleship::duel_tests::test_record_move_reports_deadline_before_phase_mismatch
+[ PASS    ] battleship::duel_tests::test_record_move_reports_not_active_before_not_player
+[ PASS    ] battleship::duel_tests::test_record_move_reports_not_player_before_not_your_turn
+[ PASS    ] battleship::duel_tests::test_record_move_reports_not_your_turn_before_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_same_player_continuing_also_resets_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_simultaneous_phase_first_a_keeps_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_simultaneous_phase_first_b_keeps_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_turn_handoff_resets_deadline
+[ PASS    ] battleship::duel_tests::test_refund_stalled_both_pending_rejects_one_ms_before_deadline
+[ PASS    ] battleship::duel_tests::test_refund_stalled_both_pending_succeeds_after_deadline
+[ PASS    ] battleship::duel_tests::test_refund_stalled_by_third_party_pays_only_the_players
+[ PASS    ] battleship::duel_tests::test_refund_stalled_charges_no_fee
+[ PASS    ] battleship::duel_tests::test_refund_stalled_one_pending_rejects_one_ms_before_grace
+[ PASS    ] battleship::duel_tests::test_refund_stalled_one_pending_succeeds_at_deadline_plus_grace
+[ PASS    ] battleship::duel_tests::test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor
+[ PASS    ] battleship::duel_tests::test_refund_stalled_refunds_both_after_grace_with_one_pending
+[ PASS    ] battleship::duel_tests::test_refund_stalled_refunds_both_when_both_pending_at_deadline
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_both_pending_before_deadline
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_clockless_duel
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_expired_duel
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_not_active
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_one_pending_before_grace
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_resolved_duel
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_timed_out_duel
+[ PASS    ] battleship::duel_tests::test_refund_stalled_works_with_house_of_other_version
+[ PASS    ] battleship::duel_tests::test_reject_by_other_on_cancelled_invite_reports_not_invited
+[ PASS    ] battleship::duel_tests::test_reject_refunds_creator_and_emits_event
+[ PASS    ] battleship::duel_tests::test_reject_refunds_regardless_of_versions
+[ PASS    ] battleship::duel_tests::test_reject_rejects_cancelled_duel
+[ PASS    ] battleship::duel_tests::test_reject_rejects_creator
+[ PASS    ] battleship::duel_tests::test_reject_rejects_open_duel
+[ PASS    ] battleship::duel_tests::test_reject_rejects_other_address
+[ PASS    ] battleship::duel_tests::test_simultaneous_phase_then_turns_then_claim_timeout
+[ PASS    ] battleship::duel_tests::test_stake_is_two_bets_after_activate
+[ PASS    ] battleship::duel_tests::test_surrender_out_of_turn_before_deadline_resolves
+[ PASS    ] battleship::duel_tests::test_terminal_states_hold_no_stake
+[ PASS    ] battleship::duel_tests::test_turn_based_game_runs_to_resolution_by_collect_and_pay
+[ PASS    ] battleship::duel_tests::test_turn_ms_is_never_changed_by_record_move
+Test result: OK. Total tests: 309; passed: 309; failed: 0
+exit=0
+$ grep -c "\[ PASS .*coinflip_tests::" <salida del test>
+40
+$ grep -c "\[ PASS " (total)
+309
+$ grep -c "\[ FAIL " (total)
+0
+
+==================================================================================================
+ANEXO 4 — Visibilidades y grep de R.7 sobre contracts/sources (salida pegada)
+==================================================================================================
+$ /usr/bin/grep -nE "^\s*(public(\(package\))?\s+)?(entry\s+)?fun " contracts/sources/coinflip.move
+37:entry fun create(
+67:entry fun accept(
+84:public fun accept_with_winner_for_testing(
+$ /usr/bin/grep -nE "^public|^entry|^fun|#\[test_only\]" contracts/sources/coinflip.move
+32:public struct Coinflip has drop {}
+37:entry fun create(
+67:entry fun accept(
+81:// to test the settlement of each outcome without `Random`. `#[test_only]`: it is not in the bytecode that
+83:#[test_only]
+84:public fun accept_with_winner_for_testing(
+$ /usr/bin/grep -nE "activate_atomic|duel::pay|new_generator|generate_u8|Collected|Random" contracts/sources/coinflip.move  (solo lineas de codigo, sin ///)
+22:use sui::random::Random;
+71:    r: &Random,
+74:    let collected = duel::activate_atomic(Coinflip {}, duel, house, payment, ctx);
+75:    let mut generator = r.new_generator(ctx);
+76:    let winner_index = generator.generate_u8_in_range(0, 1);
+77:    duel::pay(Coinflip {}, duel, collected, winner_index, ctx);
+91:    let collected = duel::activate_atomic(Coinflip {}, duel, house, payment, ctx);
+92:    duel::pay(Coinflip {}, duel, collected, winner_index, ctx);
+$ /usr/bin/grep -rn "allow(lint(public_random))\|RandomGenerator" contracts/sources
+exit=1 (1 = sin coincidencias)
+$ /usr/bin/grep -rn "new_generator\|generate_u8" contracts/sources
+contracts/sources/coinflip.move:75:    let mut generator = r.new_generator(ctx);
+contracts/sources/coinflip.move:76:    let winner_index = generator.generate_u8_in_range(0, 1);
+contracts/sources/game.move:156:    let mut generator = r.new_generator(ctx);
+contracts/sources/game.move:157:    let winner_index = generator.generate_u8_in_range(0, 1);
+$ /usr/bin/grep -rn "allow(\|fun init" contracts/sources
+contracts/sources/house.move:83:fun init(otw: HOUSE, ctx: &mut TxContext) {
+contracts/sources/house.move:191:public fun init_for_testing(ctx: &mut TxContext) {
+$ /usr/bin/grep -n "struct" contracts/sources/coinflip.move | grep -v "///"
+32:public struct Coinflip has drop {}
+
+==================================================================================================
+ANEXO 5 — Bytecode de produccion (build sin tests): _for_testing = 0 y desensamblado de coinflip.mv
+==================================================================================================
+$ rm -rf contracts/build && cd contracts && printf 'n\n' | sui move build -e testnet --warnings-are-errors   (build de produccion, sin tests)
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+$ ls build/battleship/bytecode_modules/
+coinflip.mv
+dependencies
+duel.mv
+game.mv
+house.mv
+$ strings build/battleship/bytecode_modules/coinflip.mv | grep -c _for_testing
+0
+$ strings build/battleship/bytecode_modules/duel.mv | grep -c _for_testing
+0
+$ strings build/battleship/bytecode_modules/game.mv | grep -c _for_testing
+0
+$ strings build/battleship/bytecode_modules/house.mv | grep -c _for_testing
+0
+$ strings build/battleship/bytecode_modules/coinflip.mv | grep -i "testing\|test_only"
+exit=1 (1 = nada)
+$ printf 'n\n' | sui move disassemble build/battleship/bytecode_modules/coinflip.mv
+// Move bytecode v7
+module <paquete>.coinflip {
+use <paquete>::duel;
+use <paquete>::house;
+use 0000000000000000000000000000000000000000000000000000000000000001::option;
+use 0000000000000000000000000000000000000000000000000000000000000002::coin;
+use 0000000000000000000000000000000000000000000000000000000000000002::random;
+use 0000000000000000000000000000000000000000000000000000000000000002::sui;
+use 0000000000000000000000000000000000000000000000000000000000000002::tx_context;
+
+struct Coinflip has drop {
+	dummy_field: bool
+}
+
+entry create(house#0#0: &House, stake#0#0: Coin<SUI>, opponent#0#0: Option<address>, ctx#0#0: &mut TxContext) {
+B0:
+	0: LdFalse
+	1: Pack[0](Coinflip)
+	2: MoveLoc[0](house#0#0: &House)
+	3: MoveLoc[1](stake#0#0: Coin<SUI>)
+	4: MoveLoc[2](opponent#0#0: Option<address>)
+	5: LdConst[0](u8: 0)
+	6: MoveLoc[3](ctx#0#0: &mut TxContext)
+	7: Call duel::create<Coinflip>(Coinflip, &House, Coin<SUI>, Option<address>, u8, &mut TxContext)
+	8: Ret
+}
+
+entry accept(duel#0#0: &mut Duel<Coinflip>, house#0#0: &mut House, payment#0#0: Coin<SUI>, r#0#0: &Random, ctx#0#0: &mut TxContext) {
+L5:	collected#1#0: Collected
+L6:	generator#1#0: RandomGenerator
+L7:	winner_index#1#0: u8
+B0:
+	0: LdFalse
+	1: Pack[0](Coinflip)
+	2: CopyLoc[0](duel#0#0: &mut Duel<Coinflip>)
+	3: MoveLoc[1](house#0#0: &mut House)
+	4: MoveLoc[2](payment#0#0: Coin<SUI>)
+	5: CopyLoc[4](ctx#0#0: &mut TxContext)
+	6: FreezeRef
+	7: Call duel::activate_atomic<Coinflip>(Coinflip, &mut Duel<Coinflip>, &mut House, Coin<SUI>, &TxContext): Collected
+	8: StLoc[5](collected#1#0: Collected)
+	9: MoveLoc[3](r#0#0: &Random)
+	10: CopyLoc[4](ctx#0#0: &mut TxContext)
+	11: Call random::new_generator(&Random, &mut TxContext): RandomGenerator
+	12: StLoc[6](generator#1#0: RandomGenerator)
+	13: MutBorrowLoc[6](generator#1#0: RandomGenerator)
+	14: LdU8(0)
+	15: LdU8(1)
+	16: Call random::generate_u8_in_range(&mut RandomGenerator, u8, u8): u8
+	17: StLoc[7](winner_index#1#0: u8)
+	18: LdFalse
+	19: Pack[0](Coinflip)
+	20: MoveLoc[0](duel#0#0: &mut Duel<Coinflip>)
+	21: MoveLoc[5](collected#1#0: Collected)
+	22: MoveLoc[7](winner_index#1#0: u8)
+	23: MoveLoc[4](ctx#0#0: &mut TxContext)
+	24: Call duel::pay<Coinflip>(Coinflip, &mut Duel<Coinflip>, Collected, u8, &mut TxContext)
+	25: Ret
+}
+
+Constants [
+	0 => u8: 0
+]
+}
+
+$ (misma salida) grep -nE "^(entry|public|struct)|Call |Br|Jump|Abort" => funciones exportadas, llamadas en orden y ausencia de saltos
+11:struct Coinflip has drop {
+15:entry create(house#0#0: &House, stake#0#0: Coin<SUI>, opponent#0#0: Option<address>, ctx#0#0: &mut TxContext) {
+24:	7: Call duel::create<Coinflip>(Coinflip, &House, Coin<SUI>, Option<address>, u8, &mut TxContext)
+28:entry accept(duel#0#0: &mut Duel<Coinflip>, house#0#0: &mut House, payment#0#0: Coin<SUI>, r#0#0: &Random, ctx#0#0: &mut TxContext) {
+40:	7: Call duel::activate_atomic<Coinflip>(Coinflip, &mut Duel<Coinflip>, &mut House, Coin<SUI>, &TxContext): Collected
+44:	11: Call random::new_generator(&Random, &mut TxContext): RandomGenerator
+49:	16: Call random::generate_u8_in_range(&mut RandomGenerator, u8, u8): u8
+57:	24: Call duel::pay<Coinflip>(Coinflip, &mut Duel<Coinflip>, Collected, u8, &mut TxContext)
+
+==================================================================================================
+ANEXO 6 — Mutaciones (copias en <scratchpad>/t3/mut/<mN>/contracts): linea "Test result" y tests en FAIL de cada una
+==================================================================================================
+
+--- Mutacion M1: pay(..., 1 - winner_index, ...) en coinflip.move
+Test result: FAILED. Total tests: 309; passed: 308; failed: 1
+coinflip_tests::test_accept_with_random_maps_draw_to_the_players_per_seed
+
+--- Mutacion M2: generate_u8_in_range(0, 0) en coinflip.move
+Test result: FAILED. Total tests: 309; passed: 307; failed: 2
+coinflip_tests::test_accept_with_random_maps_draw_to_the_players_per_seed
+coinflip_tests::test_accept_with_random_reaches_both_outcomes
+
+--- Mutacion M3: no cobrar la comision (duel.move de la copia: fee_amount(pot, 0) en collect_fee)
+Test result: FAILED. Total tests: 309; passed: 274; failed: 35
+coinflip_tests::test_accept_acceptor_wins_pays_payout_and_fee
+coinflip_tests::test_accept_creator_wins_pays_payout_and_fee
+coinflip_tests::test_accept_huge_pot_needs_u128_intermediate
+coinflip_tests::test_accept_invite_by_invitee_resolves
+coinflip_tests::test_accept_max_bet_with_max_fee_does_not_overflow
+duel_tests::test_activate_atomic_collects_fee_and_pay_conserves_funds
+duel_tests::test_activate_atomic_state_inside_tx_has_zero_mask_and_pending_fee_taken
+coinflip_tests::test_accept_rounds_fee_down_on_indivisible_pot
+coinflip_tests::test_accept_uses_fee_rate_copied_at_creation
+coinflip_tests::test_accept_with_max_fee_charges_ten_percent
+coinflip_tests::test_accept_with_random_reaches_both_outcomes
+coinflip_tests::test_accept_with_random_resolves_and_conserves_funds
+duel_tests::test_claim_timeout_by_the_pending_player_still_pays_the_rival
+coinflip_tests::test_fees_from_coinflip_and_legacy_game_accumulate_in_same_house
+duel_tests::test_claim_timeout_by_third_party_pays_the_rival_not_the_caller
+coinflip_tests::test_fees_from_two_coinflips_accumulate_and_withdraw_exactly
+duel_tests::test_claim_timeout_pays_acceptor_when_creator_pending
+duel_tests::test_claim_timeout_pays_creator_when_acceptor_pending
+duel_tests::test_claim_timeout_still_succeeds_after_grace
+duel_tests::test_claim_timeout_stores_timed_out_state_and_event
+duel_tests::test_claim_timeout_succeeds_at_deadline
+duel_tests::test_collect_passes_one_ms_before_deadline
+duel_tests::test_collect_then_pay_resolves_by_play_and_conserves_funds
+duel_tests::test_fee_is_floor_of_pot_times_rate
+duel_tests::test_fee_is_floor_of_pot_times_rate_when_settling_by_play
+duel_tests::test_fee_rate_copied_at_creation_is_the_one_charged
+duel_tests::test_fee_with_max_bet_and_max_fee_does_not_overflow
+duel_tests::test_fee_with_max_bet_and_max_fee_does_not_overflow_when_settling_by_play
+duel_tests::test_fees_from_duel_and_game_accumulate_in_same_house
+duel_tests::test_pay_pays_acceptor_when_index_is_one
+duel_tests::test_pay_pays_creator_when_index_is_zero
+duel_tests::test_refund_stalled_charges_no_fee
+duel_tests::test_simultaneous_phase_then_turns_then_claim_timeout
+duel_tests::test_surrender_out_of_turn_before_deadline_resolves
+duel_tests::test_turn_based_game_runs_to_resolution_by_collect_and_pay
+
+--- Mutacion M4: const NO_CLOCK: u8 = 1 en coinflip.move (create con reloj)
+Test result: FAILED. Total tests: 309; passed: 290; failed: 19
+coinflip_tests::test_accept_acceptor_wins_pays_payout_and_fee
+coinflip_tests::test_accept_creator_wins_pays_payout_and_fee
+coinflip_tests::test_accept_huge_pot_needs_u128_intermediate
+coinflip_tests::test_accept_invite_by_invitee_resolves
+coinflip_tests::test_accept_max_bet_with_max_fee_does_not_overflow
+coinflip_tests::test_accept_never_leaves_duel_active
+coinflip_tests::test_accept_rejects_resolved_duel
+coinflip_tests::test_accept_rounds_fee_down_on_indivisible_pot
+coinflip_tests::test_accept_uses_fee_rate_copied_at_creation
+coinflip_tests::test_accept_with_max_fee_charges_ten_percent
+coinflip_tests::test_accept_with_random_by_invitee_resolves
+coinflip_tests::test_accept_with_random_maps_draw_to_the_players_per_seed
+coinflip_tests::test_accept_with_random_reaches_both_outcomes
+coinflip_tests::test_accept_with_random_resolves_and_conserves_funds
+coinflip_tests::test_accept_with_zero_fee_pays_whole_pot
+coinflip_tests::test_create_invite_duel
+coinflip_tests::test_create_makes_clockless_pending_duel_and_emits_event
+coinflip_tests::test_fees_from_coinflip_and_legacy_game_accumulate_in_same_house
+coinflip_tests::test_fees_from_two_coinflips_accumulate_and_withdraw_exactly
+
+--- Mutacion M5: sortear ANTES de validar (new_generator + generate_u8_in_range antes de activate_atomic): SOBREVIVE (309/309 PASS); ver E-4
+Test result: OK. Total tests: 309; passed: 309; failed: 0
+
+==================================================================================================
+ANEXO 7 — Cobertura informativa (copia del scratchpad)
+==================================================================================================
+$ cd <scratchpad>/t3/cov/contracts   (COPIA)
+$ printf 'n\n' | sui move test -e testnet --coverage
+Test result: OK. Total tests: 309; passed: 309; failed: 0
+$ printf 'n\n' | sui move coverage summary -e testnet
++-------------------------+
+| Move Coverage Summary   |
++-------------------------+
+Module <paquete>::house
+>>> % Module coverage: 100.00
+Module <paquete>::duel
+>>> % Module coverage: 99.48
+Module <paquete>::coinflip
+>>> % Module coverage: 100.00
+Module <paquete>::game
+>>> % Module coverage: 100.00
++-------------------------+
+| % Move Coverage: 99.67  |
++-------------------------+
+
+==================================================================================================
+ANEXO 8 — §R-6: los 4 greps (/usr/bin/grep -nE) sobre el diff (los 2 archivos nuevos) y sobre este reporte
+==================================================================================================
+$ /usr/bin/grep -nE '[0-9a-fA-F]{40,64}' contracts/sources/coinflip.move contracts/tests/coinflip_tests.move   (el diff = 2 archivos nuevos sin trackear; 'git diff' no los muestra)
+contracts/tests/coinflip_tests.move:40:const SEED: vector<u8> = x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F
+contracts/tests/coinflip_tests.move:44:    x"0101010101010101010101010101010101010101010101010101010101010101",
+contracts/tests/coinflip_tests.move:45:    x"0202020202020202020202020202020202020202020202020202020202020202",
+contracts/tests/coinflip_tests.move:46:    x"0303030303030303030303030303030303030303030303030303030303030303",
+contracts/tests/coinflip_tests.move:47:    x"0404040404040404040404040404040404040404040404040404040404040404",
+exit=0
+$ /usr/bin/grep -nE '0x[0-9a-fA-F]{8,}' contracts/sources/coinflip.move contracts/tests/coinflip_tests.move   (el diff = 2 archivos nuevos sin trackear; 'git diff' no los muestra)
+exit=1
+$ /usr/bin/grep -nE 'suiprivkey|mnemonic|seed phrase|/home/|/Users/' contracts/sources/coinflip.move contracts/tests/coinflip_tests.move   (el diff = 2 archivos nuevos sin trackear; 'git diff' no los muestra)
+exit=1
+$ /usr/bin/grep -nE '[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}' contracts/sources/coinflip.move contracts/tests/coinflip_tests.move   (el diff = 2 archivos nuevos sin trackear; 'git diff' no los muestra)
+exit=1
+$ /usr/bin/grep -nE '[0-9a-fA-F]{40,64}' <reporte, sin esta seccion ni la guarda final>
+526:use 0000000000000000000000000000000000000000000000000000000000000001::option;
+527:use 0000000000000000000000000000000000000000000000000000000000000002::coin;
+528:use 0000000000000000000000000000000000000000000000000000000000000002::random;
+529:use 0000000000000000000000000000000000000000000000000000000000000002::sui;
+530:use 0000000000000000000000000000000000000000000000000000000000000002::tx_context;
+exit=0
+$ /usr/bin/grep -nE '0x[0-9a-fA-F]{8,}' <reporte, sin esta seccion ni la guarda final>
+exit=1
+$ /usr/bin/grep -nE 'suiprivkey|mnemonic|seed phrase|/home/|/Users/' <reporte, sin esta seccion ni la guarda final>
+exit=1
+$ /usr/bin/grep -nE '[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}' <reporte, sin esta seccion ni la guarda final>
+exit=1
+$ grep -c 'command not found' <reporte>
+0
+$ /usr/bin/grep -nE 'Cannot run genesis|sui_config|Address already in use' <reporte, antes de la guarda final>
+exit=1 (1 = sin rastros)
+
+### §R-6: clasificacion de cada coincidencia (salidas arriba, ANEXO 8)
+Sobre el diff (`coinflip.move` + `coinflip_tests.move`):
+- Grep 1 (`[0-9a-fA-F]{40,64}`): 5 coincidencias, todas en `coinflip_tests.move:40-47`: las constantes `SEED` y `RANDOM_SEEDS` (`x"1F1F…"`, `x"0101…"` … `x"0404…"`, 32 bytes de relleno repetido). Son las semillas de aleatoriedad FIJAS de los tests, copiadas de `game_tests.move:30-38`; no son claves ni direcciones. Clasificacion: constantes de test publicas, sin secreto.
+- Grep 2 (`0x[0-9a-fA-F]{8,}`): sin coincidencias. Los tests usan direcciones cortas de prueba (`@0xA`…`@0xE`, `@0x0`).
+- Grep 3 (`suiprivkey|mnemonic|seed phrase|/home/|/Users/`): sin coincidencias.
+- Grep 4 (`xxxx…xxxx` / `xxxx...xxxx`): sin coincidencias.
+Sobre este reporte (antes de la guarda final):
+- Grep 1: 5 coincidencias en el desensamblado de `coinflip.mv` (ANEXO 5): `0000…0001` y `0000…0002` = direcciones de los paquetes del framework (MoveStdlib `0x1`, Sui `0x2`), publicas y conocidas. El ID del paquete propio (sin publicar) se reemplazo por `<paquete>`.
+- Grep 2, 3 y 4: sin coincidencias (la ruta personal que habia en la linea "Branch" se cambio por `<repo>` antes de esta corrida).
+- `grep -c 'command not found'` = 0 y `grep 'Cannot run genesis|sui_config|Address already in use'` vacio sobre el borrador (corrido ANTES de anexar la guarda final, cuyo `stat` nombra a proposito la ruta guardada del `client.yaml`).
+
+### Cierre de la localnet
+No aplica: no se levanto ninguna localnet (solo unit tests con `test_scenario`).
+
+### Guarda de ~/.sui (C-13, R-12) y Docker
+- Todo texto escrito en archivos (codigo Move, tests, borradores del reporte) con las herramientas de escribir/editar archivos: sin heredoc, `printf`, `echo` ni `sed -i`. (Los resultados de comandos se guardaron redirigiendo la SALIDA del comando a un archivo y se anexaron con `cat`; los comandos de `sui` fueron siempre `printf 'n\n' | sui …` desde `<repo>/contracts` o desde copias en `<scratchpad>`, con el HOME real y SIN subcomando `client`/`keytool`.)
+- Ejecucion accidental de `sui`: ninguna. `sui` solo se uso como `sui --version`, `sui move build|test|disassemble|coverage` (sin red, sin claves). Ningun `sui client`, `keytool`, faucet, `new-address`, `sui start`, publish/upgrade ni `pkill`; ningun contenedor ni imagen de Docker tocados.
+- Guarda al inicio (antes de leer nada): 244 bytes, mtime `2026-10-30 17:52:52.515735237 -0500`, solo `client.yaml`, `sha256` `ef12fd09615f…`; Docker 5 contenedores / 17 imagenes. Guarda a mitad (tras escribir el codigo y los tests y correr los gates) y al final: salidas abajo (ANEXO 9), iguales a la linea base.
+- Docker: antes 5/17 (`docker ps -aq | wc -l` = 5, `docker images -aq | wc -l` = 17); despues 5/17 (ANEXO 9): sin diferencias.
+- Copias del scratchpad (`<scratchpad>/t3/probe`, `mut/m1..m5`, `cov`): efimeras, fuera del repo. En `<scratchpad>/t3/` ya habia archivos de otras sesiones (`audit.txt`, `build.txt`, `ci.txt`, `deploy.txt`, `lint.txt`, `sig.txt`, `tc.txt`, `test.txt`, `v7.txt`, `v9.txt`) que NO son mios y no toque.
+- `contracts/build/` (ignorado por git) lo cree yo con los gates y lo borre al terminar: `git status --short` final = solo los 2 archivos nuevos.
+
+### Documentacion
+- READMEs / agents.md actualizados: no aplica en este task (los asigna TASK-8; el handoff prohibe tocar `documents/*` y `app/*` y limita este task a los 2 archivos). Pendiente anotado en "Riesgos".
+- Snippet propuesto para `documents/STATUS.md`: "TASK-3 de #73 (coinflip sobre `duel`): `contracts/sources/coinflip.move` + `contracts/tests/coinflip_tests.move`; contracts build/lint 0 warnings, test 309 PASS (269 + 40); `house`, `game` y `duel` sin diff; `accept` = `entry` sin `public` con el orden validar -> cobrar -> sortear -> pagar; bytecode de produccion sin `_for_testing`; CLI 1.84.0-9dc25070cf2e".
+- Mensaje de commit sugerido (lo propone el MID, lo commitea el orquestador; sin `Closes`): `contracts: add the coinflip module on the duel base (#73)`.
+
+==================================================================================================
+ANEXO 9 — Guarda de ~/.sui y Docker: a mitad (ya pegada en la linea "guard_docker_mid" de abajo) y al final
+==================================================================================================
+--- guarda a mitad (tras los gates)
+$ docker ps -aq | wc -l
+5
+$ docker images -aq | wc -l
+17
+$ stat -c "%y %s %n" ~/.sui/sui_config/client.yaml
+2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
+$ ls -la ~/.sui/sui_config/
+total     
+drwx------ 4096 Oct 30 16:04 .
+drwx------ 4096 Oct 30 16:04 ..
+-rw-rw-r-- 244 Oct 30 17:52 client.yaml
+$ sha256sum client.yaml (12 hex)
+ef12fd09615f
+
+--- guarda tras escribir el reporte / al final
+$ docker ps -aq | wc -l
+5
+$ docker images -aq | wc -l
+17
+$ stat -c "%y %s %n" <HOME real>/.sui/sui_config/client.yaml
+2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
+$ ls -la <HOME real>/.sui/sui_config/
+total     
+drwx------ 4096 Oct 30 16:04 .
+drwx------ 4096 Oct 30 16:04 ..
+-rw-rw-r-- 244 Oct 30 17:52 client.yaml
+$ sha256sum client.yaml | cut -c1-12
+ef12fd09615f
+$ git status --short (en <repo>)
+?? contracts/sources/coinflip.move
+?? contracts/tests/coinflip_tests.move
+$ test ! -e contracts/build
+contracts/build no existe
+
+Nota: `grep -c 'command not found'` sobre ESTE archivo final da 2 solo porque el propio texto del reporte nombra esa cadena (la linea del comando de la guarda en el ANEXO 8 y su descripcion en la seccion "Guarda"); sobre el borrador sin esas lineas dio 0 (ANEXO 8) y ninguna salida de comando pegada la contiene. Sin rastros de ejecucion accidental.
+
+~~~~
+
+
+---
+
+## 10. TASK-3 (revisión del MID)
+
+> MID, TASK-3: PASA (sin 🔴 ni 🟠; 2 🟡 y 6 🔵).
+
+PASA
+
+## Revisión TASK-3 (#73, `coinflip` sobre `duel`): PASA (sin 🔴 ni 🟠; 2 🟡 y 6 🔵 que no bloquean)
+
+- **Fecha:** 2026-11-20. Handoff v1.2.6, plan v1.3.2, HEAD 61dc932, archivos nuevos sin commitear: `contracts/sources/coinflip.move` (93 líneas) y `contracts/tests/coinflip_tests.move` (1042 líneas, 40 tests).
+- **Qué leí:** el reporte del DEV (795 líneas) entero; `coinflip.move` entero y línea por línea; `game.move` (`accept_game` y sus helpers, como modelo); la ruta `activate_atomic` → `pay` de `duel.move` ya revisada en TASK-2/2b; los tests (helpers, el sorteo real, las liquidaciones, los aborts, `cancel`/`reject` y la comisión). Para la aleatoriedad leí la fuente de Sui `@testnet-v1.84.1` (`random.move` y la validación de PTB en `sui-types/src/transaction.rs`).
+- **Qué ejecuté:** solo lecturas y `grep`/`awk`. No corrí `sui` ni gates.
+- **Resultado:** el coinflip es una envoltura delgada y correcta: `accept` es una `entry` sin `public` que valida y cobra (`activate_atomic`), sortea con un generador creado adentro y paga por índice (`pay`), con el `Collected` naciendo y muriendo en la misma función. No encuentro vía para abortar dependiendo del resultado, para componer el sorteo desde fuera ni para que el gasto difiera por resultado. Lo que queda: una prueba extra recomendada sobre mutaciones del rango del sorteo, el tercer incumplimiento seguido de la regla de escritura (P-2) y comentarios que mejorar.
+
+## 0. Controles del orquestador: coinciden
+
+`~/.sui` (244 B, `client.yaml`, `ef12fd09615f`) en las tomas del DEV y en la tuya; 0 procesos `sui`; 19000 libre, 9000 ajeno igual; **Docker 5/17** antes y después (el DEV lo midió igual); worktree con solo los 2 archivos nuevos. Gates 309/309 (269 + 40), build y `--lint` en 0, **`public_random` no dispara**, cero diff en `house.move`, `game.move`, `duel.move`, `Move.lock` y los tests viejos.
+
+**Fuente de `duel.move`:** el último commit que lo toca es `6ffecf9` (el que el handoff v1.2.6 fija) y `git diff` de `duel.move`, `game.move` y `house.move` está vacío: **TASK-3 no los tocó, ni siquiera con los comentarios 🔵 opcionales**.
+
+**Visibilidad (verificada en la fuente; pasan los 5 puntos del MAYOR):**
+1. `create` (37) y `accept` (67) son `entry fun` sin `public`; la única `public fun` del módulo es `accept_with_winner_for_testing` (84) con `#[test_only]` en la línea anterior (verificado con `awk`).
+2. `activate_atomic` (74) y `pay` (77) se llaman dentro de la misma `accept`; `collected` es una variable local que no se devuelve (la función no devuelve nada), no se guarda (el módulo solo tiene el struct `Coinflip`) ni sale.
+3. `Random` solo en `accept`, con el orden validar → cobrar → sortear → pagar (74, 75, 76, 77); el generador se crea adentro.
+4. 0 `allow(`, 0 `RandomGenerator`, 0 `init`, 0 `debug`/`TODO`; ninguna `public fun` ni `public(package)` de producción.
+5. `public struct Coinflip has drop {}`: solo `drop`, nombre `Coinflip` (no `COINFLIP`), sin constructor `public`.
+
+Bytecode de producción (que confirmaste): `_for_testing` en 0 en los cuatro módulos, `coinflip.mv` exporta solo `entry create` y `entry accept`, y el desensamblado llama `activate_atomic` → `new_generator` → `generate_u8_in_range` → `pay`.
+
+## 1. Orden y seguridad de `accept` (SEG-5 / PROY-5) (punto 1)
+
+**El orden es el de `game::accept_game` y es el correcto.** `game` valida con `assert_acceptable`, cobra con `collect_pot`, sortea y paga con `pay_winner`; el coinflip delega validación y cobro en `activate_atomic`, que hace lo mismo en el mismo orden (versión de la House, `EVersionMismatch`, `EWrongHouse`, authZ, estado, monto, y la comisión con `add_fees`), y luego sortea y paga.
+
+**¿Algo entre el sorteo y `pay` que pueda abortar o ramificar según el resultado? No.**
+- Entre `generate_u8_in_range` y `pay` no hay código del coinflip; el índice entra directamente a `pay`.
+- Los tres chequeos de `pay` son deterministas e independientes del índice (salvo el tercero, que se satisface por construcción): `EWrongDuel` (el `Collected` lo creó `activate_atomic` sobre este mismo `Duel`), `ENotActive` (el `Duel` acaba de quedar `Active` dentro de `activate_atomic`) y `EBadWinnerIndex` (el índice sale de `generate_u8_in_range(0, 1)` con constantes: solo puede ser 0 o 1).
+- `generate_u8_in_range` no puede abortar por el rango (`min <= max`) y en el framework de PV 142 no tiene bucle: calcula `rand % (max − min + 1)` con 9 bytes y suma `min` (leí `random.move` `@testnet-v1.84.1`), así que **su costo no depende del valor obtenido**. `new_generator` y `generate_u8_in_range` son también las únicas llamadas que podrían fallar por razones del framework, y las dos corren antes de saber el resultado (un fallo ahí es independiente del resultado).
+- `pay`: `players.borrow(idx)`, retiro, estado, evento y `public_transfer` son idénticos para los dos índices; no hay `if`/`match` sobre el resultado (el desensamblado del DEV muestra un solo bloque sin saltos).
+
+**¿Puede salir o quedar guardado el `Collected`? No.** Sin abilities, nace en la línea 74 y se consume en la 77; si `pay` abortara, la transacción revierte entera. No existe ruta en que una tx termine entre el cobro de la comisión y el pago.
+
+**¿El gasto es el mismo en ambos resultados? Sí por construcción, y se mide en TASK-5.** Mismo camino, misma suma de operaciones, mismos objetos creados (una `Coin` nueva), mismo evento y mismo cambio de estado; solo cambia la dirección destinataria. El comentario de `accept` ("both outcomes run the same state change, event and transfer, so the gas spent is the same whoever wins") es fiel a `game.move:207-209` ("nothing that depends on the outcome can abort here; transaction limits and gas weigh the same on both paths"), y aun un poco más fuerte (afirma igualdad de gas, no solo ausencia de abortos): **lo respalda el código y lo medirá TASK-5** (🔵 N-1: suavizar a "run the same operations; TASK-5 measures the gas").
+
+**¿Puede un PTB componer `accept` con otro comando que aborte según el resultado? No, y la razón escrita por el DEV/en el brief está un poco invertida:**
+- **Lo que dice el brief** ("una tx con `Random` solo admite `MoveCall`") **no es la regla.** La regla real (verificada en `sui-types/src/transaction.rs` `@testnet-v1.84.1`, `PostRandomCommandRestrictions`) es la contraria: **un comando que usa `Random` solo puede ir seguido de `TransferObjects` o `MergeCoins`**; cualquier otro comando posterior (incluido un `MoveCall`) hace rechazar la transacción. Antes del comando con `Random` se admite cualquier cosa.
+- **Consecuencia que importa:** después de `accept` ningún `MoveCall` puede leer el resultado (por ejemplo serializando con BCS el `Duel` compartido, que es la forma de saltarse la privacidad de los campos) y abortar si perdió. Eso **cierra por el protocolo** el ataque de "abortar al perder con un comando posterior"; `TransferObjects`/`MergeCoins` no pueden abortar en función del resultado, porque el pago al ganador es una `Coin` nueva que va a una dirección y no es un argumento disponible dentro de la misma PTB. Antes de `accept` no hay nada que sepa el resultado.
+- **Lo que hace el contrato:** `entry` sin `public` (nadie compone el sorteo desde otro módulo; `public_random` no dispara), el generador creado adentro (nadie lo pasa envuelto) y el gasto igual. Son las tres defensas que cita el DEV y son correctas; **la cuarta** (la regla del protocolo) no figura en el comentario ni en el reporte y conviene escribirla (🔵 N-2).
+- **Corrección al reporte, línea 96:** dice que el PTB debe llevar la llamada con `Random` como último `MoveCall` y que "el contrato no lo puede forzar". Sí lo fuerza el protocolo: es imposible poner otro `MoveCall` después. Lo que la app tiene que hacer es lo que ya dice el plan (§8.3): el `SplitCoins` del pago **antes** y `accept` con `tx.object.random()` **último**.
+- **Superficie residual que no es de este módulo:** el aviso de la propia documentación de `new_generator` ("código dependiente de la aleatoriedad puede ser explotable con un presupuesto de gas cuidadosamente elegido"): es el ataque de fijar el presupuesto de gas para que la tx se quede sin gas en un solo resultado. Se cierra con **igualdad de cómputo y de almacenamiento entre resultados**. Recomiendo que TASK-5 no se limite a comparar `gasUsed`, sino que además pruebe un **barrido del presupuesto mínimo** que alcanza para cada resultado (si los dos umbrales coinciden, no hay diferencial explotable). Es una sugerencia para TASK-5 y para el MAYOR (🔵 N-3), no un hallazgo de este task.
+
+**M5 ("sortear antes de validar" sobrevive 309/309): lo acepto.** Un aborto de la validación después del sorteo revierte todo y es independiente del resultado (la validación no lee el sorteo), así que **no es una propiedad de seguridad del resultado** (lo que dice el reporte, "seguridad/gas", sobreestima el primer término): es una propiedad de **costo y de claridad** (trabajo desperdiciado en el caso de abortar) y de coherencia con PROY-5. Un unit test no la puede observar. La evidencia sustituta es adecuada: el orden de instrucciones del bytecode (que verificaste) y la lectura de código; no pido un test falso. Sí agrego la mutación de rango de abajo, que es la relevante para SEG-5.
+
+## 2. Conformidad con R.7 y TASK-3 §3/§5/§7 (punto 2)
+
+- **R.7 / §3:** `Coinflip` solo `drop`; control 0 por una constante `NO_CLOCK` (LIM-6: mismo valor que el `0` del handoff); no llama `record_move`, `collect`, `claim_timeout` ni `refund_stalled`; sin `init`; `accept` y `create` no `public`; sorteo por índice sin ramas.
+- **Los 22 nombres obligatorios:** los cotejé con un script contra el §5 de TASK-3: **están todos** (y los 40 tests incluyen 18 más: límites de apuesta y auto-invitación en `create`, órdenes de aborts, invitado con sorteo real, el pin por semilla, la conservación con dos coinflips y el reembolso sin versión). **17 `expected_failure`, todos con el código nombrado** (`battleship::duel::E...` o `battleship::house::EWrongVersion`; ninguno con número desnudo).
+- **INV-D5:** `test_accept_never_leaves_duel_active` fija, con el sorteo real y con los dos ganadores forzados, que el `Duel` queda `Resolved` con `stake == 0`, sin `to_move` ni `deadline_ms`, con `turn_ms == 0`, y que el evento `DuelActivated` muestra `to_move = 0` y `deadline_ms = 0` (solo dentro de la tx).
+- **Dos fuentes de comisión sobre una House:** `test_fees_from_coinflip_and_legacy_game_accumulate_in_same_house` (un `Game` y un `Duel<Coinflip>` sumando `fees_collected`) y `test_fees_from_two_coinflips_accumulate_and_withdraw_exactly` (incluye `withdraw_fees` exacto).
+- **`cancel`/`reject` sobre `Duel<Coinflip>`:** `test_cancel_and_reject_work_on_coinflip_duels` (eventos tipados con `Coinflip`, reembolso entero al creador sin comisión, el invitado no recibe nada) y `..._regardless_of_versions` (INV-D2).
+- **§7 (DoD):** gates, `public_random` sin disparar, `accept` `entry` sin `public`, `Coinflip` sin `copy`/`store`, `house.move`/`game.move`/`duel.move` sin diff y las visibilidades pegadas con `grep`: **cumplidos**. El grep de R.7 que pide el handoff ("solo la creación del generador dentro de `accept`") **no podía cumplirse tal cual**: el tipo `RandomGenerator` nunca se nombra (el generador es una variable local de tipo inferido), así que da 0 coincidencias; el DEV lo complementó con `new_generator` (solo `coinflip.move:75` y `game.move:156`, el modelo viejo). **Desviación (b) aceptada**; el texto del handoff estaba mal planteado (🔵 N-5).
+
+## 3. Tests y mutaciones (punto 3)
+
+- **Conservación por actor:** `assert_resolved` fija el evento completo, **la única transferencia de la tx** (al ganador), el coin único del ganador, que el perdedor no tiene coin, `fees_collected` antes/después, `stake == 0`, `Resolved { acceptor, winner }` y `payout + fee == 2 × bet`. Con fee 0, 250, 500 (la copiada gana) y 1000, pozo impar (`2_000_002`, comisión con piso), `MAX_BET` con fee máximo y `HUGE_BET` (9e18: `pot × 1000` desborda `u64`, solo pasa por `u128`), por los dos ganadores.
+- **Alcance real de esos tests:** las liquidaciones por comisión y fondos usan `accept_with_winner_for_testing` (la misma ruta `activate_atomic` → `pay` sin el sorteo), así que verifican `duel`, no la propia `accept`. **La propia `accept` la ejercen los tests con `Random` real** (`..._resolves_and_conserves_funds` con fee 250, `..._reaches_both_outcomes`, `..._by_invitee_resolves`, `..._never_leaves_duel_active`) y los aborts. Es correcto y suficiente porque `accept` no tiene lógica propia más allá del orden. 🔵 N-4: ninguna prueba con `Random` real usa fee 0 ni 1000 ni pozo impar; no es un riesgo (la comisión es de `duel`, ya cubierta al 100 %), pero un caso con el sorteo real y `fee_rate = 1000` costaría una línea.
+- **`test_accept_with_random_reaches_both_outcomes` y el pin por semilla.**
+  - *Lo que verifica el pin:* el valor de `winner` para cada una de las 4 semillas fijas (`[ACCEPTOR, ACCEPTOR, CREATOR, CREATOR]`), así que mata la mutación "invertir el índice" (M1), que los demás tests no distinguen porque comparan contra el ganador real.
+  - *¿Es robusto o frágil?* **Frágil, pero de forma segura:** depende de (a) el generador del framework (`hmac_sha3_256`) en la PV 142, que el DEV declara, y además de (b) `ctx.fresh_object_address()`, que **mezcla en la semilla el identificador de la transacción de test y el contador de IDs creados**: añadir, quitar o reordenar una transacción o un objeto en `play_random_games` o en los helpers cambia los sorteos sin cambiar nada del contrato. Declaro (b), que el DEV no menciona. La fragilidad produce **falsos rojos**, nunca falsos verdes, y se corrige re-midiendo.
+  - *¿Falta un test que ate índice 0 = creador / 1 = aceptante sin semillas?* **No se puede sin controlar el generador** (`accept` crea el suyo) y, lo importante, **el mapeo es irrelevante para la equidad**: con una moneda justa e independiente, 0 = creador o 0 = aceptante son simétricos. El pin sirve como regresión del contrato documentado ("Index 0 of the draw is the creator") y de que el sorteo está en `0..=1`; no es una propiedad de seguridad. **Alcanza.** Pido que el comentario del test diga también (b).
+- **Mutaciones del DEV (5) y mi valoración:** M1 (índice invertido) mata 1; M2 (`generate_u8_in_range(0, 0)`) mata 2; M3 (no cobrar, en una copia de `duel`) mata 35; M4 (`create` con control 1) mata 19; M5 (sortear antes de validar) sobrevive, aceptado arriba.
+- **Mutación que falta y es la relevante para SEG-5 (🟡 T-1, prueba extra que pido al orquestador):** **ampliar el rango del sorteo**, `generate_u8_in_range(0, 2)` y `generate_u8_in_range(0, 255)`. Con ellas, una parte de los sorteos produce un índice `> 1` y **`pay` aborta `EBadWinnerIndex` después de conocer el resultado**: es exactamente el aborto condicional que SEG-5 prohíbe. Hoy lo evitan las constantes del código; los tests lo atrapan solo si una de las 5 semillas (4 + la fija) cae fuera de `{0, 1}`: con rango 3 la probabilidad de que las 5 caigan dentro es ≈ 13 %, con 255 es ≈ 0, y el pin cambiaría casi seguro. **Pido correr las dos en una copia del scratchpad** (como las demás). Si alguna sobrevive, el DEV agrega un test (p. ej. 8-16 semillas, o fijar que ningún sorteo aborta con `EBadWinnerIndex`); si mueren, queda evidencia pegada.
+- **Cobertura 100 % de `coinflip`:** conforme.
+
+## 4. Desviaciones del DEV y P-2 (punto 4)
+
+| # | Desviación | Mi valoración |
+|---|---|---|
+| (a) | `accept_with_winner_for_testing` recibe `winner_index: u8` (el de `game.move` usa `u64`) | **Aceptable**: `pay` exige `u8`; es un helper `#[test_only]` |
+| (b) | El grep `RandomGenerator` da 0 | **Aceptable** (ver §2) |
+| (c) | `house::EWrongVersion` salta en la primera lectura (`min_bet`) y no solo en `add_fees`; test extra | **Aceptable.** Es el mismo comportamiento que dejó TASK-2 documentado; ver 🔵 N-6 sobre el test `..._from_old_package_...` |
+| (d) | No se aplicaron los 🔵 de `duel.move` | **Correcto**: eran opcionales y TASK-3 no tocó `duel.move` |
+| (e) | Constante `NO_CLOCK`; pin por semilla; helper `u8` | **Aceptables** |
+
+**P-2 (los rótulos `$ comando` generados con `echo '...'` dentro de `{ ...; } > archivo`): 🟡, no 🟠.**
+- **Criterio:** el propósito de la regla (que ningún texto con `sui` pase por el shell y que el código no se escriba por una vía que salte la herramienta de edición) se cumple: los `echo` eran de cadenas entre comillas simples sin `sui`, solo rotulan salidas de comandos que van a **archivos auxiliares del scratchpad** (no al repo ni al reporte final salvo anexadas con `cat`), `~/.sui` quedó idéntico y no hubo ejecución accidental. **A la letra** de P-2 ("nunca `echo`/`printf` para escribir texto en un archivo") es un incumplimiento. **No pido rehacer los archivos auxiliares**: son salidas crudas ya pegadas y re-rotularlas a mano no agrega seguridad.
+- **Es el tercer task seguido con una desviación** (TASK-2: heredoc con texto de `sui`; 2b: 3 heredocs sin `sui`; 3: `echo` de rótulos). El patrón dice que la regla, como está escrita, **no es operable** porque choca con una necesidad real del DEV (rotular las salidas de los comandos que pega en el reporte) para la que no le damos una herramienta. Hay otra ambigüedad: **la propia forma canónica `printf 'n\n' | sui ...` usa `printf`**, y la regla dice "nunca `printf`".
+- **Qué haría la regla operable (propongo las tres, en orden de valor):**
+  1. **Dar al DEV una herramienta de captura que ya traiga el rótulo**: un script escrito con la herramienta de archivos (no por el DEV en el shell) que corra un comando, lo rotule y guarde su salida, p. ej. `capture.sh <archivo-de-salida> -- <comando...>`; el `echo`/`printf` vive **dentro del script revisado**, no en los comandos que escribe el DEV. ILUSTRATIVO: `{ printf '$ %s\n' "$*"; "$@"; printf 'exit=%s\n' "$?"; } > "$out" 2>&1`. El DEV deja de necesitar escribir `echo` y el rótulo sale uniforme.
+  2. **Aclarar la regla:** "salvo `printf 'n\n' |` como entrada estándar de `sui`, que no escribe ningún archivo". Hoy el DEV lo hace igual en todos los tasks (correctamente) y la letra se lo prohíbe.
+  3. **Auditoría mecánica por el orquestador**, en lugar de depender de la declaración del DEV: sobre el registro de llamadas del DEV (la transcripción de su subagente) buscar `<<`, `echo `, `printf ` (excluyendo `printf 'n\n' |`), `sed -i` y `tee ` dentro de comandos `Bash`: cualquier coincidencia se pega en la revisión. Es una línea de `grep` y convierte la regla de "declarada" en "verificada".
+- **Hunk propuesto para el handoff (v1.2.7, si el orquestador acepta):** en C-13, después de "nunca con un heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo`" agregar "(**excepción:** `printf 'n\n' |` como entrada estándar de `sui`, que no escribe ningún archivo)" y "**Rótulos de las salidas de comandos:** con el script de captura del scratchpad (`capture.sh`), no con `echo`/`printf` escritos por el DEV".
+- **Sobre `grep -c 'command not found' = 3`:** lo conté y confirmo **3**, no 2 como dice el DEV: las líneas 725 (el texto del comando `grep -c 'command not found' <reporte>` pegado en el anexo), 739 (la prosa de §R-6) y 795 (la nota final). **Las tres son texto del propio patrón citado**, no una salida de shell: la salida real del comando en el anexo es `0` (línea 726) y no hay ningún mensaje de error de shell en el archivo (busqué `bash:` y `: command not found`: 0). El conteo en el reporte final (2) es un error menor del DEV, sin consecuencia.
+
+## 5. Comentarios (punto 5)
+
+Conforme y claros. `///` en el módulo, `Coinflip` (por qué solo `drop`, por qué no `COINFLIP`), `create` y `accept` (con el orden numerado y por qué `pay` no puede fallar ahí), y el helper de test (por qué es `#[test_only]`). Nada promete algo falso, con tres afinamientos (🔵 N-1, N-2 y N-6) que pueden hacerse **ahora**, porque los archivos aún no están commiteados: (1) suavizar "so the gas spent is the same whoever wins" a "run the same operations (TASK-5 measures the gas)"; (2) en el comentario del módulo y de `accept`, agregar que **el protocolo solo admite `TransferObjects`/`MergeCoins` después del comando que usa `Random`**, que es lo que cierra el aborto condicional desde otro comando de la misma PTB; (3) en el comentario del pin, que depende también de la secuencia exacta de transacciones y objetos del test.
+
+## 6. Hallazgos
+
+Ninguno 🔴 ni 🟠.
+
+- 🟡 **T-1 (prueba extra pedida):** correr en copias del scratchpad las mutaciones de rango `generate_u8_in_range(0, 2)` y `(0, 255)` y pegar el resultado; si alguna sobrevive, agregar un test (ver §3).
+- 🟡 **P-2 (regla R-12/C-13, tercer task seguido):** el DEV ya lo declaró; acepto los archivos auxiliares y propongo la herramienta de captura, la excepción de `printf 'n\n' |` y la auditoría mecánica (ver §4).
+- 🔵 **N-1:** suavizar el comentario de gas (ver §5).
+- 🔵 **N-2:** escribir la regla `PostRandomCommandRestrictions` en el comentario de `accept` y corregir la línea 96 del reporte (dice que el contrato no puede forzar el "último `MoveCall`": lo fuerza el protocolo).
+- 🔵 **N-3:** para TASK-5 y el MAYOR: además de `gasUsed` por resultado, un barrido del presupuesto de gas mínimo por resultado (el ataque de la advertencia de `new_generator`).
+- 🔵 **N-4:** un caso con `Random` real y `fee_rate = 1000` (o 0) y/o pozo impar. Opcional.
+- 🔵 **N-5:** el handoff dice que el grep de R.7 mostraría "solo la creación del generador dentro de `accept`": da 0 porque el tipo no se nombra; corregir a "0 coincidencias de `RandomGenerator` y `new_generator` solo en `accept`" en el próximo toque del handoff.
+- 🔵 **N-6:** `test_accept_from_old_package_aborts_before_the_draw` es casi un duplicado de `..._from_other_house_version_...`: con la House nueva, `min_bet` aborta en la primera lectura, sin llegar a `add_fees`. No hace daño (fija que la House y el `Duel` nuevos tampoco pasan) pero su comentario ("the checks of the duel pass") sugiere otro camino. Opcional.
+
+## 7. Qué commitear
+
+1. `contracts/sources/coinflip.move` y `contracts/tests/coinflip_tests.move`, **sin editar** (o con los comentarios de §5 si el orquestador quiere aprovechar que no están commiteados; en ese caso, sin cambio de código, y rehacer `build`/`--lint`/`test`). Mensaje propuesto (el del DEV): `contracts: add the coinflip module on the duel base (#73)` (sin palabras de cierre con número).
+2. `documents/REPORTES_MULTIGAME.md`: el reporte del DEV (`.../scratchpad/REPORTE_MULTIGAME_TASK-3.txt`, leído entero y con el §R-6 corrido) y esta revisión.
+3. `documents/STATUS.md`: fila de TASK-3 (abajo).
+4. Antes del merge: el `grep` de cuerpos de commit por `Closes #N` y la revisión de integración publicada en el PR (regla de memoria).
+
+**Snippet para STATUS:** "contracts @ `feature/issue-73-multigame` (TASK-3 de #73), CLI `1.84.0-9dc25070cf2e`, 2026-11-20 | `battleship::coinflip` sobre `duel` (witness `Coinflip`, `entry create` y `accept`; `accept` = `activate_atomic` → sorteo → `pay`, sin reloj) | build y `--lint` con `--warnings-are-errors` en 0 (`public_random` no dispara) | **309 tests PASS (269 + 40)** | `house.move`, `game.move` y `duel.move` (fuente `6ffecf9`) sin diff | bytecode de producción: 0 `_for_testing`, solo `entry create` y `entry accept` | MID: PASA (visibilidades 1-5 del MAYOR verificadas; mutaciones de índice, sorteo, comisión y control muertas; M5 sobrevive por diseño; cobertura `coinflip` 100 %) | pendiente: mutaciones de rango del sorteo, `gasUsed` por resultado (TASK-5) y la revisión de SEG-5 del MAYOR."
+
+## 8. Lo que falta de la compuerta de pre-upgrade del MAYOR (§G) tras TASK-3
+
+**Ya cubierto:** el diff de contrato **completo** (`duel`, `coinflip` y sus tests) ya existe y se puede entregar (punto 2, con la lista de artefactos congelados: `Duel`, las 6 variantes de `DuelState`, `Collected`, los 7 eventos, la tabla de controles, los 26 abort codes y ahora el struct `Coinflip has drop`); el grep de R.7 de TASK-3 (punto 12, con la salvedad del `RandomGenerator`); la tabla de transiciones y la matriz (punto 3); las evidencias V-1..V-16 (4); las sondas de `Collected` (13); las revisiones del MID por task (10).
+
+**Falta:**
+- **TASK-4:** script de upgrade, esquema y runbook (punto 7), con la regla de `typeOrigins` por (módulo, nombre) y la nota de `EUC01009`.
+- **TASK-5:** `SMOKE_MULTIGAME.md` en PASA en su parte localnet (punto 5), `upgrades`/`typeOrigins` reales y `check` en verde (6), la evidencia de que el sandbox no tocó el árbol (11), y **las medidas de `gasUsed` por resultado del coinflip (12)**, que son el cierre de SEG-5 de este task (con el barrido de presupuesto de N-3).
+- **TASK-7a, 7b y 8:** gates de app y fixtures (8) y las docs (`contracts/README.md` con los 26 códigos y los 7 eventos, `max_bet < 2^63`, regla del grep de CI).
+- **DECISIONES.md** (9) y la parte testnet de `SMOKE_MULTIGAME.md` (14, la redacta el MID).
+- **CI en verde** sobre el head (1) y la **revisión de SEG-5 del MAYOR sobre el coinflip** (en curso en paralelo): lo que señalo para ella está en §1 (la regla del protocolo después de un comando con `Random`, el barrido de presupuesto de gas y la mutación de rango).
+
+## 9. Siguiente paso
+Autorizo **TASK-4** (script y esquema de upgrade, que no depende del coinflip salvo por los nombres de los tipos). Antes de commitear TASK-3, el orquestador corre las dos mutaciones de rango (T-1) y decide si aplica los comentarios de §5.
+
+## §R-6 sobre esta revisión
+Greps con `/usr/bin/grep` sobre este archivo: hex de 40-64 caracteres, `0x` + 8 hex, claves y rutas personales, abreviaturas con puntos suspensivos: el resultado va en el mensaje de entrega. No incluye direcciones de cuenta ni hashes completos.
+
+
+
+---
+
+## 11. TASK-3 (revisión de SEG-5 del MAYOR)
+
+> MAYOR, SEG-5 del coinflip: APPROVE (sin 🔴, 🟠 ni 🟡).
+
+APPROVE
+
+## Revisión de seguridad del MAYOR, SEG-5 del `coinflip` (TASK-3 de #73)
+
+- **Fecha:** 2026-11-20.
+- **Ref:** worktree de #73, branch `feature/issue-73-multigame`, HEAD `61dc932`. `contracts/sources/coinflip.move` (93 líneas, leído entero) y `contracts/tests/coinflip_tests.move` (40 tests), sin commitear.
+- **Referencias leídas:**
+  - `contracts/sources/duel.move` (`6ffecf9`): `Duel`, `DuelState`, `Collected`, `activate_atomic`, `pay`, `assert_acceptable`, `join_and_activate`, `collect_fee` y la lista completa de funciones;
+  - `contracts/sources/game.move:142-159` (`accept_game`) y la API `public` de `house.move` y `game.move`;
+  - el reporte del DEV de TASK-3 (E-1..E-4, anexos 5 y 6).
+- **Qué ejecuté:** solo lecturas. No corrí `sui` ni gates. Los conteos (309 = 269 + 40, build y `--lint` en 0) y el bytecode son los que verificó el orquestador; los contrasté con la fuente.
+- **Veredicto:** el `coinflip` cumple SEG-5/PROY-5 y la propiedad pedida: **el llamador no puede observar el resultado y abortar dentro de la misma transacción**. Sin 🔴, 🟠 ni 🟡 para este commit. El DEV no tiene nada que cambiar. Dejo dos pedidos para la evidencia de TASK-5 y de la compuerta §G (S-1, S-2) y una nota sobre el pin (S-3).
+
+---
+
+## 0. Hechos del orquestador, confirmados en la fuente
+
+| Hecho | Fuente |
+|---|---|
+| `create` y `accept` son `entry fun` **sin `public`** | `coinflip.move:37` y `:67` |
+| La única `public fun` es `accept_with_winner_for_testing`, con `#[test_only]` | `:83-84` |
+| `Coinflip` solo tiene `drop` | `:32` |
+| Sin `init`, sin `allow(lint`, sin un `RandomGenerator` guardado | El generador es una local (`:75`) |
+| Orden: `activate_atomic` → `new_generator` → `generate_u8_in_range(0, 1)` → `pay` | `:74-77`; coincide con el orden del desensamblado del orquestador |
+| El coinflip siempre es atómico | `create` pasa `NO_CLOCK` (`:26`, `:43`) y `activate_atomic` exige `turn_ms == 0` (`EHasClock`, `duel.move`) |
+
+## 1. SEG-5 / PROY-5: validar → cobrar → sortear → pagar
+
+**Qué puede abortar después del sorteo:** nada que dependa del resultado. Este es el cuerpo de `pay` (`duel.move:338-378`):
+
+| Paso | ¿Puede abortar? | Por qué |
+|---|---|---|
+| `EWrongDuel` | No | El `Collected` lo produjo `activate_atomic` sobre **ese** `duel` dos líneas antes (`collect_fee` usa `object::id(duel)`). |
+| `active_state()` → `ENotActive` | No | `join_and_activate` acaba de dejar el `Duel` en `Active`. |
+| `EBadWinnerIndex` | No | `generate_u8_in_range(0, 1)` devuelve 0 o 1. |
+| `players.borrow(winner_index)` | No | El índice está en rango. |
+| `withdraw_all`, `coin::from_balance`, `event::emit`, `transfer::public_transfer(…, winner)` | No | La transferencia es a una dirección (no puede fallar por el destinatario) y el evento tiene tamaño fijo: las direcciones miden lo mismo. |
+
+- **Ramas que dependan del resultado:** ninguna. El índice solo **selecciona** una dirección en un vector de dos elementos. Los dos resultados ejecutan las mismas instrucciones: el mismo cambio de estado, el mismo evento y la misma transferencia de un `Coin` nuevo. Según el reporte (E-3), `accept` es un solo bloque básico, sin `Br*`/`Jump`.
+- **Gas:** por construcción, el mismo en los dos resultados. `ESelfPlay` impide que el ganador sea la misma cuenta que paga, así que en ambos casos se crea un objeto nuevo del mismo tamaño para otra dirección. Esto importa por el ataque de **presupuesto de gas** (fijar un presupuesto que alcance para un resultado y no para el otro): sin diferencia de gas, ese ataque no existe.
+  - **Hoy:** ese razonamiento y el desensamblado.
+  - **Falta medir:** `gasUsed` (cómputo, storage y rebate) por resultado en la localnet, que lo hará TASK-5 (ver S-1).
+- **Antes del sorteo** abortan todas las condiciones que no dependen del resultado: `assert_acceptable` (versión, House, authZ, estado, monto) y `collect_fee` → `add_fees`, con su chequeo de versión. Los tests `test_accept_from_other_house_version_aborts_before_the_draw` y `…_from_old_package_aborts_before_the_draw` cubren los dos aborts de versión.
+
+**Frente a `game::accept_game`: la misma propiedad, con una mejora estructural.**
+- El modelo viejo hace `assert_acceptable` → `collect_pot` (fee) → sorteo → `pay_winner(…, winner_index as u64, …)`, todo dentro de una sola `entry` privada.
+- El nuevo agrega que el paso intermedio es un **hot potato** (`Collected`, sin abilities, V-14 b/c): ni siquiera un cambio futuro en `coinflip` podría terminar la transacción entre el cobro y el pago sin que falle la compilación.
+- La diferencia de superficie es que el cobro y el pago viven en otro módulo (`duel`), con el witness por valor. Eso lo cubre §4.
+- **No veo ninguna diferencia de seguridad en contra del nuevo.**
+
+## 2. Test-and-abort / composición: **no hay canal**
+
+La propiedad "el llamador no puede observar el resultado y abortar en la misma transacción" se sostiene por **tres barreras independientes**:
+
+1. **Nadie puede envolver `accept`.**
+   - Es `entry` sin `public`: otro módulo, de este paquete o de otro, no puede llamarla. Solo se llama como comando de un PTB.
+   - El generador se crea **adentro** (`r.new_generator(ctx)`) y no se devuelve.
+   - `accept` no devuelve nada: el `Collected` nace y muere en ella, y el pago va a una **dirección** con `public_transfer`. Ningún resultado de PTB lleva información del sorteo.
+2. **Después de `accept` no hay un comando que pueda leer el resultado.**
+   - Regla del protocolo: en un PTB, después de un `MoveCall` que recibe `Random`, solo se admiten `TransferObjects` y `MergeCoins`. Es la regla que el repo ya aplica (`agents.md:302-305`), y Sui rechaza el PTB que la viola. **No la reverifiqué en la fuente de Sui en esta revisión**: pido que TASK-5 la mida (S-1).
+   - Con `TransferObjects`/`MergeCoins` no se puede abortar condicionado al resultado:
+     - no se puede referenciar el `Coin` del pago, que fue transferido y recién es utilizable en otra transacción;
+     - `Duel` es `key` sin `store`, así que no entra en `TransferObjects`;
+     - y nada de lo que esos comandos tocan depende del sorteo.
+3. **Aunque la regla 2 no existiera, en producción no hay lectura del resultado.**
+   - Las únicas `public` de `duel` son las `*_for_testing` con `#[test_only]`, y el orquestador verificó que hay 0 en el bytecode de `duel.mv`.
+   - Las `public` de `game` también son `*_for_testing` (`game.move:242-354`).
+   - Las de `house` (`fee_rate`, `fees_collected`, `min_bet`, `max_bet`, `version`, y `withdraw_fees` con el `HouseCap`) exponen valores **independientes del resultado**: la comisión se calcula y se deposita **antes** del sorteo y es la misma gane quien gane.
+   - Ninguna función pública permite leer `state` ni `winner` de un `Duel<Coinflip>`.
+
+**Otras vías que descarté:**
+- Los eventos no se leen dentro de la transacción.
+- El `Coin` de gas del que acepta no cambia con el resultado: el pago es un objeto nuevo.
+- La simulación previa (dry run o `simulateTransaction`) no anticipa el valor real: la aleatoriedad la fija la ronda del beacon al ejecutar, después del ordenamiento por consenso.
+- Un `Duel` se acepta una sola vez (`ENotPending`): no se puede "reintentar" el mismo duelo en otra transacción.
+
+## 3. Coexistencia con `game.move` sobre la misma House: **sin riesgo**
+
+- **Fondos:** las dos rutas solo **suman** a `fees_collected` por `add_fees` (`public(package)`). El retiro exige el `HouseCap`. El test `test_fees_from_coinflip_and_legacy_game_accumulate_in_same_house` cubre la suma.
+- **Versiones:** `Game` y `Duel` copian `house.version()` al crearse y comparan contra la misma House. Un corte por `VERSION` alcanza a los dos por igual: es el diseño de §4.3.
+- **En la misma transacción:**
+  - un PTB no puede hacer `accept_game` **y** `coinflip::accept`, porque los dos reciben `Random` y, después del primero, el segundo `MoveCall` queda prohibido (regla 2);
+  - cualquier otra combinación solo encadena depósitos en la House, sin lectura condicionada al resultado.
+  - El único efecto compartido es la contención del objeto compartido `House` (latencia), no los fondos.
+
+## 4. Witness y visibilidad (los 4 controles y R.7)
+
+- `Coinflip` es `public struct … has drop {}`. El tipo es nombrable desde afuera (hace falta para `Duel<Coinflip>` y para las genéricas), pero **solo `coinflip` puede empaquetarlo**: Move prohíbe construir un struct fuera de su módulo, que es el error `EC04001` de V-14 (a1).
+- **Otro módulo del paquete no puede crear, activar ni pagar un `Duel<Coinflip>`:** las funciones de `duel` que crean, mutan o cobran toman el witness `G` **por valor** y nadie más que `coinflip` produce un `Coinflip {}`. Lo que **sí** puede hacer otro módulo del paquete es crear un `Duel<SuPropioG>` con su propio witness. Es la regla de revisión de §2.3 del plan (M-3 de la errata), y aplica a cada upgrade futuro, no a este task.
+- Mis 4 controles siguen en pie con `coinflip`:
+  1. las genéricas de `duel` son `entry` sin `public`;
+  2. ninguna `public` de producción devuelve `Collected` ni recibe `&mut Duel<G>`;
+  3. `Collected` no tiene abilities;
+  4. no hay ningún `allow(lint(public_random))`.
+- `coinflip` no agrega ninguna `public` de producción.
+
+## 5. Tests de SEG-5
+
+- **M5 ("sortear antes de validar") sobrevive. Lo acepto.**
+  - Un unit test no puede observarlo: el aborto revierte todo, y el generador no tiene efectos visibles fuera de la transacción.
+  - Además, invertir el orden **no** sería explotable por sí solo, porque ninguna validación depende del resultado. El orden es higiene y defensa en profundidad (PROY-5): garantiza que lo que **puede** abortar lo haga antes de que exista un resultado.
+  - La evidencia que lo sustituye es correcta: la fuente (`:74-77`), el orden del bytecode verificado por el orquestador, y la paridad de gas por resultado en TASK-5.
+- **El pin por semilla (`[ACCEPTOR, ACCEPTOR, CREATOR, CREATOR]`) alcanza como mata-mutantes:** mata M1 (índice invertido) y M2 (rango 0..0). Además está complementado por:
+  - `…_reaches_both_outcomes`, que no depende del orden exacto;
+  - los tests con `accept_with_winner_for_testing`, que fijan la correspondencia índice → jugador sin `Random`.
+  - Depende del generador del framework de la PV 142. El propio test lo dice ("re-measure the pin"): ver S-3.
+
+---
+
+## Hallazgos
+
+| # | Sev. | Dónde | Observación | Qué pido (quién) |
+|---|---|---|---|---|
+| S-1 | 🔵 SUG (evidencia para TASK-5 y §G, no para este commit) | TASK-5 (smoke en la localnet aislada) | Lo que hoy es razonamiento tiene que quedar medido antes de la compuerta §G. | El DEV de TASK-5 agrega al smoke, en la localnet aislada: (a) `gasUsed` (cómputo, storage y rebate) de al menos 2 `accept` donde gana el creador y 2 donde gana el aceptante, con el mismo `bet` y `fee_rate`: **iguales**; (b) un **PTB atacante** `[coinflip::accept, MoveCall house::fees_collected @House]` (o cualquier `MoveCall` después del `accept`): **rechazado** por la regla del protocolo posterior a `Random`, con el error pegado; (c) el control `[coinflip::accept, TransferObjects …]`: aceptado. El MID lo lleva al paquete de entrada de §G (ítems 4 y 5). |
+| S-2 | 🔵 SUG (control permanente de la compuerta) | Plan §G, ítem 2 (artefactos), y cada upgrade futuro | `accept_with_winner_for_testing` (`coinflip.move:84`, y la de `game.move:316`) es la función más peligrosa del repo **si llegara al bytecode publicado**: elige el ganador. Hoy la frena solo `#[test_only]`, y está verificado (0 `_for_testing` en los `.mv` de producción). | Que la entrada de §G incluya, como control fijo para este y todo upgrade, la salida de `strings build/battleship/bytecode_modules/*.mv \| grep -c _for_testing` = 0 sobre el build de producción y la lista de funciones exportadas de `coinflip.mv` (solo `entry create` y `entry accept`). Lo arma el MID. Opcional: un paso en la CI. |
+| S-3 | 🔵 SUG | `coinflip_tests.move:727-740` | El pin depende del generador del framework. | Si un repin del lock cambia el generador y el pin falla, se **re-mide y se vuelve a fijar** con la justificación en el PR. Nunca se reemplaza por una aserción más débil, porque matar M1 y M2 depende de él. No hace falta cambiar nada ahora. |
+
+**Nada que el DEV tenga que cambiar antes del commit.** El MID puede cerrar TASK-3 en cuanto a SEG-5.
+
+---
+
+### §R-6 sobre esta revisión (`/usr/bin/grep -nE`)
+
+- `[0-9a-fA-F]{40,64}`: 0.
+- `0x[0-9a-fA-F]{8,}`: 0.
+- `suiprivkey|mnemonic|seed phrase|/home/|/Users/`: 1. Es esta misma línea, que cita el patrón.
+- `[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}`: 0.
+- Sin direcciones de cuenta, sin rutas personales, sin nombres de otros proyectos del host y sin palabras de cierre con número.
+
+
+
+---
+
+## 12. TASK-3 (prueba extra del orquestador)
+
+> Mutaciones de rango del sorteo (T-1 del MID) y los comentarios aplicados antes del commit.
+
+## Prueba extra del orquestador (T-1 del MID): mutaciones de rango del sorteo
+
+Pedida por el MID para TASK-3: ampliar el rango del sorteo hace que `pay` aborte `EBadWinnerIndex` **después** de conocer el resultado, que es el aborto condicional que SEG-5 prohíbe. Se corrieron en **copias** del scratchpad (`cp -a` del directorio `contracts/`, sin `build/`; el worktree no se tocó: `git status` solo con los dos archivos nuevos), con `printf 'n\n' | sui move test -e testnet --warnings-are-errors` (CLI `1.84.0-9dc25070cf2e`, 309 tests de partida).
+
+| Mutación | Resultado | Tests rojos |
+|---|---|---|
+| `generate_u8_in_range(0, 1)` → `generate_u8_in_range(0, 2)` | `Test result: FAILED. Total tests: 309; passed: 305; failed: 4` | `test_accept_rejects_resolved_duel`, `test_accept_with_random_by_invitee_resolves`, `test_accept_with_random_maps_draw_to_the_players_per_seed`, `test_accept_with_random_resolves_and_conserves_funds` |
+| `generate_u8_in_range(0, 1)` → `generate_u8_in_range(0, 255)` | `Test result: FAILED. Total tests: 309; passed: 303; failed: 6` | `test_accept_never_leaves_duel_active`, `test_accept_rejects_resolved_duel`, `test_accept_with_random_by_invitee_resolves`, `test_accept_with_random_maps_draw_to_the_players_per_seed`, `test_accept_with_random_reaches_both_outcomes`, `test_accept_with_random_resolves_and_conserves_funds` |
+
+Las dos mutaciones **mueren**. La causa del fallo es la esperada: `Test was not expected to error, but it aborted with code 13 originating in the module battleship::duel` (13 = `EBadWinnerIndex`). No hace falta ningún test nuevo.
+
+Antes del commit se aplicaron tres comentarios que pidió el MID (N-1, N-2 y el del pin), **solo líneas de comentario**: se volvieron a correr los tres gates (build y `--lint` con `--warnings-are-errors` en 0; **309 tests PASS**), el bytecode de producción (0 `_for_testing` en `coinflip.mv`, `duel.mv`, `house.mv` y `game.mv`; `coinflip.mv` exporta solo `entry create` y `entry accept`; el orden de llamadas de `accept` sigue siendo `activate_atomic` → `new_generator` → `generate_u8_in_range` → `pay`) y se comprobó que, comparado con la copia mutada, la única línea de código distinta es la de la propia mutación.
+
+**Corrección que deja constancia:** el brief del orquestador al MAYOR decía al revés la regla de Sui sobre `Random`. La regla real, verificada por el MID en la fuente de Sui (`PostRandomCommandRestrictions`), es que después del comando que usa `Random` solo se admiten `TransferObjects` y `MergeCoins`, ningún `MoveCall`. La revisión de SEG-5 del MAYOR razonó con la regla correcta. Por eso la línea del reporte del DEV que dice que el contrato no puede forzar que `accept` sea el último `MoveCall` es imprecisa (lo fuerza el protocolo); el comentario de `accept` ya lo dice bien.
+
