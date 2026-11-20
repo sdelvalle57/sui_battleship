@@ -1,5 +1,5 @@
 # HANDOFF_MULTIGAME
-> Plan: PLAN_MULTIGAME v1.3.1 (aprobado por el MAYOR, ronda 4) | Issue: #73 | Branch: `feature/issue-73-multigame` | Versión: v1.2 | Fecha: 2026-11-19
+> Plan: PLAN_MULTIGAME v1.3.1 (aprobado por el MAYOR, ronda 4) | Issue: #73 | Branch: `feature/issue-73-multigame` | Versión: v1.2.1 | Fecha: 2026-11-20
 > Un solo archivo consolidado. Lo que el DEV ve de #73 está acá: si algo del plan y de este handoff discrepan, **manda el plan** y la duda es un STOP (§C-9).
 > Alcance: TASK-1a, TASK-1b, TASK-2, TASK-2b, TASK-3, TASK-4, TASK-5, TASK-7a, TASK-7b y TASK-8. **PRE-1 (toolchain a la CLI `1.84.0`) NO va acá:** es un issue y un PR propios, sobre `master`, con su propio handoff. TASK-6 (upgrade) y TASK-9 (smoke de testnet) son **del owner** (§H, sin handoff de implementación).
 
@@ -9,6 +9,17 @@
 
 **Scope en una frase:** implementar, por tasks de una sesión cada uno, la base `duel` (custodia, ciclo y reloj por jugada), el coinflip nuevo sobre ella, el script y el esquema de upgrade, el ensayo de punta a punta en la localnet aislada y la capa `sui/` y los componentes mínimos de la app, sin tocar `house.move` ni `game.move`.
 **Lo que NO entrega:** el juego Battleship (#18), el rediseño visual (#72), el historial más allá de la ventana del fullnode (#51), juegos de terceros, mainnet, el toolchain a la CLI `1.84.0` (PRE-1) ni el upgrade y el smoke de testnet (del owner).
+
+## Cambios de v1.2 a v1.2.1
+
+Pedido del MAYOR en la revisión de integración de #80 (S-1), con PRE-1 (#75) ya mergeado a `master` (PR #79 = `8cc35ab`; housekeeping #80 = `b0bbef8`) y la branch de #73 con `master` integrado (`fd91d66`). **Solo estos cambios; no cambia el diseño, el plan (v1.3.1) ni ninguna decisión del owner.**
+
+| Pedido | Resolución en v1.2.1 | Dónde |
+|---|---|---|
+| **R-12** (regla de proceso de #75) | Nueva **C-13**: los reportes `.txt`, borradores y ediciones de docs con comandos de `sui`/`suiup` se escriben solo con las herramientas de escribir/editar archivos del harness (nunca heredoc ni `sed -i`/`printf`/`echo`); guarda de `~/.sui` al inicio, tras cada reporte/borrador, tras cada génesis y al final; `grep` de rastros sobre cada borrador; ante una ejecución accidental de `sui`, parar y declararlo; remite a `agents.md` §3 paso 8 y a `documents/agentes/AGENTE_DEV.md` ("Reporte de task") | C-13, §R |
+| **Localnet con puerto alternativo** | Nueva **Receta P** (`RPC_URL`, `smoke_guard_pre` solo para el arranque, `smoke_guard` con el RPC exacto, `ss -ltn` filtrado por el puerto 9000 antes de nada, génesis sin `suic`, `sui start --fullnode-rpc-port <puerto>` en segundo plano, recién después `smoke_guard`/`suic`/`publish.mjs`, capturas con `--url "$RPC_URL"`, cierre con el puerto libre); puerto de ejemplo **19000**; la Receta V1 suma `RPC_URL` al `smoke_guard_v1`; C-3 y TASK-1a/1b/4/5/7b/8 la usan; el 9000 del host está ocupado por un servicio ajeno que no se toca | C-3, Receta P, Receta V1, TASK-1a/1b/4/5/7b/8 |
+| **STOP de TASK-8 (navegador en el 9000)** | El navegador de la app sigue fijo en el 9000 (`app/src/sui/networks.ts:11`, issue #77): TASK-8 declara el **STOP para el orquestador** del smoke con navegador (dejar el 9000 libre en esa ventana con autorización del owner, o decidir #77 antes); el DEV no lo improvisa | TASK-8 |
+| **C-2 y §0** | SHA de PRE-1 en `master`: `8cc35ab` (`git merge-base --is-ancestor 8cc35ab HEAD`); §0 actualizado con la línea base medida en PRE-1 (CLI `1.84.0-9dc25070cf2e`, app 1246 tests en 66 archivos, gas de publicar y de las 12 transacciones, Docker de referencia); el DEV de TASK-1a igual la re-mide | C-2, §0 |
 
 ## Cambios de v1.1 a v1.2
 
@@ -42,25 +53,27 @@ Revisión del MAYOR de la v1 (APPROVE CON CAMBIOS: 2 MAJOR, 8 MINOR, 3 SUG): `do
 
 ---
 
-## 0. Baseline de gates verificado (2026-11-19)
+## 0. Baseline de gates verificado (2026-11-20, con PRE-1 mergeado)
 
-Fuente: `documents/STATUS.md` ("Baselines de gates", última medición de código: testnet @ `36068e7` y gates de #8/#14) y el árbol de `master` = `88dd53b` (los commits posteriores a #17 solo tocan `documents/`; `git diff 26f2676..HEAD -- contracts/sources` vacío).
+Fuente: `documents/STATUS.md` ("Baselines de gates", filas de #75: toolchain, localnet aislada y app + deploy-image) y el árbol de la branch de #73 con `master` integrado (`fd91d66`; PRE-1 = PR #79, `8cc35ab`). `git diff 26f2676..HEAD -- contracts/sources` sigue vacío.
 
-| Área | Gate | Baseline (CLI `1.83.0-16d2dc1e05ed`, Node `v26.13.0`) |
+| Área | Gate | Baseline (CLI `1.84.0-9dc25070cf2e`, Node `v26.13.0`, `Move.lock` en el framework de la PV 142) |
 |---|---|---|
 | contracts | `sui move build -e testnet --warnings-are-errors` / `--lint` | 0 warnings / 0 lints |
 | contracts | `sui move test -e testnet --warnings-are-errors` | **83 tests PASS** (26 `house_tests` + 57 `game_tests`); `Move.lock` sin delta |
-| contracts/scripts | `node --test scripts/*.test.mjs` / `node scripts/publish.mjs check` | **104 tests PASS** (51 `deployment.test.mjs` + 53 `publish.test.mjs`) / **1 despliegue(s)** |
-| app | `npm run lint -w app` / `typecheck` / `npm test -w app` | **0 problemas** / **0 errores** / **1156 tests PASS en 65 archivos** |
-| app | `VITE_SUI_NETWORK=testnet npm run build -w app` | `dist/assets/index-B3BeMVQC.js` ≈ 917.80 kB (277.96 kB gzip) |
+| contracts/scripts | `node --test scripts/*.test.mjs` / `node scripts/publish.mjs check` | **104 tests PASS** / **1 despliegue(s)** |
+| app | `npm run lint -w app` / `typecheck` / `npm test -w app` | **0 problemas** / **0 errores** / **1246 tests PASS en 66 archivos** |
+| app | `VITE_SUI_NETWORK=testnet npm run build -w app` | `dist/assets/index-B3BeMVQC.js` ≈ 917.80 kB (277.96 kB gzip), idéntico al de la 1.83.0 |
+| gas (localnet, PV 142) | publicar el paquete y las 12 transacciones de las fixtures | **47246000 MIST** al publicar; las 12 transacciones, **sin cambio** respecto de la 1.83.0 (`GAME_STORAGE_DEPOSIT_MIST` y las mediciones del contrato siguen valiendo) |
+| Docker (referencia) | contenedores / imágenes al terminar `check-deploy-image.sh` | 5 contenedores / 17 imágenes, sin `<none>` residuales: no se toca otra cosa ni se hace `prune` |
 
-**Este baseline es el de la CLI 1.83.0.** PRE-1 lo vuelve a medir con la CLI `1.84.0` y repinea `Move.lock` a un framework ≥ PV 142. **El DEV de TASK-1a arranca midiendo el baseline real sobre la branch de #73 con PRE-1 ya integrado** (gates de `contracts`, `scripts`, `app`) y lo escribe en su reporte (sección "Baseline medido"); ese es el baseline de todos los tasks siguientes (cero delta contra él, salvo los tests nuevos). Si el baseline medido tiene un rojo, se reporta y es STOP antes de seguir.
+**Este es el baseline de referencia que dejó PRE-1 (#75) en STATUS.** **El DEV de TASK-1a igual lo re-mide al arrancar** sobre la branch de #73 (gates de `contracts`, `scripts`, `app`) y lo escribe en su reporte (sección "Baseline medido"); ese medido es el baseline de todos los tasks siguientes (cero delta contra él, salvo los tests nuevos). Si el medido difiere de esta tabla o tiene un rojo, se reporta y es STOP antes de seguir.
 
 ## Reglas comunes del DEV (valen para todos los tasks)
 
 - **C-1 Quién hace qué.** El DEV es el **único** que corre gates y smokes. **No escribe `.md` de reportes:** deja un `.txt` en el scratchpad de la sesión (`<scratchpad>/REPORTE_MULTIGAME_TASK-<M>.txt`, ruta absoluta completa en su respuesta) que el orquestador lee **entero**, pasa por los greps §R-6 y agrega a `documents/REPORTES_MULTIGAME.md`. **Commits, pushes y PRs son del orquestador: el DEV no commitea.** El MID revisa el reporte (no corre gates) y propone el mensaje de commit.
-- **C-2 Orden y dependencias.** Todo task desde TASK-1a depende de **PRE-1 mergeado a `master`** y de la **branch de #73 con `master` integrado por merge** (no rebase), con `Move.lock` repineado a un framework ≥ PV 142 (trae `clock::borrow`, plan H-10). Antes de empezar: `git log --oneline -3` y `git merge-base --is-ancestor <SHA de PRE-1 en master> HEAD`; si PRE-1 no está, **STOP**.
-- **C-3 `sui` y la red.** Toda invocación de `sui` lleva `printf 'n\n' |` delante. Los gates `sui move …` van desde `contracts/` con la forma canónica de `agents.md` §3 (`-e testnet --warnings-are-errors`). Todo smoke usa **la localnet aislada** de `agents.md` §3 ("Localnet aislada (smokes)", pasos 1-7, con `env.sh`, `smoke_guard`, `suic`, `act_as`, `ids.env`, cierre y verificación de `~/.sui/`), **una a la vez**; el binario 1.83.0 se invoca **solo** con la receta V1 (abajo), nunca suelto. **Prohibido:** `sui client`/`sui keytool` contra testnet o sin el prefijo de la localnet aislada, publicar o hacer upgrade en testnet (ni `--dry-run`), faucet, `new-address`, `--force-regenesis`, `sui start` a secas, `pkill`. `~/.sui/` queda sin claves: solo `stat`/`ls` de la línea base y del cierre, nunca `cat`. Nada de `<SMOKE_DIR>/net` se lee ni se pega (`agents.md` §3, paso 6).
+- **C-2 Orden y dependencias.** Todo task desde TASK-1a depende de **PRE-1 mergeado a `master`** y de la **branch de #73 con `master` integrado por merge** (no rebase), con `Move.lock` repineado a un framework ≥ PV 142 (trae `clock::borrow`, plan H-10). PRE-1 (#75) ya está mergeado: PR #79 = **`8cc35ab`** en `master` (housekeeping #80 = `b0bbef8`) y la branch de #73 lo integra desde `fd91d66`. Antes de empezar: `git log --oneline -3` y `git merge-base --is-ancestor 8cc35ab HEAD` (debe salir con estado 0); si no, **STOP**.
+- **C-3 `sui` y la red.** Toda invocación de `sui` lleva `printf 'n\n' |` delante. Los gates `sui move …` van desde `contracts/` con la forma canónica de `agents.md` §3 (`-e testnet --warnings-are-errors`). Todo smoke usa **la localnet aislada** de `agents.md` §3 ("Localnet aislada (smokes)", pasos 1-8, con `env.sh`, `RPC_URL`, `smoke_guard_pre`, `smoke_guard`, `suic`, `act_as`, `ids.env`, cierre y verificación de `~/.sui/`), **una a la vez**, **con el puerto alternativo de la Receta P** (el 9000 del host lo ocupa un servicio ajeno que no se toca); el binario 1.83.0 se invoca **solo** con la Receta V1 (abajo), nunca suelto. **Prohibido:** `sui client`/`sui keytool` contra testnet o sin el prefijo de la localnet aislada, publicar o hacer upgrade en testnet (ni `--dry-run`), faucet, `new-address`, `--force-regenesis`, `sui start` a secas, `pkill`. `~/.sui/` queda sin claves: solo `stat`/`ls` de la línea base y del cierre, nunca `cat`. Nada de `<SMOKE_DIR>/net` se lee ni se pega (`agents.md` §3, paso 6).
 - **C-4 Testnet.** Solo lecturas públicas sin claves (GraphQL `https://graphql.testnet.sui.io/graphql` o gRPC público). Nunca la clave del owner.
 - **C-5 Navegador y Docker.** Chrome solo headless con perfil desechable en `<SMOKE_DIR>` (`agents.md` §3, "Pasos de navegador"); nunca el del usuario. Docker: no tocar otros contenedores ni hacer `prune`.
 - **C-6 Repo público.** Ninguna dirección de cuenta (completa ni abreviada), clave, frase ni ruta personal en nada commiteable (código, fixtures, tests, output pegado en el reporte): usar `<repo>`, `<HOME real>`, `<SMOKE_DIR>`, `<scratchpad>`. Los IDs de paquete/objeto y los digests públicos sí. Las fixtures de localnet traen direcciones **efímeras** de una génesis desechable (sin claves), como las existentes (`contracts/README.md`, "Lectura desde la app"). Los tests Move usan direcciones de prueba cortas (`@0xA`…).
@@ -70,6 +83,18 @@ Fuente: `documents/STATUS.md` ("Baselines de gates", última medición de códig
 - **C-10 Estándares.** Se trabaja contra `documents/ESTANDARES.md` (ARQ/SEG/LIM/PROY): `///` en toda función/struct pública (LIM-7), constantes nombradas (LIM-6), un abort code por condición (LIM-8), sin código muerto ni debug (LIM-3, LIM-4), tests con nombre = comportamiento (LIM-11), montos `bigint` (PROY-12). Fuentes Move con la cabecera `// Copyright (c) 2025-2026 sdelvalle57` + `// SPDX-License-Identifier: Apache-2.0` (D-20261030-14, también `tests/`).
 - **C-11 Mensajes de commit** (los propone el MID; el orquestador commitea): `<área>: <imperativo> (#73)`. **Nunca** `Closes/Fixes/Resolves #N` en commits ni PRs hasta el PR final (los cierra el orquestador con la decisión del owner).
 - **C-12 Inicio de sesión.** `git status` limpio, rama correcta, `agents.md`, `documents/STATUS.md`, `documents/DECISIONES.md` (D-20261119-05), `documents/ESTANDARES.md`, `documents/PLAN_MULTIGAME.md` y este archivo leídos; baseline medido (§0) antes de tocar nada.
+- **C-13 Cómo se escriben los reportes (R-12, #75).** Los reportes `.txt`, los borradores y las ediciones de docs con comandos de `sui` o `suiup` se escriben **solo con las herramientas de escribir/editar archivos** del harness. **Nunca** con un heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo` para texto que contenga `sui`, `suiup` o acentos graves: un heredoc sin comillas ejecutó por sustitución de comandos un `sui start` a secas con el HOME real en TASK-2a de #75 (lo contuvo solo que `~/.sui/sui_config/` no estaba vacío). **Guarda de `~/.sui`** (`stat -c '%y %s %n'` y `ls -la` de `<HOME real>/.sui/sui_config/` y `sha256sum` de `client.yaml`, **nunca `cat`**; del hash alcanzan los primeros 12 hex o "igual a la línea base"): se corre **al inicio, después de escribir cada reporte o borrador, después de cerrar cada génesis y al final**. Sobre **cada borrador**: `grep -c 'command not found'` (debe dar 0) y `/usr/bin/grep -nE 'Cannot run genesis|sui_config|Address already in use'` (rastros de una ejecución accidental). **Ante cualquier ejecución accidental de `sui`: parar, verificar `~/.sui/` y declararlo en el reporte.** Detalle: `agents.md` §3, paso 8, y `documents/agentes/AGENTE_DEV.md` ("Reporte de task").
+
+## Receta P: localnet aislada con puerto alternativo (vale para todo smoke de este handoff; fuente: `agents.md` §3 vigente)
+
+El **9000 del host lo ocupa un servicio de otro proyecto**: no se toca (ni se nombra en nada commiteable). Los smokes corren en otro puerto libre; el ejemplo de este handoff es **19000** (`<puerto>`).
+
+1. **Antes de nada:** `ss -ltn` filtrando el puerto 9000 (para ver que está ocupado y no tocarlo) y `ss -ltn` filtrando `<puerto>` con conteo 0 (libre).
+2. **`env.sh`** de `agents.md` §3 con `RPC_URL=http://127.0.0.1:<puerto>`, `smoke_guard_pre` (solo para el arranque: lee únicamente el config aislado, sin red) y `smoke_guard` (además exige que el RPC del env activo sea **exactamente** `$RPC_URL`), `suic` y `act_as`. Con otro puerto, `smoke_guard` falla (`GUARD-FAIL`) hasta que `sui start` reescribe el alias `localnet` del config aislado; así nunca se le habla al servicio del 9000.
+3. **Génesis sin ningún `suic`** → **`sui start` con `--fullnode-rpc-port <puerto>`** como comando en segundo plano del harness: `. <SMOKE_DIR>/env.sh && smoke_guard_pre && echo $$ > "$SMOKE_DIR/sui.pid" && exec "$SUI" start --network.config "$SUI_CONFIG_DIR" --fullnode-rpc-port <puerto> > "$SMOKE_DIR/sui-start.log" 2>&1` (nunca `nohup … &`) → **recién después** `smoke_guard`, `suic` y `publish.mjs`. Cualquier `suic` anterior iría al 9000.
+4. **Capturas de `app/scripts/capture-*.mjs` siempre con `--url "$RPC_URL"`**: la guarda (`localnet-guard.mjs`) acepta solo `http://127.0.0.1:<puerto>` (loopback, 1024-65535; por defecto el 9000). **Nunca una captura sin `--url` con el 9000 ocupado.** Las sondas de `SuiGrpcClient` también usan `$RPC_URL`.
+5. **Cierre** (`agents.md` §3, paso 7): `kill` por PID, `kill -0` falla, `~/.sui/` idéntico a la línea base, y con el puerto alternativo, `ss -ltn` filtrando `<puerto>` con conteo 0 (queda libre) y el 9000 ajeno **igual que al empezar**. `sui start` sale con 144 ante SIGTERM (esperado).
+6. Toda la receta se escribe y se corre respetando C-13 (R-12).
 
 ## Receta V1: invocar el binario 1.83.0 dentro de la localnet aislada (H-1; vale para TASK-1a, TASK-1b, TASK-5 y el `sui move build` del diff de bytecode)
 
@@ -82,14 +107,17 @@ El v1 del ensayo se publica con el binario **1.83.0** (el que compiló el paquet
    SUI_V1=<ruta absoluta literal del binario 1.83.0 verificado>
    [ -x "$SUI_V1" ] || { echo GUARD-FAIL; return 97; }
    suic_v1() { printf 'n\n' | "$SUI_V1" client "$@"; }
+   # Igual que smoke_guard (Receta P): config aislado, env activo = localnet y su RPC es EXACTAMENTE $RPC_URL
+   # (RPC_URL=http://127.0.0.1:<puerto> ya está definido en el env.sh de la Receta P; ejemplo 19000).
    smoke_guard_v1() {
      [ -f "$SUI_CONFIG_DIR/client.yaml" ] \
        && [ "$(printf 'n\n' | "$SUI_V1" client active-env)" = localnet ] \
+       && [ "$(printf 'n\n' | "$SUI_V1" client --json envs | jq -r '.[1] as $a | .[0][] | select(.alias==$a) | .rpc')" = "$RPC_URL" ] \
        || { echo GUARD-FAIL; return 97; }
    }
    ```
-3. **Prefijo de toda llamada al 1.83.0:** `. <SMOKE_DIR>/env.sh && { . <SMOKE_DIR>/ids.env 2>/dev/null || true; } && smoke_guard && smoke_guard_v1 && suic_v1 …` (o `printf 'n\n' | "$SUI_V1" move build -e testnet …` desde el árbol `<SMOKE_DIR>/v1/contracts`, con el mismo prefijo: `HOME` y `SUI_CONFIG_DIR` aislados, `MOVE_HOME` real para la caché del framework; si la CLI tiene que descargar el framework, se declara). **Nunca** el binario sin el prefijo; un `GUARD-FAIL` detiene el smoke y se reporta.
-4. Si el cliente 1.83.0 no puede hablar con la red levantada por la CLI de PRE-1, se declara con la salida y es **STOP** (no se cambia la CLI de la red por cuenta propia).
+3. **Prefijo de toda llamada al 1.83.0:** `. <SMOKE_DIR>/env.sh && { . <SMOKE_DIR>/ids.env 2>/dev/null || true; } && smoke_guard && smoke_guard_v1 && suic_v1 …` (con la red ya arrancada según la Receta P: el binario 1.83.0, como cualquier `suic`, **nunca** corre antes de `sui start --fullnode-rpc-port <puerto>`) (o `printf 'n\n' | "$SUI_V1" move build -e testnet …` desde el árbol `<SMOKE_DIR>/v1/contracts`, con el mismo prefijo: `HOME` y `SUI_CONFIG_DIR` aislados, `MOVE_HOME` real para la caché del framework; si la CLI tiene que descargar el framework, se declara). **Nunca** el binario sin el prefijo; un `GUARD-FAIL` detiene el smoke y se reporta.
+4. Si el cliente 1.83.0 no puede hablar con la red levantada por la CLI de PRE-1, se declara con la salida y es **STOP** (no se cambia la CLI de la red por cuenta propia). Si el `envs --json` del 1.83.0 no tiene la forma que usa `smoke_guard_v1`, se declara y el guarda usa el equivalente que verifique el RPC **exacto** (nunca se omite esa condición).
 5. El binario y los directorios `dl183`/`bin183` viven en `<SMOKE_DIR>` y se borran al cerrar; el reporte cita los **dos hashes verificados** (son públicos).
 
 ## Decisiones del owner (D1..Dn — **no reabrir**; 2026-11-19, `documents/DECISIONES.md` D-20261119-05)
@@ -246,10 +274,10 @@ Notas: (a) `collect`, `activate_atomic` y `claim_timeout` son las **únicas** fu
 ### 5. Tests obligatorios
 No hay tests nuevos del repo. Las **sondas** son las evidencias V-n (salida pegada, sin direcciones). Los gates solo se corren para el **baseline** y para comprobar que el árbol quedó limpio.
 
-### 6. Smoke (formato FLUJO §6; localnet aislada, `agents.md` §3 + Receta V1)
+### 6. Smoke (formato FLUJO §6; localnet aislada, `agents.md` §3 con la **Receta P** (puerto alternativo, ejemplo 19000) y la Receta V1)
 | # | Acción | Resultado esperado |
 |---|---|---|
-| 1 | Génesis y arranque aislados con la CLI de PRE-1; `smoke_guard` y `smoke_guard_v1` | `chain-identifier` responde; `active-env` = localnet con **ambos** binarios |
+| 1 | Receta P: el puerto 9000 ajeno **no se toca**, `<puerto>` libre; génesis **sin ningún `suic`**; `sui start --fullnode-rpc-port <puerto>` en segundo plano con la CLI de PRE-1; recién después `smoke_guard` y `smoke_guard_v1` (RPC exacto = `$RPC_URL`) | `chain-identifier` responde; `active-env` = localnet con **ambos** binarios y el RPC del env activo es `$RPC_URL` |
 | 2 | V-16: hashes del tgz y del binario 1.83.0 | coinciden con `SUI_TGZ_SHA256` y `SUI_BIN_SHA256` de `88dd53b`; `sui --version` = `1.83.0-16d2dc1e05ed` |
 | 3 | `suic_v1 test-publish` del árbol `26f2676` | éxito; `House`, `HouseCap` y `UpgradeCap` creados; pubfile escrito |
 | 4 | V-2 diff de bytecode | hashes de `house`/`game` iguales, o diff explicado |
@@ -292,10 +320,10 @@ Igual que TASK-1a: se commitea (el orquestador) solo lo que sirva como fixture r
 ### 5. Tests obligatorios
 Ninguno del repo; las sondas son las evidencias V-n.
 
-### 6. Smoke (localnet aislada, `agents.md` §3 + Receta V1)
+### 6. Smoke (localnet aislada, `agents.md` §3 con la **Receta P** y la Receta V1)
 | # | Acción | Resultado esperado |
 |---|---|---|
-| 1 | Génesis, arranque, v1 (1.83.0) y v2 sandbox | como en TASK-1a |
+| 1 | Receta P (puerto alternativo, génesis sin `suic`, `sui start --fullnode-rpc-port <puerto>`), v1 (1.83.0) y v2 sandbox; las sondas de `SuiGrpcClient` y de `ListEvents` usan `$RPC_URL` | como en TASK-1a |
 | 2 | V-3, V-12 con el upgrade v3 sandbox | prefijos = IDs de definición; `typeArguments` con el ID de definición pasa y con el de almacenamiento falla |
 | 3 | V-4 | resultados de filtro con/sin parámetros de tipo, con `emitModule` y límite de términos de la DNF |
 | 4 | V-5 | ID de `MoveAbort.location.package` informado |
@@ -479,7 +507,7 @@ Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-3.txt`; sin commits.
 - Un test explícito de que **ningún test ni código** invoca `upgrade` contra testnet (los tests usan spawns inyectados, como los de `publish`).
 
 ### 6. Smoke (localnet aislada, `agents.md` §3)
-Con el script y el prefijo de la localnet aislada (variante A: salidas dentro de `<SMOKE_DIR>`; después, la **variante B** sin `--out`, comprobando que `contracts/deployments/localnet.json` se escribe con `upgrades` y `typeOrigins` y que el cierre lo borra), el v1 registrado con la receta de TASK-5 paso 1 (`suic_v1 --json test-publish` y `record`; Receta V1) y `upgrade --network localnet --pubfile-path "$SMOKE_DIR/Pub.localnet.toml" --out "$SMOKE_DIR/localnet.json"`: el json resultante pasa `check`, trae `upgrades` y `typeOrigins` reales y no trae direcciones; el `record` de upgrade reproduce el mismo json desde la salida cruda; un reintento con el pubfile viejo falla como en V-10. Cierre y limpieza de `agents.md` §3 (paso 7).
+Con la **Receta P** (puerto alternativo) y el prefijo de la localnet aislada, con el script (variante A: salidas dentro de `<SMOKE_DIR>`; después, la **variante B** sin `--out`, comprobando que `contracts/deployments/localnet.json` se escribe con `upgrades` y `typeOrigins` y que el cierre lo borra), el v1 registrado con la receta de TASK-5 paso 1 (`suic_v1 --json test-publish` y `record`; Receta V1) y `upgrade --network localnet --pubfile-path "$SMOKE_DIR/Pub.localnet.toml" --out "$SMOKE_DIR/localnet.json"`: el json resultante pasa `check`, trae `upgrades` y `typeOrigins` reales y no trae direcciones; el `record` de upgrade reproduce el mismo json desde la salida cruda; un reintento con el pubfile viejo falla como en V-10. Cierre y limpieza de `agents.md` §3 (paso 7).
 
 ### 7. Criterios de aceptación (DoD)
 `node --test scripts/*.test.mjs` y `node scripts/publish.mjs check` en verde (104 + N tests; `check` = "1 despliegue(s)" con el `testnet.json` actual); sin cambios en `contracts/deployments/testnet.json` ni `Published.toml`; el runbook y la tabla de campos documentados; V-6 y V-11 resueltos con evidencia; ningún camino testnet ejecutable por un agente; greps §R-6.
@@ -507,13 +535,13 @@ Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-4.txt` con el output pegad
   5. El sandbox se borra al cerrar; el árbol de trabajo queda sin rastro (DoD).
 
 ### 3. Qué implementar / ejecutar
-1. Localnet aislada (`agents.md` §3), CLI de PRE-1 para la red. **Registrar el v1 (receta única, R2-2; la "variante B" de `agents.md` §3 publica el paquete del worktree y acá el v1 es el árbol `26f2676`):** (a) desde `<SMOKE_DIR>/v1/contracts` (`git archive 26f2676 contracts | tar -x -C <SMOKE_DIR>/v1`), con el prefijo de la Receta V1: `suic_v1 --json test-publish --build-env testnet --pubfile-path "$SMOKE_DIR/Pub.v1.toml" > "$SMOKE_DIR/v1-publish.json"`; (b) desde `<repo>/contracts`: `"$NODE" scripts/publish.mjs record --network localnet --from "$SMOKE_DIR/v1-publish.json" --chain-id <hex corto de la localnet> --source-commit "$(git rev-parse 26f2676)" --sui-cli-version 1.83.0-16d2dc1e05ed --framework-rev <rev de [pinned.testnet.Sui] en `git show 26f2676:contracts/Move.lock`>` **sin `--out`**: escribe `contracts/deployments/localnet.json` (ignorado por git; `record` ya existe, `publish.mjs:764-797`); (c) el upgrade de TASK-4 variante B: `publish.mjs upgrade --network localnet --pubfile-path "$SMOKE_DIR/Pub.v1.toml"`, que **lee** ese `localnet.json` para los campos base. TASK-7b y TASK-8 reusan esta receta.
+1. Localnet aislada (`agents.md` §3) con la **Receta P** (puerto alternativo, ejemplo 19000; génesis sin `suic` y `sui start --fullnode-rpc-port <puerto>` antes de cualquier `suic`/`publish.mjs`), CLI de PRE-1 para la red. **Registrar el v1 (receta única, R2-2; la "variante B" de `agents.md` §3 publica el paquete del worktree y acá el v1 es el árbol `26f2676`):** (a) desde `<SMOKE_DIR>/v1/contracts` (`git archive 26f2676 contracts | tar -x -C <SMOKE_DIR>/v1`), con el prefijo de la Receta V1: `suic_v1 --json test-publish --build-env testnet --pubfile-path "$SMOKE_DIR/Pub.v1.toml" > "$SMOKE_DIR/v1-publish.json"`; (b) desde `<repo>/contracts`: `"$NODE" scripts/publish.mjs record --network localnet --from "$SMOKE_DIR/v1-publish.json" --chain-id <hex corto de la localnet> --source-commit "$(git rev-parse 26f2676)" --sui-cli-version 1.83.0-16d2dc1e05ed --framework-rev <rev de [pinned.testnet.Sui] en `git show 26f2676:contracts/Move.lock`>` **sin `--out`**: escribe `contracts/deployments/localnet.json` (ignorado por git; `record` ya existe, `publish.mjs:764-797`); (c) el upgrade de TASK-4 variante B: `publish.mjs upgrade --network localnet --pubfile-path "$SMOKE_DIR/Pub.v1.toml"`, que **lee** ese `localnet.json` para los campos base. TASK-7b y TASK-8 reusan esta receta.
 2. Con el v1: crear (CLI) partidas del coinflip **viejo**: una abierta, una invitación, una cancelada, una aceptada/resuelta, y una `Pending` que quede para después del upgrade.
 3. Upgrade a la v2 (branch con `duel` y `coinflip`) con **`publish.mjs upgrade`** (TASK-4, variante A y luego B, sobre el `localnet.json` que dejó el paso 1(b)). `check` en verde; `upgrades` y `typeOrigins` reales; comparar con la tabla de orígenes por lectura (CLI o `SuiGrpcClient`).
 4. Tras el upgrade: la `Pending` vieja **se acepta** (desde el ID viejo y desde el nuevo) y otra se **cancela**; el coinflip nuevo: crear abierta e invitación, cancelar, rechazar, aceptar con ambos ganadores (`Random`); `fees_collected` de la **misma** House suma las dos fuentes; `fee_rate` copiado al crear.
 5. **Gasto por resultado (H-3, SEG-5):** de un `accept` del coinflip nuevo **ganado por el creador** y de otro **ganado por el aceptante** (mismo `bet` y `fee_rate`), registrar `gasUsed` (computación, storage y rebate; `suic tx-block <digest>` o `getTransaction` por gRPC) y exigir **cómputo igual** y storage igual (mismo camino); si difieren, es STOP (diferencia observable entre ganar y perder).
 6. **v3 sandbox** (reglas de §2): `testgame` con reloj: partida por turnos hasta resolver con `collect`+`pay`; vencimiento con un pendiente → `claim_timeout` (por un tercero: el pago va al rival); ambos pendientes vencido → `refund_stalled`; un pendiente pasada la gracia del sandbox → `refund_stalled`; `claim_timeout` antes del plazo, `record_move` después del plazo y `collect` de un tercero abortan con el abort esperado; `typeArguments` de las genéricas con IDs de definición de upgrades distintos (V-12).
-7. **Fixtures para la app** (scripts nuevos `app/scripts/capture-duel-*.mjs` bajo `localnet-guard.mjs`, deterministas salvo `_meta.capturedAt`): `contracts/fixtures/duel-reads.localnet.json` y `contracts/fixtures/duel-tx.localnet.json` (producción: objetos `Duel` `Pending`/`Cancelled`/`Resolved` del coinflip nuevo, sus eventos, la tabla de orígenes y las transacciones/simulaciones de crear, cancelar, rechazar y aceptar) y `contracts/fixtures/duel-clock.localnet.json` (**sandbox**: objetos `Active`/`TimedOut`/`Expired` y los eventos `DuelActivated`/`DuelTurn`/`DuelTimedOut`/`DuelExpired`, y las transacciones y aborts de reclamar y reembolsar; con `_meta.sandbox = true` y sus constantes). Direcciones: efímeras de la génesis, por rol (`A`, `B`, `C`, `ADMIN`), sin claves.
+7. **Fixtures para la app** (scripts nuevos `app/scripts/capture-duel-*.mjs` bajo `localnet-guard.mjs`, deterministas salvo `_meta.capturedAt`): `contracts/fixtures/duel-reads.localnet.json` y `contracts/fixtures/duel-tx.localnet.json` (producción: objetos `Duel` `Pending`/`Cancelled`/`Resolved` del coinflip nuevo, sus eventos, la tabla de orígenes y las transacciones/simulaciones de crear, cancelar, rechazar y aceptar) y `contracts/fixtures/duel-clock.localnet.json` (**sandbox**: objetos `Active`/`TimedOut`/`Expired` y los eventos `DuelActivated`/`DuelTurn`/`DuelTimedOut`/`DuelExpired`, y las transacciones y aborts de reclamar y reembolsar; con `_meta.sandbox = true` y sus constantes). Direcciones: efímeras de la génesis, por rol (`A`, `B`, `C`, `ADMIN`), sin claves. **Cada captura se corre con `--url "$RPC_URL"`** (con el 9000 ajeno ocupado, una captura sin `--url` le hablaría a ese servicio: nunca).
 8. Tabla de **resultados** del smoke en el reporte `.txt` (el MID/orquestador la pasan a `documents/SMOKE_MULTIGAME.md`, parte localnet). Cierre de `agents.md` §3 (paso 7).
 
 ### 4. Archivos a tocar / NO tocar
@@ -521,12 +549,12 @@ Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-4.txt` con el output pegad
 - **NO tocar:** `contracts/sources/*`, `contracts/tests/*`, `contracts/deployments/testnet.json`, `Published.toml`, `Move.lock` (si cambia: `git checkout --` y declarar), `app/src/*`.
 
 ### 5. Tests obligatorios
-Los scripts de captura son deterministas (dos capturas consecutivas dan el mismo archivo salvo `_meta.capturedAt`); salen con código 2 ante otra `--url` distinta de `http://127.0.0.1:9000` antes de cualquier pedido (como los existentes). `node --test` sigue en verde.
+Los scripts de captura son deterministas (dos capturas consecutivas dan el mismo archivo salvo `_meta.capturedAt`); salen con código 2 ante una `--url` que no sea `http://127.0.0.1:<puerto>` (loopback, 1024-65535; por defecto el 9000) antes de cualquier pedido (la guarda de PRE-1, `localnet-guard.mjs`, como las existentes). `node --test` sigue en verde.
 
 ### 6. Smoke (formato FLUJO §6; resultados en el reporte)
 | # | Acción | Resultado esperado |
 |---|---|---|
-| 1 | Génesis, arranque, `smoke_guard` y `smoke_guard_v1`; v1 con 1.83.0 (Receta V1) | publicado; `House` con comisión vigente fijada |
+| 1 | Receta P (puerto alternativo, génesis sin `suic`, `sui start --fullnode-rpc-port <puerto>`), luego `smoke_guard` y `smoke_guard_v1`; v1 con 1.83.0 (Receta V1) | publicado; `House` con comisión vigente fijada |
 | 2 | Partidas viejas creadas (abierta, invitación, cancelada, resuelta, `Pending`) | estados esperados en los objetos |
 | 3 | `publish.mjs upgrade` (variantes A y B) + `check` | exit 0; `packageVersion` 2; `upgrades`/`typeOrigins` reales; `House` intacta (`version` 1, `fee_rate` y `fees_collected` iguales) |
 | 4 | `Pending` vieja aceptada y otra cancelada tras el upgrade | éxito; fondos conservados |
@@ -615,7 +643,7 @@ Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-7a.txt` con el output pega
 Builders (targets con `packageId`, `typeArguments` con `definingId`, `Random` último en aceptar, `claim_timeout` con la House, validación de entradas, un `typeArguments` con IDs de upgrades distintos); DNF del lobby con varios términos y despacho por tipo; filtro por juego; "Mis partidas" con las dos fuentes; claves de consulta e invalidación para `claim`/`refundStalled`; el control de tiempo de cada fila (con la regla de formato).
 
 ### 6. Smoke 🧪
-Con la localnet aislada del TASK-5 reconstruida (v1 registrado y `upgrade` variante B con la receta de TASK-5 paso 1), una sonda de **solo lectura** por gRPC (`SuiGrpcClient`, sin claves): el lobby con las dos fuentes devuelve las partidas esperadas y los tipos parseados coinciden con `typeOrigins`; recaptura de las fixtures de `sui/` si cambia el layout (determinismo: solo `capturedAt`). Cierre de `agents.md` §3.
+Con la localnet aislada del TASK-5 reconstruida con la **Receta P** (puerto alternativo; v1 registrado y `upgrade` variante B con la receta de TASK-5 paso 1), una sonda de **solo lectura** por gRPC (`SuiGrpcClient`, sin claves): el lobby con las dos fuentes devuelve las partidas esperadas y los tipos parseados coinciden con `typeOrigins`; recaptura de las fixtures de `sui/` si cambia el layout (determinismo: solo `capturedAt`). Cierre de `agents.md` §3.
 
 ### 7. Criterios de aceptación (DoD)
 Los gates de TASK-7a (más los tests nuevos: 0 fallos) y `git status --porcelain --untracked-files=all` solo con los archivos del task; builders con `Random` último; ningún componente arma tags ni targets; sin dependencias nuevas; `app/README.md` y `agents.md` §5 coherentes; el control de líneas agregadas del sandbox (TASK-5 §7) en 0; greps §R-6.
@@ -653,9 +681,12 @@ Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-7b.txt` con el output pega
 Lobby: fila con control, rótulo y filtro por juego; formulario: 7 controles solo con reloj y control 0 en el coinflip, sin selector de juego con un solo creable; vista activa: turno, cuenta regresiva (reloj inyectable, ARQ-3), botón de reclamar solo vencido y para un pendiente, botón de reembolsar con ambos pendientes o tras la gracia, sin botón de jugar vencido; detalle de los tres terminales; `claim`/`refundStalled` por la máquina (candado, "sin confirmar", invalidación); el candado y el "sin confirmar" se comportan igual con un `Duel`; accesibilidad básica de los controles nuevos (rol y nombre).
 
 ### 6. Smoke 🧪🌐 (localnet aislada + Chrome headless con perfil desechable, `agents.md` §3)
+
+> **STOP de TASK-8 para el orquestador (no se improvisa):** la app en el navegador tiene el RPC de localnet **fijo en el 9000** (`app/src/sui/networks.ts:11`, issue #77) y el 9000 del host lo ocupa un servicio ajeno que no se toca. Con la localnet en el puerto alternativo (Receta P) el navegador **no la alcanza**. Antes del smoke con navegador el orquestador decide **con evidencia** (el DEV pide la decisión y no avanza en los pasos 🌐 hasta recibirla): (a) el owner **libera el 9000 en esa ventana, con autorización explícita**, y esa corrida usa el 9000 por defecto (sin `--fullnode-rpc-port`, `RPC_URL=http://127.0.0.1:9000`); (b) se **decide #77 antes** (puerto del RPC de localnet configurable en la app) y recién entonces el smoke corre con el puerto alternativo; (c) se **difiere** el smoke con navegador, declarado en el reporte, con la cobertura de componentes en Vitest. Lo que **no** necesita navegador (gates, tests, localnet, `upgrade` variante B, lecturas por `SuiGrpcClient` con `$RPC_URL`) se hace igual con la Receta P.
+
 | # | Acción | Resultado esperado |
 |---|---|---|
-| 1 | Localnet aislada + v1 registrado y **`upgrade` variante B** con la **receta de TASK-5 paso 1** (`record` sin `--out` deja `contracts/deployments/localnet.json`; `upgrade` lo lee y lo reescribe; TASK-4); `npm run dev -w app` con `VITE_SUI_NETWORK=localnet` y la burner del kit | `localnet · nodo OK` |
+| 1 | Localnet aislada (Receta P, o el 9000 si la decisión del STOP fue (a)) + v1 registrado y **`upgrade` variante B** con la **receta de TASK-5 paso 1** (`record` sin `--out` deja `contracts/deployments/localnet.json`; `upgrade` lo lee y lo reescribe; TASK-4); `npm run dev -w app` con `VITE_SUI_NETWORK=localnet` y la burner del kit | `localnet · nodo OK` |
 | 2 | Lobby con partidas viejas y nuevas | filas con rótulo "anterior"/"nueva" y el control de tiempo; filtro "Todos"/"Coinflip" |
 | 3 | Crear un coinflip nuevo | sin selector de juego ni de control; aparece en el lobby con "sin reloj" |
 | 4 | Aceptar desde otra cuenta; ver el resultado | `Resolved`; "Resultado para ti"; candado y estado "Actualizando datos…" como siempre |
@@ -663,13 +694,13 @@ Lobby: fila con control, rótulo y filtro por juego; formulario: 7 controles sol
 | 6 | "Mis partidas" | las dos fuentes y las invitaciones |
 | 7 | (opcional, H-13) parche **en una copia del repo dentro de `<SMOKE_DIR>`** (`git archive HEAD | tar -x -C <SMOKE_DIR>/web`, el diff de TASK-8 aplicado con `patch -p1`, y ahí el registro del juego sandbox `testgame` de TASK-5), **nunca en el worktree ni con `git stash`** | vista activa con turno y plazo; "Reclamar victoria" tras el vencimiento; la copia se borra al cerrar |
 | 8 | Consola | 0 violaciones de CSP; sin errores rojos nuevos |
-| 9 | Cierre (`agents.md` §3, paso 7, incluido Chrome) | línea base de `~/.sui/` y `git status` sin entradas |
+| 9 | Cierre (`agents.md` §3, paso 7, incluido Chrome; con puerto alternativo, `<puerto>` libre y el 9000 ajeno como estaba; si se liberó el 9000 por autorización del owner, restituido como estaba al empezar) | línea base de `~/.sui/` y `git status` sin entradas |
 
 ### 7. Criterios de aceptación (DoD)
-Gates de app completos como en TASK-7a/7b (más los tests nuevos) con el build de testnet válido con el `testnet.json` actual; smoke en PASA (el 7 es opcional y se declara); candado y "sin confirmar" sin regresión; **docs del DEV actualizados** (`contracts/README.md`, `app/README.md`, `agents.md`) y, en el reporte, los cambios de `ESTANDARES.md` redactados y el snippet de STATUS (el orquestador los aplica); sin cambios visuales de #72; `git diff --exit-code` sobre lo que no es del task, `git stash list` vacío y el control de líneas agregadas del sandbox (TASK-5 §7) en 0; greps §R-6.
+Gates de app completos como en TASK-7a/7b (más los tests nuevos) con el build de testnet válido con el `testnet.json` actual; smoke en PASA (el 7 es opcional y se declara; los pasos 🌐 según la decisión del STOP de TASK-8); candado y "sin confirmar" sin regresión; **docs del DEV actualizados** (`contracts/README.md`, `app/README.md`, `agents.md`) y, en el reporte, los cambios de `ESTANDARES.md` redactados y el snippet de STATUS (el orquestador los aplica); sin cambios visuales de #72; `git diff --exit-code` sobre lo que no es del task, `git stash list` vacío y el control de líneas agregadas del sandbox (TASK-5 §7) en 0; greps §R-6.
 
 ### 8. Al terminar
-Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-8.txt` con output pegado, resultados del smoke y la lista de docs tocados; sin commits.
+Reporte (§R) en `<scratchpad>/REPORTE_MULTIGAME_TASK-8.txt` con output pegado, resultados del smoke (con la decisión del STOP de TASK-8 y cómo se resolvió el navegador) y la lista de docs tocados; sin commits.
 
 ---
 
@@ -723,7 +754,8 @@ Archivo `.txt` en el scratchpad (ruta absoluta completa en la respuesta del DEV)
 ### Desviaciones del handoff (o "ninguna")
 ### Riesgos / pendientes (o "ninguno")
 ### §R-6: los 4 greps sobre el diff y sobre este reporte, con la clasificación de cada coincidencia
-### Cierre de la localnet (si hubo): kill por PID, ~/.sui/ idéntico a la línea base, git status sin entradas
+### Cierre de la localnet (si hubo): kill por PID, ~/.sui/ idéntico a la línea base, git status sin entradas, <puerto> libre y el 9000 ajeno como estaba
+### Guarda de ~/.sui (C-13, R-12): stat/ls/primeros 12 hex del sha256sum de client.yaml al inicio, tras cada reporte/borrador, tras cada génesis y al final (igual a la línea base); grep -c 'command not found' = 0 y grep de rastros ('Cannot run genesis|sui_config|Address already in use') vacío sobre cada borrador; ejecución accidental de sui: "ninguna" o declarada
 
 ### Documentación
 - READMEs / agents.md actualizados: sí / no aplica (obligatorio si cambió arquitectura, layout, comandos, contrato o tests — PROY-20)
