@@ -1,6 +1,8 @@
 # REPORTES_MULTIGAME
 
 > Reportes de los DEV y revisiones del MID de #73 (plataforma multijuego), en orden. Los reportes `.txt` del DEV se transcriben **sin editar** (el orquestador los lee enteros y corre los greps §R-6 antes de agregarlos); las revisiones del MID van tal cual. Plan: `documents/PLAN_MULTIGAME.md`; handoff: `documents/HANDOFF_MULTIGAME.md`. Estos archivos se borran en el housekeeping al cerrar el ciclo (siguen en el historial de git).
+>
+> **Sustituciones declaradas** (las únicas ediciones de los textos): la ruta absoluta del scratchpad de la sesión, que codifica el nombre de usuario del host, se reemplaza por `<scratchpad>` (desde TASK-4); los nombres de contenedores de Docker de **otros proyectos o sesiones del host** que algunos anexos de `docker ps` pegaron se reemplazan por `<contenedor de otro proyecto o sesión>` (P-1 de la revisión del MAYOR de #77: no se nombran proyectos ajenos en lo que se commitea); y el nombre de usuario del sistema que mostraban los `ls -la` de la guarda de `~/.sui` en los reportes de TASK-7b, 8a y 8b se enmascara como `<user>` en todo el archivo (N-2 de la revisión del MID de TASK-8b; los reportes ya publicados en commits anteriores de esta branch lo traían sin enmascarar).
 
 
 ---
@@ -693,7 +695,7 @@ Diff del worktree: vacio (git status y git diff --stat sin entradas): los 4 grep
 - sui-start.log: 0 lineas (0 coincidencias de panic, de puerto en uso ni de ERROR). rm -rf <SMOKE_DIR> verificado (test ! -e <SMOKE_DIR> -> existe=no): se borraron la genesis (con las claves desechables), los arboles v1, v1c, v2, v3, v4a, v4b, v4c, v5 y sbx, el binario 1.83.0 (bin183/dl183), las sondas, los pubfiles y todo el output.
 - rm -f contracts/deployments/localnet.json (nunca se creo); test ! -e contracts/deployments/localnet.json -> 0; ! compgen -G 'contracts/Pub.*.toml' -> 0.
 - git status --porcelain --untracked-files=all -> 0 lineas; git diff --stat -> vacio; git diff --exit-code -- contracts/Move.lock contracts/Published.toml contracts/sources contracts/tests contracts/deployments app .github -> exit 0.
-- Docker: antes (al empezar) docker ps -aq | wc -l = 5, docker images -aq | wc -l = 17. Despues: contenedores 6, imagenes 17, 0 imagenes <none>. El contenedor extra es pg-smoke-189, creado a las 01:13 (-0500) durante la corrida y "Up" a la hora del cierre; NO lo creo esta tarea (esta sesion no ejecuto ningun docker run ni compose; solo docker ps/images de lectura): otra sesion o proyecto del host. No se toco. Los otros 5 son los de antes.
+- Docker: antes (al empezar) docker ps -aq | wc -l = 5, docker images -aq | wc -l = 17. Despues: contenedores 6, imagenes 17, 0 imagenes <none>. El contenedor extra es <contenedor de otro proyecto o sesión>, creado a las 01:13 (-0500) durante la corrida y "Up" a la hora del cierre; NO lo creo esta tarea (esta sesion no ejecuto ningun docker run ni compose; solo docker ps/images de lectura): otra sesion o proyecto del host. No se toco. Los otros 5 son los de antes.
 
 ### Guarda de ~/.sui (C-13, R-12)
 - Inicio: stat -c '%y %s %n' del client.yaml de la carpeta de config del usuario (<HOME real>/.sui/...) ->2026-10-30 17:52:52.515735237 -0500 244; ls -la de la carpeta: solo client.yaml; sha256sum de client.yaml = ef12fd09615f (primeros 12 hex) = linea base.
@@ -1075,7 +1077,7 @@ Limpieza: `contracts/build` (ignorado) y las copias `<scratchpad>/probe` y `<scr
 - `grep -c 'command not found'` sobre el reporte y sobre las salidas auxiliares: ver sección "Greps del reporte". Ejecución accidental de `sui`: **ninguna**.
 
 ### Docker
-- Antes (al arrancar): `docker ps -aq | wc -l` = **6**, `docker images -aq | wc -l` = **17**. Referencia del handoff: 5 contenedores / 17 imágenes; el contenedor de más es un `postgres:17` efímero (`pg-smoke-*`, "Up 22 minutes" al arrancar) de otra sesión del host, no mío.
+- Antes (al arrancar): `docker ps -aq | wc -l` = **6**, `docker images -aq | wc -l` = **17**. Referencia del handoff: 5 contenedores / 17 imágenes; el contenedor de más es un `postgres:17` efímero (`<contenedor de otro proyecto o sesión>`, "Up 22 minutes" al arrancar) de otra sesión del host, no mío.
 - Después (a mitad y al final): 6 / 17. Sin diferencias atribuibles a mí; no toqué ningún contenedor ni imagen, ni hice `prune`.
 
 ### Documentación
@@ -7461,9 +7463,9 @@ Líneas agregadas de `contracts/sources` y `app/src` contra el merge-base con `m
 $ bash -c stat -c '%y %s %n' <HOME real>/.sui/sui_config/client.yaml; ls -la <HOME real>/.sui/sui_config/; sha256sum <HOME real>/.sui/sui_config/client.yaml | cut -c1-12
 2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
 total 12
-drwx------ 2 santiago santiago 4096 Oct 30 16:04 .
-drwx------ 3 santiago santiago 4096 Oct 30 16:04 ..
--rw-rw-r-- 1 santiago santiago  244 Oct 30 17:52 client.yaml
+drwx------ 2 <user> <user> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <user> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <user>  244 Oct 30 17:52 client.yaml
 ef12fd09615f
 exit=0
 --- anexo A01_ss.txt
@@ -7496,9 +7498,9 @@ exit=0
 $ bash -c stat -c '%y %s %n' <HOME real>/.sui/sui_config/client.yaml; ls -la <HOME real>/.sui/sui_config/; sha256sum <HOME real>/.sui/sui_config/client.yaml | cut -c1-12
 2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
 total 12
-drwx------ 2 santiago santiago 4096 Oct 30 16:04 .
-drwx------ 3 santiago santiago 4096 Oct 30 16:04 ..
--rw-rw-r-- 1 santiago santiago  244 Oct 30 17:52 client.yaml
+drwx------ 2 <user> <user> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <user> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <user>  244 Oct 30 17:52 client.yaml
 ef12fd09615f
 exit=0
 --- anexo A05_chain.txt
@@ -7861,9 +7863,9 @@ exit=0
 $ bash -c stat -c '%y %s %n' <HOME real>/.sui/sui_config/client.yaml; ls -la <HOME real>/.sui/sui_config/; sha256sum <HOME real>/.sui/sui_config/client.yaml | cut -c1-12; echo libre19000=$(ss -ltn | grep -c ':19000 '); ss -ltn | grep ':9000 '; echo docker_ps=$(docker ps -aq | wc -l) docker_images=$(docker images -aq | wc -l); cd <repo>; test ! -e contracts/deployments/localnet.json; echo sin_localnet_json=$?; ! compgen -G 'contracts/Pub.*.toml'; echo sin_Pub=$?; git diff --exit-code -- contracts/Move.lock contracts/Published.toml; echo lock_pub=$?
 2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
 total 12
-drwx------ 2 santiago santiago 4096 Oct 30 16:04 .
-drwx------ 3 santiago santiago 4096 Oct 30 16:04 ..
--rw-rw-r-- 1 santiago santiago  244 Oct 30 17:52 client.yaml
+drwx------ 2 <user> <user> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <user> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <user>  244 Oct 30 17:52 client.yaml
 ef12fd09615f
 libre19000=0
 LISTEN 0      4096              0.0.0.0:9000       0.0.0.0:*   
@@ -7939,9 +7941,9 @@ Al ARMAR este reporte usé dos veces `echo` en el shell para agregar a mano un r
 $ bash -c stat -c '%y %s %n' <HOME real>/.sui/sui_config/client.yaml; ls -la <HOME real>/.sui/sui_config/; sha256sum <HOME real>/.sui/sui_config/client.yaml | cut -c1-12; cd <HOME real>/Projects/Battleship-issue73 && git status --porcelain --untracked-files=all | wc -l
 2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/sui_config/client.yaml
 total 12
-drwx------ 2 santiago santiago 4096 Oct 30 16:04 .
-drwx------ 3 santiago santiago 4096 Oct 30 16:04 ..
--rw-rw-r-- 1 santiago santiago  244 Oct 30 17:52 client.yaml
+drwx------ 2 <user> <user> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <user> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <user>  244 Oct 30 17:52 client.yaml
 ef12fd09615f
 27
 exit=0
@@ -9315,4 +9317,1491 @@ Hecha sobre el árbol sin commitear (HEAD `d674316`) cuando el DEV entregó el r
 **Aplicado por el orquestador antes del commit de estándares:** `ESTANDARES.md` v1.9 con los cambios del borrador del DEV y la corrección de ARQ-1 que pidió el MID (los hooks sí pueden importar `@mysten/sui` según `app/eslint.config.js`; lo que ni componentes ni hooks hacen es armar targets, tags de tipo o `typeArguments`), PROY-5 con la regla completa (tras el comando con `Random` solo `TransferObjects` y `MergeCoins`; un `splitCoins` antes es válido) y PROY-10 con un puntero a la restricción (d) sin duplicarla; `DECISIONES.md` con **D-20261120-01** (redactada por el MID: aplicación documental de D-20261119-05, sin decisión nueva del owner y sin autorizar publicar ni upgradear).
 
 **Pendientes que no entran en estos commits:** el handoff v1.2.11 (permisos aditivos de 8b: `sui/createGame.ts` con el depósito del `Duel`, retiro de `fetchGame` y `allSections`, los `case` de `claim`/`refundStalled` en `GameActions` y `HouseAdminPanel`, y la línea del depósito en `contracts/README.md`; C-13 también prohíbe el heredoc vacío o a `/dev/null` y `: > /dev/null`), que escribe el MID y se commitea aparte; y la revisión del MAYOR de `ESTANDARES.md` v1.9 y de D-20261120-01 en la integración.
+
+
+
+---
+
+## 30. TASK-8b (reporte del DEV)
+
+> DEV, TASK-8b: UI de las dos fuentes, reloj por jugada, acciones de tiempo y estándar de UX, con smoke con navegador (la ruta del scratchpad sustituida por <scratchpad> y el nombre de usuario por <user>; el anexo N-4 trae los conteos vigentes: 2138 tests en 97 archivos).
+
+~~~~text
+## Task completado: HANDOFF_MULTIGAME — TASK-8b (UI de las dos fuentes de coinflip, reloj por jugada y acciones de tiempo, con el estándar de UX; smoke 🧪🌐)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-73-multigame` sobre `0ec278a` (handoff v1.2.12), árbol de trabajo del DEV **sin commitear** (54 entradas: 23 modificadas, 1 borrada, 30 nuevas; anexo F01). `git merge-base --is-ancestor 8cc35ab HEAD` = 0 (anexo A01). `git stash list` vacío.
+
+### Baseline medido y árbol de partida
+Árbol limpio, rama correcta. Medido **antes de tocar nada** (anexo B01) y coincide con el del orquestador: `npm run lint -w app` 0, `typecheck` 0, `npm test -w app` **1921 tests en 79 archivos**, build de testnet `index-r1qeKkDU.js` **942.24 kB (284.67 kB gzip)**, `node --test scripts/*.test.mjs` = **173**. Docker (solo conteo): 8 contenedores / 53 imágenes al arrancar; 7 / 55 al armar la localnet y **7 / 55 al cerrar**: la diferencia con el arranque la causan otras sesiones del host (no lancé ni toqué ningún contenedor; no se nombra nada ajeno).
+
+### Qué se implementó (resumen)
+- **Lobby y formulario:** con la fuente nueva en el registro, el lobby suma el **filtro por juego** ("Todos" por defecto, cantidad visible), el rótulo "anterior"/"nueva" y el control de tiempo por fila, como **texto**; el formulario usa la nota de costo del **depósito de la fuente a la que va "crear"** (selector puro `storageDepositFor`; con `legacy` el texto es idéntico), el selector de juego solo con más de uno creable y, para un juego **con reloj**, los 7 controles (`fieldset`/`legend`/radios). Con el `testnet.json` actual (`packageVersion` 1) todo se ve como hoy.
+- **Vista activa, reloj y acciones de tiempo:** resumen `GameStatus` (estado → turno → tiempo → qué sigue, sin jerga), `Countdown` con **un solo intervalo inyectable** sobre un reloj de pantalla con la **hora de la cadena** como referencia, `TimeoutActions` ("Reclamar victoria" / "Reembolsar") por la misma máquina de 8a (`useClaimTimeout`/`useRefundStalled`: candado y "sin confirmar"), con lo que pasará con los fondos y el motivo de cada botón deshabilitado a la vista.
+- **Detalle de terminales y resultados adoptados:** `Resolved`, `TimedOut` ("Ganó por tiempo") y `Expired` ("Nadie movió a tiempo: cada jugador recuperó su apuesta") por la variante del objeto, en el detalle, la etiqueta y el `.my-game-result` de "Mis partidas"; los `case 'claim'`/`'refundStalled'` de `adoptedStatus` ya tienen texto (el de `HouseAdminPanel` sigue en `null`).
+- **Retiro de lo provisorio:** `components/stateText.ts` borrado, `fetchGame` (con su `describe`) y `allSections` (con las aserciones de 7b, que pasan a `sections`) retirados.
+
+### Archivos (anexo F01: `git status --porcelain --untracked-files=all` y `git diff --stat`)
+**Código nuevo** (`app/src`): `hooks/{screenClock,screenClockContext,useChainNow,useChainClockSampling,useGameCatalog}.ts`, `components/{Countdown,GameStatus,TimeoutActions,ChainClockSampler}.tsx`, `components/{deadlineFormat,gameTexts}.ts`, y el harness `test/{clockHarness.tsx,duelRows.ts}`. **Modificados:** `components/{CreateGameForm,GameActions,GameDetail,LobbyList,MyGamesSection}.tsx`, `pages/{GameDetailPage,MyGamesPage}.tsx`, `hooks/{queryKeys,useLobby,useMyGames}.ts`, `sui/{createGame,gameDetail}.ts` (permisos 1 y 2), `index.css` (permiso 5, 55 líneas agregadas, 0 borradas). **Borrado:** `components/stateText.ts`. **Docs:** `app/README.md`, `agents.md` (§8 y §9), `contracts/README.md` (**una** línea, 1/0). **Tests:** 17 archivos nuevos (213 tests) y los modificados listados abajo.
+
+### Qué se hizo por archivo y decisiones declaradas
+- `hooks/screenClock.ts` (+ `screenClockContext.ts`, `useChainNow.ts`, `useChainClockSampling.ts`): el **reloj de pantalla** (UX-3, ARQ-3, PROY-14). `createScreenClock({ now, setIntervalFn, clearIntervalFn })`: un solo intervalo compartido (se crea con el primer suscriptor, se limpia con el último), **monótono** (se conserva el mayor desfase observado entre la cadena y la hora local: cada muestra llega con la edad de su checkpoint, así que el mayor es el más fresco) y de dos velocidades (`live` 1 s; `coarse` 1 min cuando solo quedan plazos vencidos, para que "venció hace N min" siga avanzando). `useDeadlinePhase`/`useChainNow` se suscriben con un **selector**: quien usa la fase solo se renderiza al cambiar de fase. La hora de la cadena sale del estado del nodo (misma clave que el indicador de red, sin pedidos de más: altura del último checkpoint) y `fetchCheckpointTime`; la muestra se anota **dentro del `queryFn`**, nunca en un efecto (PROY-14). Sin muestra: "calculando el tiempo restante…", nunca un tiempo inventado con la hora local. `ChainClockSampler` lo monta **una vez por página** y solo si hay una partida activa con reloj (no por fila: evita sumar observadores con `refetchInterval`). `queryKeys.chainClock` es una clave propia (permiso 6: hook fino).
+- `components/deadlineFormat.ts`: función pura (UX-2), tabla de casos en su test (0 ms, 999 ms, 59 s, 60 s, 1 h, 24 h, 7 días, negativo y más). Decisión: lo vencido se escribe sin segundos desde el minuto ("venció hace 5 min") y el último segundo se redondea hacia arriba (nunca "0 s" con tiempo por delante); en el instante exacto, "venció ahora".
+- `components/gameTexts.ts`: **un solo módulo de textos** (UX-6): verbos, estados, turno, "qué sigue" por estado × cuenta × fase, textos de fondos y de motivos, resultados adoptados. `Countdown` (`role="timer"`, `aria-live="off"`, `<time dateTime>` y `title`, clase `clock-counter`), `GameStatus` (región `role="status"` vacía hasta que vence el plazo: anuncia **una vez**, UX-4) y `TimeoutActions`.
+- `components/TimeoutActions.tsx`: reclamar (solo si no deben mover los dos: nadie gana) y reembolsar (con los dos pendientes al vencer; con uno, **solo pasada la gracia de 7 días**, con una nota que lo explica). Cada botón lleva **visibles** y con `aria-describedby` el texto de fondos (UX-8) y el motivo si está deshabilitado (UX-9: "Conecta tu wallet", "Aún no venció el plazo (quedan 3 min 20 s)", "Esta partida ya terminó", "Hay otra transacción en curso: espera a que termine", "La transacción anterior quedó sin confirmar…", "Leyendo la hora de la red…"). En la fila el nombre accesible suma la partida (UX-10). Los `id` de los textos enlazados salen de la partida: el test existente M-4 de #12 prohíbe `useId` en `hooks/` y `components/` (lo respeté en lugar de relajarlo).
+- `components/GameActions.tsx`: monta `TimeoutActions` para una `Active` de la fuente nueva; `adoptedStatus` pasa de `null` a texto para `claim` y `refundStalled` (`claimedText`/`refundedText`); los verbos salen de `ACTION_TEXT` (mismo texto, mismo nombre accesible). `HouseAdminPanel.tsx` **no se editó** (su `adoptedHouseStatus` devuelve `null` para las dos; lo prueba `HouseAdminPanel.adopted.test.tsx`).
+- `components/GameDetail.tsx`: para la fuente nueva, `GameStatus` arriba de la ficha, fila "Reloj" y el detalle de `TimedOut` ("Ganó por tiempo": ganador, pozo, comisión, pago, "Resultado para ti") y `Expired` ("Devuelto a cada jugador", sin comisión ni ganador); la fuente anterior se dibuja como siempre.
+- `components/MyGamesSection.tsx`: etiquetas reales de los tres estados, `.my-game-result` real de `TimedOut`/`Expired`, el control de tiempo solo si tiene reloj (con "sin reloj" en cada fila del coinflip sería ruido) y un `GameStatus` compacto en las `Active`. `pages/MyGamesPage.tsx` y `pages/GameDetailPage.tsx` montan `ChainClockSampler` solo si hay una activa con reloj.
+- `components/LobbyList.tsx` + `hooks/useGameCatalog.ts` + `hooks/useLobby.ts` (`useLobby(games)`): filtro (`<label>Juego` + `<select>`, "Todos" por defecto, "3 partidas" y "; puede haber más"), rótulo y control por fila, vacío de un juego ("No hay partidas abiertas de Coinflip") distinto del global. **Decisión:** el filtro, el rótulo "anterior"/"nueva" y el control de tiempo del lobby aparecen **solo cuando el registro tiene la fuente nueva** (`catalog.multiSource`): con el `testnet.json` de hoy el lobby es idéntico al de antes (hay un test del texto exacto de la fila).
+- `components/CreateGameForm.tsx` + `sui/createGame.ts`: `DUEL_STORAGE_DEPOSIT_MIST` = `{ open: 2_409_200n, invitation: 2_652_400n }` y `storageDepositFor(createSource)` (**solo agregados**: `createGame.ts` 19/0); la nota usa la cifra de la fuente (tests: las dos constantes fijadas, el selector, el texto **exacto** con `legacy` y con `duel`, la nota antes del botón). **Decisión (ver Desviaciones):** el "valor por defecto" de los controles es el primero de `GameDef.controlIds` (el registro no trae un campo de valor por defecto y `sui/gameRegistry.ts` no está en los permisos).
+- `sui/gameDetail.ts` / `.test.ts`: `fetchGame` retirado con su `describe` (y el import que dejó sin uso); `gameDetail.test.ts` queda con `gameRefetchInterval`/`GAME_REFETCH_MS`; `fetchGameDetail` intacto con sus tests (`gameDetail.byType.test.ts`). `hooks/useMyGames.ts` / `.test.tsx`: `allSections` retirado; las 3 aserciones que lo usaban pasan a `sections` (declaradas abajo, ninguna relajada).
+- `index.css`: **55 líneas agregadas, 0 borradas**, solo clases `clock-`/`duel-` (anexo D02): `clock-counter` (números tabulares), `duel-action`/`duel-select` (44 px), `duel-radio` (la etiqueta de cada radio mide 44 px, con 8 px de separación), `duel-action-block`/`duel-filter` (separación), `duel-status`/`duel-actions`/`clock-line`/`duel-count`/`duel-controls` (`overflow-wrap: anywhere`) y `duel-sr-only` (la región de anuncios). Nada sobre `:root`, `body`, `main`, `.field-error`, elementos ni modo oscuro; sin colores ni tipografías.
+
+### Tests y gates (output PEGADO abajo; anexos G01-G03)
+- **Baseline** → **final:** lint 0 → 0; typecheck 0 → 0; tests 1921/79 → **2130 en 96 archivos, 0 fallos (+209)**; bundle de testnet 942.24 kB → **`index-CwsHv0KF.js` 961.51 kB (289.80 kB gzip)**: **+19.27 kB (+5.13 kB gzip)**, que explico por lo agregado (el reloj de pantalla, el módulo de textos con todos los estados y cuentas, los componentes `GameStatus`/`TimeoutActions`/`Countdown`, el filtro y el formulario; el build con el `testnet.json` actual es válido); `node --test scripts/*.test.mjs` 173 = 173; `npm audit signatures` OK (292 paquetes con firmas verificadas); `npm audit --omit=dev --audit-level=high`: 0 vulnerabilidades. `npm ci` no hizo falta (no hay cambios de dependencias; `git diff --exit-code` de `package.json`, `package-lock.json` y `app/package.json` = 0).
+- **Aritmética de los +209:** 213 tests de 17 archivos nuevos − 8 (`describe('fetchGame')`) + 2 (`createGame.test.ts`) + 1 (`useLobby.test.tsx`) − 1 (`GameActions.test.tsx`: el caso `active` de la prueba "sin acciones" dejó de valer) + 2 (`GameDetailPage.test.tsx`). Los tests de 7b/8a y los de los componentes de hoy siguen verdes; los que cambiaron, y por qué, abajo.
+- **Tests nuevos por archivo** (anexo T01): `deadlineFormat.test.ts` 32, `gameTexts.test.ts` 32, `GameActions.timeout.test.tsx` 27, `GameStatus.test.tsx` 19, `GameDetail.duel.test.tsx` 15, `LobbyList.multigame.test.tsx` 13, `useChainNow.test.tsx` 12, `Countdown.test.tsx` 12, `CreateGameForm.multigame.test.tsx` 11, `screenClock.test.ts` 10, `GameDetail.fixtures.test.tsx` 8 (objetos **reales** de `duel-clock`, con `_meta.sandbox === true`), `MyGamesSection.clock.test.tsx` 6, `useChainClockSampling.test.tsx` 5, `GameActions.timeoutMachine.test.tsx` 3 (máquina real), `useGameCatalog.test.ts` 3, `MyGamesPage.clock.test.tsx` 3, `HouseAdminPanel.adopted.test.tsx` 2.
+- **Tests de UX con el identificador en el nombre** (DoD 8): **180** tests cuyo nombre lleva `UX-n`; conteo por criterio: UX-1 45, UX-2 34, UX-3 36, UX-4 7, UX-5 18, UX-6 26, UX-7 7, UX-8 16, UX-9 24, UX-10 10, UX-14 7, UX-15 11 (UX-11 y UX-12 se verifican solo por S, porque jsdom no tiene layout, y UX-13 por revisión del diff, como pide el handoff; el `describe` de los controles de tiempo de `CreateGameForm.multigame.test.tsx` menciona UX-11 pero no lo mide). Lista completa de nombres y resultado (todos pasan): anexo T02.
+- **Tests existentes que cambiaron** (todos declarados; ninguna aserción relajada: cada uno afirmaba el fallback de 8a que 8b **reemplaza** o la ausencia de acciones de tiempo que 8b agrega):
+  1. `GameActions.test.tsx`: "offers no action on a %s new-source game (the time actions are 8b)" → sin el caso `active` (que ahora ofrece las acciones de tiempo, probadas en `GameActions.timeout*.test.tsx`); los casos `timed out` y `expired` siguen afirmando "ningún botón" para toda cuenta.
+  2. `MyGamesSection.test.tsx`: "shows the six states… the fallback line for the rest" → mismos seis estados con el **texto real** (`Ganó por tiempo`, `Nadie movió a tiempo: …`); "gives a timed-out or expired game one neutral result line" → las líneas reales (Ganaste/Perdiste por tiempo con el reparto; el reembolso sin comisión).
+  3. `GameDetailPage.test.tsx`: los 3 `it.each` "shows the neutral fallback line…" → texto real de "Estado" y los campos de cada terminal; +2 tests (el `ChainClockSampler` solo con una activa con reloj; el `ChainClockSampler` mockeado en el archivo).
+  4. `useMyGames.test.tsx` (**las 3 aserciones de 7b con `allSections`**, declaradas una por una): (a) en "sections does not filter…" se quitó `expect(result.allSections.pending.map(row => row.kind)).toEqual(['duel','game'])`, cuyo contenido ya lo afirma la línea siguiente sobre `sections` (`['duel','legacy']`); (b) en "pins a duel row…" `ready(hook).allSections.pending` → `ready(hook).sections.pending` (mismo `toHaveLength(1)`); (c) `ready(hook).allSections.finished.map(row => row.kind)` → `ready(hook).sections.finished.map(row => row.kind === 'game' ? row.row.source : row.kind)` (mismo `['duel']`).
+  5. `gameDetail.test.ts`: solo `gameRefetchInterval` (los 8 tests de `fetchGame` salieron con el export; sus casos de error ya los cubre `gameDetail.byType.test.ts`).
+  6. `useLobby.test.tsx`, `createGame.test.ts`: solo tests agregados.
+- Tablas de contrato y `app/src/sui/` sincronizados: no aplica (no cambió ningún contrato, evento ni layout; `contracts/README.md` suma solo la línea del depósito del `Duel`).
+- `git diff --exit-code` de `house.move`/`game.move`/`Move.lock`/`Published.toml`: 0 (anexo D01).
+
+### Verificación manual (smoke 🧪🌐; localnet aislada del puerto 19000; anexos S01-S31)
+Localnet de la Receta P (génesis **sin** `suic`, `sui start --fullnode-rpc-port 19000` en segundo plano con PID guardado, recién después `smoke_guard`); v1 = árbol `26f2676` con el **1.83.0** (los dos SHA-256 verificados **antes** de ejecutarlo: tgz `e51168051bca…` y binario `29e1beb96434…` = los de `ci.yml` de `88dd53b`, anexo S01), `record` sin `--out`, `upgrade` variante B (paquete v1 → v2, `typeOrigins` del json = tabla de la cadena **24/24, 0 diferencias** por gRPC) y `check` ("2 despliegue(s) válidos y coherentes"); `git diff --exit-code` de `Move.lock`/`Published.toml` = 0. Vite lanzado con `VITE_SUI_NETWORK=localnet VITE_LOCALNET_URL=http://127.0.0.1:19000 node <repo>/node_modules/vite/bin/vite.js` (script `dev`, **sin `--host`**; el log dice "Network: use --host to expose"; `ss -ltn`: el 5173 **solo en `127.0.0.1`**). Chrome headless (`--headless=new`, perfil, `HOME` y `XDG_*` desechables, depuración solo en `127.0.0.1:19222`, `--no-sandbox` porque el entorno lo exige) con un **grabador CDP** (dominios `Network`, `Log`, `Runtime`, enganchado a toda pestaña, en segundo plano, cerrado por PID) y un cliente CDP mínimo para conducir y medir.
+
+| # | Acción | Resultado | Evidencia |
+|---|---|---|---|
+| 1 | Localnet + v1 + upgrade B + Vite sin `--host` + Chrome + grabador | **PASA.** "localnet · nodo OK". Peticiones de TODO tipo del grabador: **279 a `http://127.0.0.1:19000`** (87 `OPTIONS` + 192 `POST`, gRPC-web), **265 `GET` a `http://localhost:5173`** (Vite: módulos y recursos), 5 URLs `data:` y 2 WebSocket a `ws://localhost:5173` (HMR de Vite); **0 con destino `:9000`** (`grep -c ':9000'` = 0). No hubo otros orígenes. | S02-S11, S22 |
+| 2 | Lobby con partidas viejas y nuevas | **PASA.** Dos filas abiertas: "0.01 SUI · comisión 5 % · creada por `<corta>` · **nueva** · **sin reloj** · …" y "… · **anterior** · **sin reloj** · …"; filtro `Juego` = "Todos" / "Coinflip", "**2 partidas**"; al elegir "Coinflip" (con el nodo real, filtro por el tag completo) siguen las dos. | S11, S21 |
+| 3 | Crear un coinflip nuevo (y medir el gas) | **PASA.** Sin selector de juego, sin `fieldset`/radios (0/0/0). Nota: "≈ **0.0024092 SUI** abierta, ≈ **0.0026524 SUI** con invitación"; al crear navega a "Partida creada" y el detalle dice "La partida está abierta." / "Reloj: sin reloj"; el lobby la muestra como "nueva · sin reloj". **Gas medido de crear con el `Duel`** (digest de la creación `9h2YK1DWZLLDJAiK5ztDReoXLxoqJFtrfwze4A8FBm3n`): presupuesto elegido por la app/preflight **4 409 200 MIST**; `gasUsed` = cómputo **1 000 000** + storage **3 397 200** − rebate **987 901** = **3 409 299 MIST** netos (la UI dice "Costo de red: 0.003409299 SUI"); **bruto (cómputo + storage) = 4 397 200 MIST**, que es **menor** que `CREATE_GAS_RESERVE_MIST` (10 000 000): **la constante NO cambia** (ni hace falta STOP). El depósito del objeto (storage 3 397 200 − 988 000 de la moneda de gas) = 2 409 200 = `DUEL_STORAGE_DEPOSIT_MIST.open`. | S12-S15 |
+| 4 | Aceptar desde otra cuenta (otra pestaña, otra burner) | **PASA.** Estado "Resuelta"; resumen "Ganaste el sorteo y se te pagó. No hay nada más que hacer."; "Resultado para ti: ganaste"; "¡Ganaste! Recibiste 0.019 SUI (pozo 0.02 SUI − comisión 0.001 SUI)"; "Transacción 6SNXoy…iCgv · Costo de red: 0.002474892 SUI". Pozo 0.02 = pago 0.019 + comisión 0.001 (5 %). Los estados transitorios ("Actualizando datos…", candado) no los observé en el navegador (el éxito llegó antes de que mi cliente los leyera): quedan cubiertos por los tests de máquina (`GameActions.timeoutMachine`, `routedActions`). | S16-S17 |
+| 5 | Cancelar y rechazar una partida nueva | **PASA.** Cancelar (creador): "La partida fue cancelada." + "Partida cancelada: se devolvieron 0.005 SUI a tu cuenta" ("Transacción 7izUEa…YFWN"). Rechazar (invitado, desde "Mis partidas"): fila "Cancelada" + "Invitación rechazada: se devolvieron 0.005 SUI a quien te invitó" ("Transacción CML4tx…B9hj"). Misma máquina que siempre. | S18-S20 |
+| 6 | "Mis partidas" | **PASA.** Las tres secciones; la invitación recibida con "Aceptar"/"Rechazar"; en "Terminadas": "Aceptaste · Aceptaste la de `<corta>` · 0.01 SUI · Resuelta" y "Ganaste · pozo 0.02 SUI · al ganador 0.019 SUI (según la fórmula del contrato)". | S19-S20 |
+| 7 | (opcional) vista activa con el juego de ensayo `testgame` | **OMITIDO** (decisión declarada): obliga a reconstruir el sandbox de TASK-5 fuera del árbol y no era necesario para el resto. La vista activa, `TimedOut` y `Expired` con reloj quedan cubiertas **solo por Vitest/RTL**, con reloj de pantalla inyectable y con objetos **reales** de `duel-clock` (`GameDetail.fixtures.test.tsx`, `_meta.sandbox === true`, valores por valor). Los controles que el coinflip no puede mostrar en producción se midieron con **marcado inyectado** (ver paso 9). | — |
+| 8 | Consola | **PASA.** 0 errores, 0 excepciones, 0 violaciones de CSP (en dev no hay CSP: solo producción). Warnings esperados, **2 veces cada uno** (dos pestañas): "Your application is currently using the unsafe burner wallet…" (la burner de `DEV`) y "Lit is in dev mode…". | S22 |
+| 9 | Medidas de UX por CDP | **PASA** en todo lo alcanzable; ver "Evidencia de UX". | UX01 |
+| 10 | Cierre | **PASA**: Chrome, Vite, grabador y `sui start` cerrados **por PID** (`kill`; `sui start` sale con 144 y Vite con 143, esperados); `kill -0` falla para los cuatro; `ss -ltn` = **0** para 19000, 5173 y 19222; el 9000 ajeno **igual** (2 sockets); `localnet.json` y `Pub.*.toml` ausentes; `<SMOKE_DIR>` borrado y verificado; `~/.sui` idéntico. | S30, S31 |
+
+Cuentas de las capturas por rol: `A` (creó las partidas del lobby), `B` (invitado), `P1`/`P2` (las dos burners de las pestañas); ninguna dirección real se transcribe.
+
+### Evidencia de UX
+Criterio → cómo se verificó → resultado. **T** = test con el identificador en el nombre (anexo T02; todos pasan); **S** = medida/captura por CDP (resumen en el anexo UX01; las imágenes vivieron en `<SMOKE_DIR>`, ya borrado; no se commitean).
+- **UX-1** estado → turno → tiempo → siguiente paso. T: `gameTexts.test.ts` (los **9 estados × 5 cuentas × 4 fases**: cada combinación tiene una línea de siguiente paso en español, sin jerga, que termina en punto), `GameStatus.test.tsx`, `GameDetail.duel.test.tsx`, `GameDetail.fixtures.test.tsx` (objetos reales). S: vistas alcanzables (descritas abajo): el resumen aparece primero y dice p. ej. "La partida es una invitación." / "Espera a que `<corta>` la acepte; mientras tanto puedes cancelarla y recuperar tu apuesta."; "La partida está resuelta." / "Ganaste el sorteo y se te pagó. No hay nada más que hacer."; "La partida fue cancelada." / "…No hay nada más que hacer." **PASA.**
+- **UX-2** plazo legible: T `deadlineFormat.test.ts` (tabla: 0 ms, 999 ms, 59 s, 60 s, 1 h, 24 h, 7 días, negativo + bordes) y el `<time dateTime>` con `title` en `Countdown.test.tsx`. **PASA.**
+- **UX-3** cuenta regresiva: T con reloj falso (`clockHarness`): avance de 1 s por tick, transición a "venció ahora", baja al tick de 1 min al vencer, **limpieza al desmontar** (también bajo `StrictMode`), **monotonía tras un refetch**, **un solo intervalo con 50 filas**, y un hijo vecino cuyo contador de renders **no cambia con el tick**; `useDeadlinePhase` no re-renderiza por tick, solo al cambiar de fase. **PASA.**
+- **UX-4** anuncios: T: `role="timer"` con `aria-live="off"`; avanzar 10 s **no** cambia la región `status`; cruzar el plazo agrega **un** mensaje ("Venció el plazo: ya se puede reclamar la victoria." / "…reembolsar la partida.") y los ticks siguientes no lo repiten. **PASA.**
+- **UX-5** sin depender del color: T (el texto está; ningún `svg`/`img`); S: captura con `Emulation.setEmulatedVisionDeficiency` `achromatopsia` de cada vista (lobby, filtro, formulario, detalle pendiente/resuelto/cancelado, "Mis partidas", marcado inyectado): el contenido y la jerarquía se leen igual sin color (todo es texto; no se agregó ningún color). **PASA.**
+- **UX-6** sin jerga: T: ninguna de las vistas (9 estados × 4 cuentas en el detalle, las filas de "Mis partidas", los motivos, los resultados adoptados, el formulario) casa con `claim_timeout|refund_stalled|to_move|deadline_ms|TimedOut|Expired|DuelState`; los verbos viven en `ACTION_TEXT`. **PASA.**
+- **UX-7** estados de la vista: T: carga (`Cargando…` sin cantidad), vacío global vs vacío de un juego ("No hay partidas abiertas de Coinflip", también con el piso del nodo), error con "Reintentar", "sin confirmar" ("Ya la revisé") y en curso ("Hay otra transacción en curso…") con la máquina real. **PASA.**
+- **UX-8** fondos: T: "El pozo (0.004 SUI) menos la comisión (0.0001 SUI) va a `<quien ganó por tiempo>`; no necesariamente a quien ejecuta." y "Cada jugador recupera su apuesta (0.002 SUI). Sin comisión." con `toHaveAccessibleDescription`; la nota de **crear** con el depósito de cada fuente (exacta). S: el marcado inyectado lee el mismo texto por `aria-describedby`. **PASA.**
+- **UX-9** motivo del botón deshabilitado: T: cada causa × botón (`no_account`, `busy`, `unconfirmed`, `unknown_time`, `done`, `not_yet` con el tiempo que falta) con `toHaveAccessibleDescription`; el motivo cambia solo cuando cambia la causa. S (DOM): "Reclamar victoria" deshabilitado → `aria-describedby` = "Aún no venció el plazo (quedan 3 min 20 s) | El pozo (0.02 SUI) menos la comisión (0.001 SUI) va a `<id>`; no necesariamente a quien ejecuta." (anexo S23). **PASA.**
+- **UX-10** accesibilidad básica: T: nombres únicos en una lista ("Reclamar victoria (partida `<corta>`)" por fila), botones existentes **sin cambiar de nombre** (sus tests intactos), encabezados sin saltos, lista semántica, **sin `tabindex`**, orden de los enfocables = orden del DOM. S: recorrido con `Tab` por `Input.dispatchKeyEvent` (anexo UX01, líneas `Tab n`): lobby = "Mis partidas" → conectar wallet → apuesta → invitar → "Actualizar" → **filtro (select)** → "Ver partida" → "Ver partida"; detalle de una partida pendiente = conectar → "Aceptar"; el `outline` de los controles propios es `auto` (visible; no se tocó); el botón de la wallet del kit tiene `outline: none` por su propio CSS (no es de 8b). Encabezados: H1 → H2 → H3 sin saltos. **PASA.**
+- **UX-11** objetivos táctiles (≥ 44 × 44 px, ≥ 8 px de separación): S a 360 px: el **select del filtro mide 67 × 44** (real, en el lobby); con el **marcado inyectado** (réplica con las mismas clases del `fieldset` de controles y de los botones de reclamar/reembolsar, porque la producción no los puede mostrar): "Reclamar victoria" 119 × 44, "Reembolsar" 87,9 × 44 y las 7 etiquetas de radio 281 × 44 (1280 px: 992 × 44; 320 px: 241 × 44), con **8 px** entre etiquetas vecinas. Hallazgo propio corregido en el smoke: la primera medida dio 0 px entre las etiquetas de radio; agregué `margin: 8px 0` a `.duel-radio` y se re-midió (8 px). **PASA, con la salvedad declarada de que los botones y los radios se midieron sobre marcado inyectado.**
+- **UX-12** 320 px: S: `document.documentElement.scrollWidth <= clientWidth` en **cada** vista (lobby, lobby con filtro, formulario, detalle pendiente/resuelto/cancelado, "Mis partidas" y el marcado inyectado, que incluye una dirección de 66 caracteres en el texto de fondos): 305 ≤ 305 a 320 px, 345 ≤ 345 a 360 px, 1265 ≤ 1265 a 1280 px (la diferencia con el ancho es la barra de scroll vertical). `overflow-wrap: anywhere` hace su trabajo. **PASA.**
+- **UX-13** sin animaciones nuevas: revisión del diff: ninguna `animation`/`transition`/`@keyframes` en `index.css` ni en los componentes; el tick solo cambia texto. **PASA.**
+- **UX-14** filtro y rótulos: T: `<label>`/`select` con nombre accesible "Juego", "Todos" por defecto, cantidad ("3 partidas", "1 partida", "; puede haber más"), "anterior"/"nueva" y el control como texto; el select cambia la consulta (`useLobby('coinflip')`). S: lo mismo contra el nodo real (paso 2). **PASA.**
+- **UX-15** formulario: T: `fieldset`/`legend` "Tiempo por jugada" con los **7 radios** ("10 min por jugada" … "7 días por jugada"), el primero marcado y "Por defecto: 10 min por jugada." declarado; el coinflip (las dos fuentes) sin ningún control nuevo ni selector; la nota antes del botón. S: el formulario del coinflip real no tiene `select`, `fieldset` ni radios (0/0/0). **PASA.**
+
+**Descripción de cada vista capturada** (por rol; capturas vistas: `lobby_filtro_360` e `inyectado_360`; de las demás, el texto del DOM y las medidas; las imágenes se borraron con `<SMOKE_DIR>`):
+- *Lobby a 1280/360/320 px* (con la cuenta conectada): bajo "Partidas abiertas" y "Actualizar", el filtro "Juego [Todos ▾]" (select de 67 × 44) y "2 partidas"; dos filas de lista en texto corrido con "· nueva · sin reloj ·" y "· anterior · sin reloj ·"; a 360 px el texto envuelve sin scroll horizontal y el foco visible se ve como contorno azul sobre "Ver partida". Con `achromatopsia` la página es legible igual (no hay color de significado).
+- *Formulario de crear:* h3 "Crear partida", límites, comisión 5 %, saldo, campos (apuesta, invitar a), estimación "Si alguien acepta: pozo 0.02 SUI · comisión 0.001 SUI · al ganador 0.019 SUI", la nota del depósito del `Duel` **antes** del botón; ningún selector ni radio.
+- *Detalle de `Pending`* (cuenta que puede aceptar y, antes, la que creó): resumen "La partida está abierta." + "Puedes aceptar la partida apostando lo mismo que quien la creó." (o, como creador, "Espera a que alguien la acepte; mientras tanto puedes cancelarla…"), ficha "Estado Abierta / Creador / Oponente abierta / Apuesta / Comisión / **Reloj sin reloj** / Última actividad", estimación y el botón "Aceptar" (o "Cancelar") con el aviso de sorteo.
+- *Detalle de `Resolved`:* "La partida está resuelta." + "Ganaste el sorteo y se te pagó. No hay nada más que hacer.", ficha con Aceptante, Ganador, Pozo, Comisión cobrada, Pago al ganador y "Resultado para ti: ganaste", y debajo el resultado de la transacción; sin botones.
+- *Detalle de `Cancelled`* (creador): "La partida fue cancelada." + "La partida se canceló y la apuesta volvió a quien la creó. No hay nada más que hacer." y "Partida cancelada: se devolvieron 0.005 SUI a tu cuenta".
+- *"Mis partidas":* tres secciones ("Invitaciones recibidas", "Tus partidas pendientes", "Terminadas") con la invitación y sus acciones y, en terminadas, "Aceptaste · Aceptaste la de `<corta>` · 0.01 SUI · Resuelta" con el resultado; sin scroll horizontal a 320 px.
+- *Marcado inyectado* (réplica de `TimeoutActions` y del `fieldset` de controles, solo para medir): "Reclamar victoria" deshabilitado (gris) con "Aún no venció el plazo (quedan 3 min 20 s)" **debajo**, en texto, y el texto de fondos con una dirección larga que **envuelve**; "Reembolsar" habilitado con "Cada jugador recupera su apuesta (0.01 SUI). Sin comisión."; los 7 radios en columna, cada uno con su etiqueta de 44 px.
+- **No medido en navegador (cubierto solo por Vitest):** la vista activa con la cuenta regresiva, `TimedOut` y `Expired` en pantalla, las acciones de tiempo con la máquina real sobre una partida real y el vacío de un juego filtrado (con un solo juego registrado el filtro no puede dar vacío): paso 7 omitido y un solo juego en el registro.
+
+### Evidencias específicas
+- **DoD extra de 8b (§7, puntos 1-11), salida pegada en el anexo D01** (resumen): (1) `stateText|FALLBACK_STATE_TEXT` en `app/src` = **0** (`stateText.ts` borrado, sin tests que lo citen); (2) `allSections` = **0** y `\bfetchGame\b` = **0** en `app/src`, y `app/README.md` deja de describirlos (corregí la cita que quedaba en "Al subir el tren `@mysten/*`" → `fetchGameDetail`); (3) `DuelClockAction|LegacyMyGamesSections` = **0**; `typeArguments|::(duel|coinflip)::` en hooks/components/pages sin tests = **0**; `transactionErrorMessage(` solo en `hooks/useExecuteTransaction.ts` (4 llamadas con `ids` de la config completa) más su definición, y `buildGameRegistry(` solo en `hooks/useGameRegistry.ts` (con la `config`) más su definición; (4) `sui/createGame.ts` **19/0** (aditivo) y `sui/gameDetail.ts` **7/28**: las 28 borradas son `fetchGame` con su JSDoc (25), el import `gameType, isExactType, parseGameObject` que quedó en `isExactType` y **dos comentarios** que citaban `fetchGame` (DoD 2 los exige reescritos: +7 líneas de comentario), declarado; (5) la nota con `legacy` es idéntica a la de hoy (test del texto exacto); (6) medición de `CREATE_GAS_RESERVE_MIST` con el `Duel` en el paso 3 (bruto 4 397 200 MIST < 10 000 000; constante intacta); (7) `contracts/README.md` **1/0**; (8) UX con evidencia (arriba); (9) sin dependencias nuevas (exit 0) y `index.css` **55/0** con solo selectores `clock-`/`duel-` (anexo D02) y 0 reglas sobre `:root`/`body`/`main`/`.field-error`/`@media`/`html`/`*`; (10) #77 intacto: `git diff --exit-code` de `networks.ts`, `config.ts`, `localnetUrl.mjs`, `localnetUrl.d.mts`, `localnet-guard.mjs` y `localnetCorpus.ts` = 0; `VITE_LOCALNET_URL` solo en `config.ts`, `vite-env.d.ts` y el corpus de #77 (sin cambios); `import.meta.env` solo en `config.ts`; el bundle de testnet **no embebe el valor** (`127.0.0.1:19000` = 0 ocurrencias; la única aparición es el **nombre** de la variable en el texto del error de configuración de #77); (11) el navegador nunca le habló al 9000 (paso 1, **0** peticiones con `:9000`), Vite sin `--host` (comando arriba y `ss` del 5173 solo en loopback) y cierre de Vite y Chrome por PID.
+- **Control anti-fuga del sandbox** (TASK-5 §7, sin `-i`; anexo D01): sobre lo agregado de `contracts/sources` y `app/src` = **0**; sobre los archivos nuevos sin trackear = **0**. Los tests que usan `duel-clock` (`GameDetail.fixtures.test.tsx`) afirman `_meta.sandbox === true`, leen los valores por valor (el plazo, las cuentas y la apuesta salen del objeto leído) y **no** toman constantes de producción de esa fixture; en tests inventados uso direcciones sintéticas (`'ab'.repeat(32)`…) y las aserciones usan `shortAddress(...)`, sin escribir ninguna abreviatura.
+- `git diff --exit-code` sobre lo que no es del task: `contracts/{sources,tests,scripts,fixtures,Move.lock,Published.toml,deployments}`, `.github`, `documents`, `app/index.html`, `app/vite.config.ts`, `app/eslint.config.js`, `Caddyfile`, `Dockerfile`, `sui/{eventScan,lobby,myGames,gameRegistry,events,duel,errors,gameTx,transactions}`, `txSession`, `txInvalidation`, `gameRow`, los hooks de acción y `HouseAdminPanel.tsx` = **0** (anexo D01).
+
+### Desviaciones del handoff
+1. **Filtro, rótulo "anterior"/"nueva" y control de tiempo del lobby solo con la fuente nueva en el registro** (`useGameCatalog().multiSource`), en lugar de siempre. Motivo: el handoff pide a la vez esas pantallas y que con el `testnet.json` actual "se vean y se comporten como hoy"; con una sola fuente un filtro de un solo juego y un "anterior" en cada fila serían cambios visibles sin valor. Test del texto exacto de la fila con una sola fuente. El paso 2 del smoke (con las dos fuentes) las muestra.
+2. **"Valor por defecto" de los controles de tiempo = el primero de `GameDef.controlIds`** (el handoff dice "el que defina el registro", pero `GameDef` no tiene un campo de valor por defecto y `sui/gameRegistry.ts` no está entre los permisos). Declarado en el texto del formulario ("Por defecto: 10 min por jugada.").
+3. **Un juego con reloj no se puede crear todavía desde la app:** no existe un builder de creación de un juego con reloj (`buildCreateCoinflipTx` no recibe control; lo agrega el juego que lo use, #18), así que el formulario muestra los 7 controles pero deshabilita "Crear partida" con el motivo a la vista ("Este juego todavía no se puede crear desde la app"), en lugar de ofrecer un control que no viaja a la transacción. Ningún juego registrado tiene `usesClock`, así que no es alcanzable en producción hoy; está probado con un juego sintético.
+4. **Reloj de pantalla de dos velocidades** (1 s mientras corre una cuenta; 1 min para lo ya vencido): el handoff dice "se detiene al vencer"; el intervalo de 1 s se detiene al vencer y solo queda uno por minuto para que "venció hace N min" siga avanzando (si no, el texto quedaría congelado); sin suscriptores, ninguno.
+5. **`ChainClockSampler` por página y no por fila** (ver arriba), y **marcado inyectado** para medir UX-11/UX-12 de los botones y radios que la producción no puede mostrar (paso 7 omitido).
+6. **`TimeoutActions` genera los `id` de los textos enlazados desde el id de la partida** (el test M-4 de #12 prohíbe `useId` en `hooks/`/`components/`).
+7. **Archivos no listados explícitamente en §4 que toqué:** `hooks/queryKeys.ts` (`chainClock`, aditivo), `hooks/useLobby.ts` (el parámetro `games`, permitido por "el filtro por juego"), `pages/MyGamesPage.tsx` y `pages/GameDetailPage.tsx` (montan el sampler; `pages/*` está en el "Tocar"), `test/{clockHarness.tsx,duelRows.ts}` (harness nuevos) y `app/README.md` (la cita corregida de `fetchGame`).
+8. **Proceso (C-13):** (a) intenté editar `gameDetail.ts` con un heredoc de Python y el sistema lo **denegó**: no se escribió nada; lo rehice con las herramientas de edición; (b) usé `echo`/`printf` solo como salida de diagnóstico dentro de comandos de captura (`echo up=$?`, `echo puerto…`, `echo docker_ps=…`), nunca para escribir archivos; **hubo una línea de la sesión, `echo "export GAMEB1=…" >> /dev/null`, que repite el patrón que C-13 prohíbe (escribe nada, pero el auditor la contará)**: 🟡, sin `sui`, sin código ni texto de reporte; (c) para adaptar las herramientas de TASK-8a usé `cp` y `sed 's#/t8a/#/t8b/#g' <origen> > <destino nuevo>` (sin `-i`; excepción (ii)), y `sed -E` sin `-i` hacia un archivo nuevo para la copia del pubfile (Receta U paso 1); (d) los IDs de `ids.env` salen de la salida de `jq`/`sed` sobre salidas de comandos (excepción (b)); `echo $$ > <pid>` solo para guardar los PID de `sui start`, Vite, Chrome y el grabador.
+
+### Riesgos / pendientes
+- **El reloj no se probó de punta a punta contra una partida activa real en el navegador** (paso 7 omitido): lo cubren Vitest (reloj inyectable) y objetos reales de `duel-clock`; el MID/MAYOR deciden si el paso 7 se exige antes de la compuerta §G. La preflight sigue siendo la que decide la elegibilidad (`ENotExpired`/`ENotStalled` con su mensaje); un desfase pequeño entre la hora estimada y la de la cadena solo puede mostrar "quedan 2 s" con el plazo ya vencido (nunca habilita un reclamo antes de tiempo: el contrato aborta igual).
+- **El bundle crece +19.27 kB (+5.13 kB gzip)**; sigue pendiente el code-splitting (#58).
+- La cantidad "N partidas" del lobby cuenta lo cargado (con más páginas dice "; puede haber más").
+
+### Documentación
+- READMEs / `agents.md` actualizados: **sí.** `app/README.md` (mapa de `sui/` y de hooks, tabla de componentes —`TimeoutActions`, `GameStatus`, `Countdown`, `ChainClockSampler`, `deadlineFormat`/`gameTexts`—, "Formulario de creación" con la nota por fuente y los controles de tiempo, y la sección nueva "Vistas con reloj y estándar de UX (#73, TASK-8b)"); `agents.md` §8 (los módulos `duel` y `coinflip`) y §9 (entidades `Duel`, `DuelState`, `Coinflip`, eventos `Duel*`, `GameRow`, `GameDef`); `contracts/README.md`: **una** línea (el depósito del `Duel`, 2 409 200 / 2 652 400 MIST, +456 000 sobre el del `Game`, con su cita de `DUEL_STORAGE_DEPOSIT_MIST`).
+- **Snippet propuesto para `documents/STATUS.md`:** "TASK-8b de #73 (`feature/issue-73-multigame`, sobre `0ec278a`): UI de las dos fuentes del coinflip y del reloj por jugada. Lobby con filtro por juego ('Todos' por defecto, con la cantidad), rótulo 'anterior'/'nueva' y control de tiempo por fila (solo con la fuente nueva en el registro: con el `testnet.json` actual las pantallas son las de siempre); formulario con la nota de costo del depósito de la fuente a la que va 'crear' (`DUEL_STORAGE_DEPOSIT_MIST` 2 409 200 / 2 652 400 MIST, `storageDepositFor`), selector de juego solo con más de uno creable y los 7 controles de tiempo solo para un juego con reloj; vista activa (`GameStatus`: estado → turno → plazo → qué sigue; `Countdown` con un único intervalo inyectable y la hora de la cadena como referencia), 'Reclamar victoria' y 'Reembolsar' por la misma máquina de 8a (con lo que pasará con los fondos y el motivo de cada botón deshabilitado a la vista), detalle de `Resolved`/`TimedOut`/`Expired` y resultados adoptados de un reclamo y un reembolso. Se retiran `stateText.ts`, `fetchGame` y `allSections`. Estándar de UX de 8b (UX-1..UX-15) con 180 tests y medidas por CDP (320 px sin scroll horizontal, objetivos de 44 px, achromatopsia, Tab). App 2130 tests en 96 archivos (1921 + 209), lint 0, typecheck 0, bundle de testnet 961.51 kB (+19.27 kB sobre 942.24). Smoke 🧪🌐 en la localnet aislada (puerto 19000) en PASA con el paso 7 (vista activa con el sandbox) omitido: lobby con las dos fuentes y filtro, crear (gas bruto 4 397 200 MIST < `CREATE_GAS_RESERVE_MIST`, sin cambio), aceptar, cancelar, rechazar, 'Mis partidas'; 0 peticiones al 9000 y consola sin errores."
+- **Delta de `ESTANDARES.md` redactado (NO aplicado; lo aplica el orquestador con su entrada de DECISIONES):**
+  - **PROY-14 (Data fetching), agregar:** "El reloj de pantalla (una cuenta regresiva) es estado de presentación: **un único intervalo inyectable** (ARQ-3) que solo hace avanzar la hora estimada de la cadena y nunca pide datos; la hora de la cadena entra como una muestra de TanStack Query (no de un `useEffect`) y el reloj es monótono."
+  - **PROY-16 (UX de transacciones), agregar:** "Toda acción que mueve fondos dice, junto al botón y en texto visible enlazado con `aria-describedby`, qué pasará y cuánto; un botón no disponible dice por qué en texto visible (no solo `title`); los cambios de estado temporizados se anuncian una sola vez en una región `status` y el contador es un `timer` sin `aria-live`; los controles táctiles nuevos miden ≥ 44 × 44 px; las vistas nuevas no tienen scroll horizontal desde 320 px."
+  - **PROY-13 / ARQ-1:** sin cambio (los textos y el formato del plazo viven en `components/`, no en `sui/`).
+$ /bin/true === ANEXO A01 ===
+exit=0
+$ bash -c cd <repo> && git status -sb && git log --oneline -3 && git merge-base --is-ancestor 8cc35ab HEAD; echo ancestor=$?; git stash list | wc -l
+## feature/issue-73-multigame
+0ec278a docs: update the multigame handoff to v1.2.12 with the browser STOP resolved by #77, the post-merge baselines and the UX standard for TASK-8b (Refs #73)
+cff8cf8 Merge master into feature/issue-73-multigame (#77 integrated) (Refs #73)
+440f44e Merge pull request #81 from sdelvalle57/feature/issue-77-localnet-port
+ancestor=0
+0
+exit=0
+$ bash -c stat -c "%y %s %n" <HOME real>/.sui/<cfg>/client.yaml; ls -la <HOME real>/.sui/<cfg>/; sha256sum <HOME real>/.sui/<cfg>/client.yaml | cut -c1-12
+2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/<cfg>/client.yaml
+total 12
+drwx------ 2 <user> <user> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <user> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <user>  244 Oct 30 17:52 client.yaml
+ef12fd09615f
+exit=0
+$ bash -c export PATH=<node26>/bin:$PATH && node --version
+v26.13.0
+exit=0
+$ bash -c docker ps -aq | wc -l; docker images -aq | wc -l
+8
+53
+exit=0
+$ bash -c ss -ltn | /usr/bin/grep -c ":9000 "; ss -ltn | /usr/bin/grep -c ":19000 "; ss -ltn | /usr/bin/grep -c ":5173 "
+2
+0
+0
+exit=1
+$ /bin/true === ANEXO B01 ===
+exit=0
+$ bash -c cd <repo> && npm run lint -w app 2>&1 | tail -8
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+$ bash -c cd <repo> && npm run typecheck -w app 2>&1 | tail -8
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm test -w app 2>&1 | tail -15
+> vitest run
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  79 passed (79)
+      Tests  1921 passed (1921)
+   Start at  13:51:15
+   Duration  43.00s (environment 62%, tests 15%, import 12%, setup 10%, transform 1%, worker 1%)
+
+Environment  jsdom was created 79 times · 250.67s total, 62% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+$ bash -c set -o pipefail; cd <repo> && VITE_SUI_NETWORK=testnet npm run build -w app 2>&1 | tail -12
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.46 kB │ gzip:   0.29 kB
+dist/assets/index-PjfExgZ6.css    0.38 kB │ gzip:   0.22 kB
+dist/assets/index-r1qeKkDU.js   942.24 kB │ gzip: 284.67 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.42s
+exit=0
+$ bash -c set -o pipefail; cd <repo>/contracts && node --test scripts/*.test.mjs 2>&1 | tail -12
+✔ record --upgrade usa el meta.json que dejó upgrade junto a la salida cruda (como record), sin los cuatro flags (2.038132ms)
+✔ record --upgrade: argumentos faltantes, base ausente, salida de error de la CLI o sin cambio de paquete ("digest inexistente") fallan claro y sin escribir (9.198201ms)
+✔ record --upgrade en testnet: solo escribe si el json coincide con el Published.toml ya existente; si no, STOP sin registrar (3.924653ms)
+✔ ningún test ni código de upgrade llega a la CLI real: spawn siempre inyectado y SUI_BIN inexistente en los tests de main (3.172378ms)
+ℹ tests 173
+ℹ suites 0
+ℹ pass 173
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 527.015322
+exit=0
+$ /bin/true === ANEXO F01 ===
+exit=0
+$ bash -c cd <repo> && git status -sb | head -1; git log --oneline -1; git status --porcelain --untracked-files=all
+## feature/issue-73-multigame
+0ec278a docs: update the multigame handoff to v1.2.12 with the browser STOP resolved by #77, the post-merge baselines and the UX standard for TASK-8b (Refs #73)
+ M agents.md
+ M app/README.md
+ M app/src/components/CreateGameForm.tsx
+ M app/src/components/GameActions.test.tsx
+ M app/src/components/GameActions.tsx
+ M app/src/components/GameDetail.tsx
+ M app/src/components/LobbyList.tsx
+ M app/src/components/MyGamesSection.test.tsx
+ M app/src/components/MyGamesSection.tsx
+ D app/src/components/stateText.ts
+ M app/src/hooks/queryKeys.ts
+ M app/src/hooks/useLobby.test.tsx
+ M app/src/hooks/useLobby.ts
+ M app/src/hooks/useMyGames.test.tsx
+ M app/src/hooks/useMyGames.ts
+ M app/src/index.css
+ M app/src/pages/GameDetailPage.test.tsx
+ M app/src/pages/GameDetailPage.tsx
+ M app/src/pages/MyGamesPage.tsx
+ M app/src/sui/createGame.test.ts
+ M app/src/sui/createGame.ts
+ M app/src/sui/gameDetail.test.ts
+ M app/src/sui/gameDetail.ts
+ M contracts/README.md
+?? app/src/components/ChainClockSampler.tsx
+?? app/src/components/Countdown.test.tsx
+?? app/src/components/Countdown.tsx
+?? app/src/components/CreateGameForm.multigame.test.tsx
+?? app/src/components/GameActions.timeout.test.tsx
+?? app/src/components/GameActions.timeoutMachine.test.tsx
+?? app/src/components/GameDetail.duel.test.tsx
+?? app/src/components/GameDetail.fixtures.test.tsx
+?? app/src/components/GameStatus.test.tsx
+?? app/src/components/GameStatus.tsx
+?? app/src/components/HouseAdminPanel.adopted.test.tsx
+?? app/src/components/LobbyList.multigame.test.tsx
+?? app/src/components/MyGamesSection.clock.test.tsx
+?? app/src/components/TimeoutActions.tsx
+?? app/src/components/deadlineFormat.test.ts
+?? app/src/components/deadlineFormat.ts
+?? app/src/components/gameTexts.test.ts
+?? app/src/components/gameTexts.ts
+?? app/src/hooks/screenClock.test.ts
+?? app/src/hooks/screenClock.ts
+?? app/src/hooks/screenClockContext.ts
+?? app/src/hooks/useChainClockSampling.test.tsx
+?? app/src/hooks/useChainClockSampling.ts
+?? app/src/hooks/useChainNow.test.tsx
+?? app/src/hooks/useChainNow.ts
+?? app/src/hooks/useGameCatalog.test.ts
+?? app/src/hooks/useGameCatalog.ts
+?? app/src/pages/MyGamesPage.clock.test.tsx
+?? app/src/test/clockHarness.tsx
+?? app/src/test/duelRows.ts
+exit=0
+$ bash -c cd <repo> && git diff --stat | tail -40
+ agents.md                                  |  23 ++++++-
+ app/README.md                              |  76 ++++++++++++++++++----
+ app/src/components/CreateGameForm.tsx      |  97 +++++++++++++++++++++++++---
+ app/src/components/GameActions.test.tsx    |   4 +-
+ app/src/components/GameActions.tsx         |  34 ++++++++--
+ app/src/components/GameDetail.tsx          | 100 ++++++++++++++++++++++++++---
+ app/src/components/LobbyList.tsx           |  95 ++++++++++++++++++++++++---
+ app/src/components/MyGamesSection.test.tsx |  19 +++---
+ app/src/components/MyGamesSection.tsx      |  34 +++++++---
+ app/src/components/stateText.ts            |  10 ---
+ app/src/hooks/queryKeys.ts                 |   6 ++
+ app/src/hooks/useLobby.test.tsx            |  13 ++++
+ app/src/hooks/useLobby.ts                  |  11 ++--
+ app/src/hooks/useMyGames.test.tsx          |   7 +-
+ app/src/hooks/useMyGames.ts                |   7 +-
+ app/src/index.css                          |  55 ++++++++++++++++
+ app/src/pages/GameDetailPage.test.tsx      |  43 ++++++++++---
+ app/src/pages/GameDetailPage.tsx           |   4 ++
+ app/src/pages/MyGamesPage.tsx              |   5 ++
+ app/src/sui/createGame.test.ts             |  15 +++++
+ app/src/sui/createGame.ts                  |  19 ++++++
+ app/src/sui/gameDetail.test.ts             |  90 +-------------------------
+ app/src/sui/gameDetail.ts                  |  35 ++--------
+ contracts/README.md                        |   1 +
+ 24 files changed, 587 insertions(+), 216 deletions(-)
+exit=0
+$ /bin/true === ANEXO G01 ===
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm audit signatures 2>&1 | tail -5
+292 packages have verified registry signatures
+
+143 packages have verified attestations
+(use --json --include-attestations to view attestation details)
+
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm audit --omit=dev --audit-level=high 2>&1 | tail -5
+found 0 vulnerabilities
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm run lint -w app 2>&1 | tail -6
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm run typecheck -w app 2>&1 | tail -6
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+$ /bin/true === ANEXO G02 ===
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm test -w app 2>&1 | tail -14
+
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  96 passed (96)
+      Tests  2130 passed (2130)
+   Start at  14:35:46
+   Duration  53.79s (environment 60%, tests 15%, import 13%, setup 10%, transform 1%)
+
+Environment  jsdom was created 96 times · 309.47s total, 60% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit=0
+$ /bin/true === ANEXO G03 ===
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm run lint -w app 2>&1 | tail -4
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm run typecheck -w app 2>&1 | tail -4
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm test -w app 2>&1 | tail -13 | head -8
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  96 passed (96)
+      Tests  2130 passed (2130)
+   Start at  14:39:04
+   Duration  36.15s (environment 61%, tests 15%, import 12%, setup 10%, transform 1%, worker 1%)
+exit=0
+$ bash -c set -o pipefail; cd <repo> && VITE_SUI_NETWORK=testnet npm run build -w app 2>&1 | /usr/bin/grep -E 'dist/|built in|error'
+dist/index.html                   0.46 kB │ gzip:   0.29 kB
+dist/assets/index-CJc1ZLwi.css    0.92 kB │ gzip:   0.45 kB
+dist/assets/index-CwsHv0KF.js   961.51 kB │ gzip: 289.80 kB
+✓ built in 460ms
+exit=0
+$ bash -c set -o pipefail; cd <repo>/contracts && node --test scripts/*.test.mjs 2>&1 | /usr/bin/grep -E '^ℹ (tests|pass|fail)'
+ℹ tests 173
+ℹ pass 173
+ℹ fail 0
+exit=0
+$ /bin/true === ANEXO T01 ===
+exit=0
+src/components/Countdown.test.tsx	12
+src/components/CreateGameForm.multigame.test.tsx	11
+src/components/GameActions.timeout.test.tsx	27
+src/components/GameActions.timeoutMachine.test.tsx	3
+src/components/GameDetail.duel.test.tsx	15
+src/components/GameDetail.fixtures.test.tsx	8
+src/components/GameStatus.test.tsx	19
+src/components/HouseAdminPanel.adopted.test.tsx	2
+src/components/LobbyList.multigame.test.tsx	13
+src/components/MyGamesSection.clock.test.tsx	6
+src/components/deadlineFormat.test.ts	32
+src/components/gameTexts.test.ts	32
+src/hooks/screenClock.test.ts	10
+src/hooks/useChainClockSampling.test.tsx	5
+src/hooks/useChainNow.test.tsx	12
+src/hooks/useGameCatalog.test.ts	3
+src/pages/MyGamesPage.clock.test.tsx	3
+$ /bin/true === ANEXO T02 ===
+exit=0
+Countdown UX-2: writes the time left in Spanish and the absolute moment in a <time> with its dateTime and title
+Countdown UX-3: advances one second per tick, switches to "venció ahora" at the deadline and keeps counting what passed by the minute
+Countdown UX-3: stops the 1 s interval when the deadline expires (one tick per minute remains) and clears it on unmount
+Countdown UX-3: clears its interval when it is unmounted before the deadline
+Countdown UX-3: a data refetch (another render with the same deadline and an older sample) does not move the counter back
+Countdown UX-3: a real change of the deadline does change the counter
+Countdown UX-3: 50 counters share one interval
+Countdown UX-3: the tick re-renders only the counter text, never the row or its neighbors
+Countdown UX-4: the visible counter is a timer with live announcements off, so a screen reader does not read it every second
+Countdown UX-3: uses tabular numbers through its own class, so the width does not change every second
+CreateGameForm: the cost note of the source "crear" goes to (UX-8, UX-15) UX-8: with the previous source (today's testnet.json) the note is exactly the one from before 8b
+CreateGameForm: the cost note of the source "crear" goes to (UX-8, UX-15) UX-8: with the new source the note uses the storage deposit of the Duel (2 409 200 / 2 652 400 MIST), in the same format
+CreateGameForm: the cost note of the source "crear" goes to (UX-8, UX-15) UX-15: the cost note comes BEFORE the button that creates the game
+CreateGameForm: the coinflip has no time option and no game selector (UX-15) UX-15: with the coinflip (previous source) there is no fieldset, no radio and no game select
+CreateGameForm: the coinflip has no time option and no game selector (UX-15) UX-15: with the coinflip (new source) there is no fieldset, no radio and no game select
+CreateGameForm: a game with a clock (UX-15, UX-11) UX-15: offers the 7 time controls as radios in a fieldset with a legend, with readable names and a declared default
+CreateGameForm: a game with a clock (UX-15, UX-11) UX-15: choosing another control moves the selection (one radio group, one value)
+CreateGameForm: a game with a clock (UX-15, UX-11) UX-9: it does not offer to create a game that has no creation builder yet, and says why next to the button
+CreateGameForm: a game with a clock (UX-15, UX-11) UX-6: no time control text has contract jargon
+CreateGameForm: the game selector (UX-15) UX-15: appears only with more than one creatable game and routes the creation to the chosen one
+CreateGameForm: the game selector (UX-15) UX-15: a game that cannot be created is not offered in the selector
+time actions: claim before and after the deadline (UX-8, UX-9) UX-9: before the deadline "Reclamar victoria" is disabled and says why, with the time left, next to the button
+time actions: claim before and after the deadline (UX-8, UX-9) UX-9: the reason follows the counter (3 min 20 s → 3 min 19 s) and does not change while the cause is the same
+time actions: claim before and after the deadline (UX-8, UX-9) UX-8: once the deadline passed the button is enabled, keeps the funds text and drops the reason
+time actions: claim before and after the deadline (UX-8, UX-9) UX-8: the funds text says who gets the pot, for a third account and for the one who gets it
+time actions: claim before and after the deadline (UX-8, UX-9) wires the claim hook of 8a to the row (its source and game) and shows its transaction status and result
+time actions: claim before and after the deadline (UX-8, UX-9) claims through the hook of 8a when the button is used after the deadline
+time actions: claim before and after the deadline (UX-8, UX-9) does not offer a button to play: only the time actions exist for an active game
+time actions: claim before and after the deadline (UX-8, UX-9) UX-9: tells the user that without a claim, after the grace, anyone can refund both players
+time actions: refund (UX-8, UX-9) UX-1/UX-9: with both pending there is no claim (nobody wins) and the refund waits for the deadline, with its reason
+time actions: refund (UX-8, UX-9) with one pending the refund appears only once the grace passed, next to the claim that still works
+time actions: why a button is not available (UX-9) UX-9: even with the deadline passed, the button says why when there is no wallet account
+time actions: why a button is not available (UX-9) UX-9: even with the deadline passed, the button says why when another transaction is in progress
+time actions: why a button is not available (UX-9) UX-9: even with the deadline passed, the button says why when the last transaction was left unconfirmed
+time actions: why a button is not available (UX-9) UX-9: even with the deadline passed, the button says why when the chain time is not known yet
+time actions: why a button is not available (UX-9) UX-9: even with the deadline passed, the button says why when the claim already succeeded
+time actions: why a button is not available (UX-9) UX-9: the reason changes only when the cause changes: wallet first, then the time left
+time actions: why a button is not available (UX-9) the unconfirmed alert and "Ya la revisé" appear once, as in the other actions, and unlock with it
+time actions: accessible names in a list (UX-10) UX-10: in a row of "Mis partidas" each button names its game, so two rows never repeat a name
+time actions: accessible names in a list (UX-10) UX-10: the detail has a single game, so its buttons keep the plain verbs
+time actions: accessible names in a list (UX-10) UX-10: the order of the elements that can take focus is the order of reading: the reason is text, then the next control
+time actions: accessible names in a list (UX-10) UX-10: the texts that describe a button are in the same block as the button
+time actions with the global machine (UX-9) builds the claim from the registry (current packageId, the type argument of the game, the House) and sends it through the preflight
+time actions with the global machine (UX-9) UX-7 (action in progress) and UX-9: while the claim is in flight the button says another transaction is in progress, and the lock is the usual one
+time actions with the global machine (UX-9) UX-7 (unconfirmed) and UX-9: an unconfirmed claim shows one alert and one "Ya la revisé"; the button says why it is blocked and unlocks with it
+GameDetail: a game of the new source (UX-1) UX-1: an active game shows the summary first (state, turn, time left, next step), then the sheet with the clock and the acceptor
+GameDetail: a game of the new source (UX-1) UX-1: a pending game shows its next step, the clock of the game and no turn or timer
+GameDetail: a game of the new source (UX-1) UX-1: a game with no clock reads "sin reloj" in the sheet
+GameDetail: a game of the new source (UX-1) a game of the previous source is drawn as always: no summary and no clock row
+GameDetail: every view without contract jargon, and readable by structure (UX-5, UX-6, UX-10) UX-6: no state, with or without account, shows words of the contract in its text
+GameDetail: every view without contract jargon, and readable by structure (UX-5, UX-6, UX-10) UX-1: every state shows a line that says what comes next (a state is never left without one)
+GameDetail: every view without contract jargon, and readable by structure (UX-5, UX-6, UX-10) UX-5: the state is written with text in the sheet and in the summary, never with color alone
+GameDetail: every view without contract jargon, and readable by structure (UX-5, UX-6, UX-10) UX-10: the detail uses a definition list for the sheet and no tabindex, so the order of tabbing is the order of reading
+GameDetail with the real objects of the clock fixture UX-1: an active game with one pending shows the turn of its creator, the time left and the next step
+GameDetail with the real objects of the clock fixture UX-2: the time control of a value outside the mirror is written in the generic format, "<N> s por jugada"
+GameDetail with the real objects of the clock fixture UX-1: once the deadline passed, the account that was waiting is told to claim
+GameDetail with the real objects of the clock fixture UX-1: an active game with both pending says both have to move
+GameStatus: an active game (UX-1) UX-1: answers in order what is happening, whose turn it is, how much time is left and what this account can do
+GameStatus: an active game (UX-1) UX-1: the turn for the one who must move
+GameStatus: an active game (UX-1) UX-1: the turn for the rival
+GameStatus: an active game (UX-1) UX-1: the turn for a third account
+GameStatus: an active game (UX-1) UX-1: the turn for no account
+GameStatus: an active game (UX-1) UX-1: when both must move it says so to everyone
+GameStatus: an active game (UX-1) UX-1: with the deadline passed the counter says it expired and the next step is to claim
+GameStatus: an active game (UX-1) UX-1 and UX-7 (loading the chain time): without chain time it does not guess whether the deadline passed
+GameStatus: an active game (UX-1) UX-1: a compact summary (a row of "Mis partidas") leaves out the state sentence
+GameStatus: the rest of the states say what comes next (UX-1) UX-1: pending
+GameStatus: the rest of the states say what comes next (UX-1) UX-1: cancelled
+GameStatus: the rest of the states say what comes next (UX-1) UX-1: resolved
+GameStatus: the rest of the states say what comes next (UX-1) UX-1: expired
+GameStatus: the rest of the states say what comes next (UX-1) UX-1: a game won by time tells who won and the split
+GameStatus: announcements (UX-4) UX-4: the status region exists empty and does not change while time runs: advancing 10 s of ticks adds nothing
+GameStatus: announcements (UX-4) UX-4: crossing the deadline adds ONE message to the region and the later ticks do not repeat it
+GameStatus: announcements (UX-4) UX-4: with both pending the announcement is about the refund
+GameStatus: announcements (UX-4) UX-4: the timer is not the announcement: it is not a live region
+GameStatus: announcements (UX-4) UX-5: the urgency is said with text ("venció", "Te toca a ti"), never only with color or an icon
+LobbyList with both sources: filter, labels and time control (UX-14) UX-14: the filter is a labeled select, "Todos" by default, with every game of the registry and the visible count
+LobbyList with both sources: filter, labels and time control (UX-14) UX-14: the count is singular for one game and says there may be more when more pages can be loaded
+LobbyList with both sources: filter, labels and time control (UX-14) UX-14: an unreadable row is not counted as a game
+LobbyList with both sources: filter, labels and time control (UX-14) UX-14: each row says as TEXT which source it is ("anterior"/"nueva") and its time control
+LobbyList with both sources: filter, labels and time control (UX-14) UX-14: choosing a game asks the lobby for that game and choosing "Todos" goes back to all of them
+LobbyList with both sources: filter, labels and time control (UX-14) UX-10: the filter comes before the list in the DOM, so the tab order is the reading order
+LobbyList with both sources: filter, labels and time control (UX-14) UX-10: the list is a semantic list and the headings do not skip levels
+LobbyList: every state of the view (UX-7) UX-7: an empty lobby filtered by a game says which game, and differs from the global empty one
+LobbyList: every state of the view (UX-7) UX-7: the empty lobby of a game keeps saying it is the history the node has, when the bound is the node floor
+LobbyList: every state of the view (UX-7) UX-7: loading shows "Cargando…" and no count; an error shows its message with "Reintentar"
+LobbyList: every state of the view (UX-7) keeps the filter available while loading so the choice is not lost
+MyGamesSection: rows with a clock (TASK-8b) UX-1: an active row shows its label, the turn, the time left and the next step, between the line and the actions
+MyGamesSection: rows with a clock (TASK-8b) UX-3: many active rows share ONE interval and each counter ticks on its own
+MyGamesSection: rows with a clock (TASK-8b) UX-6: none of the rows has words of the contract
+formatDeadline (UX-2) writes 1 ms as "quedan 1 s"
+formatDeadline (UX-2) writes 999 ms as "quedan 1 s"
+formatDeadline (UX-2) writes 1000 ms as "quedan 1 s"
+formatDeadline (UX-2) writes 1001 ms as "quedan 2 s"
+formatDeadline (UX-2) writes 45000 ms as "quedan 45 s"
+formatDeadline (UX-2) writes 59000 ms as "quedan 59 s"
+formatDeadline (UX-2) writes 60000 ms as "quedan 1 min"
+formatDeadline (UX-2) writes 570000 ms as "quedan 9 min 30 s"
+formatDeadline (UX-2) writes 3599000 ms as "quedan 59 min 59 s"
+formatDeadline (UX-2) writes 3600000 ms as "quedan 1 h"
+formatDeadline (UX-2) writes 18720000 ms as "quedan 5 h 12 min"
+formatDeadline (UX-2) writes 86399000 ms as "quedan 23 h 59 min"
+formatDeadline (UX-2) writes 86400000 ms as "quedan 1 día"
+formatDeadline (UX-2) writes 183600000 ms as "quedan 2 días 3 h"
+formatDeadline (UX-2) writes 259200000 ms as "quedan 3 días"
+formatDeadline (UX-2) writes 604800000 ms as "quedan 7 días"
+formatDeadline (UX-2) writes 621000000 ms as "quedan 7 días 4 h"
+formatDeadline (UX-2) writes 0 ms as "venció ahora"
+formatDeadline (UX-2) writes -1 ms as "venció ahora"
+formatDeadline (UX-2) writes -999 ms as "venció ahora"
+formatDeadline (UX-2) writes -1000 ms as "venció hace 1 s"
+formatDeadline (UX-2) writes -45000 ms as "venció hace 45 s"
+formatDeadline (UX-2) writes -60000 ms as "venció hace 1 min"
+formatDeadline (UX-2) writes -300000 ms as "venció hace 5 min"
+formatDeadline (UX-2) writes -359000 ms as "venció hace 5 min"
+formatDeadline (UX-2) writes -3600000 ms as "venció hace 1 h"
+formatDeadline (UX-2) writes -8100000 ms as "venció hace 2 h 15 min"
+formatDeadline (UX-2) writes -86400000 ms as "venció hace 1 día"
+formatDeadline (UX-2) writes -698400000 ms as "venció hace 8 días 2 h"
+formatDeadline (UX-2) never says "0 s" or "quedan 0" while there is time left, and never "hace 0" once it expired
+formatDeadline (UX-2) keeps the span without the verb for the places that add their own text
+the absolute moment of a deadline (UX-2) gives an ISO 8601 UTC dateTime and a readable text with the same instant
+verbs and states (UX-6) UX-6: keeps the fixed verbs and the three states 8b adds, in one module
+verbs and states (UX-6) UX-6: the grace text mirrors CLAIM_GRACE_MS (7 days)
+verbs and states (UX-6) UX-6: the time control reads "sin reloj" for the previous source and the label for the new one
+who is who (UX-1) reads null as none in an active game with an invitation
+who is who (UX-1) reads <id> as creator in an active game with an invitation
+who is who (UX-1) reads <id> as acceptor in an active game with an invitation
+who is who (UX-1) reads <id> as invitee in an active game with an invitation
+who is who (UX-1) reads <id> as other in an active game with an invitation
+the turn (UX-1) UX-1: "Te toca a ti" for the one who must move, "Le toca a <contraparte>" for the other and "Les toca a los dos"
+the turn (UX-1) UX-1: an account that does not play (or has none) is told whose turn it is by role
+the turn (UX-1) who wins on a timeout: the rival of the one who had to move, and nobody when both had to
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: every state × account × phase has a sentence that says what comes next, in Spanish and without contract jargon
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: pending (open) for sin cuenta
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: pending (open) for creador
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: pending (open) for tercero
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: pending (invitation) for sin cuenta
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: pending (invitation) for creador
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: pending (invitation) for invitado
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: pending (invitation) for tercero
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: cancelled and resolved say that nothing is left to do, and who won
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: timed out says who won by time, what they received and that nothing is left to do
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: expired says that each player got their bet back, without a fee
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-1: an active game tells each account what to do in each phase of the deadline
+what comes next, for every state and account (UX-1, UX-5, UX-6) UX-4: announces the expiry once, only after the deadline, with the action that is now possible
+what happens with the funds, and why a button is not available (UX-8, UX-9) UX-8: claiming says the pot minus the fee goes to whoever won by time, not necessarily to who executes it
+what happens with the funds, and why a button is not available (UX-8, UX-9) UX-8: refunding says that each player recovers their bet, without a fee
+what happens with the funds, and why a button is not available (UX-8, UX-9) UX-9: the reasons are plain Spanish, without contract jargon
+adopted results of a claim and a refund (UX-6, SEG-10) says who won, what they received and that the payment is not for who executed it
+adopted results of a claim and a refund (UX-6, SEG-10) says what each player recovered after a refund
+adopted results of a claim and a refund (UX-6, SEG-10) with no readable event, it is an honest success that points to the detail
+adopted results of a claim and a refund (UX-6, SEG-10) UX-6: no adopted text has contract jargon
+createScreenClock (UX-3) UX-3: has no snapshot without a chain sample and starts no interval without subscribers
+createScreenClock (UX-3) UX-3: estimates the chain time from a sample and advances it with the local clock on every 1 s tick
+createScreenClock (UX-3) UX-3: shares ONE interval among any number of subscribers and clears it with the last one
+createScreenClock (UX-3) UX-3: a second unsubscribe of the same subscription does nothing
+createScreenClock (UX-3) UX-3: stops the 1 s tick when only expired deadlines remain (it drops to one tick per minute) and clears at the end
+createScreenClock (UX-3) UX-3: is monotonic: an older sample received later never makes the estimate go back
+createScreenClock (UX-3) UX-3: a fresher sample (a younger checkpoint) moves the estimate forward and tells the subscribers
+createScreenClock (UX-3) UX-3: never goes back if the local clock does
+createScreenClock (UX-3) UX-3: refreshes a stale estimate when someone subscribes after a quiet period
+createScreenClock (UX-3) UX-3: the clock only moves time: it takes no client and no query function (it never asks for data)
+useChainClockSampling (UX-3, PROY-14) UX-3: asks for the time of the last checkpoint the node status reported and notes it as the chain time
+useChainClockSampling (UX-3, PROY-14) UX-3: asks for nothing while the node does not report a height (loading, offline, wrong chain or no height)
+useChainClockSampling (UX-3, PROY-14) PROY-14: reads the checkpoint once per height (immutable) and does not ask again on a re-render
+useChainClockSampling (UX-3, PROY-14) UX-3: a new height asks for the new checkpoint and the estimate never goes back with an older one
+useChainClockSampling (UX-3, PROY-14) a checkpoint without a timestamp leaves the clock without a sample (no invented time)
+deadlinePhase (UX-3) puts a chain time of null in the phase unknown
+deadlinePhase (UX-3) puts a chain time of 5000000 in the phase running
+deadlinePhase (UX-3) puts a chain time of 5009999 in the phase running
+deadlinePhase (UX-3) puts a chain time of 5010000 in the phase expired
+deadlinePhase (UX-3) puts a chain time of 609809999 in the phase expired
+deadlinePhase (UX-3) puts a chain time of 609810000 in the phase stalled
+useDeadlinePhase and useChainNow (UX-3) UX-3: re-renders its component only when the phase changes, not on every tick
+useDeadlinePhase and useChainNow (UX-3) UX-3: asks for the 1 s tick while the deadline runs and drops to one tick per minute once it expired
+useDeadlinePhase and useChainNow (UX-3) UX-3: without a chain sample the phase is "unknown" and no 1 s tick is requested
+useDeadlinePhase and useChainNow (UX-3) UX-3: the chain time advances with the tick and never goes back after a fresh sample that is older
+useDeadlinePhase and useChainNow (UX-3) UX-3: many components with a deadline share ONE interval, and unmounting them all clears it
+useDeadlinePhase and useChainNow (UX-3) UX-3: under StrictMode (double mount) it still leaves a single interval and none after unmounting
+$ /bin/true === ANEXO D01 ===
+exit=0
+$ bash -c cd <repo> && /usr/bin/grep -rnE 'stateText|FALLBACK_STATE_TEXT' app/src | wc -l; ls app/src/components/stateText.ts 2>&1 | head -1
+0
+ls: cannot access 'app/src/components/stateText.ts': No such file or directory
+exit=0
+$ bash -c cd <repo> && /usr/bin/grep -rn 'allSections' app/src | wc -l; /usr/bin/grep -rnE '\bfetchGame\b' app/src | wc -l; /usr/bin/grep -rnE 'allSections|\bfetchGame\b' app/README.md | wc -l
+0
+0
+1
+exit=0
+$ bash -c cd <repo> && /usr/bin/grep -rnE 'DuelClockAction|LegacyMyGamesSections' app/src | wc -l
+0
+exit=0
+$ bash -c cd <repo> && /usr/bin/grep -rnE 'typeArguments|::(duel|coinflip)::' app/src/hooks app/src/components app/src/pages --exclude='*.test.*' | wc -l
+0
+exit=0
+$ bash -c cd <repo> && /usr/bin/grep -rn 'transactionErrorMessage(' app/src --exclude='*.test.*'
+app/src/hooks/useExecuteTransaction.ts:149:          return failure(transactionErrorMessage(error, ids));
+app/src/hooks/useExecuteTransaction.ts:154:        return failure(transactionErrorMessage(error, ids));
+app/src/hooks/useExecuteTransaction.ts:171:        return failure(transactionErrorMessage(error, ids));
+app/src/hooks/useExecuteTransaction.ts:191:      return failure(transactionErrorMessage(verdict.error, ids), digest, cost);
+app/src/sui/errors.ts:245:export function transactionErrorMessage(source: unknown, ids: OwnPackageIds): string {
+exit=0
+$ bash -c cd <repo> && /usr/bin/grep -rn 'buildGameRegistry(' app/src --exclude='*.test.*'
+app/src/hooks/useGameRegistry.ts:12:  return useMemo(() => buildGameRegistry(config), [config]);
+app/src/sui/gameRegistry.ts:329:export function buildGameRegistry(config: RegistryConfig): GameRegistry {
+exit=0
+$ bash -c cd <repo> && git diff --numstat -- app/src/sui/createGame.ts app/src/sui/gameDetail.ts app/src/sui/createGame.test.ts app/src/sui/gameDetail.test.ts
+15	0	app/src/sui/createGame.test.ts
+19	0	app/src/sui/createGame.ts
+3	87	app/src/sui/gameDetail.test.ts
+7	28	app/src/sui/gameDetail.ts
+exit=0
+$ bash -c cd <repo> && git diff -U0 -- app/src/sui/gameDetail.ts | /usr/bin/grep -E '^[-+]' | /usr/bin/grep -vE '^(---|\+\+\+)' | cut -c1-110
+-import { gameType, isExactType, parseGameObject, type Game } from './game';
++import { isExactType, type Game } from './game';
+-/**
+- * Lee una partida por ID. Inexistente o borrada ⇒ `GameNotFoundError`; otro tipo de objeto ⇒ `NotAGameError`
+- * parsear); el resto lo valida `parseGameObject`. `previousTransaction` es la **última** transacción que toc
+- * también una fallida (sonda P6 de #10): sirve solo para "Última actividad", nunca como "la que la resolvió"
+- */
+-export async function fetchGame(
+-  client: Pick<SuiGrpcClient, 'getObject'>,
+-  { id, originalPackageId, signal }: { id: string; originalPackageId: string; signal?: AbortSignal },
+-): Promise<{ game: Game; previousTransaction: string | null }> {
+-  let object;
+-  try {
+-    ({ object } = await withReadTimeout(signal, (abort) =>
+-      client.getObject({ objectId: id, include: { content: true, previousTransaction: true }, signal: abort }
+-    ));
+-  } catch (error) {
+-    if (error instanceof ObjectError && (error.reason === 'notFound' || error.reason === 'deleted')) {
+-      throw new GameNotFoundError(id, { cause: error });
+-    }
+-    throw error;
+-  }
+-  if (!isExactType(object.type, gameType(originalPackageId))) throw new NotAGameError(id, object.type);
+-  return { game: parseGameObject(object, originalPackageId), previousTransaction: object.previousTransaction 
+-}
+-
+-/** Lo que devuelve `fetchGameDetail`: el objeto y la última transacción que lo tocó (ver `fetchGame`). */
++/**
++ * Lo que devuelve `fetchGameDetail`: el objeto y la última transacción que lo tocó. `previousTransaction` es
++ * que tocó el objeto, también una fallida (sonda P6 de #10): sirve solo para "Última actividad", nunca como 
++ * resolvió".
++ */
+- * antes de parsear; el resto lo valida el parser de la fuente (`ReadDataError`). Mismo contrato que `fetchGa
+- * `previousTransaction`.
++ * antes de parsear; el resto lo valida el parser de la fuente (`ReadDataError`).
+exit=0
+$ bash -c cd <repo> && git diff --numstat -- contracts/README.md
+1	0	contracts/README.md
+exit=0
+$ bash -c cd <repo> && git diff --exit-code -- package.json package-lock.json app/package.json; echo exit_deps=$?
+exit_deps=0
+exit=0
+$ bash -c cd <repo> && git diff --numstat -- app/src/index.css
+55	0	app/src/index.css
+exit=0
+$ bash -c cd <repo> && git diff -U0 -- app/src/index.css | /usr/bin/grep '^+' | /usr/bin/grep -E '^\+[^ ].*\{' | sed -E 's/ \{$//'
++.clock-counter
++.duel-controls
++.duel-select
++.duel-action
++.duel-filter
++.duel-radio
++.duel-sr-only
+exit=0
+$ bash -c cd <repo> && git diff -U0 -- app/src/index.css | /usr/bin/grep '^+' | /usr/bin/grep -E '^\+(:root|body|main|\.field-error|@media|html|\*)' | wc -l
+0
+exit=0
+$ bash -c cd <repo> && git diff --exit-code -- app/src/sui/networks.ts app/src/sui/config.ts app/src/sui/localnetUrl.mjs app/src/sui/localnetUrl.d.mts app/scripts/localnet-guard.mjs app/src/test/localnetCorpus.ts; echo exit_77=$?
+exit_77=0
+exit=0
+$ bash -c cd <repo> && /usr/bin/grep -rln 'VITE_LOCALNET_URL' app --include=*.ts --include=*.tsx --include=*.mjs --include=*.html --include=*.json --exclude-dir=node_modules --exclude-dir=dist | /usr/bin/grep -v '\.test\.' 
+app/src/vite-env.d.ts
+app/src/test/localnetCorpus.ts
+app/src/sui/config.ts
+exit=0
+$ bash -c cd <repo> && /usr/bin/grep -rln 'import\.meta\.env' app/src --include=*.ts --include=*.tsx | /usr/bin/grep -v '\.test\.'
+app/src/sui/config.ts
+exit=0
+$ bash -c cd <repo> && git diff --exit-code -- app/index.html app/vite.config.ts app/eslint.config.js app/Caddyfile Dockerfile; echo exit_noedit=$?
+exit_noedit=0
+exit=0
+$ bash -c cd <repo> && git diff --exit-code -- contracts/sources contracts/tests contracts/scripts contracts/Move.lock contracts/Published.toml contracts/deployments contracts/fixtures .github documents app/src/sui/eventScan.ts app/src/sui/lobby.ts app/src/sui/myGames.ts app/src/sui/gameRegistry.ts app/src/sui/events.ts app/src/sui/duel.ts app/src/sui/errors.ts app/src/sui/gameTx.ts app/src/sui/transactions app/src/hooks/txSession.ts app/src/hooks/txInvalidation.ts app/src/hooks/gameRow.ts app/src/hooks/useClaimTimeout.ts app/src/hooks/useRefundStalled.ts app/src/hooks/useAcceptGame.ts app/src/hooks/useCancelGame.ts app/src/hooks/useRejectGame.ts app/src/hooks/useCreateGame.ts app/src/hooks/useGame.ts app/src/hooks/useExecuteTransaction.ts app/src/components/HouseAdminPanel.tsx app/src/test/txHarness.tsx; echo exit_resto=$?
+exit_resto=0
+exit=0
+$ bash -c cd <repo> && git stash list | wc -l
+0
+exit=0
+$ bash -c cd <repo> && BASE=$(git merge-base master HEAD); git diff $BASE -U0 -- contracts/sources app/src | /usr/bin/grep '^+' | /usr/bin/grep -c 'SANDBOX\|testgame'; git ls-files --others --exclude-standard -- contracts/sources app/src | xargs -r /usr/bin/grep -c 'SANDBOX\|testgame' | /usr/bin/grep -vc ':0$'
+0
+0
+exit=1
+$ bash -c cd <repo> && ls app/dist/assets/*.js | head -3; /usr/bin/grep -c '127\.0\.0\.1:19000' app/dist/assets/*.js; /usr/bin/grep -c 'VITE_LOCALNET_URL' app/dist/assets/*.js
+app/dist/assets/index-CwsHv0KF.js
+0
+1
+exit=0
+$ bash -c cd <repo> && git status --porcelain --untracked-files=all | wc -l; git status --porcelain --untracked-files=all | /usr/bin/grep -vE ' app/src/| (agents|app/README|contracts/README)\.md|^ D app/src' | head
+54
+exit=0
+$ /bin/true === ANEXO D02 ===
+exit=0
+$ bash -c cd <repo> && git diff -U0 -- app/src/index.css | /usr/bin/grep -E '^\+\.' | sed -E 's/ \{$//'
++.clock-counter
++.clock-line,
++.duel-status,
++.duel-actions,
++.duel-action-block,
++.duel-filter,
++.duel-count,
++.duel-controls
++.duel-action,
++.duel-select
++.duel-action
++.duel-action-block,
++.duel-filter
++.duel-radio
++.duel-sr-only
+exit=0
+$ /bin/true === ANEXO S01 ===
+exit=0
+$ bash -c ss -ltn | /usr/bin/grep -c ":9000 "; echo libre19000=$(ss -ltn | /usr/bin/grep -c ":19000 "); echo docker_ps=$(docker ps -aq | wc -l) docker_images=$(docker images -aq | wc -l)
+2
+libre19000=0
+docker_ps=7 docker_images=55
+exit=0
+$ bash -c cd <repo> && git show 88dd53b:.github/workflows/ci.yml | sed -n "22,25p"
+  SUI_VERSION: "1.83.0"
+  SUI_COMMIT: "16d2dc1e05ed"
+  SUI_TGZ_SHA256: "e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8"
+  SUI_BIN_SHA256: "29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa"
+exit=0
+$ bash -c cp <cache>/suiup/releases/sui-testnet-v1.83.0-ubuntu-x86_64.tgz <scratchpad>/t8b/smoke/dl183/ && cd <scratchpad>/t8b/smoke/dl183 && sha256sum *.tgz
+e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8  sui-testnet-v1.83.0-ubuntu-x86_64.tgz
+exit=0
+$ bash -c cd <scratchpad>/t8b/smoke/bin183 && tar -xzf <scratchpad>/t8b/smoke/dl183/sui-testnet-v1.83.0-ubuntu-x86_64.tgz ./sui && sha256sum sui <suiup>/binaries/testnet/sui-v1.83.0
+29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa  sui
+29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa  <suiup>/binaries/testnet/sui-v1.83.0
+exit=0
+$ /bin/true === ANEXO S02 ===
+exit=0
+$ bash -c . <scratchpad>/t8b/smoke/env.sh && [ ! -e "$SUI_CONFIG_DIR/client.yaml" ] && printf 'n\n' | "$SUI" genesis --working-dir "$SUI_CONFIG_DIR" > "$SMOKE_DIR/genesis.log" 2>&1; echo genesis_exit=$?
+genesis_exit=0
+exit=0
+$ bash -c stat -c "%y %s %n" <HOME real>/.sui/<cfg>/client.yaml; ls -la <HOME real>/.sui/<cfg>/; sha256sum <HOME real>/.sui/<cfg>/client.yaml | cut -c1-12
+2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/<cfg>/client.yaml
+total 12
+drwx------ 2 <user> <user> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <user> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <user>  244 Oct 30 17:52 client.yaml
+ef12fd09615f
+exit=0
+$ /bin/true === ANEXO S03 ===
+exit=0
+$ bash -c . <scratchpad>/t8b/smoke/env.sh && smoke_guard && suic chain-identifier
+Base58: 24h7vTQhDasbWXWt9WhfbsNNT8nYZZD6QZD3rbw1NoZo
+Hex: 0fcdcadc
+exit=0
+$ bash -c . <scratchpad>/t8b/smoke/env.sh && smoke_guard && suic --json addresses | jq -r '.addresses | length'
+5
+exit=0
+$ /bin/true === ANEXO S04 ===
+exit=0
+$ bash -c . <scratchpad>/t8b/smoke/env.sh && smoke_guard && suic --json addresses | jq -r '.addresses | map(length)'
+[
+  2,
+  2,
+  2,
+  2,
+  2
+]
+exit=0
+$ bash -c cut -d= -f1 <scratchpad>/t8b/smoke/ids.env; wc -l < <scratchpad>/t8b/smoke/ids.env
+export ADMIN
+export A
+export B
+export C
+4
+exit=0
+$ /bin/true === ANEXO S05 ===
+exit=0
+$ bash -c mkdir -p <scratchpad>/t8b/smoke/v1 && cd <repo> && git archive 26f2676 contracts | tar -x -C <scratchpad>/t8b/smoke/v1 && ls <scratchpad>/t8b/smoke/v1/contracts && git rev-parse 26f2676
+Move.lock
+Move.toml
+README.md
+fixtures
+scripts
+sources
+tests
+26f267626d797f3b2b1939c0fec496103b6d135f
+exit=0
+$ bash -c . <scratchpad>/t8b/smoke/env.sh && . <scratchpad>/t8b/smoke/ids.env && smoke_guard && smoke_guard_v1 && act_as "$ADMIN" && cd <scratchpad>/t8b/smoke/v1/contracts && suic_v1 --json test-publish --build-env testnet --pubfile-path <scratchpad>/t8b/smoke/Pub.v1.toml > <scratchpad>/t8b/smoke/v1-publish.json; echo publish_exit=$?
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+publish_exit=0
+exit=0
+$ bash <scratchpad>/t8b/tools/txsum.sh file <scratchpad>/t8b/smoke/v1-publish.json
+digest=ERDw2uVRMbDxsYJcvfhAJqsJJGW7C5i7QKYcBCemz1Je
+status=success
+gasPaymentObjects=5 gasBudget=48246000
+gas: computationCost=1000000 storageCost=46246000 storageRebate=0 nonRefundableStorageFee=0
+created 0x2::package::Publisher <id>
+created <id>::house::HouseCap <id>
+published package v1 <id>
+created 0x2::package::UpgradeCap <id>
+created <id>::house::House <id>
+exit=0
+$ /bin/true === ANEXO S06 ===
+exit=0
+$ bash -c . <scratchpad>/t8b/smoke/env.sh && . <scratchpad>/t8b/smoke/ids.env && smoke_guard && cd <repo>/contracts && "$NODE" scripts/publish.mjs record --network localnet --from <scratchpad>/t8b/smoke/v1-publish.json --chain-id "$CHAIN_HEX" --source-commit $(git rev-parse 26f2676) --sui-cli-version 1.83.0-16d2dc1e05ed --framework-rev 05ad86a3e86c522deea116f80dc2bf2309a53363 | sed -E 's/0x[0-9a-f]{8,}/<id>/g' | head -14; ls deployments
+Despliegue escrito en <repo>/contracts/deployments/localnet.json:
+  schemaVersion: 1
+  network: localnet
+  chainId: 0fcdcadc
+  packageId: <id>
+  originalPackageId: <id>
+  packageVersion: 1
+  upgradeCapId: <id>
+  houseId: <id>
+  houseCapId: <id>
+  publishTxDigest: ERDw2uVRMbDxsYJcvfhAJqsJJGW7C5i7QKYcBCemz1Je
+  publishTimestamp: 2026-11-20T19:26:12.547Z
+  sourceCommit: 26f267626d797f3b2b1939c0fec496103b6d135f
+  suiCliVersion: 1.83.0-16d2dc1e05ed
+localnet.json
+testnet.json
+exit=0
+$ /bin/true === ANEXO S07 ===
+exit=0
+$ bash -c . <scratchpad>/t8b/smoke/ids.env && ROLE=ADMIN bash <scratchpad>/t8b/tools/ptb.sh --move-call "$PK1::house::update_fee_rate" "@$HOUSE" "@$HOUSECAP" 500
+cli_exit=0
+digest=DiLECG6y8WYm36VHCkuaUPiYES4xmTnvGaqkGQLqeiJw
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+gas: computationCost=1000000 storageCost=3807600 storageRebate=3807219 nonRefundableStorageFee=381
+event <id>::house::FeeRateUpdated
+exit=0
+$ bash <scratchpad>/t8b/tools/story_old.sh
+cli_exit=0 step=GO1 digest=GKX3DxkorB5WHSzvJBaKgJiWQaxsG4irjcvKV84SeA14 status=success game=yes
+cli_exit=0 step=GINV digest=83Zay1hoeDMfJhbNnpZ6mQ13fdXC32JJnaxfuLCttHp2 status=success game=yes
+cli_exit=0 step=GCAN digest=ZCV2ANKWfPEfFwCAViNZc3VKfbpR9GY6oymvxyEctWn status=success game=yes
+cli_exit=0 step=GCAN_CANCEL digest=5wBDxPZoVUUmtmSqv6UknJhY6pXbHf55J7KZCdyThboV status=success game=
+cli_exit=0 step=GRES digest=3akVfYNs4kB6497Z4d5oFvTck8qm31a19FkfQY47DP4L status=success game=yes
+cli_exit=0 step=GRES_ACCEPT digest=EeEDH9ryfNDcohDzqRrLj7bNZv7Q1BMvLbHrYpijs96w status=success game=
+exit=0
+$ /bin/true === ANEXO S08 ===
+exit=0
+$ bash -c . <scratchpad>/t8b/smoke/env.sh && . <scratchpad>/t8b/smoke/ids.env && smoke_guard && act_as "$ADMIN" && cd <repo>/contracts && SUI_BIN="$SUI" "$NODE" scripts/publish.mjs upgrade --network localnet --pubfile-path <scratchpad>/t8b/smoke/Pub.v1.repo.toml | sed -E 's/0x[0-9a-f]{8,}/<id>/g; s#/tmp/[^ ]*#<tmp>#g'
+Upgrade registrado en <repo>/contracts/deployments/localnet.json:
+  packageVersion: 1 → 2
+  packageId: <id> → <id>
+  upgrades[0]: version 2, packageId <id>, txDigest CPY1zJjxv14mVopA2Qu3YosGfawAYBVrojU463RMdQL3
+  typeOrigins: 24 tipos, 11 definidos en un upgrade
+  sourceCommit: null
+  suiCliVersion: 1.84.0-9dc25070cf2e
+  frameworkRev: e6f43880f4b65e2c1f0397583a9690b4b22c9223
+Directorio temporal con la salida cruda: <tmp> (bórralo cuando termines)
+Siguiente (no lo ejecuta este script; README → Upgrade, pasos de registro y verificación):
+  git diff -- contracts/Published.toml   # solo published-at, version y toolchain-version; si no, STOP
+  node scripts/publish.mjs check
+  verificación independiente de typeOrigins por gRPC o GraphQL público (no con la CLI que la produjo)
+exit=0
+$ bash -c . <scratchpad>/t8b/smoke/env.sh && smoke_guard && cd <repo>/contracts && "$NODE" scripts/publish.mjs check
+2 despliegue(s) válidos y coherentes con Published.toml
+exit=0
+$ bash -c cd <repo> && git diff --exit-code -- contracts/Move.lock contracts/Published.toml; echo diff_exit=$?
+diff_exit=0
+exit=0
+$ /bin/true === ANEXO S09 ===
+exit=0
+$ bash -c . <scratchpad>/t8b/smoke/env.sh && RPC_URL=$RPC_URL "$NODE" <scratchpad>/t8b/tools/verify_origins.mjs <repo>/contracts/deployments/localnet.json | sed -E 's/0x[0-9a-f]{8,}/<id>/g'
+json: 24 tipos; cadena (gRPC getObject package): 24 tipos; diferencias: 0
+  modulo house: definingId = original
+  modulo duel: definingId = upgrade-2
+  modulo coinflip: definingId = upgrade-2
+  modulo game: definingId = original
+exit=0
+$ bash <scratchpad>/t8b/tools/story_new.sh
+cli_exit=0 step=DO digest=Fy7a8SK7jnVDqzCFWznTDtvpQnjvK6D3VkBFeeYzR2dc status=success duel=yes
+cli_exit=0 step=DINV digest=CwTT7wfgXY1Ab8HGMQRbE1kqbx47Lc4XXXSbpyQKoSXT status=success duel=yes
+cli_exit=0 step=DCAN digest=FvWJdyNu4QtgjNzRZA9Nn5mA3qSiSecrFPzmNMVcWkGn status=success duel=yes
+cli_exit=0 step=DCAN_CANCEL digest=7Bi5aT512gqJZcqqTjo8DKNamjTo4jC7fjubd4mc5q66 status=success duel=
+cli_exit=0 step=DREJ digest=39VHCW6PjSoAKWPSBZkmtQPU4WbCgp36k9K28C6Uuegx status=success duel=yes
+cli_exit=0 step=DREJ_REJECT digest=Gr31jC2nfTT4VGGysb2Wxb1RDKXjWFwqaX5hCYVTzFC8 status=success duel=
+cli_exit=0 step=DACC digest=FRzK73nizEk5eREjfFnz9H1Qgwsrfk2cZn1y5rcN5VCh status=success duel=yes
+cli_exit=0 step=DACC_ACCEPT digest=5Y379ZqYu2v5o8kDojonKG3XD9GKbbatvYYbWPSSjXVu status=success duel=
+exit=0
+$ /bin/true === ANEXO S10 ===
+exit=0
+$ bash -c ss -ltn | /usr/bin/grep -E ':5173 |:19222 '; cat <scratchpad>/t8b/smoke/vite.pid <scratchpad>/t8b/smoke/chrome.pid; /usr/bin/grep -nE 'Local|Network' <scratchpad>/t8b/smoke/vite.log | head
+LISTEN 0      10              127.0.0.1:19222      0.0.0.0:*   
+LISTEN 0      511             127.0.0.1:5173       0.0.0.0:*   
+3412310
+3412470
+4:  ➜  Local:   http://localhost:5173/
+5:  ➜  Network: use --host to expose
+exit=0
+$ bash -c ps -o pid,args -p $(cat <scratchpad>/t8b/smoke/vite.pid),$(cat <scratchpad>/t8b/smoke/chrome.pid) | cut -c1-200
+    PID COMMAND
+3412310 <node26>/bin/node <repo>/node_modules/vite/bin/vite.js
+3412470 /opt/google/chrome/chrome --headless=new --remote-debugging-port=19222 --remote-debugging-address=127.0.0.1 --user-data-dir=<scratchpad (ruta cortada)>
+exit=0
+$ /bin/true === ANEXO S11 ===
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs open t1 http://localhost:5173/
+abierta t1
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs wait t1 document.body.innerText.includes('nodo OK') 30000
+true
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 document.querySelector('.network-badge').innerText
+"localnet · nodo OK"
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 document.querySelector('.lobby').innerText.slice(0,900)
+"Partidas abiertas\nActualizar\nJuego \nTodos\nCoinflip\n\n2 partidas\n\n0.01 SUI · comisión 5 % · creada por <corta> · nueva · sin reloj · 20 nov 2026, 14:26 · Ver partida\n0.01 SUI · comisión 5 % · creada por <corta> · anterior · sin reloj · 20 nov 2026, 14:26 · Ver partida"
+exit=0
+$ /bin/true === ANEXO S12 ===
+exit=0
+$ bash <scratchpad>/t8b/tools/fund.sh <scratchpad>/t8b/smoke/p1.addr
+cli_exit=0
+digest=5K6rPWoX5eVbeGjF2N7xe35oDJzTntVgEyfmEgrHw1xf
+status=success
+gasPaymentObjects=10 gasBudget=200000000
+exit=0
+$ /bin/true === ANEXO S13 ===
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 document.querySelector('form.create-game').innerText.replace(/0x[0-9a-f]{4}…[0-9a-f]{4}/g,'<corta>')
+"Crear partida\n\nMínimo 0.001 SUI · máximo 50 SUI\n\nComisión 5 % (la partida guarda esta comisión)\n\nSaldo: 0 SUI\n\nApuesta (SUI) Invitar a (opcional) \n\nAdemás del gas, crear la partida deja un depósito de almacenamiento (≈ 0.0024092 SUI abierta, ≈ 0.0026524 SUI con invitación, al precio actual de testnet) que no se recupera. El saldo tiene que cubrir la apuesta más ≈ 0.01 SUI de reserva para el gas.\n\nCrear partida"
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 JSON.stringify({selectJuego: !!document.querySelector('form.create-game select'), fieldsets: document.querySelectorAll('form.create-game fieldset').length, radios: document.querySelectorAll('form.create-game input[type=radio]').length})
+"{\"selectJuego\":false,\"fieldsets\":0,\"radios\":0}"
+exit=0
+$ /bin/true === ANEXO S14 ===
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 [...document.querySelectorAll('form.create-game p')].map(p=>p.innerText).filter(t=>t.startsWith('Saldo')).join('|')
+"Saldo: 2 SUI"
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 JSON.stringify({submitDisabled: document.querySelector('form.create-game button[type=submit]').disabled, estimate: document.querySelector('.game-estimate')?.innerText})
+"{\"submitDisabled\":false,\"estimate\":\"Si alguien acepta: pozo 0.02 SUI · comisión 0.001 SUI · al ganador 0.019 SUI\"}"
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs wait t1 location.hash.startsWith('#/game/') 40000
+true
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 document.querySelector('main').innerText.replace(/0x[0-9a-f]{4}…[0-9a-f]{4}/g,'<corta>')
+"Partida\n\nPartida creada\n\nTransacción 9h2YK1…Bm3n · Costo de red: 0.003409299 SUI (incluye el depósito de almacenamiento, que no se recupera)\n\nLa partida está abierta.\n\nEspera a que alguien la acepte; mientras tanto puedes cancelarla y recuperar tu apuesta.\n\nEstado\nAbierta\nCreador\n<corta>\nOponente\nabierta\nApuesta\n0.01 SUI\nComisión\n5 %\nReloj\nsin reloj\nÚltima actividad\n20 nov 2026, 14:30\n\nPozo 0.02 SUI · comisión 0.001 SUI · al ganador 0.019 SUI\n\nCancelar"
+exit=0
+$ /bin/true === ANEXO S15 ===
+exit=0
+$ bash -c bash <scratchpad>/t8b/tools/txsum.sh digest $(cat <scratchpad>/t8b/smoke/create1.digest) | sed -E 's/0x[0-9a-f]{8,}/<id>/g'
+digest=9h2YK1DWZLLDJAiK5ztDReoXLxoqJFtrfwze4A8FBm3n
+status=success
+gasPaymentObjects=1 gasBudget=4409200
+gas: computationCost=1000000 storageCost=3397200 storageRebate=987901 nonRefundableStorageFee=99
+created <id>::duel::Duel<<id>::coinflip::Coinflip> <id>
+event <id>::duel::DuelCreated<<id>::coinflip::Coinflip>
+exit=0
+$ /bin/true === ANEXO S16 ===
+exit=0
+$ bash <scratchpad>/t8b/tools/fund.sh <scratchpad>/t8b/smoke/p2.addr
+cli_exit=0
+digest=CejbsuVhiosrNwzDnWB6X4wKqjAuJfo4pzARhwdnopJ5
+status=success
+gasPaymentObjects=1 gasBudget=200000000
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t2 document.querySelector('main').innerText.replace(/0x[0-9a-f]{4}…[0-9a-f]{4}/g,'<corta>')
+"Partida\n\nLa partida está abierta.\n\nPuedes aceptar la partida apostando lo mismo que quien la creó.\n\nEstado\nAbierta\nCreador\n<corta>\nOponente\nabierta\nApuesta\n0.01 SUI\nComisión\n5 %\nReloj\nsin reloj\nÚltima actividad\n20 nov 2026, 14:30\n\nPozo 0.02 SUI · comisión 0.001 SUI · al ganador 0.019 SUI\n\nApuestas 0.01 SUI, igual que el creador. El ganador se sortea on-chain al ejecutarse la transacción (50 % cada uno) y pagas su gas.\n\nSi tu wallet muestra una vista previa con un ganador o un cambio de saldo, es una simulación: el sorteo real ocurre cuando la red ejecuta la transacción.\n\nSaldo insuficiente: necesitas 0.01 SUI de apuesta más ≈ 0.01 SUI de reserva para el gas\n\nAceptar"
+exit=0
+$ /bin/true === ANEXO S17 ===
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t2 JSON.stringify({aceptar: [...document.querySelectorAll('button')].map(b=>b.innerText+':'+b.disabled), saldo: document.querySelector('.field-error')?.innerText ?? null})
+"{\"aceptar\":[\"Aceptar:false\"],\"saldo\":null}"
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs wait t2 document.querySelector('.tx-success') !== null 60000
+true
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t2 document.querySelector('main').innerText.replace(/0x[0-9a-f]{4}…[0-9a-f]{4}/g,'<corta>')
+"Partida\n\nLa partida está resuelta.\n\nGanaste el sorteo y se te pagó. No hay nada más que hacer.\n\nEstado\nResuelta\nCreador\n<corta>\nOponente\nabierta\nApuesta\n0.01 SUI\nComisión\n5 %\nReloj\nsin reloj\nAceptante\n<corta>\nGanador\n<corta>\nPozo\n0.02 SUI\nComisión cobrada\n0.001 SUI\nPago al ganador\n0.019 SUI (según la fórmula del contrato)\nResultado para ti\nganaste\nÚltima actividad\n20 nov 2026, 14:30\n\n¡Ganaste! Recibiste 0.019 SUI (pozo 0.02 SUI − comisión 0.001 SUI)\n\nTransacción 6SNXoy…iCgv · Costo de red: 0.002474892 SUI"
+exit=0
+$ /bin/true === ANEXO S18 ===
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs wait t1 [...document.querySelectorAll('.tx-success')].length >= 1 && document.querySelector('main').innerText.includes('Cancelada') 60000
+true
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 document.querySelector('main').innerText.replace(/0x[0-9a-f]{4}…[0-9a-f]{4}/g,'<corta>')
+"Partida\n\nPartida creada\n\nTransacción EGxU74…g25R · Costo de red: 0.003409299 SUI (incluye el depósito de almacenamiento, que no se recupera)\n\nLa partida fue cancelada.\n\nLa partida se canceló y la apuesta volvió a quien la creó. No hay nada más que hacer.\n\nEstado\nCancelada\nCreador\n<corta>\nOponente\nabierta\nApuesta\n0.005 SUI\nComisión\n5 %\nReloj\nsin reloj\nÚltima actividad\n20 nov 2026, 14:31\n\nPartida cancelada: se devolvieron 0.005 SUI a tu cuenta\n\nTransacción 7izUEa…YFWN · Costo de red: 0.00198834 SUI"
+exit=0
+$ /bin/true === ANEXO S19 ===
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 JSON.stringify({submitDisabled: document.querySelector('form.create-game button[type=submit]').disabled, errores: [...document.querySelectorAll('.field-error')].map(e=>e.innerText)})
+"{\"submitDisabled\":false,\"errores\":[]}"
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 document.querySelector('main').innerText.replace(/0x[0-9a-f]{4}…[0-9a-f]{4}/g,'<corta>')
+"Partida\n\nPartida creada\n\nTransacción 9w9xCu…trM4 · Costo de red: 0.002664598 SUI (incluye el depósito de almacenamiento, que no se recupera)\n\nComparte el enlace de esta página con el invitado; guárdalo, o encuéntrala en «Mis partidas»\n\nLa partida es una invitación.\n\nEspera a que <corta> la acepte; mientras tanto puedes cancelarla y recuperar tu apuesta.\n\nEstado\nInvitación a <corta>\nCreador\n<corta>\nOponente\n<corta>\nApuesta\n0.005 SUI\nComisión\n5 %\nReloj\nsin reloj\nÚltima actividad\n20 nov 2026, 14:31\n\nPozo 0.01 SUI · comisión 0.0005 SUI · al ganador 0.0095 SUI\n\nCancelar"
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t2 document.querySelector('.my-games').innerText.replace(/0x[0-9a-f]{4}…[0-9a-f]{4}/g,'<corta>')
+"Mis partidas\nActualizar\nAbrir partida por ID Abrir\nInvitaciones recibidas\n\nTe invitó <corta> · 0.005 SUI · Pendiente · 20 nov 2026, 14:31 · Ver partida\n\nApuestas 0.005 SUI, igual que el creador. El ganador se sortea on-chain al ejecutarse la transacción (50 % cada uno) y pagas su gas.\n\nSi tu wallet muestra una vista previa con un ganador o un cambio de saldo, es una simulación: el sorteo real ocurre cuando la red ejecuta la transacción.\n\nAceptar\nRechazar\nTus partidas pendientes\n\nNo tienes partidas pendientes\n\nTerminadas\n\nAceptaste · Aceptaste la de <corta> · 0.01 SUI · Resuelta · 20 nov 2026, 14:30 · Ver partida\n\nGanaste · pozo 0.02 SUI · al ganador 0.019 SUI (según la fórmula del contrato)"
+exit=0
+$ /bin/true === ANEXO S20 ===
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs wait t2 document.querySelector('.tx-success') !== null 60000
+true
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t2 document.querySelector('.my-games').innerText.replace(/0x[0-9a-f]{4}…[0-9a-f]{4}/g,'<corta>')
+"Mis partidas\nActualizar\nAbrir partida por ID Abrir\nInvitaciones recibidas\n\nTe invitó <corta> · 0.005 SUI · Cancelada · 20 nov 2026, 14:31 · Ver partida\n\nInvitación rechazada: se devolvieron 0.005 SUI a quien te invitó\n\nTransacción CML4tx…B9hj · Costo de red: 0.001000463 SUI\n\nTus partidas pendientes\n\nNo tienes partidas pendientes\n\nTerminadas\n\nAceptaste · Aceptaste la de <corta> · 0.01 SUI · Resuelta · 20 nov 2026, 14:30 · Ver partida\n\nGanaste · pozo 0.02 SUI · al ganador 0.019 SUI (según la fórmula del contrato)"
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 document.querySelector('.lobby').innerText.replace(/0x[0-9a-f]{4}…[0-9a-f]{4}/g,'<corta>')
+"Partidas abiertas\nActualizar\nJuego \nTodos\nCoinflip\n\n2 partidas\n\n0.01 SUI · comisión 5 % · creada por <corta> · nueva · sin reloj · 20 nov 2026, 14:26 · Ver partida\n0.01 SUI · comisión 5 % · creada por <corta> · anterior · sin reloj · 20 nov 2026, 14:26 · Ver partida"
+exit=0
+$ /bin/true === ANEXO S21 ===
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 (() => { const s = document.querySelector('.duel-select'); s.value = 'coinflip'; s.dispatchEvent(new Event('change', { bubbles: true })); return s.value; })()
+"coinflip"
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 document.querySelector('.lobby').innerText.replace(/0x[0-9a-f]{4}…[0-9a-f]{4}/g,'<corta>')
+"Partidas abiertas\nActualizar\nJuego \nTodos\nCoinflip\n\n2 partidas\n\n0.01 SUI · comisión 5 % · creada por <corta> · nueva · sin reloj · 20 nov 2026, 14:26 · Ver partida\n0.01 SUI · comisión 5 % · creada por <corta> · anterior · sin reloj · 20 nov 2026, 14:26 · Ver partida"
+exit=0
+$ /bin/true === ANEXO S22 ===
+exit=0
+$ bash -c /usr/bin/grep -c ':9000' <scratchpad>/t8b/smoke/net-requests.log; sed -E 's#^(request [A-Z]+ |websocket )(https?://[^/]+|wss?://[^/]+|data:).*#\1\2#' <scratchpad>/t8b/smoke/net-requests.log | sort | uniq -c
+0
+      5 request GET data:
+    265 request GET http://localhost:5173
+     87 request OPTIONS http://127.0.0.1:19000
+    192 request POST http://127.0.0.1:19000
+      2 websocket ws://localhost:5173
+exit=0
+$ bash -c sed -E 's/0x[0-9a-f]{8,}/<id>/g' <scratchpad>/t8b/smoke/console.log | cut -c1-240 | sort | uniq -c | sort -rn | head -12
+      2 console warning Your application is currently using the unsafe burner wallet. Make sure that this wallet is disabled in production.
+      2 console warning Lit is in dev mode. Not recommended for production! See https://lit.dev/msg/dev-mode for more information.
+      1 grabador listo
+exit=0
+$ /bin/true === ANEXO S23 ===
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/cdp.mjs eval t1 JSON.stringify([...document.querySelectorAll('#inyectado .duel-action')].map(b => ({boton: b.innerText, disabled: b.disabled, motivo: b.getAttribute('aria-describedby').split(' ').map(id => document.getElementById(id).innerText.replace(/0x[0-9a-f]{8,}/g,'<id>')).join(' | ')})))
+"[{\"boton\":\"Reclamar victoria\",\"disabled\":true,\"motivo\":\"Aún no venció el plazo (quedan 3 min 20 s) | El pozo (0.02 SUI) menos la comisión (0.001 SUI) va a <id>; no necesariamente a quien ejecuta.\"},{\"boton\":\"Reembolsar\",\"disabled\":false,\"motivo\":\"Cada jugador recupera su apuesta (0.01 SUI). Sin comisión.\"}]"
+exit=0
+$ /bin/true === ANEXO S30 ===
+exit=0
+$ bash -c kill $(cat <scratchpad>/t8b/smoke/recorder.pid); kill $(cat <scratchpad>/t8b/smoke/chrome.pid); kill $(cat <scratchpad>/t8b/smoke/vite.pid); kill $(cat <scratchpad>/t8b/smoke/sui.pid); sleep 3; for n in recorder chrome vite sui; do kill -0 $(cat <scratchpad>/t8b/smoke/$n.pid) 2>/dev/null && echo $n vivo || echo $n detenido; done
+recorder detenido
+chrome detenido
+vite detenido
+sui detenido
+exit=0
+$ bash -c for p in 19000 5173 19222; do echo puerto $p: $(ss -ltn | /usr/bin/grep -c ":$p "); done; echo 9000: $(ss -ltn | /usr/bin/grep -c ':9000 ')
+puerto 19000: 0
+puerto 5173: 0
+puerto 19222: 0
+9000: 2
+exit=0
+$ /bin/true === ANEXO S31 ===
+exit=0
+$ bash -c cd <repo> && rm -f contracts/deployments/localnet.json && rmdir contracts/deployments 2>/dev/null; ls contracts/deployments; test ! -e contracts/deployments/localnet.json && echo sin_localnet_json=0; ! compgen -G 'contracts/Pub.*.toml' && echo sin_pub_toml=0; git diff --exit-code -- contracts/Move.lock contracts/Published.toml; echo lock_published_exit=$?
+testnet.json
+sin_localnet_json=0
+sin_pub_toml=0
+lock_published_exit=0
+exit=0
+$ bash -c rm -rf <scratchpad>/t8b/smoke; test ! -e <scratchpad>/t8b/smoke && echo smoke_dir_borrado=0; ls <scratchpad>/t8b | head -3
+smoke_dir_borrado=0
+a01_inicio.txt
+a02_baseline.txt
+console.final.log
+exit=0
+$ bash -c stat -c "%y %s %n" <HOME real>/.sui/<cfg>/client.yaml; ls -la <HOME real>/.sui/<cfg>/; sha256sum <HOME real>/.sui/<cfg>/client.yaml | cut -c1-12
+2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/<cfg>/client.yaml
+total 12
+drwx------ 2 <user> <user> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <user> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <user>  244 Oct 30 17:52 client.yaml
+ef12fd09615f
+exit=0
+$ bash -c pgrep -x sui | wc -l; pgrep -f 'vite.js' | wc -l; pgrep -f 'remote-debugging-port=19222' | wc -l; echo docker_ps=$(docker ps -aq | wc -l) docker_images=$(docker images -aq | wc -l)
+0
+3
+3
+docker_ps=7 docker_images=55
+exit=0
+$ bash -c echo chrome19222=$(ps -eo args | /usr/bin/grep -c '[r]emote-debugging-port=19222'); echo vite=$(ps -eo args | /usr/bin/grep -c '[v]ite/bin/vite.js'); echo sui_start=$(ps -eo args | /usr/bin/grep -c '[s]ui start')
+chrome19222=0
+vite=0
+sui_start=0
+exit=0
+$ /bin/true === ANEXO UX01 ===
+exit=0
+$ <node26>/bin/node <scratchpad>/t8b/tools/summ.mjs
+== detalle_cancelled
+  1280px: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: ninguno; tabindex positivos: 0
+  360px: scrollWidth 345 <= clientWidth 345: true; controles nuevos: ninguno; tabindex positivos: 0
+  320px: scrollWidth 305 <= clientWidth 305: true; controles nuevos: ninguno; tabindex positivos: 0
+  achromatopsia: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: ninguno; tabindex positivos: 0
+  Tab 1: body
+  Tab 2: a[Mis partidas] outline=auto/1px en pantalla=true
+  Tab 3: button[] outline=none/1px en pantalla=true
+  Tab 4: body
+  Tab 5: a[Mis partidas] outline=auto/1px en pantalla=true
+== detalle_pending
+  1280px: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: ninguno; tabindex positivos: 0
+  360px: scrollWidth 345 <= clientWidth 345: true; controles nuevos: ninguno; tabindex positivos: 0
+  320px: scrollWidth 305 <= clientWidth 305: true; controles nuevos: ninguno; tabindex positivos: 0
+  achromatopsia: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: ninguno; tabindex positivos: 0
+  Tab 1: button[] outline=none/1px en pantalla=true
+  Tab 2: button[Aceptar] outline=auto/1px en pantalla=true
+  Tab 3: body
+  Tab 4: a[Mis partidas] outline=auto/1px en pantalla=true
+  Tab 5: button[] outline=none/1px en pantalla=true
+  Tab 6: button[Aceptar] outline=auto/1px en pantalla=true
+  Tab 7: body
+== detalle_resolved
+  1280px: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: ninguno; tabindex positivos: 0
+  360px: scrollWidth 345 <= clientWidth 345: true; controles nuevos: ninguno; tabindex positivos: 0
+  320px: scrollWidth 305 <= clientWidth 305: true; controles nuevos: ninguno; tabindex positivos: 0
+  achromatopsia: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: ninguno; tabindex positivos: 0
+  Tab 1: a[Mis partidas] outline=auto/1px en pantalla=true
+  Tab 2: button[] outline=none/1px en pantalla=true
+  Tab 3: body
+  Tab 4: a[Mis partidas] outline=auto/1px en pantalla=true
+  Tab 5: button[] outline=none/1px en pantalla=true
+== formulario
+  1280px: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  360px: scrollWidth 345 <= clientWidth 345: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  320px: scrollWidth 305 <= clientWidth 305: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  achromatopsia: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  Tab 1: input[] outline=auto/1px en pantalla=true
+  Tab 2: input[] outline=auto/1px en pantalla=true
+  Tab 3: button[Actualizar] outline=auto/1px en pantalla=true
+  Tab 4: select[Todos
+  Tab 5: a[Ver partida] outline=auto/1px en pantalla=true
+  Tab 6: a[Ver partida] outline=auto/1px en pantalla=true
+== inyectado
+  1280px: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: duel-select 67x44, duel-action 119x44, duel-action 87.9x44, duel-radio 992x44, duel-radio 992x44, duel-radio 992x44, duel-radio 992x44, duel-radio 992x44, duel-radio 992x44, duel-radio 992x44; tabindex positivos: 0
+  360px: scrollWidth 345 <= clientWidth 345: true; controles nuevos: duel-select 67x44, duel-action 119x44, duel-action 87.9x44, duel-radio 281x44, duel-radio 281x44, duel-radio 281x44, duel-radio 281x44, duel-radio 281x44, duel-radio 281x44, duel-radio 281x44; tabindex positivos: 0
+  320px: scrollWidth 305 <= clientWidth 305: true; controles nuevos: duel-select 67x44, duel-action 119x44, duel-action 87.9x44, duel-radio 241x44, duel-radio 241x44, duel-radio 241x44, duel-radio 241x44, duel-radio 241x44, duel-radio 241x44, duel-radio 241x44; tabindex positivos: 0
+  achromatopsia: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: duel-select 67x44, duel-action 119x44, duel-action 87.9x44, duel-radio 992x44, duel-radio 992x44, duel-radio 992x44, duel-radio 992x44, duel-radio 992x44, duel-radio 992x44, duel-radio 992x44; tabindex positivos: 0
+== lobby
+  1280px: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  360px: scrollWidth 345 <= clientWidth 345: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  320px: scrollWidth 305 <= clientWidth 305: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  achromatopsia: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  Tab 1: a[Mis partidas] outline=auto/1px en pantalla=true
+  Tab 2: button[] outline=none/1px en pantalla=true
+  Tab 3: input[] outline=auto/1px en pantalla=true
+  Tab 4: input[] outline=auto/1px en pantalla=true
+  Tab 5: button[Actualizar] outline=auto/1px en pantalla=true
+  Tab 6: select[Todos
+  Tab 7: a[Ver partida] outline=auto/1px en pantalla=true
+  Tab 8: a[Ver partida] outline=auto/1px en pantalla=true
+  Tab 9: body
+== lobby_filtro
+  1280px: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  360px: scrollWidth 345 <= clientWidth 345: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  320px: scrollWidth 305 <= clientWidth 305: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  achromatopsia: scrollWidth 1265 <= clientWidth 1265: true; controles nuevos: duel-select 67x44; tabindex positivos: 0
+  Tab 1: input[] outline=auto/1px en pantalla=true
+  Tab 2: input[] outline=auto/1px en pantalla=true
+  Tab 3: button[Actualizar] outline=auto/1px en pantalla=true
+  Tab 4: select[Todos
+  Tab 5: a[Ver partida] outline=auto/1px en pantalla=true
+  Tab 6: a[Ver partida] outline=auto/1px en pantalla=true
+  Tab 7: body
+  Tab 8: a[Mis partidas] outline=auto/1px en pantalla=true
+  Tab 9: button[] outline=none/1px en pantalla=true
+== mis_partidas
+  1280px: scrollWidth 1280 <= clientWidth 1280: true; controles nuevos: ninguno; tabindex positivos: 0
+  360px: scrollWidth 345 <= clientWidth 345: true; controles nuevos: ninguno; tabindex positivos: 0
+  320px: scrollWidth 305 <= clientWidth 305: true; controles nuevos: ninguno; tabindex positivos: 0
+  achromatopsia: scrollWidth 1280 <= clientWidth 1280: true; controles nuevos: ninguno; tabindex positivos: 0
+  Tab 1: button[Actualizar] outline=auto/1px en pantalla=true
+  Tab 2: input[] outline=auto/1px en pantalla=true
+  Tab 3: button[Abrir] outline=auto/1px en pantalla=true
+  Tab 4: a[Ver partida] outline=auto/1px en pantalla=true
+  Tab 5: button[Aceptar] outline=auto/1px en pantalla=true
+  Tab 6: button[Rechazar] outline=auto/1px en pantalla=true
+  Tab 7: a[Ver partida] outline=auto/1px en pantalla=true
+  Tab 8: body
+== resumen
+exit=0
+$ /bin/true === ANEXO R6a ===
+exit=0
+$ bash -c /usr/bin/grep -nE '[0-9a-fA-F]{40,64}' <scratchpad>/t8b/added_tracked.txt | cut -c1-170
+exit=0
+$ bash -c /usr/bin/grep -nE '0x[0-9a-fA-F]{8,}' <scratchpad>/t8b/added_tracked.txt | cut -c1-170
+exit=0
+$ bash -c /usr/bin/grep -nE 'suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home-' <scratchpad>/t8b/added_tracked.txt | cut -c1-170
+exit=0
+$ bash -c /usr/bin/grep -nE '[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}' <scratchpad>/t8b/added_tracked.txt | cut -c1-170
+exit=0
+$ bash -c /usr/bin/grep -nE '[0-9a-fA-F]{40,64}' <scratchpad>/t8b/added_new.txt | cut -c1-170
+exit=0
+$ bash -c /usr/bin/grep -nE '0x[0-9a-fA-F]{8,}' <scratchpad>/t8b/added_new.txt | cut -c1-170
+exit=0
+$ bash -c /usr/bin/grep -nE 'suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home-' <scratchpad>/t8b/added_new.txt | cut -c1-170
+exit=0
+$ bash -c /usr/bin/grep -nE '[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}' <scratchpad>/t8b/added_new.txt | cut -c1-170
+exit=0
+
+
+### §R-6: los 4 greps sobre el diff, las altas y este reporte (grep 3 = `suiprivkey|mnemonic|seed phrase|/home/|/Users/|claude-[0-9]+|-home-`)
+Anexo R6a (diff tracked: 587 líneas agregadas; altas sin trackear: 3486 líneas de los 30 archivos nuevos): **0 coincidencias** de los 4 patrones, en ambos (los tests usan direcciones sintéticas construidas con `'ab'.repeat(32)` y comparan con `shortAddress(...)`, sin literales abreviados). Sobre **este reporte** (anexo R6b, grep final en el cierre), cada coincidencia clasificada:
+- Grep 1 (`[0-9a-fA-F]{40,64}`): los **SHA-256** del tgz y del binario 1.83.0 (de `ci.yml` de `88dd53b`, públicos), el commit `26f2676…` (`sourceCommit` y el `git rev-parse`) y los `frameworkRev` del `Move.lock` (commits públicos del framework de Sui) en las salidas pegadas del smoke. Ninguna clave ni dirección.
+- Grep 2 (`0x[0-9a-fA-F]{8,}`): **0**; los anexos están enmascarados (`<id>`) con `sed` sin `-i`; los IDs de objetos y paquetes de la localnet desechable no se transcriben.
+- Grep 3: solo las líneas que **citan el propio patrón** (el comando de §R-6 pegado en R6a). Las rutas de sesión y personales están enmascaradas (`<scratchpad>`, `<repo>`, `<HOME real>`).
+- Grep 4 (`[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}`): **0**; las direcciones abreviadas de las capturas (`0x…`) están enmascaradas como `<corta>`.
+- Rastros de una ejecución accidental de `sui` (la cadena "command not found" y el patrón "Cannot run genesis | sui_config | Address already in use"): **0 coincidencias en los anexos y en el cuerpo de los resultados**; las únicas del reporte final son las líneas que **citan el propio patrón** (este párrafo, el de "Guarda de ~/.sui" y el comando de verificación). Los anexos de guarda muestran `<cfg>` en lugar del nombre del directorio de la config.
+
+### Cierre de la localnet
+Lanzado en segundo plano por este task y **cerrado por PID** antes de entregar: (1) `sui start --fullnode-rpc-port 19000` (PID 3407484), (2) el servidor de Vite (PID 3412310, **sin `--host`**), (3) Chrome headless (PID 3412470, depuración en `127.0.0.1:19222`), (4) el grabador CDP (PID en `recorder.pid`). `kill` por PID, nunca `pkill`; `sui start` salió con 144 y Vite con 143 (esperados); `kill -0` falla para los cuatro; `ss -ltn` = **0** para `19000`, `5173` y `19222`; `ps -eo args` sin `sui start`, `vite/bin/vite.js` ni Chrome con el puerto 19222; el **9000 ajeno igual** que al empezar (2 sockets, no se le habló: 0 peticiones con `:9000`). `<SMOKE_DIR>` (con el binario 1.83.0, los árboles temporales, las capturas y los PID) **borrado y verificado** (`test ! -e`); `contracts/deployments/` solo con `testnet.json` (`localnet.json` borrado) y `! compgen -G 'contracts/Pub.*.toml'` = 0; `git diff --exit-code -- contracts/Move.lock contracts/Published.toml` = 0 (anexos S30, S31). Docker: 8 contenedores / 53 imágenes al arrancar, 7 / 55 al armar la localnet y 7 / 55 al cerrar; no lancé ni toqué contenedores (lo cambiaron otras sesiones del host; sin nombrar nada). **C-14:** además de lo anterior, el primer `npm test` con `lint` y `typecheck` en una sola llamada pasó a segundo plano por el límite de 120 s del harness (`b5j1lai5z`) y **terminó solo** (exit 0, 2130 tests) antes de seguir; ningún `Monitor`; esperas en primer plano con `timeout … until`. Al entregar no queda ningún proceso mío en segundo plano.
+
+### Guarda de ~/.sui (C-13, R-12)
+`stat`, `ls -la` y primeros 12 hex del `sha256sum` de `client.yaml` (nunca `cat`): **al inicio** (anexo A01), **tras la génesis** (S02), **al cerrar la localnet** (S31) y **al final, tras escribir este reporte** (anexo Z01): **244 bytes, mtime `2026-10-30 17:52:52.515735237 -0500`, solo `client.yaml`, `ef12fd09615f`** en los cuatro: idéntico a la línea base. Sin rastros de ejecución accidental sobre el reporte y los borradores (salvo las líneas que citan el propio patrón, arriba). **Ejecución accidental de `sui`: ninguna** (toda invocación llevó `printf 'n\n' |` y el prefijo de la localnet aislada; ninguna `sui client` ni `keytool` fuera del prefijo; ningún publicar/upgrade/`--dry-run` contra testnet; sin faucet, sin `new-address`, sin `--force-regenesis`, sin `sui start` a secas). Todo texto que escribí a archivos (código, tests, docs, scripts de CDP y de la corrida, este reporte) salió de las herramientas de archivos; las desviaciones de proceso, en "Desviaciones" (punto 8).
+
+### Resumen para el orquestador (≈15 líneas)
+Ver el mensaje de entrega del DEV: lobby y filtro, formulario y nota de costo, vista activa y reloj, detalle de terminales, reclamar y reembolsar, resultados adoptados, retiro de lo provisorio, UX-1..UX-15 y su evidencia, docs, tests nuevos, gates, bundle, DoD, smoke, cierre y C-14, desviaciones.
+$ /bin/true === ANEXO Z01 ===
+exit=0
+$ bash -c stat -c "%y %s %n" <HOME real>/.sui/<cfg>/client.yaml; ls -la <HOME real>/.sui/<cfg>/; sha256sum <HOME real>/.sui/<cfg>/client.yaml | cut -c1-12
+2026-10-30 17:52:52.515735237 -0500 244 <HOME real>/.sui/<cfg>/client.yaml
+total 12
+drwx------ 2 <user> <user> 4096 Oct 30 16:04 .
+drwx------ 3 <user> <user> 4096 Oct 30 16:04 ..
+-rw-rw-r-- 1 <user> <user>  244 Oct 30 17:52 client.yaml
+ef12fd09615f
+exit=0
+
+
+
+## Anexo N-4 (pedido del MID: fijar las clases de UX-11 y UX-3)
+
+Archivo **nuevo** (el único cambio): `app/src/components/uxClasses.test.tsx`, **8 tests**, con `UX-11`/`UX-3` en el nombre. (a) Renderizan los componentes que usan las clases con los harness existentes (`clockHarness`, `duelRows`) y comprueban que cada elemento lleva la suya: los botones de reclamar/reembolsar de `TimeoutActions` (`duel-action`), las etiquetas de los 7 radios del formulario (`duel-radio`), el `select` del filtro del lobby (`duel-select`) y el contador (`clock-counter`). (b) Leen `app/src/index.css` como texto y comprueban que cada clase tiene su regla, que `.duel-action`, `.duel-radio` y `.duel-select` declaran `min-height` y `min-width` de `44px` y que `.clock-counter` declara `font-variant-numeric: tabular-nums` (los comentarios se quitan antes de parsear; los selectores agrupados cuentan).
+
+Desvío declarado: `import.meta.glob(..., '?raw')` **no sirve con un `.css`**: Vitest vacía los estilos y devuelve `''` aun con `?raw` (lo comprobé con un test descartable que borré: la variante con `query` dio una cadena de largo 0 y la de `index.css?raw` ninguna entrada). Por eso el test lee el archivo con `node:fs` por importación dinámica (módulo incorporado: sin dependencias nuevas ni tipos de Node; el nombre del módulo va en una variable y la forma usada se declara en el test) y la ruta sale de `import.meta.url`, relativa a `app/` (la carpeta desde la que corren todos los gates). Sin `useEffect`, sin direcciones literales y sin las cadenas `SANDBOX`/`testgame` (0 coincidencias).
+
+Gates (anexo siguiente, con `capture.sh`): los 8 tests pasan; `npm run lint -w app` 0; `npm run typecheck -w app` 0; `npm test -w app` **2138 tests en 97 archivos, 0 fallos** (2130 + 8; 96 + 1). No toqué ningún otro archivo (ni tests existentes, ni CSS, ni componentes): `git status` solo suma `uxClasses.test.tsx`; los otros dos modificados fuera de `app/` que muestra `git status` (`documents/DECISIONES.md`, `documents/ESTANDARES.md`) los aplicó el orquestador, no yo. Proceso (C-13): ningún heredoc, ni `/dev/null` con `echo`/`:`, ni `python3 -`; todo texto a archivo con las herramientas de escribir/editar (dos archivos descartables de depuración se crearon y borraron con las mismas herramientas); sin procesos en segundo plano.
+
+$ /bin/true === ANEXO N-4 (gates) ===
+exit=0
+$ bash -c set -o pipefail; cd <repo>/app && npx vitest run src/components/uxClasses.test.tsx --reporter=verbose 2>&1 | /usr/bin/grep -E '✓|×|Tests |Test Files'
+ ✓ src/components/uxClasses.test.tsx > the classes that give the touch targets and the tabular numbers (UX-11, UX-3) > UX-11: the claim and refund buttons of the time actions carry duel-action 194ms
+ ✓ src/components/uxClasses.test.tsx > the classes that give the touch targets and the tabular numbers (UX-11, UX-3) > UX-11: every radio of the time controls sits in a label with duel-radio 53ms
+ ✓ src/components/uxClasses.test.tsx > the classes that give the touch targets and the tabular numbers (UX-11, UX-3) > UX-11: the game filter select of the lobby carries duel-select 14ms
+ ✓ src/components/uxClasses.test.tsx > the classes that give the touch targets and the tabular numbers (UX-11, UX-3) > UX-3: the visible counter carries clock-counter 12ms
+ ✓ src/components/uxClasses.test.tsx > the classes that give the touch targets and the tabular numbers (UX-11, UX-3) > UX-11: index.css has a rule for .duel-action with min-height and min-width of 44px 2ms
+ ✓ src/components/uxClasses.test.tsx > the classes that give the touch targets and the tabular numbers (UX-11, UX-3) > UX-11: index.css has a rule for .duel-radio with min-height and min-width of 44px 0ms
+ ✓ src/components/uxClasses.test.tsx > the classes that give the touch targets and the tabular numbers (UX-11, UX-3) > UX-11: index.css has a rule for .duel-select with min-height and min-width of 44px 0ms
+ ✓ src/components/uxClasses.test.tsx > the classes that give the touch targets and the tabular numbers (UX-11, UX-3) > UX-3: index.css has a rule for .clock-counter with font-variant-numeric: tabular-nums 0ms
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm run lint -w app 2>&1 | tail -4
+
+> lint
+> eslint . --max-warnings 0
+
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm run typecheck -w app 2>&1 | tail -4
+
+> typecheck
+> tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json
+
+exit=0
+$ bash -c set -o pipefail; cd <repo> && npm test -w app 2>&1 | tail -13 | head -7
+
+ RUN  v5.0.5 <repo>/app
+
+
+ Test Files  97 passed (97)
+      Tests  2138 passed (2138)
+   Start at  15:01:32
+exit=0
+$ bash -c cd <repo> && git status --porcelain --untracked-files=all | /usr/bin/grep -E 'uxClasses|zzTmp'; git status --porcelain --untracked-files=all | /usr/bin/grep -c .; git status --porcelain | /usr/bin/grep -v 'app/src\|README\|agents'; git diff --stat -- app/src app/README.md agents.md contracts | tail -1; /usr/bin/grep -c 'SANDBOX\|testgame\|useEffect' app/src/components/uxClasses.test.tsx; git stash list | wc -l
+?? app/src/components/uxClasses.test.tsx
+57
+ M documents/DECISIONES.md
+ M documents/ESTANDARES.md
+ 24 files changed, 591 insertions(+), 216 deletions(-)
+0
+0
+exit=0
+
+~~~~
+
+
+---
+
+## 31. TASK-8b (revisión del MID)
+
+> MID, TASK-8b: PASA CON CAMBIOS (de bordes del paquete; sin 🔴 ni 🟠).
+
+PASA CON CAMBIOS
+
+# Revisión del MID: TASK-8b de #73 (UI de las dos fuentes, reloj, acciones de tiempo, estándar de UX UX-1..UX-15 y smoke 🧪🌐)
+
+Rama `feature/issue-73-multigame` sobre `0ec278a` (handoff v1.2.12), cambios sin commitear: 23 modificados, 1 borrado (`components/stateText.ts`) y 30 nuevos. Revisado contra `HANDOFF_MULTIGAME.md` v1.2.12 TASK-8b §1-§8, el "Estándar de UX de 8b", el DoD 1-11 y FLUJO §5. Solo lecturas: no corrí gates ni `sui`. Leí el reporte completo (1220 líneas, anexos incluidos), el `git diff` de lo versionado, y **enteros** los módulos y componentes nuevos de producción (`screenClock.ts`, `screenClockContext.ts`, `useChainNow.ts`, `useChainClockSampling.ts`, `useGameCatalog.ts`, `Countdown.tsx`, `GameStatus.tsx`, `TimeoutActions.tsx`, `ChainClockSampler.tsx`, `deadlineFormat.ts`, `gameTexts.ts`); los tests por muestreo guiado por UX-1..UX-15 (nombres de todos los archivos de tests de UX y lectura de los de reloj, contador, acciones de tiempo, lobby y formulario).
+
+## Veredicto
+
+**PASA CON CAMBIOS.** Sin 🔴 ni 🟠. El código, los tests, el smoke, la lógica de elegibilidad contra el contrato y los docs de `app/README.md` y `contracts/README.md` están bien y se commitean tal cual. Los cambios que pido son **de bordes del paquete**, ninguno obliga a otra ronda larga del DEV:
+
+1. **Borrador de `ESTANDARES.md` (PROY-16)** con una redacción que obliga de más (N-1); corrección abajo.
+2. **Reporte:** el nombre del usuario del sistema aparece sin enmascarar en 12 líneas (los `ls -la` de la guarda de `~/.sui`); se reemplaza antes de agregarlo a `REPORTES` (N-2).
+3. **`agents.md`:** una frase inexacta sobre `house::add_fees` (N-6), una línea.
+4. **Recomendado, no bloquea** (N-4): un test chico que fije las clases que sostienen UX-11, la única exigencia de UX sin ningún test que la proteja de una regresión.
+
+## Controles del orquestador: coinciden
+
+- 54 entradas (23 M + 1 D + 30 ??); `git diff --exit-code` en lo que no es del task = 0 (`contracts/*`, `.github`, `package*.json`, `eslint.config.js`, `vite.config.ts`, `index.html`, `Caddyfile`, `Dockerfile`, `.dockerignore`, `documents/`, `app/scripts`, `localnetCorpus.ts`, `localnet-guard.test.ts` y los archivos de `sui/` ajenos al permiso).
+- `numstat` que verifiqué: `index.css` **+55/−0**, `sui/createGame.ts` **+19/−0**, `sui/gameDetail.ts` +7/−28 (solo el retiro de `fetchGame`, con el import que dejó sin uso y dos comentarios que lo citaban), `contracts/README.md` +1/−0, `components/stateText.ts` −10.
+- Anti-fuga `SANDBOX|testgame` = 0 en lo agregado y en los archivos nuevos. Mis greps del DoD: `stateText|FALLBACK_STATE_TEXT`, `allSections`, `\bfetchGame\b`, `DuelClockAction|LegacyMyGamesSections` y `typeArguments|::(duel|coinflip)::` en hooks, componentes y páginas sin tests = 0; no hay `useEffect` nuevo (solo los preexistentes de `useMyGames` y `useTxTarget`); no hay `transition`, `animation` ni `@keyframes` en lo agregado.
+- §R-6 que corrí sobre el diff y los 30 archivos nuevos: los cuatro patrones = 0. Tus números de tests y bundle (2130 en 96 archivos; `index-CwsHv0KF.js` 961.51 kB, +19.27 kB) coinciden con el reporte.
+
+## 1. Conformidad con §3/§5/§6/§7 y UX-1..UX-15, uno por uno
+
+| Criterio | Evidencia | Veredicto |
+|---|---|---|
+| **UX-1** estado → turno → tiempo → qué sigue | `gameTexts.test.ts` (9 estados × 5 cuentas × 4 fases, cada una con su línea de siguiente paso en español), `GameStatus.test.tsx` (activa en orden, turno propio/ajeno/de ambos, vencida, sin hora de la red, compacto), `GameDetail.duel.test.tsx` y `GameDetail.fixtures.test.tsx` con objetos **reales** de `duel-clock` (`_meta.sandbox === true`). S: las vistas alcanzables | ✅ T y S |
+| **UX-2** plazo legible | `deadlineFormat.ts` pura y sin dependencias de fechas; tabla de casos (0 ms, 999 ms ⇒ "1 s", 59 s, 60 s, 1 h, 24 h, 7 días, negativo, el instante exacto ⇒ "venció ahora"); `<time dateTime>` con `title` en `Countdown.test.tsx` | ✅ T |
+| **UX-3** cuenta regresiva | `screenClock.ts`: un solo intervalo compartido (se crea con el primer suscriptor, se limpia con el último), monótono (mayor desfase observado), de dos velocidades. Tests con reloj falso: avance por tick, vencimiento, limpieza al desmontar (también bajo `StrictMode`), monotonía tras un refetch y con la hora local atrasada, **50 contadores = un intervalo**, un hijo vecino cuyo contador de renders no cambia con el tick, y "el reloj no recibe cliente ni función de consulta". **Sin `useEffect`**: la hora de la cadena entra como muestra de TanStack Query anotada dentro del `queryFn` y el intervalo es del propio reloj | ✅ T (el más sólido del paquete) |
+| **UX-4** anuncios | `role="timer"` con `aria-live="off"`; región `role="status"` vacía desde el principio y con **un** mensaje al cruzar el plazo (avanzar 10 s no la cambia; los ticks siguientes no lo repiten); con los dos pendientes el aviso es del reembolso | ✅ T (7 tests) |
+| **UX-5** sin depender del color | T: el texto está y no hay `svg`/`img`; S: capturas con `achromatopsia`, aunque el DEV declara que **vio solo dos** (`lobby_filtro_360` e `inyectado_360`) y que de las demás tiene el texto del DOM y las medidas | ✅ con la salvedad N-4 |
+| **UX-6** sin jerga | un solo módulo de textos (`gameTexts.ts`) y un test sobre el `textContent` de todas las vistas y cuentas contra `claim_timeout`, `refund_stalled`, `to_move`, `deadline_ms`, `TimedOut`, `Expired`, `DuelState`; verbos fijos en `ACTION_TEXT`; tuteo consistente | ✅ T |
+| **UX-7** estados de la vista | carga (`Cargando…` sin cantidad), vacío del juego filtrado distinto del global (también con el piso del nodo), error con "Reintentar", "sin confirmar" ("Ya la revisé") y en curso, con la máquina real (`GameActions.timeoutMachine`) | ✅ T |
+| **UX-8** fondos | `claimDescription` ("El pozo (X SUI) menos la comisión (Y SUI) va a `<quien ganó>`; no necesariamente a quien ejecuta") y `refundDescription`, con los montos de `resolutionAmounts`, visibles y enlazados con `aria-describedby` (`toHaveAccessibleDescription`); la nota de crear con el depósito de cada fuente | ✅ T y S (marcado inyectado) |
+| **UX-9** motivo del botón | `availabilityOf` con las causas en orden (terminó, sin cuenta, sin confirmar, en curso, hora desconocida, aún no venció con el tiempo que falta); el motivo es texto visible y va primero en `aria-describedby`; un test por causa × botón | ✅ T y S (DOM) |
+| **UX-10** accesibilidad | nombres únicos por fila ("Reclamar victoria (partida `<corta>`)", que **contiene el texto visible**: WCAG 2.5.3), sin `tabindex`, encabezados H1→H2→H3, lista semántica, orden de los enfocables = orden del DOM; los botones existentes **no cambian de nombre** (`ACTION_TEXT` conserva "Aceptar", "Cancelar", "Rechazar") y sus tests de #12/#13 siguen sin relajar. S: `Tab` por CDP (el recorrido está en el anexo) | ✅ T y S |
+| **UX-11** objetivos ≥ 44 px y separación | S a 360 px: el `select` del filtro **real** mide 67 × 44; los botones de reclamar/reembolsar (119 × 44 y 87,9 × 44) y las 7 etiquetas de radio (281 × 44, con 8 px de separación tras corregir un 0 px que el propio DEV midió) se midieron sobre **marcado inyectado** con las mismas clases | 🟡 aceptada con la salvedad declarada (N-4) |
+| **UX-12** 320 px sin scroll horizontal | S en **cada** vista real (lobby, con filtro, formulario, detalle pendiente/resuelto/cancelado, "Mis partidas") y en el marcado inyectado con una dirección de 66 caracteres: 305 ≤ 305 a 320 px; 345 ≤ 345 a 360; 1265 ≤ 1265 a 1280 | ✅ S |
+| **UX-13** sin animaciones | mi grep del diff y de los archivos nuevos: ninguna `animation`, `transition` ni `@keyframes`; el tick solo cambia texto | ✅ |
+| **UX-14** filtro y rótulos | `<label>Juego</label>` + `<select>`, "Todos" por defecto, cantidad ("3 partidas", "1 partida", "; puede haber más"), un ilegible no cuenta, "anterior"/"nueva" y el control como texto, el `select` cambia la consulta (`useLobby('coinflip')`); S contra el nodo real (paso 2: el filtro por el tag completo devuelve las dos filas) | ✅ T y S |
+| **UX-15** formulario | `fieldset`/`legend` "Tiempo por jugada", 7 radios con nombres legibles, el primero marcado y "Por defecto: 10 min por jugada.", el coinflip sin ninguna opción nueva ni selector (S: 0/0/0 en el formulario real), la nota antes del botón | ✅ T y S |
+
+**¿Hay criterios cumplidos solo "en el papel"?** No. Todos los que se pueden probar en jsdom tienen test con su identificador (180 tests con `UX-n` en el nombre: UX-1 45, UX-2 34, UX-3 36, UX-4 7, UX-5 18, UX-6 26, UX-7 7, UX-8 16, UX-9 24, UX-10 10, UX-14 7, UX-15 11). UX-11 y UX-12 se verifican solo por S (el handoff lo pedía así: jsdom no tiene layout) y UX-13 por revisión del diff (que repetí). La debilidad real es otra y está en N-4.
+
+## 2. Las pantallas de hoy (`testnet.json` con `packageVersion` 1, solo `legacy`)
+
+**Correcto y bien resuelto.** `useGameCatalog().multiSource` (el registro tiene una fuente `duel`) decide que el filtro, el rótulo "anterior"/"nueva" y el control de tiempo del lobby **aparezcan solo con las dos fuentes**. Con la fuente anterior sola, un filtro de un único juego y un "anterior" en cada fila serían cambios visibles sin valor y contradirían el criterio de DoD "se ven y se comportan como hoy". Hay un test del **texto exacto de la fila** con una sola fuente (`LobbyList.multigame.test.tsx`, "keeps the row text identical to the one before 8b") y otro de que no hay filtro ni rótulo y se pide "todos". En "Mis partidas" el control de tiempo aparece solo si `turnMs > 0n` (con "sin reloj" en cada fila del coinflip sería ruido). Con el upgrade, el registro trae las dos fuentes y las pantallas nuevas aparecen sin otro cambio: el paso 2 del smoke lo demuestra. Los componentes que ya existían no cambian de marcado ni de nombres accesibles.
+
+## 3. Lo retirado
+
+- `stateText.ts` borrado y sin citas (mi grep = 0); `fetchGame` retirado con su `describe` y el import que dejó sin uso (`gameDetail.ts` +7/−28: 25 líneas de `fetchGame` con su docstring, el import, y dos comentarios reescritos); `allSections` retirado.
+- **Los 8 tests de `fetchGame`:** sus casos de error ya los cubre `gameDetail.byType.test.ts` (11 tests, de 8a); `gameRefetchInterval` y `GAME_REFETCH_MS` quedan con los suyos.
+- **Las 3 aserciones de 7b sobre `allSections`, una por una, ninguna relajada:** (a) se quitó `expect(result.allSections.pending…).toEqual(['duel','game'])`, cuyo contenido ya afirma la línea siguiente sobre `sections` (`['duel','legacy']`): es retirar una aserción sobre un campo que ya no existe, con la misma información cubierta; (b) y (c) pasan a leer `sections` con el mismo `toHaveLength(1)` y el mismo `['duel']`. Correcto.
+- **Los demás tests existentes que cambiaron** (`GameActions.test`, `MyGamesSection.test`, `GameDetailPage.test`) afirmaban el fallback de 8a que 8b **reemplaza** o la ausencia de acciones de tiempo que 8b agrega; los casos `timed out` y `expired` siguen afirmando "ningún botón" para toda cuenta. No se relajó nada.
+
+## 4. Nota de costo y gas de crear
+
+- `DUEL_STORAGE_DEPOSIT_MIST` = `{ open: 2_409_200n, invitation: 2_652_400n }` y `storageDepositFor(createSource)` **solo agregados** (`createGame.ts` 19/0); la nota usa la cifra de la fuente a la que va "crear" y con `legacy` es **idéntica** a la de hoy (test del texto exacto con las dos fuentes, y la nota **antes** del botón).
+- **Gas de crear con el `Duel`, medido en el navegador contra la localnet:** presupuesto de la preflight 4 409 200 MIST; `gasUsed` = cómputo 1 000 000 + storage 3 397 200 − rebate 987 901 = **3 409 299 MIST netos** (la UI muestra 0.003409299 SUI); **bruto (cómputo + storage) 4 397 200 MIST < `CREATE_GAS_RESERVE_MIST` (10 000 000)**: la constante no cambia y no hay STOP. El depósito del objeto (3 397 200 − 988 000 de la moneda de gas) = 2 409 200 = `DUEL_STORAGE_DEPOSIT_MIST.open`. La aritmética cierra y concuerda con la medición de 8a.
+
+## 5. `index.css`
+
+**55/0 y solo selectores con prefijo `clock-` o `duel-`**, sin reglas sobre `:root`, `body`, `main`, `.field-error`, elementos ni `@media`; sin colores ni tipografías. Son los usos pedidos (números tabulares, 44 px con separación, `overflow-wrap: anywhere`) más **uno que el permiso 5 no nombraba: `.duel-sr-only`**, la clase de la región de anuncios (texto solo para lectores de pantalla, UX-4). Lo acepto 🔵 (N-5): es una clase nueva con prefijo, no toca nada global, está declarada en el reporte y en el propio comentario del CSS, y es la forma estándar de tener una región `status` que no ocupe espacio. El `margin: 8px 0` de `.duel-radio` salió de una medición real (0 px) y está bien justificado.
+
+## 6. Las desviaciones
+
+1. **Filtro/rótulo/control del lobby solo con la fuente nueva en el registro:** aceptable y correcta (sección 2).
+2. **Valor por defecto de los controles = el primero de `GameDef.controlIds`:** aceptable. El handoff decía "el que defina el registro" y `GameDef` no tiene ese campo; tocar `gameRegistry.ts` estaba fuera de los permisos. Declarado en el texto del formulario. **Va a #18**: cuando se registre un juego con reloj, `GameDef` deberá declarar su control por defecto.
+3. **Un juego con reloj no se puede crear todavía desde la app** (el formulario muestra los 7 controles pero deshabilita "Crear partida" con el motivo "Este juego todavía no se puede crear desde la app", enlazado por `aria-describedby`): aceptable. No existe un builder de creación con control y ningún juego registrado tiene `usesClock`, así que no es alcanzable en producción; ofrecer un control que no viaja a la transacción sería peor (el usuario creería haber elegido un plazo). Está probado con un juego sintético. **Va a #18:** el builder de creación del juego con reloj y habilitar el botón; y la elección de controles queda lista.
+4. **`id` de los textos derivados del id de la partida** porque el test M-4 de #12 prohíbe `useId`: correcto respetar el test en lugar de relajarlo.
+5. **Reloj de dos velocidades** (1 s corriendo, 1 min para lo vencido): mejor que lo que pedía el handoff ("se detiene al vencer"): un "venció hace N min" congelado sería un texto que miente. Se limpia sin suscriptores.
+6. **`ChainClockSampler` por página y no por fila**, y solo con una activa con reloj: evita sumar observadores del estado del nodo. Bien.
+7. **Marcado inyectado para medir UX-11/UX-12 de lo que la producción no puede mostrar:** aceptable para las **medidas de CSS**, con la salvedad de N-4.
+8. **Archivos fuera de la lista literal** (`queryKeys.ts` con `chainClock`, `useLobby.ts` con el parámetro `games`, `MyGamesPage.tsx`, `GameDetailPage.tsx`, harness de tests): cubiertos por "hooks finos para el reloj y el filtro" y por `pages/*`; aditivos.
+
+**¿Algo para el issue de seguimiento o para #18/#72?** Sí, ver "Pendientes" más abajo.
+
+## 7. El smoke y la decisión sobre el paso 7
+
+**Pasos 1-6, 8, 9 y 10 en PASA con evidencia pegada:** v1 con el 1.83.0 (los dos SHA-256 comparados con `ci.yml` antes de ejecutar), `upgrade` variante B, `typeOrigins` = cadena 24/24, `check` verde; Vite con `VITE_LOCALNET_URL` y **sin `--host`** (el 5173 solo en loopback); Chrome headless con perfil desechable y un grabador CDP: **279 peticiones gRPC-web a `127.0.0.1:19000`, 265 `GET` a Vite, 5 `data:` y 2 WebSocket de HMR, 0 a `:9000` de cualquier tipo**; consola sin errores (los 2 warnings esperados de la burner y de Lit en dev); lobby con las dos fuentes y el filtro, crear (gas medido), aceptar, cancelar, rechazar, "Mis partidas"; cierre por PID de los cuatro procesos, `kill -0` falla, 19000/5173/19222 en 0, el 9000 ajeno igual, `~/.sui` idéntico, **C-14 cumplido**.
+
+**Paso 7 OMITIDO. Mi recomendación: NO se exige antes de la compuerta §G.** Razones:
+
+- **No es alcanzable en producción hasta #18.** El coinflip no persiste `Active` (acepta de forma atómica) y `refund_stalled` y `claim_timeout` exigen `Active`: con el único juego que existe (sin reloj), `Active`, `TimedOut` y `Expired` **no pueden aparecer** en la app real. Ningún jugador verá esas vistas antes del primer juego con reloj.
+- **El riesgo de integración que queda es acotado y está cubierto:** la lectura de la hora de la cadena usa `fetchCheckpointTime` y el estado del nodo (ambos ya ejercidos en el navegador por pasos anteriores), el parseo del `Duel` activo se prueba con **objetos reales** de `duel-clock`, y la máquina de claim/refund se prueba con la máquina real. Lo que no se vio en navegador es el cableado visual de la cuenta regresiva y de los botones sobre una partida activa real.
+- **El error de estimación es conservador, y lo verifiqué leyendo el código.** `observe` guarda el mayor `chain − local` de las muestras; como una muestra es el timestamp de un checkpoint (siempre ≤ la hora real de la cadena), ese valor nunca supera el desfase real, así que la hora estimada es **menor o igual** que la real, aun con el reloj local desfasado. Consecuencia: la UI puede decir "quedan 2 s" con el plazo ya vencido (retrasa el botón unos segundos), **nunca habilita un reclamo antes de tiempo**; y, si así fuera, la preflight y el contrato lo rechazan (`ENotExpired`/`ENotStalled`). Es exactamente lo que dice el reporte.
+- **Condición que dejo escrita:** el paso 7 (vista activa con reloj, `TimedOut` y `Expired`, y claim/refund reales desde el navegador) pasa a ser **obligatorio en el smoke del primer juego con reloj (#18)**, junto con el builder de creación con control y el campo de control por defecto en `GameDef`. En la compuerta §G queda como **limitación declarada**.
+
+## 8. El bundle (+19.27 kB, 961.51 kB, 289.80 gzip)
+
+**Aceptable.** Suma el reloj de pantalla, el módulo de textos con todos los estados y cuentas, tres componentes, el filtro y el formulario; +2 % sobre 942.24 kB. El code-splitting sigue pendiente en #58 (el bundle ya pasa los 500 kB desde hace tiempo y Vite avisa) y es el lugar para recuperarlo; no bloquea. 🔵 N-7.
+
+## 9. Docs, borradores de `ESTANDARES.md` y snippet de STATUS
+
+- **`app/README.md`:** mapa de `sui/` y de hooks (`useGameCatalog`, el reloj de pantalla), tabla de componentes (`TimeoutActions`, `GameStatus`, `Countdown`, `ChainClockSampler`, `deadlineFormat`/`gameTexts`), "Formulario de creación" con la nota por fuente y los controles de tiempo, y la sección **"Vistas con reloj y estándar de UX (#73, TASK-8b)"**: exactos contra el código. Sin rutas ni cuentas.
+- **`contracts/README.md` (+1):** el depósito del `Duel` (2 409 200 / 2 652 400 MIST, +456 000 sobre el del `Game`) con su cita de `DUEL_STORAGE_DEPOSIT_MIST`: es lo único que se pidió.
+- **`agents.md` §8/§9:** bien, salvo una frase (N-6): "Solo `duel` llama a `house::add_fees`". Es verdad entre los módulos **nuevos** (P-4 de D-20261119-05), pero el `game` anterior también la llama (`game.move`). Corregir a "Entre los módulos nuevos, solo `duel` llama a `house::add_fees` (el `game` anterior la sigue llamando)".
+- **Borrador del DEV para `ESTANDARES.md`:**
+  - **PROY-14: bien.** "El reloj de pantalla es estado de presentación: un único intervalo inyectable (ARQ-3) que solo hace avanzar la hora estimada de la cadena y nunca pide datos; la hora de la cadena entra como una muestra de TanStack Query (no de un `useEffect`) y el reloj es monótono." Es verdadero contra el código.
+  - **PROY-16: corregir (N-1).** El borrador dice "**Toda** acción que mueve fondos dice, junto al botón…; un botón no disponible dice por qué…". Escrito así **obliga retroactivamente** a "Aceptar", "Cancelar", "Rechazar" y al formulario de crear, que tienen sus propios textos pero no todos enlazados con `aria-describedby` (y 8b no los toca: sus nombres y tests son de #12/#13). Redacción propuesta: "**Las acciones y vistas nuevas desde #73** que mueven fondos dicen, junto al botón y en texto visible enlazado con `aria-describedby`, qué pasará y cuánto; un botón no disponible dice por qué en texto visible (no solo `title`); los cambios de estado temporizados se anuncian una sola vez en una región `status` y el contador es un `timer` sin `aria-live`; los controles táctiles nuevos miden ≥ 44 × 44 px; las vistas nuevas no tienen scroll horizontal desde 320 px. Las acciones anteriores se alinean cuando se rediseñan (#72)."
+  - **Versión:** `ESTANDARES.md` pasa a v1.10 y su cabecera cita la entrada nueva de `DECISIONES.md`.
+- **Entrada de `DECISIONES.md` propuesta** (la redacté: el pedido del owner "usa un buen ui/ux" y el estándar UX-1..UX-15 son una regla nueva que entra a `ESTANDARES.md`; el patrón de D-20261120-01 pide "su propia entrada si cambian reglas"):
+
+  > ### D-20261120-02 — Estándar de UX de las vistas nuevas de #73 (TASK-8b): pedido del owner "usa un buen ui/ux"
+  > - **Decisión:** las pantallas que #73 agrega para las partidas con reloj por jugada (lobby con filtro por juego y rótulos, vista activa, reclamar y reembolsar, terminales, formulario con control de tiempo) se construyen y se **verifican** contra un estándar de UX concreto, dentro del sistema visual existente (sin rediseño global: eso es #72): estado, turno, plazo y siguiente paso a primera vista; plazo legible y cuenta regresiva de un único intervalo inyectable, monótona y anunciada una sola vez; textos en español consistentes y sin jerga del contrato; todos los estados de la vista; qué pasará con los fondos antes de moverlos; botones deshabilitados que explican por qué; accesibilidad básica; objetivos táctiles de 44 px; sin scroll horizontal desde 320 px; sin animaciones nuevas. Entra a `ESTANDARES.md` como PROY-14 (el reloj de pantalla es estado de presentación) y PROY-16 (acciones y vistas nuevas desde #73). La verificación es un test por criterio (UX-1..UX-15, 180 tests) y medidas por CDP en el smoke. **El paso del smoke con una partida activa real queda como obligatorio en el primer juego con reloj (#18)** y es una limitación declarada de la compuerta de #73.
+  > - **Alternativa descartada:** un rediseño visual dentro de #73 (es #72); dejar la calidad de UX sin criterios verificables; exigir antes de la compuerta el sandbox de ensayo en el navegador (no hay un juego con reloj alcanzable en producción).
+  > - **Motivo:** el owner pidió "usa un buen ui/ux" para esta tarea; sin criterios concretos, "buena UX" no es revisable. Cada criterio tiene un identificador y un modo de comprobación, así el MAYOR y #72 pueden usarlos como criterios de aceptación.
+  > - **Aprobado por:** usuario (pedido explícito para TASK-8b de #73, 2026-11-20: "usa un buen ui/ux"); el MAYOR revisa el delta de `ESTANDARES.md` en la integración. **Fecha:** 2026-11-20.
+
+- **Snippet de STATUS (con las cifras del orquestador):** "TASK-8b de #73 (`feature/issue-73-multigame`, sobre `0ec278a`): UI de las dos fuentes del coinflip y del reloj por jugada. Lobby con filtro por juego ("Todos" por defecto, con la cantidad), rótulo "anterior"/"nueva" y control de tiempo por fila, solo con la fuente nueva en el registro (con el `testnet.json` actual las pantallas son las de siempre); formulario con la nota de costo del depósito de la fuente a la que va "crear" (`DUEL_STORAGE_DEPOSIT_MIST` 2 409 200 / 2 652 400 MIST, `storageDepositFor`), selector de juego solo con más de uno creable y los 7 controles de tiempo solo para un juego con reloj (el botón de crear de un juego con reloj queda deshabilitado con su motivo hasta que #18 aporte el builder); vista activa (`GameStatus`: estado, turno, plazo, qué sigue; `Countdown` con un único intervalo inyectable y la hora de la cadena como referencia, monótono, de dos velocidades), "Reclamar victoria" y "Reembolsar" por la máquina de 8a con lo que pasará con los fondos y el motivo de cada botón deshabilitado a la vista, detalle de `Resolved`/`TimedOut`/`Expired` y resultados adoptados de un reclamo y un reembolso. Se retiran `stateText.ts`, `fetchGame` y `allSections`. Estándar de UX UX-1..UX-15 con 180 tests y medidas por CDP (320 px sin scroll horizontal, objetivos de 44 px, achromatopsia, `Tab`). App 2130 tests en 96 archivos (1921 + 209), lint 0, typecheck 0, `npm audit --omit=dev` 0, `node --test` 173, bundle de testnet 961.51 kB (+19.27 kB sobre 942.24). Smoke 🧪🌐 en la localnet aislada del puerto 19000 con `VITE_LOCALNET_URL` en PASA, con el **paso 7 omitido** (la vista activa y los terminales con reloj están cubiertos solo por Vitest con objetos reales de `duel-clock`; sin juego con reloj en producción no son alcanzables hasta #18): lobby con las dos fuentes y filtro, crear (gas bruto 4 397 200 MIST < `CREATE_GAS_RESERVE_MIST`, sin cambio), aceptar, cancelar, rechazar, "Mis partidas"; 279 peticiones gRPC-web al nodo y 0 de cualquier tipo al 9000, Vite sin `--host`, consola sin errores."
+
+## 10. Hallazgos con severidad
+
+- 🔴/🟠: **ninguno.**
+- **N-1 🟡 (a corregir al aplicar):** PROY-16 del borrador de `ESTANDARES.md` obliga a "toda acción"; se acota a "acciones y vistas nuevas desde #73" (sección 9).
+- **N-2 🟡 (a corregir en el reporte antes de `REPORTES`):** el nombre del usuario del sistema aparece sin enmascarar en 12 líneas (los `ls -la` de `<HOME real>/.sui/…` de la guarda de `~/.sui`: anexos A01, S02, S31 y Z01). En los reportes anteriores se enmascaró como `<user> <group>`. Se reemplaza en esas líneas; no hay otros nombres de proyectos ajenos ni de contenedores (el orquestador ya lo comprobó).
+- **N-3 🟡 (proceso, C-13): 🟡 y no 🟠.** Auditoría: 424 líneas Bash; 0 `sed -i`, `tee` ni `cat >`.
+  - **El heredoc de Python para EDITAR `gameDetail.ts` (código)** fue **denegado por el sistema antes de ejecutarse** y el DEV lo rehízo con las herramientas de edición (el +7/−28 del diff es consistente). Por la letra de C-13, "🟠 si hay código… escrito por esa vía": **no se escribió nada por esa vía**, así que es 🟡. Pero es un intento de escribir código con heredoc, y es **la tercera tarea seguida** con un heredoc intentado o un patrón de `/dev/null` (7b, 8a y ahora 8b): conviene reforzar la regla en el brief ("ningún heredoc, para nada, ni vacío ni a `/dev/null`; para editar código solo Edit/Write; para descartar una salida, `> /dev/null` en la misma línea").
+  - **`echo "export GAMEB1=…" >> /dev/null`:** exactamente el patrón de C-13 (d), sin efecto. 🟡.
+  - **2 `printf` de diagnóstico a pantalla y 21 `echo`:** marcas dentro de comandos y los `echo $$ > <nombre>.pid` de `sui`, Vite, Chrome y el grabador, ya cubiertos por C-13 (i) de v1.2.12. Los dos `printf` son 🟡 menores (no escriben archivos).
+- **N-4 🟡 (recomendado, no bloquea):** UX-11 no tiene ningún test que lo proteja de una regresión. jsdom no mide el layout y la prueba es la medición S sobre marcado **inyectado**; en los tests solo se afirman las clases `clock-counter` y `duel-action-block`. Si alguien quita `className="duel-action"` de un botón, `className="duel-radio"` de una etiqueta o `className="duel-select"` de un select, ningún test falla y los 44 px desaparecen en silencio. **Pedido:** un test de pocas líneas que fije las clases (los botones de reclamar y reembolsar con `duel-action`, las etiquetas de radio con `duel-radio`, los dos `select` con `duel-select`, el contador con `clock-counter`). Es un cambio del DEV, de minutos; si se prefiere no devolverlo, queda como pendiente de #18 junto con el paso 7.
+- **N-5 🔵:** `.duel-sr-only` no figuraba en los tres usos nombrados del permiso 5; aceptada (sección 5).
+- **N-6 🔵 (docs):** frase de `agents.md` sobre `house::add_fees` (sección 9).
+- **N-7 🔵:** el bundle (+19.27 kB; #58).
+- **N-8 🔵:** "N partidas" del lobby cuenta lo cargado (con más páginas dice "; puede haber más"); correcto y declarado.
+- **N-9 🔵:** la dirección conservadora del reloj de pantalla (sección 7) conviene dejarla escrita en el comentario de `screenClock.ts` o en `app/README.md` ("la hora estimada nunca supera la real: el botón puede tardar unos segundos, nunca se adelanta"); hoy está en el razonamiento del reporte pero no en el código.
+
+## Commits y agrupación (sin palabras de cierre; `Refs #73`)
+
+1. **Código y tests** (23 modificados de `app/src`, el borrado de `stateText.ts` y los 30 nuevos):
+   `app: add the multigame UI with the game filter and source labels, the clock views with a single injectable countdown, the claim and refund actions, the terminal details and the UX standard (Refs #73)`
+2. **Docs:**
+   `docs: document the TASK-8b views, the UX standard and the Duel storage deposit in app/README.md, agents.md and contracts/README.md (Refs #73)` (con el arreglo de N-6)
+3. **Estándares y decisión:**
+   `docs: apply the UX standard of the clock views to ESTANDARES (PROY-14, PROY-16) and record it in DECISIONES (Refs #73)` (`ESTANDARES.md` v1.10 con el PROY-16 acotado de N-1 y `D-20261120-02`)
+4. **Reportes y estado:**
+   `docs: add the TASK-8b DEV report and MID review and record TASK-8b in STATUS (Refs #73)` (el reporte con N-2 resuelto y su §R-6 hecho, esta revisión y `STATUS.md`)
+
+## Qué entra a §G tras 8b
+
+- **Punto 8 (gates de app), completo:** 2130 tests en 96 archivos (de 1921/79 al arrancar 8b), lint 0, typecheck 0, `npm audit --omit=dev` 0, `node --test` 173, build de testnet válido con el `testnet.json` actual (solo `legacy`) con el bundle de 961.51 kB, `Move.lock`/`Published.toml` sin delta, anti-fuga del sandbox en 0, `git diff --exit-code` sobre lo que no es del task, el DoD 1-11 de 8b con la salida de los greps, y el estándar de UX con sus 180 tests.
+- **Punto 5 (smoke localnet) y el smoke 🌐:** la tabla de 10 pasos de 8b, **incluido el navegador de punta a punta con `VITE_LOCALNET_URL`** (0 peticiones al 9000, Vite sin `--host`) y las medidas de UX por CDP. **Limitación declarada:** el paso 7 (vista activa con reloj, `TimedOut`, `Expired` y claim/refund reales en el navegador) no se hizo; cubierto por Vitest con objetos reales de `duel-clock`, y obligatorio en #18.
+- **Punto 12 (medidas de gas):** el gas de **crear** con el `Duel` medido en el navegador (bruto 4 397 200 MIST; neto 3 409 299 con el rebate; `CREATE_GAS_RESERVE_MIST` intacto) y el de **aceptar** observado (0.002474892 SUI), junto al depósito de storage (2 409 200 / 2 652 400).
+- **Punto 10:** esta revisión (PASA CON CAMBIOS: dos textos del paquete, ningún 🔴/🟠 de código).
+- **Para el MAYOR en la integración:** `ESTANDARES.md` v1.10 (PROY-14 y PROY-16) y `D-20261120-02`; el `app/README.md` nuevo; que `claim_timeout`/`refund_stalled` quedan cableados en la UI pero **no alcanzables en producción** hasta el primer juego con reloj.
+
+## Pendientes y a quién van
+
+- **#18 (Battleship, primer juego con reloj):** (1) el builder de creación del juego con control de tiempo y habilitar el botón de crear (hoy deshabilitado con su motivo); (2) un campo de control por defecto en `GameDef` (hoy se usa el primero de `controlIds`); (3) el **paso 7 obligatorio** en su smoke: vista activa con cuenta regresiva real, `TimedOut`, `Expired` y claim/refund reales desde el navegador; (4) con un juego con reloj registrado, el filtro puede dar vacío y se prueba en navegador.
+- **#72 (rediseño):** el estándar UX-1..UX-15 como **criterios de aceptación** del rediseño, para que no se pierda la calidad de estructura, texto y accesibilidad al cambiar el aspecto; y alinear las acciones anteriores (Aceptar/Cancelar/Rechazar/Crear) al PROY-16 nuevo.
+- **#58:** el code-splitting del bundle (961.51 kB).
+- **Sin issue nuevo** (todo lo anterior cabe en #18, #72 y #58).
+
+## ¿Conviene una segunda mirada de UX? Sí, acotada
+
+El DEV **vio solo dos capturas reales** (`lobby_filtro_360` y `inyectado_360`); del resto tiene el texto del DOM y medidas, y las imágenes ya no existen (`<SMOKE_DIR>` borrado). Para una tarea cuyo pedido explícito fue "usa un buen ui/ux", propongo antes del PR: **un recorrido del owner de ~15 minutos** sobre `npm run dev` con la localnet aislada (la misma receta del paso 7 de #77 y de este smoke) por las vistas alcanzables: lobby con las dos fuentes y el filtro, crear con la nota de costo, detalle pendiente y resuelto, "Mis partidas" y la pantalla angosta. El owner juzga lo que los criterios no miden (si se entiende, si el orden de la información es el que esperaba). Lo que **no** se puede ver hasta #18 es la vista activa con reloj; por eso el paso 7 queda como condición de #18. Si el owner prefiere, esa revisión se hace en la sesión del smoke de testnet (TASK-9).
+
+## §R-6 de esta salida
+
+Los cuatro greps (`/usr/bin/grep -nE`, el patrón 3 con las rutas de sesión y su slug) sobre este archivo: 0 coincidencias en cada uno. Sin direcciones de cuenta, sin rutas personales (`<scratchpad>`), sin el nombre del usuario del sistema, sin el nombre del servicio del 9000 ni de ningún otro proyecto del host.
+
+
+
+---
+
+## 32. TASK-8b (verificación del orquestador)
+
+> Controles independientes, cambios aplicados antes de commitear y pendientes.
+
+## Verificación independiente del orquestador (TASK-8b)
+
+Hecha sobre el árbol sin commitear (HEAD `0ec278a`) cuando el DEV entregó el reporte, y repetida tras el anexo N-4.
+
+| Control | Resultado |
+|---|---|
+| Estado del DEV al entregar | `completed`, sin procesos de la tarea en marcha (`sui start`, Vite, Chrome: ninguno), puertos 19000, 5173 y 19222 en 0 y el del servicio de otro proyecto igual que al empezar (C-14) |
+| `git status` | 54 entradas (23 modificadas, 1 borrada —`components/stateText.ts`— y 30 nuevas) más el test del anexo N-4: todas dentro de `app/src`, `app/README.md`, `agents.md` y `contracts/README.md`; `ESTANDARES.md`, `DECISIONES.md` y `STATUS.md` los edita el orquestador |
+| `git diff --exit-code` sobre `contracts/{sources,tests,scripts,Move.lock,Published.toml,deployments}`, `.github`, `package*.json`, `app/package.json`, `app/eslint.config.js`, `app/vite.config.ts`, `app/index.html`, `Caddyfile`, `Dockerfile`, `.dockerignore`, `app/scripts`, `localnetCorpus.ts`, `localnet-guard.test.ts` y los archivos de `sui/` que no son del permiso | 0 |
+| `git diff --numstat` | `index.css` +55/−0; `sui/createGame.ts` +19/−0; `sui/gameDetail.ts` +7/−28 (solo el retiro de `fetchGame`); `contracts/README.md` +1/−0 |
+| Anti-fuga del sandbox (`SANDBOX\|testgame`, sin `-i`) | 0 sobre lo agregado y 0 en los archivos nuevos |
+| DoD de 8b (greps del orquestador) | `stateText\|FALLBACK_STATE_TEXT` = 0; `allSections` = 0; `\bfetchGame\b` = 0; `DuelClockAction\|LegacyMyGamesSections` = 0; `typeArguments\|::(duel\|coinflip)::` en hooks, componentes y páginas sin tests = 0; `import.meta.env` por objeto sin tests = 0 |
+| `npm run lint -w app`; `npm run typecheck -w app`; `npm test -w app` | 0; 0; **2138 tests en 97 archivos, 0 fallos** (2130 en 96 del reporte + 8 del anexo N-4) |
+| `node --test scripts/*.test.mjs`; `npm audit --omit=dev --audit-level=high` | 173 PASS; 0 vulnerabilidades |
+| `VITE_SUI_NETWORK=testnet npm run build -w app` | válido: `index-CwsHv0KF.js` **961,51 kB** (gzip 289,80 kB), +19,27 kB sobre 942,24 |
+| §R-6 (grep 3 con `claude-[0-9]+\|-home-`) sobre el diff y los archivos nuevos | 0 en los cuatro; ninguna de las 3 cuentas efímeras de las fixtures aparece en el diff ni en el reporte; el reporte no nombra contenedores ni proyectos ajenos |
+| `~/.sui` | 244 bytes, mtime 2026-10-30 17:52:52, solo `client.yaml`, `ef12fd09615f` |
+| Auditoría mecánica de la transcripción (`audit_dev.sh`, P-2) | 424 líneas Bash; 0 `sed -i`, 0 `tee`, 0 `cat >`; **un `python3 - <<'EOF'` para editar `gameDetail.ts` que el sistema denegó antes de ejecutarse** (no se escribió nada por esa vía; rehecho con las herramientas de edición); dos `printf` de diagnóstico a pantalla; un `echo "export …" >> /dev/null` sin efecto (el patrón que C-13 (d) prohíbe); los `echo $$ > <nombre>.pid` permitidos por C-13 (i); 131 `Edit` y 46 `Write`. La segunda ronda (el test del anexo N-4) no usó ninguno de esos patrones. El MID lo juzga 🟡 (tercera tarea seguida con un patrón de heredoc o de `/dev/null`: se refuerza en el próximo brief) |
+| Código de producción leído por el orquestador | `Countdown.tsx`, `GameStatus.tsx`, el comienzo de `TimeoutActions.tsx` y de `gameTexts.ts`; el resto (componentes, hooks de reloj, tests) lo leyó el MID |
+
+**Aplicado por el orquestador antes de commitear (de la revisión del MID):** N-1, PROY-16 acotado a las acciones y vistas nuevas desde #73 (`ESTANDARES.md` v1.10) y PROY-14 con el reloj de pantalla; la entrada `D-20261120-02` de `DECISIONES.md`; N-6, la frase de `agents.md` sobre `house::add_fees`; N-9, la dirección conservadora del reloj en `app/README.md`; N-2, el nombre del usuario del sistema se enmascara en el reporte al transcribirlo (declarado en el prefacio); y N-4, el test que fija las clases de los 44 px y de los números tabulares (`app/src/components/uxClasses.test.tsx`, 8 tests), que el DEV agregó en una segunda ronda.
+
+**Pendientes que no entran en estos commits:** el recorrido de UX del owner (≈ 15 minutos sobre `npm run dev` con la localnet aislada) y el paso 7 del smoke, obligatorio en #18; a #18 van además el builder de creación con control de tiempo y el campo de control por defecto en `GameDef`; a #72, UX-1..UX-15 como criterios de aceptación del rediseño y alinear las acciones anteriores a PROY-16; a #58, el code-splitting.
 
