@@ -346,13 +346,15 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 | Archivo | Contenido | Issue |
 |---|---|---|
 | `networks.ts` | `Network`, URL gRPC y base del explorador por red, `isNetwork`, `shortChainId` | #9 |
-| `config.ts` | **único** lector de `import.meta.env` y de `contracts/deployments/*.json`; valida el esquema de #7 (incluido `publishTxDigest`, cota del lobby) | #9, #10 |
+| `config.ts` | **único** lector de `import.meta.env` y de `contracts/deployments/*.json`; valida el esquema de #7 (incluido `publishTxDigest`, cota del lobby). #73: lee `packageVersion`, `upgrades` y `typeOrigins` (opcionales **solo** con `packageVersion` 1, o ausente: el `testnet.json` de antes del upgrade sigue válido y el registro queda con la fuente `legacy`); con `packageVersion > 1`, la falta de cualquiera de los dos, de una entrada de un tipo del registro (`registryTypeKeys`) o una incoherencia con `check` (versiones consecutivas, último `packageId` = el vigente, `definingId` ∈ {original, upgrades}, tipos de la v1 con el ID original) es un **error de configuración**, nunca "no hay partidas". `AppConfig.upgrades`/`typeOrigins` son opcionales en el tipo (una config armada a mano equivale a "sin upgrades") y `resolveConfig` siempre los completa | #9, #10, #73 |
 | `format.ts` | SUI ↔ MIST con `bigint` (`parseSuiToMist`, `formatMist`), `shortAddress`, `formatBps`, `formatTimestamp` | #9, #10 |
 | `explorer.ts` | links a transacción, objeto y cuenta (`explorerAccountUrl`, "Ver tu historial completo en el explorador"; Suiscan en testnet; `null` en localnet); validan antes de mirar la red | #9, #13 |
 | `nodeInfo.ts` | `fetchNodeInfo` (consulta viva con el corte común; trae el piso `lowestAvailableCheckpoint`) y `deriveNodeStatus` (con `retrying`) | #9, #10 |
 | `dappKit.ts` | instancia del kit con `createDAppKit` y `SuiGrpcClient` | #9 |
 | `game.ts` | esquema BCS del `Game`, `gameType`, `parseGameObject` (tipo exacto, dueño compartido, bytes canónicos, invariantes) y `resolutionAmounts` | #10 |
-| `events.ts` | `RawGameEvent`, esquemas BCS y parsers de `GameCreated`/`GameCancelled`/`GameResolved` | #10 |
+| `events.ts` | `RawGameEvent`, esquemas BCS y parsers de `GameCreated`/`GameCancelled`/`GameResolved` (#10) y, #73, de los 7 eventos de la base `duel` (`parseDuelCreated`, `parseDuelCancelled`, `parseDuelActivated`, `parseDuelTurn`, `parseDuelResolved`, `parseDuelTimedOut`, `parseDuelExpired`) con `duelEventType` (`<ID de definición del evento>::duel::<Evento><<tag de G>>`): reciben el tipo exacto esperado y validan `pot == payout + fee`, `winner ∈ {creator, acceptor}`, `to_move` de `DuelActivated` (0 sin reloj, `1..=3` con reloj) y de `DuelTurn` (`1..=3`); `turn_ms`/`control` **no** se contrastan con la tabla | #10, #73 |
+| `duel.ts` | #73: esquema BCS de `duel::Duel<G>` y `DuelState` (6 variantes: `Pending`, `Cancelled`, `Active`, `Resolved`, `TimedOut`, `Expired`), `duelType`, `parseDuelObject` (tipo exacto con el ID de definición de `Duel` y de `G`, dueño compartido, bytes canónicos e invariantes de R.6: `stake` = `bet` / `2 × bet` / 0, `turn_ms > 0` y `to_move ∈ 1..=3` en `Active`, `winner ∈ {creator, acceptor}`; **sin** validar `turn_ms` contra la tabla: la cadena manda) y la máscara `TO_MOVE_*` | #73 |
+| `gameRegistry.ts` | #73: registro de juegos (`buildGameRegistry`: un `GameDef` con sus fuentes `legacy` = `game::Game` y `duel` = `Duel<Coinflip>`, cada una con sus tipos exactos desde `typeOrigins`, sus parsers y los eventos que "envía" un jugador); `definingIdOf` busca por **(módulo, nombre)**, nunca solo por módulo (S-2); espejo de la tabla de controles de `duel.move` (`TIME_CONTROLS`, ids 0-7, y `CLAIM_GRACE_MS`; `agents.md` §5) y `controlLabel` (la cadena manda: un `turn_ms` fuera del espejo se muestra como "15 s / N min / N h / N días por jugada", nunca es un error). Los tipos de `house`/`game` llevan el ID original; los de `duel`/`coinflip`, el del upgrade; `packageId` solo sirve para targets de llamadas | #73 |
 | `readErrors.ts` | errores de lectura (`ReadDataError`, `GameNotFoundError`, `NotAGameError`, `PaginationStalledError`, `ReadTimeoutError`, `NotYetCheckpointedError`, `HistoryPrunedError`) y `readErrorMessage`. `ReadDataError` suma en #14 el motivo `incomplete` (la búsqueda del `HouseCap` no llegó a una respuesta cierta), con su texto propio "El nodo no completó la búsqueda del HouseCap; reintenta" y no transitorio | #10, #14 |
 | `readPolicy.ts` | `withReadTimeout` (corte de 10 s), `isTransientReadError`, `shouldRetryRead`, `readRetryDelay` | #10 |
 | `readStatus.ts` | `ReadStatus` y `deriveReadStatus` (cargando, reintentando n de m, en pausa, error, lista) | #10 |
@@ -363,7 +365,7 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 | `lobby.ts` | `fetchLobbyPage` (lobby por eventos sobre `eventScan.ts`) y las constantes calibradas (50 / 2 / 20) | #10, #13 |
 | `myGames.ts` | "Mis partidas" (ver esa sección): `myActivityFilter`, `fetchMyActivityPage`, `fetchInvitationsPage`, `naturalSection`, `mergeMyGames`, `extendPins`, `groupMyGames`, `myGameKey`, `sectionFooter` y `MY_ACTIVITY_*` (50 / 1) | #13 |
 | `transactions/game.ts` | builders puros de PTB: `buildCreateGameTx` (`splitCoins(gas)` + `create_game`), `buildCancelGameTx`, `buildRejectGameTx` y `buildAcceptGameTx` (`splitCoins(gas, [bet])` + `accept_game(game, house, coin, random)` con `tx.object.random()`, **último** comando: después de un comando con `Random` el nodo solo admite `TransferObjects`/`MergeCoins`); lanzan ante un ID o un monto inválidos; sin `sender` ni gas | #11, #12 |
-| `errors.ts` | `ABORT_MESSAGES` (módulo + código → mensaje), `findMoveAbort` (estructurado, formato del SDK y formato Rust del nodo; `cause` hasta 5 niveles), `abortCodeSuffix`, `runtimeCancellation` + `RUNTIME_CANCELLED_MESSAGES` (cancelaciones del runtime, DL-11) y `transactionErrorMessage` con sus fallbacks | #11, #12 |
+| `errors.ts` | `ABORT_MESSAGES` (módulo + código → mensaje; #73 suma `duel` 0-25, un mensaje por código, y `house`/3, `game`/3 y `duel`/3 siguen distinguidos), `transactionErrorMessage` (#73: acepta `packageId`, `originalPackageId` y **todos** los IDs de `upgrades[]`: un abort informa el ID de la versión ejecutada, V-5), `findMoveAbort` (estructurado, formato del SDK y formato Rust del nodo; `cause` hasta 5 niveles), `abortCodeSuffix`, `runtimeCancellation` + `RUNTIME_CANCELLED_MESSAGES` (cancelaciones del runtime, DL-11) y `transactionErrorMessage` con sus fallbacks | #11, #12 |
 | `execution.ts` | `preflightTransaction` (simulación de una copia, corte de 20 s, `PreflightNetworkError`; DL-10: un `SimulationError` sin `executionError` cuyo `cause` es un corte de red, según `isPreflightNetworkCause` = `isTransientReadError`, también es `PreflightNetworkError`), `confirmTransaction` (30 s), `waitForCheckpoint` (30 s), `classifyExecution`, `digestFromError`, `networkCost` | #11, #12 |
 | `gameTx.ts` | `parseCreatedGame` (único `GameCreated` del firmante), `cancelledRefund` (`refund` del `GameCancelled` de esa partida) y `parseResolvedGame` (único `GameResolved` de esa partida con `acceptor` = la cuenta; si no, `null`) | #11, #12 |
 | `house.ts` | esquema BCS de la `House`, `houseType`, `parseHouseObject` (tipo exacto, compartida, bytes canónicos, `0 < min_bet <= max_bet`) y `fetchHouse` | #11 |
@@ -416,6 +418,11 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
   re-serialización comparada byte a byte e invariantes de `game.move`. Lo que no encaja es `ReadDataError`: en el lobby
   queda como fila "Partida ilegible" sin ocultar las sanas; nunca se muestra como `Pending` (SEG-10). El `json` del nodo
   no se usa. Fixtures reales en `contracts/fixtures/game-reads.localnet.json`.
+  **#73:** el `Duel<G>` y sus 7 eventos se leen igual (`duel.ts`, `events.ts`), pero su tipo lleva el ID de **definición**
+  de `typeOrigins` (el del upgrade que introdujo el módulo, no el original) y, en el tag de `G`, el del módulo del juego;
+  el registro de juegos (`gameRegistry.ts`) arma esos tags por (módulo, nombre) y ningún componente lo hace. Fixtures
+  reales en `contracts/fixtures/duel-reads.localnet.json` y `duel-tx.localnet.json` (producción) y `duel-clock.localnet.json`
+  (ensayo: solo prueba el mecanismo del reloj; ningún test toma de ella una constante de producción).
 - **Montos de una partida resuelta** = `resolutionAmounts` (pozo `2 × bet`, comisión `⌊pozo × fee_rate / 10 000⌋`, pago
   `pozo − comisión`): fórmula de la v1 del contrato (D-20261030-16 D2/D3). Un upgrade que la cambie conserva la vieja para
   las partidas resueltas con el código viejo (por versión del `Game` o leyendo el evento), en el mismo PR (`agents.md`
@@ -560,9 +567,10 @@ el texto de red).
   fallo del nodo y un "sin confirmar" (el estado pudo cambiar). `done` llega **después** de la relectura: con el lobby o
   "Mis partidas" montados, "Actualizando datos…" dura lo que tarde esa lectura. Las acciones de la House (H-5 de #14) no
   reinician nada ni tocan partidas, `lobby` o `myGames`; sin cuenta, solo `house`.
-- **Mensajes de abort** (`errors.ts`, M-5): por **módulo + código**, solo si el abort viene de nuestro `packageId` u
-  `originalPackageId` (normalizados), con el sufijo de diagnóstico fijo `(código <módulo>/<n>)`, p. ej. "Solo quien creó
-  la partida puede cancelarla. (código game/3)". Los textos de `game` 0–10 y `house` 0–4 viven solo en
+- **Mensajes de abort** (`errors.ts`, M-5): por **módulo + código**, solo si el abort viene de nuestro `packageId`,
+  `originalPackageId` o de cualquier `upgrades[].packageId` (normalizados; #73, V-5: el abort informa el ID de la versión
+  ejecutada), con el sufijo de diagnóstico fijo `(código <módulo>/<n>)`, p. ej. "Solo quien creó la partida puede
+  cancelarla. (código game/3)". Los textos de `game` 0–10, `house` 0–4 y `duel` 0–25 (#73) viven solo en
   `ABORT_MESSAGES` (tabla de `contracts/README.md`, "Abort codes"). Fallbacks:
 
   | Caso | Mensaje |
