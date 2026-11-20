@@ -99,6 +99,7 @@ Los gates se corren con `cd contracts && printf 'n\n' | sui move …` (equivalen
 | `sui move test -e testnet --coverage && sui move coverage summary -e testnet` | Cobertura (informativo) |
 | Red local para smokes: **solo aislada** | Ver "Localnet aislada (smokes)" abajo; nunca `sui start` a secas |
 | `node scripts/publish.mjs publish --network testnet` | Publicación — **solo el owner, con su `SUI_CONFIG_DIR` propio** (§12, D-20261102-03); agentes: solo `--network localnet` dentro de la localnet aislada |
+| `node scripts/publish.mjs upgrade --network testnet` | Upgrade del paquete (#73) — **solo el owner, con su `SUI_CONFIG_DIR` propio y una autorización registrada en `DECISIONES.md`** (runbook: `contracts/README.md`, "Uso en testnet → Upgrade"); agentes: solo `--network localnet --pubfile-path <copia del pubfile>` dentro de la localnet aislada |
 
 Las seis primeras filas son exactamente los steps de gate del job `contracts` de
 `.github/workflows/ci.yml` (PROY-18); el job además exige árbol limpio y cero claves. Baseline vigente
@@ -110,8 +111,11 @@ de los gates: `documents/STATUS.md`.
 |---|---|---|
 | `node --test scripts/*.test.mjs`, `node scripts/publish.mjs check` | sí (gate) | sí |
 | `node scripts/publish.mjs record …` | sí (con salidas de localnet) | sí |
+| `node scripts/publish.mjs record --upgrade …` (offline: `--from` y `--type-origins`) | sí (con salidas de localnet; no invoca `sui` ni toca la red) | sí |
 | `node scripts/publish.mjs publish --network localnet …` | **solo** con el prefijo de la localnet aislada (`. env.sh && smoke_guard &&`, abajo) | sí, con su localnet aislada |
+| `node scripts/publish.mjs upgrade --network localnet --pubfile-path <copia> …` | **solo** con el prefijo de la localnet aislada, sobre un paquete publicado en esa génesis y con la copia del pubfile de la Receta U (`source.local` = `contracts/`; el script no lo edita y aborta si no coincide) | sí, con su localnet aislada |
 | `node scripts/publish.mjs publish --network testnet …` (con o sin `--dry-run`) | **nunca** (D4) | sí, con `SUI_CONFIG_DIR` propio |
+| `node scripts/publish.mjs upgrade --network testnet …` (con o sin `--dry-run`) | **nunca** (D4) | sí, con `SUI_CONFIG_DIR` propio y **solo con una autorización explícita registrada en `DECISIONES.md`** (runbook de `contracts/README.md`) |
 
 #### Localnet aislada (smokes)
 
@@ -228,7 +232,8 @@ borradas al cerrar. Nada en `~/.sui/`.
    una ejecución accidental). Ante cualquier ejecución accidental de `sui`: parar, verificar `~/.sui/` y declararlo en el reporte.
 
 **Reglas del script de publicación para agentes (D-20261102-03):** ningún agente corre
-`publish.mjs publish --network testnet`, ni con `--dry-run`. Un agente solo define `SUI_CONFIG_DIR` como
+`publish.mjs publish --network testnet` ni `publish.mjs upgrade --network testnet`, ni con `--dry-run` (#73: el
+dry run también corre contra testnet con la config del owner). Un agente solo define `SUI_CONFIG_DIR` como
 `$SMOKE_DIR/net`; la ruta de la config del owner nunca se escribe en el repo, issues, handoffs ni reportes. **Ninguna**
 llamada `sui client …` (ni `publish.mjs publish`) sin el prefijo del paso 3, tampoco las de solo lectura
 (`active-env`, `chain-identifier`, `addresses`): la única forma de ver la salida real de un `sui client` es esta

@@ -587,7 +587,8 @@ transacción (cómputo + storage − rebate de `effects.gasUsed`).
 Un archivo por red en `contracts/deployments/<red>.json`: `localnet.json` (ignorado por git) y `testnet.json` (commiteado
 en #8). Lo escribe **solo** `scripts/publish.mjs` (nunca a mano), con `JSON.stringify(obj, null, 2)` y salto de
 línea final, a partir de la salida de la misma transacción de publicación (D-20261102-01). El script exige el Node de
-`.nvmrc` (26): con otra versión sale con 1 y un mensaje (#8).
+`.nvmrc` (26): con otra versión sale con 1 y un mensaje (#8). Los subcomandos son `publish`, `upgrade` (#73), `record`
+(también `record --upgrade`) y `check`; un upgrade reescribe el json con el mismo script, nunca a mano (ARQ-6).
 
 **Testnet:** publicado el 2026-11-04 (#8) desde `26f2676`,
 `packageId` `0x8b7873ec06f9173d43aa6c1f093040e5237967ad2aaecece0a32070587856f51`.
@@ -632,9 +633,38 @@ Ejemplo con IDs **ficticios**:
 | `sourceCommit` | 40 hex o `null` | `git rev-parse HEAD` al publicar; `null` solo en localnet con el árbol sucio | versión vigente |
 | `suiCliVersion` | texto | `sui --version` sin el prefijo `sui ` | versión vigente |
 | `frameworkRev` | 40 hex | `rev` de `[pinned.testnet.Sui]` en `Move.lock` al publicar (STATUS H13) | versión vigente |
+| `upgrades` (opcional, #73) | arreglo de `{ version, packageId, txDigest }` | Un elemento por upgrade, en orden ascendente y **consecutivo** (`version` 2, 3, …, `packageVersion`); `packageId` = el paquete de ese upgrade (`0x` + 64 hex, distintos entre sí y del original); `txDigest` = digest base58 de su transacción. El **último** es el vigente: su `packageId` = `packageId` y su `version` = `packageVersion`. Sale de la salida `--json` de la CLI del upgrade (no de `Published.toml`, V-11). `publishTxDigest` no cambia: sigue siendo el de la publicación original. **Obligatorio con `packageVersion > 1`**; con la versión 1 puede faltar (o ser `[]`) | versión vigente (se agrega una entrada por upgrade) |
+| `typeOrigins` (opcional, #73) | arreglo de `{ module, name, definingId }`, **ordenado por (module, name)** | La tabla de orígenes del objeto paquete: el ID del paquete que **definió** cada tipo (`definingId`, `0x` + 64 hex). Es el prefijo de los tipos y eventos de la app y la base de los `typeArguments` de las `entry` genéricas (plan §4.4): un módulo agregado en un upgrade lleva el ID de **ese** upgrade, no el original. Se lee de `content.Package.type_origin_table` de `sui client --json object <packageId>` (fuente única: el script no usa gRPC ni GraphQL). **La clave es el par (module, name), nunca solo el módulo**: un struct agregado a un módulo existente en un upgrade posterior tiene su propio `definingId`, y un par repetido es un error. **Obligatorio con `packageVersion > 1`** | versión vigente (se reemplaza entera en cada upgrade) |
 
 "Describe": **publicación original** no cambia nunca; **versión vigente** es la del código en `packageId` (en la v1
-coinciden; un upgrade reescribe estos campos y agrega el opcional `packageTxDigest`).
+coinciden; un upgrade reescribe `packageId`, `packageVersion`, `sourceCommit`, `suiCliVersion` y `frameworkRev` y agrega
+`upgrades` y `typeOrigins`; no toca `originalPackageId`, `upgradeCapId`, `houseId`, `houseCapId` ni los campos de la
+publicación). El esquema **no sube de versión** (`schemaVersion` sigue en 1): un `testnet.json` sin los campos nuevos
+(`packageVersion` 1, el de hoy) sigue siendo válido.
+
+Ejemplo de un json **después de un upgrade** (IDs ficticios; `typeOrigins` abreviada, la real trae todos los tipos y
+siempre los 13 de la v1 de `house` y `game`):
+
+```json
+{
+  "packageId": "0x6666666666666666666666666666666666666666666666666666666666666666",
+  "originalPackageId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "packageVersion": 2,
+  "upgrades": [
+    { "version": 2, "packageId": "0x6666666666666666666666666666666666666666666666666666666666666666", "txDigest": "22222222222222222222222222222222" }
+  ],
+  "typeOrigins": [
+    { "module": "coinflip", "name": "Coinflip", "definingId": "0x6666666666666666666666666666666666666666666666666666666666666666" },
+    { "module": "duel", "name": "Duel", "definingId": "0x6666666666666666666666666666666666666666666666666666666666666666" },
+    { "module": "game", "name": "Game", "definingId": "0x1111111111111111111111111111111111111111111111111111111111111111" },
+    { "module": "house", "name": "House", "definingId": "0x1111111111111111111111111111111111111111111111111111111111111111" }
+  ]
+}
+```
+
+(Solo cambian los campos de la versión vigente y se suman los dos opcionales; los demás campos del ejemplo anterior
+quedan como estaban. Contrato de formato para la app: `scripts/fixtures/localnet.upgraded.deployment.json`, real,
+generado con `record --upgrade`.)
 
 **Qué no va, y por qué:** ninguna dirección de cuenta (publicador, dueño del `HouseCap`/`UpgradeCap`), ni claves ni
 frases (SEG-3): el script ignora `sender`/`owner` de la salida de la CLI y un test lo verifica. La dirección del
@@ -647,8 +677,8 @@ estado on-chain (comisión, límites, `version` de la House).
 1. Los 14 campos de la v1 son **obligatorios**; el script y `check` rechazan uno faltante, con formato inválido o
    una clave desconocida.
 2. Los campos posteriores a la v1 son **opcionales** (se validan solo si aparecen y se registran en el validador y en
-   esta tabla en el mismo PR). Hacer obligatorio un campo nuevo, renombrar, quitar o cambiar un significado ⇒
-   `schemaVersion: 2` + STOP.
+   esta tabla en el mismo PR; hoy `upgrades` y `typeOrigins`, que solo son obligatorios con `packageVersion > 1`).
+   Hacer obligatorio un campo nuevo, renombrar, quitar o cambiar un significado ⇒ `schemaVersion: 2` + STOP.
 3. Los consumidores (la app, #9) validan lo que usan, rechazan `schemaVersion` ≠ 1 e **ignoran claves desconocidas**.
 4. Contrato de formato para la app: `scripts/fixtures/localnet.deployment.json` (real, generado con `record`).
 
@@ -661,6 +691,23 @@ para upgrades y para impedir una doble publicación. Es la **fuente** de los dat
 su `network`, si una red no-localnet no tiene su `[published.<red>]` (o al revés) o si `packageId`, `originalPackageId`,
 `packageVersion`, `upgradeCapId` o `chainId` no coinciden con `Published.toml`. `localnet` no se cruza (lo publica
 `test-publish`, que escribe un `Pub.*.toml` efímero, no `Published.toml`).
+
+Además, desde #73, `check` aplica estos invariantes de `upgrades` y `typeOrigins` (offline, en `deployment.mjs`):
+
+- con `packageVersion > 1`, `upgrades` y `typeOrigins` son **obligatorios** (y `upgrades` no está vacío);
+- `upgrades` es **consecutivo** (`version` 2, 3, …), con `packageId` distintos entre sí y del original, y su **último**
+  elemento tiene `packageId` = `packageId` y `version` = `packageVersion` (con la versión 1, `upgrades` puede faltar o ser `[]`);
+- todo `definingId` de `typeOrigins` es el `originalPackageId` o el `packageId` de un elemento de `upgrades`;
+- los **13 tipos de la v1** de `house` y `game` (`House`, `HouseCap`, `HOUSE`, `FeeRateUpdated`, `BetLimitsUpdated`,
+  `FeesWithdrawn`, `HouseCapTransferred`, `HouseMigrated`, `Game`, `GameCreated`, `GameCancelled`, `GameResolved`,
+  `GameState`) están en la tabla y llevan el `originalPackageId` (un upgrade compatible no borra tipos);
+- la clave de la tabla es el par (`module`, `name`): un par repetido rechaza y dos tipos del mismo módulo con
+  `definingId` distintos son válidos (un struct agregado a un módulo existente en un upgrade posterior);
+- la coherencia con el `Published.toml` **ya existente** (`published-at`, `original-id`, `version`, `upgrade-capability`
+  y `chain-id`) la sigue comparando `checkConsistency`, que **falla sin arreglar nada**.
+
+`check` no puede comparar `typeOrigins` con la cadena (es offline): esa verificación es del owner, por lectura pública
+independiente (runbook "Upgrade", paso 7).
 
 ### Uso en localnet
 
@@ -685,6 +732,25 @@ su `network`, si una red no-localnet no tiene su `[published.<red>]` (o al revé
   Sin `--out` escribe `contracts/deployments/localnet.json` (ignorado por git). `--out` existe solo para localnet
   (smokes); en testnet el script lo rechaza (#39). En localnet se usa
   `sui client test-publish --build-env testnet`: el manifest no declara un entorno localnet y `publish` no puede.
+- **Upgrade (#73)**, desde `contracts/`, sobre un paquete ya publicado y registrado en la misma localnet:
+
+  ```bash
+  SUI_CONFIG_DIR=<dir>/net node scripts/publish.mjs upgrade --network localnet --pubfile-path <copia del pubfile> [--out <ruta>] [--dry-run]
+  ```
+
+  El upgrade **lee** el `deployments/localnet.json` existente para los campos de la publicación original (el que dejó
+  `record` sobre la salida de `test-publish` del v1) y **aborta con un mensaje claro si falta**: no inventa ni publica.
+  Sin `--out` lo reescribe (variante B, ignorado por git); con `--out` escribe solo ahí y deja el base como estaba
+  (variante A). Usa `sui client test-upgrade --build-env testnet --pubfile-path …`.
+  **Receta U (el pubfile se indexa por ruta):** `test-publish` guarda en el pubfile la ruta absoluta del árbol desde donde
+  se publicó (`source.local`), y `test-upgrade` solo encuentra la publicación si el árbol que se upgradea está **en esa
+  ruta**. Si el v1 se publicó desde otro árbol (p. ej. `git archive 26f2676 contracts` en un directorio de smoke) y el
+  upgrade sale de `contracts/`, se hace antes una **copia del pubfile con `source.local` = la ruta de `contracts/`**
+  (edición de un archivo nuevo, nunca del original; `test-upgrade` reescribe el pubfile **en el lugar**, así que cada
+  upgrade parte de la copia ya actualizada). El script **no edita** el pubfile: lo valida y, si el `realpath` de ningún
+  `source.local` coincide con `contracts/`, **aborta antes de invocar `sui`** con ese mensaje. También aborta si el
+  pubfile no es el del json base (otra génesis, o un upgrade que el json no registró: reintentarlo falla con
+  `PackageIDDoesNotMatch` pagando gas) o si el `chain-id` del pubfile o del json no es el del env activo.
 
 ### Uso en testnet (solo el owner)
 
@@ -909,6 +975,193 @@ reintenta sin buscar antes el digest** (en el mensaje o en el explorador): una s
   `4c78adac`). Si existe `meta.json`, se usa y los flags se ignoran.
 - Si falta `Published.toml` tras una publicación en testnet, reconstruirlo es STOP de #8.
 
+### Uso en testnet → Upgrade (solo el owner; #73)
+
+> **Sin una autorización explícita del owner registrada en `DECISIONES.md` no se ejecuta ningún paso de testnet de
+> esta sección.** Todos los comandos de testnet los corre **solo el owner, con su wallet y su `SUI_CONFIG_DIR`**: nunca
+> un agente, ni el script bajo un agente, ni con `--dry-run` (D-20261102-03). La autorización del upgrade (D-20261119-05,
+> D14) es una entrada propia de `DECISIONES.md`, con la fecha y el head autorizado, posterior a la compuerta de
+> pre-upgrade del MAYOR.
+
+El upgrade agrega los módulos nuevos (`duel`, `coinflip`) a la misma `House`, con política `compatible` y **sin subir
+`house::VERSION`** (D5-D7): nada se corta y las partidas `Pending` existentes siguen jugables (plan §4). Es **un solo
+PTB** atómico (autorizar con el `UpgradeCap` → `Upgrade` → `commit_upgrade`): o se confirma entero o no cambia nada y el
+`UpgradeCap` queda intacto (V-10). Parte de lo ya publicado: **exige** `deployments/testnet.json` y `[published.testnet]`
+en `Published.toml` (y que coincidan) y usa `sui client upgrade`; no admite `--out` ni `--pubfile-path`. El script nunca
+pasa `--skip-verify-compatibility` ni `--upgrade-capability`: la verificación local de compatibilidad de la CLI queda
+activa y el `UpgradeCap` lo toma la CLI de `Published.toml` (`upgrade-capability`, que `check` compara con
+`upgradeCapId`). Placeholders y forma de las shells: los de "Uso en testnet" (`<repo>`, `<su dir>`, `<branch>`, `<head>`).
+
+#### U0. Precondiciones (todas, antes de seguir)
+
+- PRE-1 mergeado y la CLI local del owner **= `ci.yml`** (`printf 'n\n' | sui --version` = `${SUI_VERSION}-${SUI_COMMIT}`;
+  si no, el script aborta en testnet).
+- La branch con `master` integrado por merge y la CI en verde en el `<head>` conocido; el árbol limpio y en ese commit.
+- TASK-1..5, 7 y 8 de #73 en PASA contra la localnet; la **compuerta de pre-upgrade del MAYOR sin 🔴/🟠**; P-1..P-14 en
+  `DECISIONES.md`; la **autorización explícita del owner** registrada.
+- `deployments/testnet.json` (con `packageVersion` 1) y `Published.toml` commiteados y `node scripts/publish.mjs check` en
+  verde (`1 despliegue(s) válidos…`).
+
+#### U1. Shell
+
+La misma del paso 1 de "Uso en testnet" (`git status --porcelain` vacío, `git log -1 --format=%H` = `<head>`, `nvm use`,
+`export SUI_CONFIG_DIR=<su dir>`, la línea `case` que imprime `config fuera de ~/.sui`, `suio`, `sui --version`,
+`suio active-env` = `testnet`). Además, para los pasos siguientes:
+
+```bash
+unset SUI_BIN                # el script usa SUI_BIN si existe (la receta de los smokes de localnet): que no quede de un smoke
+command -v sui               # la CLI que se va a usar; `sui --version` debe ser la de ci.yml (si no, el script aborta en testnet)
+cd <repo>/contracts
+PKG="$(jq -r .packageId deployments/testnet.json)"; HOUSE="$(jq -r .houseId deployments/testnet.json)"
+UCAP="$(jq -r .upgradeCapId deployments/testnet.json)"
+```
+
+#### U2. Pre-vuelo: versión de protocolo y `UpgradeCap`
+
+1. La PV de testnet, justo antes (como el paso 2 de "Uso en testnet"): debe ser **≤ la PV máxima de la CLI instalada**
+   (`MAX_PROTOCOL_VERSION`; la CLI `1.84.0` cubre la PV 142). Si es mayor: **no se sigue**, es otro task de toolchain.
+2. El `UpgradeCap` en la dirección del owner, sin pegar la dirección (como el paso 8):
+
+   ```bash
+   A="$(suio active-address)"
+   suio object "$UCAP" --json | jq -r --arg a "$A" '[.objType, (.owner.AddressOwner == $a)] | @tsv'   # …::package::UpgradeCap  true
+   ```
+
+3. Sus valores esperados **hoy**, por lectura pública (sin la CLI): `policy` 0, `version` `"1"` y `package` = `packageId`:
+
+   ```bash
+   curl -fsSL -X POST -H 'content-type: application/json' \
+     -d "{\"query\":\"{ object(address: \\\"$UCAP\\\") { asMoveObject { contents { json } } } }\"}" \
+     https://graphql.testnet.sui.io/graphql | jq '.data.object.asMoveObject.contents.json'
+   ```
+
+4. La `House` antes del upgrade, para comparar al final (el upgrade no la toca): `suio object "$HOUSE" --json | jq
+   '{version: .content.version, fee_rate: .content.fee_rate, fees_collected: .content.fees_collected}'` (anotar el resultado).
+5. **Saldo de gas de la cuenta del owner ≥ 0,5 SUI** (`suio gas`; no se pega): el upgrade de la v1 a la v2 con `duel` y
+   `coinflip` estimó unos 87 000 000 MIST (≈ 0,09 SUI) en la localnet aislada (cómputo + almacenamiento del paquete nuevo,
+   neto del reembolso); el dry run del paso U3 da la cifra exacta para testnet (`Gas estimado: N MIST`). Con un saldo
+   insuficiente la CLI falla antes de enviar y no se paga nada; con margen se evita reintentar.
+
+#### U3. Dry run
+
+```bash
+node scripts/publish.mjs upgrade --network testnet --dry-run; echo "exit=$?"
+```
+
+Éxito = la línea **`Dry run ok. Gas estimado: N MIST.`** y `exit=0`. Comprueba el env activo y el chain id, la CLI contra
+`ci.yml`, el árbol limpio, el json base contra `Published.toml`, que el dry run daría exactamente la **versión
+`packageVersion + 1`** avanzando **el** `UpgradeCap` del json, y que `Move.lock` no cambie. Cualquier otra salida es un
+fallo y no se sigue. En particular:
+
+- **Un error de compatibilidad local de la CLI (p. ej. `EUC01009`) o un dry run que falle por compatibilidad es STOP.**
+  **Nunca** `--skip-verify-compatibility` (el script no lo pasa y la lista blanca de la CLI lo rechaza): con `compatible` la
+  bandera solo saltea la verificación local y silencia una señal temprana; la cadena sigue aplicando la política. Se avisa
+  al orquestador con el mensaje. (Dato de TASK-1b, V-2: con la política `additive` la CLI `1.84.0` rechaza localmente un
+  upgrade que agrega un módulo que llama a una `public(package)` de `house`, `EUC01009 friend mismatch`, porque cambia la
+  lista de amigos de `house`; con `compatible`, la política vigente (D7), no ocurre. Es una de las razones de la regla.)
+- "el dry run daría la versión X (se esperaba la Y)" significa que el json base **no es** el estado de la cadena (¿ya se
+  hizo este upgrade?): STOP, se mira el digest (ver "Recuperación del upgrade").
+- Si la CLI de testnet pidiera pasar el `UpgradeCap` (`Please pass the upgrade cap with -c …`) o no lo resolviera desde
+  `Published.toml`, es STOP: no se adivina ni se agrega esa bandera a mano; se avisa al orquestador.
+
+#### U4. Upgrade
+
+```bash
+node scripts/publish.mjs upgrade --network testnet
+```
+
+Repite las guardas y el dry run y pide escribir `testnet` en la terminal (freno contra accidentes; la autorización es la
+del owner; no existe opción ni variable que lo omita, y sin terminal aborta). Después, un solo PTB. Imprime la versión nueva,
+el paquete, el digest de la transacción, cuántos tipos tiene `typeOrigins` y el directorio temporal (`battleship-upgrade-*`,
+`0700`, con `meta.json`, `upgrade-output.json` y `object-output.json`, `0600`). Solo si todo cierra escribe
+`deployments/testnet.json`; ante cualquier error, "Recuperación del upgrade" (**nunca reintentar sin mirar el digest**).
+
+```bash
+D=<directorio temporal que imprimió el script>
+```
+
+#### U5. `Published.toml` tras el upgrade (STOP si no es lo esperado)
+
+```bash
+git diff -- Published.toml
+```
+
+Debe mostrar **solo** `published-at`, `version` y `toolchain-version` (la forma que deja `test-upgrade`; el formato de
+`sui client upgrade` en testnet lo ve por primera vez el owner). Si cambia **otra cosa** o **no cambia nada**: **STOP, no se
+registra ni se reintenta** (un reintento con el `Published.toml` viejo falla con `PackageIDDoesNotMatch` y paga gas): se busca
+el digest y se sigue por "Recuperación del upgrade". El script toma el ID nuevo, la versión y el digest de la salida de la
+CLI y **no** depende de cómo ella reescribió este archivo: si no coincide con el json armado, **no escribe el json**.
+
+#### U6. Registro y `check`
+
+```bash
+git status --porcelain      # exactamente: " M contracts/Published.toml" y " M contracts/deployments/testnet.json"
+node scripts/publish.mjs check
+git diff -- deployments/testnet.json
+```
+
+`check` debe dar `1 despliegue(s) válidos y coherentes con Published.toml`. El diff del json solo cambia `packageId`,
+`packageVersion`, `sourceCommit`, `suiCliVersion` y `frameworkRev` y agrega `upgrades` (una entrada, `version` 2, con el
+digest del paso U4) y `typeOrigins`: `publishTxDigest`, `originalPackageId`, `upgradeCapId`, `houseId` y `houseCapId` **no
+cambian**. Ante cualquier otro cambio: STOP, sin commitear ni editar nada.
+
+#### U7. Verificación independiente por lectura pública
+
+`typeOrigins` del json se compara con la tabla del paquete **on-chain** leída por una vía **distinta de la CLI que la
+produjo** (gRPC `ledgerService.getObject` con `readMask` `package`, o el GraphQL público de solo lectura):
+
+```bash
+PKG2="$(jq -r .packageId deployments/testnet.json)"
+curl -fsSL -X POST -H 'content-type: application/json' \
+  -d "{\"query\":\"{ package(address: \\\"$PKG2\\\") { version typeOrigins { module struct definingId } } }\"}" \
+  https://graphql.testnet.sui.io/graphql \
+  | jq -S '[.data.package.typeOrigins[] | {module, name: .struct, definingId}] | sort_by([.module, .name])' > "$D/origins-chain.json"
+jq -S '.typeOrigins | sort_by([.module, .name])' deployments/testnet.json > "$D/origins-json.json"
+diff "$D/origins-chain.json" "$D/origins-json.json" && echo "typeOrigins = cadena"
+```
+
+Debe imprimir `typeOrigins = cadena`. Además, por lectura pública: el `UpgradeCap` con `version` `"2"` y `package` = el
+`packageId` nuevo (la consulta de U2.3), y la `House` **intacta** (la lectura de U2.4: `version` `"1"` y los mismos `fee_rate`
+y `fees_collected`). El smoke con partidas del coinflip nuevo y del viejo es el de TASK-9 (`SMOKE_MULTIGAME.md`).
+
+#### U8. Entrega al orquestador y cierre
+
+- `contracts/deployments/testnet.json` y `contracts/Published.toml` **sin editar ni commitear**: los commitea el orquestador
+  en la branch del PR.
+- Los digests (el del upgrade: `upgrades[0].txDigest`), el "sí/no" de la custodia del `UpgradeCap` (U2.2, repetido tras el
+  upgrade), la PV y la época medidas en U2, y el resultado de U7. Nada más: ni la salida de la CLI ni el contenido de `$D`.
+- **No se rebasea ni se squashea** después: el `sourceCommit` del json tiene que seguir existiendo en `master` (merge
+  commit). Recién con la CI del PR en verde: `rm -rf` de los `battleship-upgrade-*` (el del dry run y el del upgrade).
+
+#### Recuperación del upgrade (R-2: nunca reintentar sin mirar el digest)
+
+Antes de invocar el upgrade, el script crea un directorio temporal (`0700`) con `meta.json` (red, chain id, commit, CLI,
+`frameworkRev`) y guarda ahí la salida cruda (`upgrade-output.json`, `upgrade-stderr.txt`, y después `object-output.json`,
+`0600`). Si la CLI se corta **después** de ejecutar, la transacción existe pero `Published.toml` y el json pueden no estar
+escritos.
+
+- **No se reintenta** `upgrade` sin buscar antes el digest (en el mensaje del script o en el explorador). Con el
+  `Published.toml` viejo, un segundo `upgrade` **falla con `PackageIDDoesNotMatch` y paga gas**, y no crea la versión 3; si
+  `Published.toml` ya quedó actualizado y el json no, un nuevo `upgrade` sería un upgrade **real** (v2 → v3): no se corre.
+- Si la transacción existe y solo falló el registro, `record --upgrade` rearma el json **sin repetir el upgrade y sin tocar
+  la red** (todo offline; en testnet tampoco admite `--out`). El digest se busca **a mano** (paso del owner), con su config:
+
+  ```bash
+  suio tx-block <digest> --json > "$D/tx-block.json"          # la salida cruda del upgrade
+  suio object <packageId nuevo> --json > "$D/object-output.json"   # la tabla de orígenes
+  node scripts/publish.mjs record --upgrade --network testnet --from "$D/tx-block.json" --type-origins "$D/object-output.json" --meta "$D/meta.json"
+  ```
+
+  Sin `--meta` (otro directorio) se pasan `--source-commit`, `--sui-cli-version`, `--framework-rev` y `--chain-id`, como en
+  `record`. El ID nuevo, la versión y el digest salen de `--from`; la tabla, de `--type-origins`. Parte del
+  `deployments/testnet.json` **existente** (los campos de la publicación original) y solo escribe el json si coincide con
+  el `Published.toml` ya existente.
+- **"Digest inexistente":** si `--from` es un **error de la CLI** (p. ej. `PackageIDDoesNotMatch` o "transacción no
+  encontrada") o **no trae el cambio de paquete** (sin `published` en los cambios de objeto), `record --upgrade` falla con un
+  mensaje claro y **sin escribir nada**; si el `Published.toml` no coincide con lo armado, es **STOP: no se registra**.
+- Un `deployments/testnet.json` que quedó con la versión vieja y un `Published.toml` ya avanzado hacen fallar a `check`
+  (es la señal buscada); reconstruir `Published.toml` a mano es STOP.
+
 ### Tests
 
 ```bash
@@ -933,4 +1186,28 @@ destruida.
 `package` sobre un paquete de ensayo con 4 upgrades de una localnet desechable: conserva `linkage` y `typeOrigins`
 (`moduleName`, `datatypeName`, `packageId`) y omite los módulos con su bytecode. Lleva `_meta.sandbox = true`: los módulos
 (`probe`, `g_two`, `g_three`, `sb_thing`, `sb_game`, `clock_probe`, `mod_a`, `fee_probe`) son de ensayo y la fixture sirve
-solo por la **forma** de la tabla de orígenes (V-6 de TASK-4). No trae cuentas.
+solo por la **forma** de la tabla de orígenes (V-6 de TASK-4). No trae cuentas. Es la forma de **gRPC**: el parser del script
+no la usa (lee la de la CLI, abajo); sirve de referencia de la verificación independiente del owner (runbook "Upgrade", U7).
+
+Fixtures del script de upgrade (#73, TASK-4), de una misma localnet aislada y desechable (el v1 es el árbol `26f2676`
+publicado con la CLI `1.83.0`; el upgrade, con la `1.84.0`, agrega `duel` y `coinflip` a la `House` real, no a un
+sandbox):
+
+- `localnet-upgrade-base.deployment.json`: el `record` del v1 (el despliegue **base** del upgrade; `packageVersion` 1).
+- `localnet-upgrade-duel-coinflip.json`: el stdout `--json` crudo del upgrade (`test-upgrade`; lleva la cuenta efímera
+  de la génesis, sin valor y con la clave destruida). **No existe una salida real de `sui client upgrade`** (la corre solo el
+  owner en testnet): los tests de parseo usan esta forma y lo declaran en el nombre (`…_with_the_test_upgrade_shape`), sin
+  afirmar que sea la de testnet.
+- `localnet-object-package.json`: la salida real de `sui client --json object <paquete nuevo>`, la **fuente única** de
+  `typeOrigins` (`content.Package.type_origin_table`: `module_name`, `datatype_name`, `package`, **sin ordenar**; el
+  parser ordena por (módulo, nombre)). Solo se omitió `content.Package.module_map` (el bytecode de los 4 módulos, ≈ 130 KB de
+  enteros); el resto es la salida cruda y no trae cuentas (`owner` es `Immutable`).
+- `localnet.upgraded.deployment.json`: el json que arma el script con las tres anteriores (`record --upgrade`), con
+  `upgrades` y `typeOrigins` reales (24 tipos: 13 de la v1 con el ID original y 11 de `duel` y `coinflip` con el del upgrade);
+  es el contrato de formato para la app (TASK-7a). Un test comprueba que el script lo reproduce byte a byte.
+- `Published.upgrade-base.localnet.toml`: el pubfile efímero del v1 **con la copia de la Receta U** (`source.local` =
+  `<REPO>/contracts`, placeholder).
+
+Ningún test llama a `sui client upgrade` ni a ningún vector de testnet: `commandUpgrade` y `commandRecordUpgrade` reciben sus
+dependencias (`spawn`, archivos, terminal) inyectadas, y los vectores de `upgrade`/`upgrade --dry-run` de testnet solo
+aparecen como claves del `spawn` falso.
