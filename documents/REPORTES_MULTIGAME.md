@@ -1222,3 +1222,1141 @@ Autorizo **TASK-2b** (depende de TASK-2 en PASA y de V-13/V-15 de 1b, ya en PASA
 ## §R-6 sobre esta revisión
 Greps con `/usr/bin/grep` sobre este archivo: hex de 40-64 caracteres, `0x` + 8 hex, claves y rutas personales, abreviaturas con puntos suspensivos: el resultado va en el mensaje de entrega. No incluye direcciones de cuenta ni hashes completos; las direcciones de los tests no se citan.
 
+
+
+---
+
+## 7. TASK-2b (reporte del DEV)
+
+> DEV, TASK-2b: reloj por jugada de duel (record_move, claim_timeout, refund_stalled).
+
+~~~~text
+## Task completado: HANDOFF_MULTIGAME — TASK-2b (reloj por jugada de la base `battleship::duel`)
+
+(Reporte del DEV, redactado en español. Se armó con la herramienta de escribir archivos; los outputs de los gates, la tabla de
+transiciones, las mutaciones y las listas se anexaron con `cat` de archivos generados por los comandos, sin heredoc, `printf` ni `echo`
+para texto con comandos de la CLI de Sui. Ver "Guarda de ~/.sui" y "Desviaciones", punto 9, para lo que sí se hizo con heredoc.)
+
+### Branch (con SHA corto del HEAD)
+`feature/issue-73-multigame`, HEAD `5ba8286` (con `master` integrado; PRE-1 = `8cc35ab`, `git merge-base --is-ancestor 8cc35ab HEAD` = 0). Sin commits, sin `git add`, sin push: los cambios están sin commitear en el worktree `<repo>-issue73` (`<repo>` = la raíz del proyecto).
+
+### Baseline medido y árbol de partida
+- `git status -sb`: limpio, rama `feature/issue-73-multigame`.
+- CLI: `sui 1.84.0-9dc25070cf2e` (la de PRE-1).
+- Baseline medido ANTES de tocar nada: `sui move test -e testnet --warnings-are-errors` = **185 tests PASS** (83 de `house`/`game` + 102 de TASK-2).
+- Docker antes: `docker ps -aq | wc -l` = 6, `docker images -aq | wc -l` = 17 (la referencia de hoy).
+- Condición de arranque: V-13 y V-15 de TASK-1b en PASA (citado de `documents/REPORTES_MULTIGAME.md`: "#### V-13 ... PASA", "#### V-15 ... PASA con una precisión sobre antes de ejecutar"; el MID de TASK-1b y el de TASK-2 lo ratifican).
+
+### Archivos modificados/creados (git diff --stat)
+```
+ contracts/sources/duel.move     |  221 +++++-
+ contracts/tests/duel_tests.move | 1441 ++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 1657 insertions(+), 5 deletions(-)
+```
+`git status --short`: solo esos dos archivos (` M`). No se tocó `house.move`, `game.move`, sus tests, `Move.toml`, `Move.lock`, `contracts/deployments/*`, `Published.toml`, `app/*`, `.github/*`, `documents/*`. `contracts/build` se creó con los gates y se borró (`ls contracts/build` = no existe). `Move.lock` sin delta (no hubo que hacer `git checkout`).
+
+Líneas borradas (todas las 5): en `duel.move` 3 líneas del comentario de las constantes reservadas y 1 línea del doc del enum (N-3), y en `duel_tests.move` solo la línea del `use` (ampliada para importar los 3 eventos nuevos). **Ningún test existente se tocó ni se borró** (los 102 nombres de TASK-2 siguen y pasan).
+
+### Qué se implementó
+- `duel.move`: `record_move` (`public(package)`, witness por valor, lee `ctx.sender()`), `claim_timeout` y `refund_stalled` (`entry` genéricas, sin `public`), los eventos `DuelTurn`/`DuelTimedOut`/`DuelExpired`, `CLAIM_GRACE_MS` = 604 800 000 y las 5 constantes de abort que faltaban (14, 20, 22, 23, 25) en su lugar numérico y sin ningún `#[allow]`. Doc de `DuelState::Expired` corregido (N-3).
+- El orden de aborts es el de R.4 / R4-1: `record_move`: `ENotActive`, `ENoClock`, `ENotPlayer`, `ENotYourTurn`, `EDeadlinePassed`, luego `EBadMask` (`rem == 0`) o `EPhaseMismatch` (`rem != 0`); `claim_timeout`: `house::EWrongVersion` (lectura con versión de la House, primera), `ENotActive`, `ENoClock`, `EVersionMismatch`, `EWrongHouse`, `ENotExpired`, `EBothPending`, `EBrokenStake`; `refund_stalled`: `ENotActive`, `ENoClock`, `ENotStalled` (sin House, sin versión, **sin `assert` de `stake == 2 × bet`**).
+- `duel_tests.move`: 84 tests nuevos (la suite del reloj, los 2 de orden T-2 y las barreras (a)/(b) de `claim_timeout` entre `collect` y `pay`), con un juego de test `#[test_only]` (helpers `play_turn`, `commit_first`, `commit_last`) con jugadas por turnos y con fase simultánea.
+
+### Tests y gates (output pegado, por área tocada)
+Tests agregados (84; nombres exactos, salida de `comm` contra la lista de nombres de `HEAD`; los 49 nombres obligatorios del handoff, incluidos los de T-1 y T-2, están todos: comprobado con `grep` de cada nombre):
+test_claim_timeout_aborts_with_house_of_other_version
+test_claim_timeout_after_refund_stalled_aborts_not_active
+test_claim_timeout_between_collect_and_pay_aborts_not_expired
+test_claim_timeout_by_the_pending_player_still_pays_the_rival
+test_claim_timeout_by_third_party_pays_the_rival_not_the_caller
+test_claim_timeout_pays_acceptor_when_creator_pending
+test_claim_timeout_pays_creator_when_acceptor_pending
+test_claim_timeout_rejects_both_pending
+test_claim_timeout_rejects_broken_stake
+test_claim_timeout_rejects_clockless_duel
+test_claim_timeout_rejects_duel_of_older_version
+test_claim_timeout_rejects_expired_duel
+test_claim_timeout_rejects_not_active
+test_claim_timeout_rejects_one_ms_before_deadline
+test_claim_timeout_rejects_one_ms_before_deadline_when_acceptor_pending
+test_claim_timeout_rejects_other_house
+test_claim_timeout_rejects_resolved_duel
+test_claim_timeout_rejects_timed_out_duel
+test_claim_timeout_reports_both_pending_before_broken_stake
+test_claim_timeout_reports_house_version_first
+test_claim_timeout_reports_no_clock_before_version_mismatch
+test_claim_timeout_reports_not_expired_before_both_pending
+test_claim_timeout_reports_version_mismatch_before_wrong_house
+test_claim_timeout_reports_wrong_house_before_not_expired
+test_claim_timeout_still_succeeds_after_grace
+test_claim_timeout_stores_timed_out_state_and_event
+test_claim_timeout_succeeds_at_deadline
+test_collect_passes_one_ms_before_deadline
+test_collect_rejects_at_deadline
+test_collect_rejects_expired_duel
+test_collect_rejects_timed_out_duel
+test_collect_reports_version_mismatch_before_wrong_house
+test_create_reports_bet_too_high_before_self_invite
+test_pay_rejects_expired_duel
+test_pay_rejects_timed_out_duel
+test_record_move_passes_one_ms_before_deadline
+test_record_move_phase_close_resets_deadline_even_if_closer_moves_next
+test_record_move_rejects_after_deadline
+test_record_move_rejects_at_deadline
+test_record_move_rejects_clockless_duel
+test_record_move_rejects_expired_duel
+test_record_move_rejects_next_above_three
+test_record_move_rejects_next_both_in_simultaneous_phase
+test_record_move_rejects_next_other_than_rem_in_simultaneous_phase
+test_record_move_rejects_next_other_than_rem_when_rem_is_creator
+test_record_move_rejects_next_zero_in_simultaneous_phase
+test_record_move_rejects_next_zero_or_above_three
+test_record_move_rejects_next_zero_when_closing_a_simultaneous_phase
+test_record_move_rejects_not_active
+test_record_move_rejects_player_outside_to_move
+test_record_move_rejects_resolved_duel
+test_record_move_rejects_second_commit_in_simultaneous_phase
+test_record_move_rejects_third_party
+test_record_move_rejects_timed_out_duel
+test_record_move_reports_deadline_before_mask
+test_record_move_reports_deadline_before_phase_mismatch
+test_record_move_reports_not_active_before_not_player
+test_record_move_reports_not_player_before_not_your_turn
+test_record_move_reports_not_your_turn_before_deadline
+test_record_move_same_player_continuing_also_resets_deadline
+test_record_move_simultaneous_phase_first_a_keeps_deadline
+test_record_move_simultaneous_phase_first_b_keeps_deadline
+test_record_move_turn_handoff_resets_deadline
+test_refund_stalled_both_pending_rejects_one_ms_before_deadline
+test_refund_stalled_both_pending_succeeds_after_deadline
+test_refund_stalled_by_third_party_pays_only_the_players
+test_refund_stalled_charges_no_fee
+test_refund_stalled_one_pending_rejects_one_ms_before_grace
+test_refund_stalled_one_pending_succeeds_at_deadline_plus_grace
+test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor
+test_refund_stalled_refunds_both_after_grace_with_one_pending
+test_refund_stalled_refunds_both_when_both_pending_at_deadline
+test_refund_stalled_rejects_both_pending_before_deadline
+test_refund_stalled_rejects_clockless_duel
+test_refund_stalled_rejects_expired_duel
+test_refund_stalled_rejects_not_active
+test_refund_stalled_rejects_one_pending_before_grace
+test_refund_stalled_rejects_resolved_duel
+test_refund_stalled_rejects_timed_out_duel
+test_refund_stalled_works_with_house_of_other_version
+test_simultaneous_phase_then_turns_then_claim_timeout
+test_surrender_out_of_turn_before_deadline_resolves
+test_turn_based_game_runs_to_resolution_by_collect_and_pay
+test_turn_ms_is_never_changed_by_record_move
+
+Contracts (todos con `-e testnet --warnings-are-errors`, forma canónica de `agents.md` §3, desde `<repo>/contracts`, con `printf 'n\n' |` delante de cada `sui`):
+
+`sui --version` => `sui 1.84.0-9dc25070cf2e`
+
+#### Gate 1: `cd contracts && printf 'n\n' | sui move build -e testnet --warnings-are-errors` (exit 0, 0 warnings)
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+
+#### Gate 2: `cd contracts && printf 'n\n' | sui move build -e testnet --lint --warnings-are-errors` (exit 0, 0 lints)
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+
+#### Gate 3: `cd contracts && printf 'n\n' | sui move test -e testnet --warnings-are-errors` (exit 0)
+**Conteo: 269 tests PASS = 185 (baseline) + 84 nuevos** (83 `house`/`game` + 102 de TASK-2 + 84 de TASK-2b). Output completo:
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+Running Move unit tests
+[ PASS    ] battleship::game_tests::test_accept_by_creator_on_cancelled_game_reports_self_play
+[ PASS    ] battleship::game_tests::test_accept_by_creator_on_own_invite_reports_self_play
+[ PASS    ] battleship::game_tests::test_accept_by_other_on_cancelled_invite_reports_not_invited
+[ PASS    ] battleship::game_tests::test_accept_from_old_package_aborts_in_fee_collection
+[ PASS    ] battleship::game_tests::test_accept_huge_pot_needs_u128_intermediate
+[ PASS    ] battleship::game_tests::test_accept_invite_by_invitee_resolves
+[ PASS    ] battleship::game_tests::test_accept_max_bet_with_max_fee_does_not_overflow
+[ PASS    ] battleship::house_tests::test_add_fees_accumulates_balance
+[ PASS    ] battleship::house_tests::test_add_fees_rejects_wrong_version
+[ PASS    ] battleship::house_tests::test_fee_rate_rejects_wrong_version
+[ PASS    ] battleship::game_tests::test_accept_open_game_acceptor_wins_pays_payout_and_fee
+[ PASS    ] battleship::house_tests::test_fees_collected_rejects_wrong_version
+[ PASS    ] battleship::house_tests::test_init_sends_single_house_cap_to_publisher
+[ PASS    ] battleship::game_tests::test_accept_open_game_creator_wins_pays_payout_and_fee
+[ PASS    ] battleship::house_tests::test_init_shares_exactly_one_house_with_defaults
+[ PASS    ] battleship::house_tests::test_max_bet_rejects_wrong_version
+[ PASS    ] battleship::game_tests::test_accept_rejects_cancelled_game
+[ PASS    ] battleship::house_tests::test_migrate_bumps_version_and_emits_event
+[ PASS    ] battleship::house_tests::test_migrate_rejects_current_version
+[ PASS    ] battleship::game_tests::test_accept_rejects_game_of_older_version
+[ PASS    ] battleship::house_tests::test_migrate_rejects_house_newer_than_package
+[ PASS    ] battleship::house_tests::test_min_bet_rejects_wrong_version
+[ PASS    ] battleship::game_tests::test_accept_rejects_higher_stake
+[ PASS    ] battleship::house_tests::test_transfer_house_cap_moves_cap_and_emits_event
+[ PASS    ] battleship::game_tests::test_accept_rejects_house_of_newer_version
+[ PASS    ] battleship::house_tests::test_transferred_cap_lets_new_holder_administer
+[ PASS    ] battleship::house_tests::test_update_bet_limits_accepts_equal_min_and_max
+[ PASS    ] battleship::house_tests::test_update_bet_limits_rejects_min_above_max
+[ PASS    ] battleship::game_tests::test_accept_rejects_lower_stake
+[ PASS    ] battleship::house_tests::test_update_bet_limits_rejects_wrong_version
+[ PASS    ] battleship::house_tests::test_update_bet_limits_rejects_zero_min
+[ PASS    ] battleship::game_tests::test_accept_rejects_non_invited
+[ PASS    ] battleship::house_tests::test_update_bet_limits_sets_limits_and_emits_event
+[ PASS    ] battleship::house_tests::test_update_fee_rate_accepts_max_fee
+[ PASS    ] battleship::game_tests::test_accept_rejects_other_house
+[ PASS    ] battleship::house_tests::test_update_fee_rate_rejects_fee_above_max
+[ PASS    ] battleship::duel_tests::test_activate_accepts_each_valid_first_to_move
+[ PASS    ] battleship::house_tests::test_update_fee_rate_rejects_wrong_version
+[ PASS    ] battleship::game_tests::test_accept_rejects_own_game
+[ PASS    ] battleship::house_tests::test_update_fee_rate_sets_rate_and_emits_event
+[ PASS    ] battleship::duel_tests::test_activate_atomic_aborts_with_house_of_other_version
+[ PASS    ] battleship::house_tests::test_version_reads_house_with_wrong_version
+[ PASS    ] battleship::house_tests::test_withdraw_fees_rejects_empty_house
+[ PASS    ] battleship::game_tests::test_accept_rejects_resolved_game
+[ PASS    ] battleship::house_tests::test_withdraw_fees_rejects_wrong_version
+[ PASS    ] battleship::duel_tests::test_activate_atomic_collects_fee_and_pay_conserves_funds
+[ PASS    ] battleship::house_tests::test_withdraw_fees_returns_all_fees_and_emits_event
+[ PASS    ] battleship::game_tests::test_accept_reports_house_before_authz
+[ PASS    ] battleship::duel_tests::test_activate_atomic_invite_by_invitee
+[ PASS    ] battleship::game_tests::test_accept_reports_state_before_stake
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_cancelled_duel
+[ PASS    ] battleship::game_tests::test_accept_reports_version_before_authz
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_clocked_duel
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_duel_of_older_version
+[ PASS    ] battleship::game_tests::test_accept_reports_version_before_house
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_higher_stake
+[ PASS    ] battleship::game_tests::test_accept_rounds_fee_down_on_indivisible_pot
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_lower_stake
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_non_invited
+[ PASS    ] battleship::game_tests::test_accept_uses_fee_rate_copied_at_creation
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_other_house
+[ PASS    ] battleship::game_tests::test_accept_with_max_fee_charges_ten_percent
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_own_duel
+[ PASS    ] battleship::duel_tests::test_activate_atomic_rejects_resolved_duel
+[ PASS    ] battleship::duel_tests::test_activate_atomic_reports_stake_before_has_clock
+[ PASS    ] battleship::duel_tests::test_activate_atomic_state_inside_tx_has_zero_mask_and_pending_fee_taken
+[ PASS    ] battleship::duel_tests::test_activate_invite_by_invitee
+[ PASS    ] battleship::game_tests::test_accept_with_random_reaches_both_outcomes
+[ PASS    ] battleship::duel_tests::test_activate_joins_stake_and_sets_clock_state
+[ PASS    ] battleship::game_tests::test_accept_with_random_resolves_and_conserves_funds
+[ PASS    ] battleship::duel_tests::test_activate_rejects_active_duel
+[ PASS    ] battleship::game_tests::test_accept_with_zero_fee_pays_whole_pot
+[ PASS    ] battleship::duel_tests::test_activate_rejects_cancelled_duel
+[ PASS    ] battleship::game_tests::test_cancel_by_other_on_cancelled_game_reports_not_creator
+[ PASS    ] battleship::duel_tests::test_activate_rejects_clockless_duel
+[ PASS    ] battleship::game_tests::test_cancel_invite_game_by_creator
+[ PASS    ] battleship::duel_tests::test_activate_rejects_duel_of_older_version
+[ PASS    ] battleship::game_tests::test_cancel_refunds_full_stake_and_emits_event
+[ PASS    ] battleship::duel_tests::test_activate_rejects_first_to_move_above_both
+[ PASS    ] battleship::game_tests::test_cancel_refunds_regardless_of_versions
+[ PASS    ] battleship::duel_tests::test_activate_rejects_higher_stake
+[ PASS    ] battleship::game_tests::test_cancel_rejects_cancelled_game
+[ PASS    ] battleship::duel_tests::test_activate_rejects_house_of_newer_version
+[ PASS    ] battleship::game_tests::test_cancel_rejects_invitee
+[ PASS    ] battleship::duel_tests::test_activate_rejects_invalid_first_to_move
+[ PASS    ] battleship::game_tests::test_cancel_rejects_other_address
+[ PASS    ] battleship::duel_tests::test_activate_rejects_lower_stake
+[ PASS    ] battleship::game_tests::test_cancel_rejects_rejected_game
+[ PASS    ] battleship::duel_tests::test_activate_rejects_non_invited
+[ PASS    ] battleship::game_tests::test_cancel_rejects_resolved_game
+[ PASS    ] battleship::duel_tests::test_activate_rejects_other_house
+[ PASS    ] battleship::game_tests::test_create_accepts_bet_equal_to_max_bet
+[ PASS    ] battleship::duel_tests::test_activate_rejects_own_duel
+[ PASS    ] battleship::game_tests::test_create_accepts_bet_equal_to_min_bet
+[ PASS    ] battleship::duel_tests::test_activate_reports_authz_before_state
+[ PASS    ] battleship::game_tests::test_create_copies_fee_rate_at_creation
+[ PASS    ] battleship::game_tests::test_create_invite_game_stores_opponent
+[ PASS    ] battleship::duel_tests::test_activate_reports_house_before_authz
+[ PASS    ] battleship::game_tests::test_create_open_game_stores_fields_and_emits_event
+[ PASS    ] battleship::duel_tests::test_activate_reports_house_version_first
+[ PASS    ] battleship::game_tests::test_create_rejects_bet_above_max
+[ PASS    ] battleship::game_tests::test_create_rejects_bet_below_min
+[ PASS    ] battleship::duel_tests::test_activate_reports_no_clock_before_bad_mask
+[ PASS    ] battleship::game_tests::test_create_rejects_house_with_wrong_version
+[ PASS    ] battleship::duel_tests::test_activate_reports_stake_before_no_clock
+[ PASS    ] battleship::game_tests::test_create_rejects_self_invite
+[ PASS    ] battleship::game_tests::test_create_reports_bet_error_before_self_invite
+[ PASS    ] battleship::duel_tests::test_activate_reports_state_before_stake
+[ PASS    ] battleship::game_tests::test_fees_from_two_games_accumulate_and_withdraw_exactly
+[ PASS    ] battleship::duel_tests::test_activate_reports_version_before_house
+[ PASS    ] battleship::duel_tests::test_cancel_by_other_on_cancelled_duel_reports_not_creator
+[ PASS    ] battleship::game_tests::test_games_of_same_creator_are_independent
+[ PASS    ] battleship::duel_tests::test_cancel_invite_duel_by_creator
+[ PASS    ] battleship::game_tests::test_reject_by_other_on_cancelled_invite_reports_not_invited
+[ PASS    ] battleship::duel_tests::test_cancel_refunds_full_stake_and_emits_event
+[ PASS    ] battleship::game_tests::test_reject_refunds_creator_and_emits_event
+[ PASS    ] battleship::game_tests::test_reject_refunds_regardless_of_versions
+[ PASS    ] battleship::duel_tests::test_cancel_refunds_regardless_of_versions
+[ PASS    ] battleship::game_tests::test_reject_rejects_cancelled_game
+[ PASS    ] battleship::duel_tests::test_cancel_rejects_active_duel
+[ PASS    ] battleship::game_tests::test_reject_rejects_creator
+[ PASS    ] battleship::duel_tests::test_cancel_rejects_cancelled_duel
+[ PASS    ] battleship::game_tests::test_reject_rejects_open_game
+[ PASS    ] battleship::duel_tests::test_cancel_rejects_invitee
+[ PASS    ] battleship::game_tests::test_reject_rejects_other_address
+[ PASS    ] battleship::duel_tests::test_cancel_rejects_other_address
+[ PASS    ] battleship::game_tests::test_reject_rejects_resolved_game
+[ PASS    ] battleship::duel_tests::test_claim_timeout_aborts_with_house_of_other_version
+[ PASS    ] battleship::duel_tests::test_claim_timeout_after_refund_stalled_aborts_not_active
+[ PASS    ] battleship::duel_tests::test_claim_timeout_between_collect_and_pay_aborts_not_expired
+[ PASS    ] battleship::duel_tests::test_claim_timeout_by_the_pending_player_still_pays_the_rival
+[ PASS    ] battleship::duel_tests::test_claim_timeout_by_third_party_pays_the_rival_not_the_caller
+[ PASS    ] battleship::duel_tests::test_claim_timeout_pays_acceptor_when_creator_pending
+[ PASS    ] battleship::duel_tests::test_claim_timeout_pays_creator_when_acceptor_pending
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_both_pending
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_broken_stake
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_clockless_duel
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_duel_of_older_version
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_expired_duel
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_not_active
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_one_ms_before_deadline
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_one_ms_before_deadline_when_acceptor_pending
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_other_house
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_resolved_duel
+[ PASS    ] battleship::duel_tests::test_claim_timeout_rejects_timed_out_duel
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_both_pending_before_broken_stake
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_house_version_first
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_no_clock_before_version_mismatch
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_not_expired_before_both_pending
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_version_mismatch_before_wrong_house
+[ PASS    ] battleship::duel_tests::test_claim_timeout_reports_wrong_house_before_not_expired
+[ PASS    ] battleship::duel_tests::test_claim_timeout_still_succeeds_after_grace
+[ PASS    ] battleship::duel_tests::test_claim_timeout_stores_timed_out_state_and_event
+[ PASS    ] battleship::duel_tests::test_claim_timeout_succeeds_at_deadline
+[ PASS    ] battleship::duel_tests::test_clock_helper_sets_exact_timestamp_with_sender_change
+[ PASS    ] battleship::duel_tests::test_collect_aborts_in_fee_collection_with_house_of_other_version
+[ PASS    ] battleship::duel_tests::test_collect_by_player_out_of_turn_succeeds
+[ PASS    ] battleship::duel_tests::test_collect_passes_one_ms_before_deadline
+[ PASS    ] battleship::duel_tests::test_collect_rejects_after_deadline
+[ PASS    ] battleship::duel_tests::test_collect_rejects_at_deadline
+[ PASS    ] battleship::duel_tests::test_collect_rejects_broken_stake
+[ PASS    ] battleship::duel_tests::test_collect_rejects_clockless_duel
+[ PASS    ] battleship::duel_tests::test_collect_rejects_duel_of_older_version
+[ PASS    ] battleship::duel_tests::test_collect_rejects_expired_duel
+[ PASS    ] battleship::duel_tests::test_collect_rejects_invitee_that_did_not_accept
+[ PASS    ] battleship::duel_tests::test_collect_rejects_not_active
+[ PASS    ] battleship::duel_tests::test_collect_rejects_other_house
+[ PASS    ] battleship::duel_tests::test_collect_rejects_resolved_duel
+[ PASS    ] battleship::duel_tests::test_collect_rejects_third_party
+[ PASS    ] battleship::duel_tests::test_collect_rejects_timed_out_duel
+[ PASS    ] battleship::duel_tests::test_collect_reports_deadline_before_version
+[ PASS    ] battleship::duel_tests::test_collect_reports_house_before_broken_stake
+[ PASS    ] battleship::duel_tests::test_collect_reports_not_active_before_not_player
+[ PASS    ] battleship::duel_tests::test_collect_reports_not_player_before_deadline
+[ PASS    ] battleship::duel_tests::test_collect_reports_version_mismatch_before_wrong_house
+[ PASS    ] battleship::duel_tests::test_collect_reports_version_mismatch_for_house_of_newer_version
+[ PASS    ] battleship::duel_tests::test_collect_then_pay_resolves_by_play_and_conserves_funds
+[ PASS    ] battleship::duel_tests::test_create_accepts_bet_equal_to_max_bet
+[ PASS    ] battleship::duel_tests::test_create_accepts_bet_equal_to_min_bet
+[ PASS    ] battleship::duel_tests::test_create_copies_fee_rate_and_turn_ms
+[ PASS    ] battleship::duel_tests::test_create_invite_duel_stores_opponent
+[ PASS    ] battleship::duel_tests::test_create_open_duel_stores_fields_and_emits_event
+[ PASS    ] battleship::duel_tests::test_create_rejects_bet_above_max
+[ PASS    ] battleship::duel_tests::test_create_rejects_bet_below_min
+[ PASS    ] battleship::duel_tests::test_create_rejects_control_255
+[ PASS    ] battleship::duel_tests::test_create_rejects_house_with_wrong_version
+[ PASS    ] battleship::duel_tests::test_create_rejects_invalid_control
+[ PASS    ] battleship::duel_tests::test_create_rejects_self_invite
+[ PASS    ] battleship::duel_tests::test_create_reports_bet_error_before_self_invite
+[ PASS    ] battleship::duel_tests::test_create_reports_bet_too_high_before_self_invite
+[ PASS    ] battleship::duel_tests::test_create_reports_self_invite_before_control
+[ PASS    ] battleship::duel_tests::test_create_reports_version_before_bet
+[ PASS    ] battleship::duel_tests::test_create_sets_turn_ms_for_each_control
+[ PASS    ] battleship::duel_tests::test_duels_of_different_games_are_independent
+[ PASS    ] battleship::duel_tests::test_duels_of_same_creator_are_independent
+[ PASS    ] battleship::duel_tests::test_fee_is_charged_only_when_resolving
+[ PASS    ] battleship::duel_tests::test_fee_is_floor_of_pot_times_rate
+[ PASS    ] battleship::duel_tests::test_fee_is_floor_of_pot_times_rate_when_settling_by_play
+[ PASS    ] battleship::duel_tests::test_fee_rate_copied_at_creation_is_the_one_charged
+[ PASS    ] battleship::duel_tests::test_fee_with_max_bet_and_max_fee_does_not_overflow
+[ PASS    ] battleship::duel_tests::test_fee_with_max_bet_and_max_fee_does_not_overflow_when_settling_by_play
+[ PASS    ] battleship::duel_tests::test_fees_from_duel_and_game_accumulate_in_same_house
+[ PASS    ] battleship::duel_tests::test_pay_pays_acceptor_when_index_is_one
+[ PASS    ] battleship::duel_tests::test_pay_pays_creator_when_index_is_zero
+[ PASS    ] battleship::duel_tests::test_pay_rejects_bad_winner_index
+[ PASS    ] battleship::duel_tests::test_pay_rejects_collected_of_other_duel
+[ PASS    ] battleship::duel_tests::test_pay_rejects_expired_duel
+[ PASS    ] battleship::duel_tests::test_pay_rejects_not_active
+[ PASS    ] battleship::duel_tests::test_pay_rejects_timed_out_duel
+[ PASS    ] battleship::duel_tests::test_pay_reports_not_active_before_bad_winner_index
+[ PASS    ] battleship::duel_tests::test_pay_reports_wrong_duel_before_not_active
+[ PASS    ] battleship::duel_tests::test_record_move_passes_one_ms_before_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_phase_close_resets_deadline_even_if_closer_moves_next
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_after_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_at_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_clockless_duel
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_expired_duel
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_above_three
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_both_in_simultaneous_phase
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_other_than_rem_in_simultaneous_phase
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_other_than_rem_when_rem_is_creator
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_zero_in_simultaneous_phase
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_zero_or_above_three
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_next_zero_when_closing_a_simultaneous_phase
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_not_active
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_player_outside_to_move
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_resolved_duel
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_second_commit_in_simultaneous_phase
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_third_party
+[ PASS    ] battleship::duel_tests::test_record_move_rejects_timed_out_duel
+[ PASS    ] battleship::duel_tests::test_record_move_reports_deadline_before_mask
+[ PASS    ] battleship::duel_tests::test_record_move_reports_deadline_before_phase_mismatch
+[ PASS    ] battleship::duel_tests::test_record_move_reports_not_active_before_not_player
+[ PASS    ] battleship::duel_tests::test_record_move_reports_not_player_before_not_your_turn
+[ PASS    ] battleship::duel_tests::test_record_move_reports_not_your_turn_before_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_same_player_continuing_also_resets_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_simultaneous_phase_first_a_keeps_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_simultaneous_phase_first_b_keeps_deadline
+[ PASS    ] battleship::duel_tests::test_record_move_turn_handoff_resets_deadline
+[ PASS    ] battleship::duel_tests::test_refund_stalled_both_pending_rejects_one_ms_before_deadline
+[ PASS    ] battleship::duel_tests::test_refund_stalled_both_pending_succeeds_after_deadline
+[ PASS    ] battleship::duel_tests::test_refund_stalled_by_third_party_pays_only_the_players
+[ PASS    ] battleship::duel_tests::test_refund_stalled_charges_no_fee
+[ PASS    ] battleship::duel_tests::test_refund_stalled_one_pending_rejects_one_ms_before_grace
+[ PASS    ] battleship::duel_tests::test_refund_stalled_one_pending_succeeds_at_deadline_plus_grace
+[ PASS    ] battleship::duel_tests::test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor
+[ PASS    ] battleship::duel_tests::test_refund_stalled_refunds_both_after_grace_with_one_pending
+[ PASS    ] battleship::duel_tests::test_refund_stalled_refunds_both_when_both_pending_at_deadline
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_both_pending_before_deadline
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_clockless_duel
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_expired_duel
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_not_active
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_one_pending_before_grace
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_resolved_duel
+[ PASS    ] battleship::duel_tests::test_refund_stalled_rejects_timed_out_duel
+[ PASS    ] battleship::duel_tests::test_refund_stalled_works_with_house_of_other_version
+[ PASS    ] battleship::duel_tests::test_reject_by_other_on_cancelled_invite_reports_not_invited
+[ PASS    ] battleship::duel_tests::test_reject_refunds_creator_and_emits_event
+[ PASS    ] battleship::duel_tests::test_reject_refunds_regardless_of_versions
+[ PASS    ] battleship::duel_tests::test_reject_rejects_cancelled_duel
+[ PASS    ] battleship::duel_tests::test_reject_rejects_creator
+[ PASS    ] battleship::duel_tests::test_reject_rejects_open_duel
+[ PASS    ] battleship::duel_tests::test_reject_rejects_other_address
+[ PASS    ] battleship::duel_tests::test_simultaneous_phase_then_turns_then_claim_timeout
+[ PASS    ] battleship::duel_tests::test_stake_is_two_bets_after_activate
+[ PASS    ] battleship::duel_tests::test_surrender_out_of_turn_before_deadline_resolves
+[ PASS    ] battleship::duel_tests::test_terminal_states_hold_no_stake
+[ PASS    ] battleship::duel_tests::test_turn_based_game_runs_to_resolution_by_collect_and_pay
+[ PASS    ] battleship::duel_tests::test_turn_ms_is_never_changed_by_record_move
+Test result: OK. Total tests: 269; passed: 269; failed: 0
+
+Después de los gates: `git diff --exit-code -- contracts/sources/house.move contracts/sources/game.move contracts/Move.lock` => **exit 0** (sin salida). `git status --short`: solo `duel.move` y `duel_tests.move`. `contracts/build` borrado.
+Scripts/tablas/Docker/Sui: ver más abajo. Tablas de `contracts/README.md` y `app/src/sui/`: **no aplica en este task** (la app y el README los sincroniza TASK-7/TASK-8 con los abort codes y eventos de R.3/R.5; ningún número ya publicado cambió).
+
+### Verificación manual
+No aplica (unit tests con `test_scenario`; el reloj de punta a punta en la localnet es de TASK-5). **No se levantó ninguna localnet**, ni `sui client`, ni red, ni Docker, ni navegador.
+
+### Evidencias específicas del task
+
+#### E-1. Lista COMPLETA de las 26 constantes de abort (`constante = número`), leída de `contracts/sources/duel.move` y comparada por un script con la tabla R.3 del handoff
+(`python3 -I check_abort_codes.py contracts/sources/duel.move documents/HANDOFF_MULTIGAME.md <duel.move de HEAD>`; sin `#[allow]` en `duel.move` ni en `duel_tests.move`: `grep -n 'allow(' ...` = vacío)
+
+```
+constants read from duel.move: 26 (expected in R.3: 26)
+EBetTooLow         =  0
+EBetTooHigh        =  1
+ESelfInvite        =  2
+ENotCreator        =  3
+ENotPending        =  4
+ENotInvited        =  5
+ENoInvitation      =  6
+EVersionMismatch   =  7
+EWrongHouse        =  8
+ESelfPlay          =  9
+EWrongStake        = 10
+ENotActive         = 11
+EWrongDuel         = 12
+EBadWinnerIndex    = 13
+ENotExpired        = 14
+EBrokenStake       = 15
+EBadControl        = 16
+ENoClock           = 17
+EHasClock          = 18
+EBadMask           = 19
+ENotYourTurn       = 20
+EDeadlinePassed    = 21
+EBothPending       = 22
+ENotStalled        = 23
+ENotPlayer         = 24
+EPhaseMismatch     = 25
+discrepancies with R.3: 0
+constants of TASK-2 (committed HEAD): 21, moved or removed: 0
+```
+Las 5 nuevas (14 `ENotExpired`, 20 `ENotYourTurn`, 22 `EBothPending`, 23 `ENotStalled`, 25 `EPhaseMismatch`) están en su lugar numérico; las 21 de TASK-2 (comparadas contra el `duel.move` de `HEAD`) no se movieron (0 movidas); 0 discrepancias con R.3; numeración exacta 0..25 sin colisiones. R4-1 aplicado tal cual (orden y causas, ver "Qué se implementó"); el MID lo puede comprobar con las pruebas de orden (`test_record_move_reports_*`).
+
+#### E-2. Verificación de bytecode (pedida por el MAYOR en TASK-2)
+Procedimiento: `rm -rf contracts/build`, build de producción (`printf 'n\n' | sui move build -e testnet --warnings-are-errors`, que NO compila lo `#[test_only]`; un `sui move test` deja módulos de test en `build/`, por eso no se usó ese `build/`), y luego:
+
+`strings contracts/build/battleship/bytecode_modules/duel.mv | grep -c _for_testing` => **0** (el `build/` de `sui move test` da 30: los helpers; el de producción no los trae).
+`printf 'n\n' | sui move disassemble contracts/build/battleship/bytecode_modules/duel.mv`: 0 apariciones de `_for_testing`, de `Random`, de `init` y de `allow`; 0 funciones `public` a secas. El desensamblado muestra `public(package)` como `public(friend)` (así representa el bytecode la visibilidad de paquete). Firmas exportadas y privadas, tal cual salen del desensamblado (se quitaron los sufijos `#0#0` de los nombres de variable):
+
+```
+public(friend) create<G: drop>(_: G, house: &House, stake: Coin<SUI>, opponent: Option<address>, control: u8, ctx: &mut TxContext) {
+entry cancel<G>(duel: &mut Duel<G>, ctx: &mut TxContext) {
+entry reject<G>(duel: &mut Duel<G>, ctx: &mut TxContext) {
+public(friend) activate<G: drop>(_: G, duel: &mut Duel<G>, house: &House, payment: Coin<SUI>, first_to_move: u8, ctx: &TxContext) {
+public(friend) activate_atomic<G: drop>(_: G, duel: &mut Duel<G>, house: &mut House, payment: Coin<SUI>, ctx: &TxContext): Collected {
+public(friend) collect<G: drop>(_: G, duel: &mut Duel<G>, house: &mut House, ctx: &TxContext): Collected {
+public(friend) pay<G: drop>(_: G, duel: &mut Duel<G>, c: Collected, winner_index: u8, ctx: &mut TxContext) {
+public(friend) record_move<G: drop>(_: G, duel: &mut Duel<G>, next_to_move: u8, ctx: &TxContext) {
+entry claim_timeout<G>(duel: &mut Duel<G>, house: &mut House, ctx: &mut TxContext) {
+entry refund_stalled<G>(duel: &mut Duel<G>, ctx: &mut TxContext) {
+refund_creator<G>(duel: &mut Duel<G>, cancelled_by: address, ctx: &mut TxContext) {
+is_pending<G>(duel: &Duel<G>): bool {
+active_state<G>(duel: &Duel<G>): address * u8 * u64 {
+assert_acceptable<G>(duel: &Duel<G>, house: &House, payment: &Coin<SUI>, acceptor: address) {
+join_and_activate<G>(duel: &mut Duel<G>, payment: Coin<SUI>, acceptor: address, to_move: u8, deadline_ms: u64) {
+collect_fee<G>(duel: &mut Duel<G>, house: &mut House): Collected {
+turn_ms_of(control: u8): u64 {
+now_ms(): u64 {
+fee_amount(pot: u64, fee_rate: u16): u64 {
+```
+Lectura: `claim_timeout` y `refund_stalled` (y `cancel`/`reject`) son **`entry` sin `public`**; `create`, `activate`, `activate_atomic`, `collect`, `pay` y **`record_move`** son `public(friend)` (= `public(package)` en el fuente) con el witness `_: G` por valor; ninguna función de producción devuelve `Collected` siendo pública ni recibe `&mut Duel<G>` siendo pública (las dos que lo devuelven, `activate_atomic` y `collect`, son `public(friend)`); el resto son privadas. Fuente: las **30** `public fun` de `duel.move` llevan `#[test_only]` en la línea anterior (25 de TASK-2 + 5 nuevas: `is_timed_out_for_testing`, `is_expired_for_testing`, `new_duel_turn_for_testing`, `new_duel_timed_out_for_testing`, `new_duel_expired_for_testing`; `awk` que verifica que cada `public fun` está precedida de `#[test_only]`: "30 public fun checked", 0 sin el atributo). `Collected` sigue siendo `public struct Collected { duel_id: ID, pot: u64, fee: u64 }` **sin abilities** (línea sin cambio). `grep -nE 'allow\(|Random|fun init|debug::|TODO|df::|friend|dynamic_field'` sobre `duel.move` y `duel_tests.move` => vacío.
+
+Observación (no es desviación): el compilador acepta llamar a `duel::claim_timeout`/`refund_stalled` (como ya pasaba con `cancel`/`reject` en los tests de TASK-2) desde el módulo de tests, que es `#[test_only]`; en el bytecode de producción son `entry` privadas, que es lo que cuenta para H-14.
+
+#### E-3. Mutaciones (en una COPIA en `<scratchpad>/mut_work`, nunca en el worktree; `run_mutations.py`, escrito con la herramienta de archivos; cada mutación = un reemplazo exacto de un texto único de `duel.move`, gate `sui move test -e testnet --warnings-are-errors`)
+Corrida completa y final sobre la suite de 269 tests (la mutación M0 es el control sin mutar: 269/269 PASS). **28 mutaciones, todas rompen al menos un test.** (Una primera corrida, con la suite de 266 tests, tuvo 3 mutaciones mal armadas: M10 y M21 rompían el build por una variable/constante sin uso y M20 coincidía en 3 lugares; se corrigieron y se re-corrió todo con los 3 tests que se agregaron después.)
+
+Las tres pedidas por el handoff (T-1 y la regla de bits):
+- **`collect`: `now_ms() < deadline_ms` -> `<=` (M1)**: rompe `test_collect_rejects_at_deadline` ("Test did not error as expected": `collect` pasó en `== deadline`).
+- **`record_move`: `now < deadline_ms` -> `<=` (M2)**: rompe `test_record_move_rejects_at_deadline`, `test_record_move_reports_deadline_before_mask` y `test_record_move_reports_deadline_before_phase_mismatch`.
+- **Regla de bits de `record_move`** (M3: con `rem != 0` también mueve `deadline_ms`, o sea quitar el `deadline_ms` intacto): rompe `test_record_move_simultaneous_phase_first_a_keeps_deadline`, `..._first_b_keeps_deadline`, `test_record_move_phase_close_resets_deadline_even_if_closer_moves_next` y `test_simultaneous_phase_then_turns_then_claim_timeout`; M4 (con `rem == 0` no reinicia el plazo): 8 tests; M5 (bit del que mueve intercambiado): 21 tests.
+
+Resumen completo de la corrida (los nombres de los tests que fallan por mutación):
+
+```
+M0 | control: no mutation
+    -> OK (control) | Test result: OK. Total tests: 269; passed: 269; failed: 0
+M1 | collect: now_ms() < deadline_ms -> <=
+    -> KILLED by 1 test(s) | Test result: FAILED. Total tests: 269; passed: 268; failed: 1
+       FAIL battleship::duel_tests::test_collect_rejects_at_deadline
+M2 | record_move: now < deadline_ms -> <=
+    -> KILLED by 3 test(s) | Test result: FAILED. Total tests: 269; passed: 266; failed: 3
+       FAIL battleship::duel_tests::test_record_move_rejects_at_deadline
+       FAIL battleship::duel_tests::test_record_move_reports_deadline_before_mask
+       FAIL battleship::duel_tests::test_record_move_reports_deadline_before_phase_mismatch
+M3 | record_move bits: rem != 0 also moves deadline_ms (drops the intact deadline)
+    -> KILLED by 4 test(s) | Test result: FAILED. Total tests: 269; passed: 265; failed: 4
+       FAIL battleship::duel_tests::test_record_move_phase_close_resets_deadline_even_if_closer_moves_next
+       FAIL battleship::duel_tests::test_record_move_simultaneous_phase_first_a_keeps_deadline
+       FAIL battleship::duel_tests::test_record_move_simultaneous_phase_first_b_keeps_deadline
+       FAIL battleship::duel_tests::test_simultaneous_phase_then_turns_then_claim_timeout
+M4 | record_move bits: rem == 0 keeps the old deadline_ms (no new plazo)
+    -> KILLED by 8 test(s) | Test result: FAILED. Total tests: 269; passed: 261; failed: 8
+       FAIL battleship::duel_tests::test_record_move_passes_one_ms_before_deadline
+       FAIL battleship::duel_tests::test_record_move_phase_close_resets_deadline_even_if_closer_moves_next
+       FAIL battleship::duel_tests::test_record_move_same_player_continuing_also_resets_deadline
+       FAIL battleship::duel_tests::test_record_move_turn_handoff_resets_deadline
+       FAIL battleship::duel_tests::test_simultaneous_phase_then_turns_then_claim_timeout
+       FAIL battleship::duel_tests::test_surrender_out_of_turn_before_deadline_resolves
+       ... and 2 more
+M5 | record_move bits: rem computed with the wrong bit (creator and acceptor swapped)
+    -> KILLED by 21 test(s) | Test result: FAILED. Total tests: 269; passed: 248; failed: 21
+       FAIL battleship::duel_tests::test_record_move_passes_one_ms_before_deadline
+       FAIL battleship::duel_tests::test_record_move_phase_close_resets_deadline_even_if_closer_moves_next
+       FAIL battleship::duel_tests::test_record_move_rejects_after_deadline
+       FAIL battleship::duel_tests::test_record_move_rejects_at_deadline
+       FAIL battleship::duel_tests::test_record_move_rejects_next_above_three
+       FAIL battleship::duel_tests::test_record_move_rejects_next_other_than_rem_in_simultaneous_phase
+       ... and 15 more
+M6 | record_move: EPhaseMismatch check removed
+    -> KILLED by 4 test(s) | Test result: FAILED. Total tests: 269; passed: 265; failed: 4
+       FAIL battleship::duel_tests::test_record_move_rejects_next_both_in_simultaneous_phase
+       FAIL battleship::duel_tests::test_record_move_rejects_next_other_than_rem_in_simultaneous_phase
+       FAIL battleship::duel_tests::test_record_move_rejects_next_other_than_rem_when_rem_is_creator
+       FAIL battleship::duel_tests::test_record_move_rejects_next_zero_in_simultaneous_phase
+M7 | record_move: mask upper bound 3 -> 4
+    -> KILLED by 1 test(s) | Test result: FAILED. Total tests: 269; passed: 268; failed: 1
+       FAIL battleship::duel_tests::test_record_move_rejects_next_above_three
+M8 | record_move: ENotYourTurn check removed
+    -> KILLED by 3 test(s) | Test result: FAILED. Total tests: 269; passed: 266; failed: 3
+       FAIL battleship::duel_tests::test_record_move_rejects_player_outside_to_move
+       FAIL battleship::duel_tests::test_record_move_rejects_second_commit_in_simultaneous_phase
+       FAIL battleship::duel_tests::test_record_move_reports_not_your_turn_before_deadline
+M9 | claim_timeout: now_ms() >= deadline_ms -> >
+    -> KILLED by 13 test(s) | Test result: FAILED. Total tests: 269; passed: 256; failed: 13
+       FAIL battleship::duel_tests::test_claim_timeout_by_third_party_pays_the_rival_not_the_caller
+       FAIL battleship::duel_tests::test_claim_timeout_pays_acceptor_when_creator_pending
+       FAIL battleship::duel_tests::test_claim_timeout_pays_creator_when_acceptor_pending
+       FAIL battleship::duel_tests::test_claim_timeout_rejects_both_pending
+       FAIL battleship::duel_tests::test_claim_timeout_rejects_broken_stake
+       FAIL battleship::duel_tests::test_claim_timeout_rejects_timed_out_duel
+       ... and 7 more
+M10 | claim_timeout: ENotExpired check removed (barrier INV-D6 gone; pay's ENotActive is the next barrier)
+    -> KILLED by 4 test(s) | Test result: FAILED. Total tests: 269; passed: 265; failed: 4
+       FAIL battleship::duel_tests::test_claim_timeout_between_collect_and_pay_aborts_not_expired
+       FAIL battleship::duel_tests::test_claim_timeout_rejects_one_ms_before_deadline
+       FAIL battleship::duel_tests::test_claim_timeout_rejects_one_ms_before_deadline_when_acceptor_pending
+       FAIL battleship::duel_tests::test_claim_timeout_reports_not_expired_before_both_pending
+M11 | claim_timeout: pays the caller instead of the rival
+    -> KILLED by 3 test(s) | Test result: FAILED. Total tests: 269; passed: 266; failed: 3
+       FAIL battleship::duel_tests::test_claim_timeout_by_the_pending_player_still_pays_the_rival
+       FAIL battleship::duel_tests::test_claim_timeout_by_third_party_pays_the_rival_not_the_caller
+       FAIL battleship::duel_tests::test_claim_timeout_stores_timed_out_state_and_event
+M12 | claim_timeout: winner swapped
+    -> KILLED by 8 test(s) | Test result: FAILED. Total tests: 269; passed: 261; failed: 8
+       FAIL battleship::duel_tests::test_claim_timeout_by_the_pending_player_still_pays_the_rival
+       FAIL battleship::duel_tests::test_claim_timeout_by_third_party_pays_the_rival_not_the_caller
+       FAIL battleship::duel_tests::test_claim_timeout_pays_acceptor_when_creator_pending
+       FAIL battleship::duel_tests::test_claim_timeout_pays_creator_when_acceptor_pending
+       FAIL battleship::duel_tests::test_claim_timeout_still_succeeds_after_grace
+       FAIL battleship::duel_tests::test_claim_timeout_stores_timed_out_state_and_event
+       ... and 2 more
+M13 | claim_timeout: no fee charged (add_fees never called)
+    -> KILLED by 8 test(s) | Test result: FAILED. Total tests: 269; passed: 261; failed: 8
+       FAIL battleship::duel_tests::test_claim_timeout_by_the_pending_player_still_pays_the_rival
+       FAIL battleship::duel_tests::test_claim_timeout_by_third_party_pays_the_rival_not_the_caller
+       FAIL battleship::duel_tests::test_claim_timeout_pays_acceptor_when_creator_pending
+       FAIL battleship::duel_tests::test_claim_timeout_pays_creator_when_acceptor_pending
+       FAIL battleship::duel_tests::test_claim_timeout_still_succeeds_after_grace
+       FAIL battleship::duel_tests::test_claim_timeout_stores_timed_out_state_and_event
+       ... and 2 more
+M14 | fee: ceiling instead of floor (shared by collect, activate_atomic and claim_timeout)
+    -> KILLED by 4 test(s) | Test result: FAILED. Total tests: 269; passed: 265; failed: 4
+       FAIL battleship::duel_tests::test_claim_timeout_pays_acceptor_when_creator_pending
+       FAIL battleship::duel_tests::test_claim_timeout_pays_creator_when_acceptor_pending
+       FAIL battleship::duel_tests::test_fee_is_floor_of_pot_times_rate
+       FAIL battleship::duel_tests::test_fee_is_floor_of_pot_times_rate_when_settling_by_play
+M15 | claim_timeout: EBothPending check removed
+    -> KILLED by 2 test(s) | Test result: FAILED. Total tests: 269; passed: 267; failed: 2
+       FAIL battleship::duel_tests::test_claim_timeout_rejects_both_pending
+       FAIL battleship::duel_tests::test_claim_timeout_reports_both_pending_before_broken_stake
+M16 | claim_timeout: first version-checked House read removed
+    -> KILLED by 1 test(s) | Test result: FAILED. Total tests: 269; passed: 268; failed: 1
+       FAIL battleship::duel_tests::test_claim_timeout_reports_house_version_first
+M17 | claim_timeout: EBrokenStake check removed
+    -> KILLED by 1 test(s) | Test result: FAILED. Total tests: 269; passed: 268; failed: 1
+       FAIL battleship::duel_tests::test_claim_timeout_rejects_broken_stake
+M18 | refund_stalled: adds an assert of stake == 2 x bet (would lock funds)
+    -> KILLED by 1 test(s) | Test result: FAILED. Total tests: 269; passed: 268; failed: 1
+       FAIL battleship::duel_tests::test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor
+M19 | refund_stalled: acceptor gets only bet (rest stays in the stake)
+    -> KILLED by 1 test(s) | Test result: FAILED. Total tests: 269; passed: 268; failed: 1
+       FAIL battleship::duel_tests::test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor
+M20 | refund_stalled: grace shortened to 1 day (CLAIM_GRACE_MS / 7)
+    -> KILLED by 1 test(s) | Test result: FAILED. Total tests: 269; passed: 268; failed: 1
+       FAIL battleship::duel_tests::test_refund_stalled_one_pending_rejects_one_ms_before_grace
+M21 | refund_stalled: a single pending player is eligible at the deadline (no grace)
+    -> KILLED by 2 test(s) | Test result: FAILED. Total tests: 269; passed: 267; failed: 2
+       FAIL battleship::duel_tests::test_refund_stalled_one_pending_rejects_one_ms_before_grace
+       FAIL battleship::duel_tests::test_refund_stalled_rejects_one_pending_before_grace
+M26 | refund_stalled: grace off by one ms (CLAIM_GRACE_MS - 1)
+    -> KILLED by 1 test(s) | Test result: FAILED. Total tests: 269; passed: 268; failed: 1
+       FAIL battleship::duel_tests::test_refund_stalled_one_pending_rejects_one_ms_before_grace
+M27 | refund_stalled: both pending needs the grace too (branches swapped)
+    -> KILLED by 11 test(s) | Test result: FAILED. Total tests: 269; passed: 258; failed: 11
+       FAIL battleship::duel_tests::test_claim_timeout_rejects_expired_duel
+       FAIL battleship::duel_tests::test_collect_rejects_expired_duel
+       FAIL battleship::duel_tests::test_pay_rejects_expired_duel
+       FAIL battleship::duel_tests::test_record_move_rejects_expired_duel
+       FAIL battleship::duel_tests::test_refund_stalled_both_pending_succeeds_after_deadline
+       FAIL battleship::duel_tests::test_refund_stalled_one_pending_rejects_one_ms_before_grace
+       ... and 5 more
+M22 | refund_stalled: now_ms() >= stalled_from -> >
+    -> KILLED by 12 test(s) | Test result: FAILED. Total tests: 269; passed: 257; failed: 12
+       FAIL battleship::duel_tests::test_claim_timeout_after_refund_stalled_aborts_not_active
+       FAIL battleship::duel_tests::test_claim_timeout_rejects_expired_duel
+       FAIL battleship::duel_tests::test_collect_rejects_expired_duel
+       FAIL battleship::duel_tests::test_pay_rejects_expired_duel
+       FAIL battleship::duel_tests::test_record_move_rejects_expired_duel
+       FAIL battleship::duel_tests::test_refund_stalled_by_third_party_pays_only_the_players
+       ... and 6 more
+M23 | refund_stalled: the acceptor refund goes to the caller
+    -> KILLED by 7 test(s) | Test result: FAILED. Total tests: 269; passed: 262; failed: 7
+       FAIL battleship::duel_tests::test_refund_stalled_both_pending_succeeds_after_deadline
+       FAIL battleship::duel_tests::test_refund_stalled_by_third_party_pays_only_the_players
+       FAIL battleship::duel_tests::test_refund_stalled_charges_no_fee
+       FAIL battleship::duel_tests::test_refund_stalled_one_pending_succeeds_at_deadline_plus_grace
+       FAIL battleship::duel_tests::test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor
+       FAIL battleship::duel_tests::test_refund_stalled_refunds_both_when_both_pending_at_deadline
+       ... and 1 more
+M24 | record_move: ENoClock check removed
+    -> KILLED by 1 test(s) | Test result: FAILED. Total tests: 269; passed: 268; failed: 1
+       FAIL battleship::duel_tests::test_record_move_rejects_clockless_duel
+M25 | claim_timeout: ENotActive/ENoClock/EVersionMismatch order: EWrongHouse check removed
+    -> KILLED by 2 test(s) | Test result: FAILED. Total tests: 269; passed: 267; failed: 2
+       FAIL battleship::duel_tests::test_claim_timeout_rejects_other_house
+       FAIL battleship::duel_tests::test_claim_timeout_reports_wrong_house_before_not_expired
+```
+
+Extractos de los fallos (log de cada mutación, hash del paquete reemplazado por `<pkg>`): M1 y M2 hacen que el test que espera `EDeadlinePassed` no falle; M3 y M4 rompen la igualdad del evento `DuelTurn`; y M10 (quitar `ENotExpired` de `claim_timeout`) muestra la **segunda barrera**: la transacción igual aborta, ahora en `pay` con `ENotActive` (código 11):
+
+```
+----- M1 (test_collect_rejects_at_deadline)
+┌── test_collect_rejects_at_deadline ──────
+│ Test did not error as expected
+└──────────────────
+----- M2 (test_record_move_rejects_at_deadline)
+┌── test_record_move_rejects_at_deadline ──────
+│ Test did not error as expected
+└──────────────────
+----- M4 (test_record_move_turn_handoff_resets_deadline)
+┌── test_record_move_turn_handoff_resets_deadline ──────
+│ error[EC11001]: test failure
+│      ┌─ ./tests/duel_tests.move:2160:5
+│      │
+│ 2150 │ fun assert_turn(
+│      │     ----------- In this function in battleship::duel_tests
+│      ·
+│ 2160 │     assert!(turn_events == vector[expected]);
+│      │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Test was not expected to error, but it aborted originating in the module battleship::duel_tests rooted here
+│ 
+│ 
+│ stack trace
+│ 	duel_tests::test_record_move_turn_handoff_resets_deadline(./tests/duel_tests.move:2898)
+│ 
+└──────────────────
+----- M3 (test_record_move_simultaneous_phase_first_a_keeps_deadline)
+┌── test_record_move_simultaneous_phase_first_a_keeps_deadline ──────
+│ error[EC11001]: test failure
+│      ┌─ ./tests/duel_tests.move:2160:5
+│      │
+│ 2150 │ fun assert_turn(
+│      │     ----------- In this function in battleship::duel_tests
+│      ·
+│ 2160 │     assert!(turn_events == vector[expected]);
+│      │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Test was not expected to error, but it aborted originating in the module battleship::duel_tests rooted here
+│ 
+│ 
+│ stack trace
+│ 	duel_tests::test_record_move_simultaneous_phase_first_a_keeps_deadline(./tests/duel_tests.move:2922)
+│ 
+└──────────────────
+----- M10 (test_claim_timeout_between_collect_and_pay_aborts_not_expired)
+┌── test_claim_timeout_between_collect_and_pay_aborts_not_expired ──────
+│ error[EC11001]: test failure
+│     ┌─ ./sources/duel.move:511:14
+│     │
+│ 508 │ fun active_state<G>(duel: &Duel<G>): (address, u8, u64) {
+│     │     ------------ In this function in battleship::duel
+│     ·
+│ 511 │         _ => abort ENotActive,
+│     │              ^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to abort with code 14 originating in the module battleship::duel but instead it aborted with code 11 originating in the module battleship::duel rooted here
+│ 
+│ 
+│ stack trace
+│ 	duel::pay(./sources/duel.move:347)
+│ 	duel_tests::test_claim_timeout_between_collect_and_pay_aborts_not_expired(./tests/duel_tests.move:3267)
+│ 
+└──────────────────
+```
+
+Otras mutaciones de fondos que también mueren (M11: `claim_timeout` paga a quien llama; M12: ganador intercambiado; M13: sin comisión en `claim_timeout`; M14: techo en vez de piso; M18: un `assert` de `stake == 2 × bet` en `refund_stalled`; M19: el aceptante recibe solo `bet`; M23: el reembolso del aceptante va a quien llama; M20/M21/M26: gracia acortada a 1 día / sin gracia / un ms de más; M22: `>` en vez de `>=` en `refund_stalled`; M9: `>` en `claim_timeout`; M15..M17, M24, M25 y M27: cada `assert` y cada orden de aborts). Ver el resumen de arriba.
+
+#### E-4. TABLA DE TRANSICIONES y matriz test <-> INV-D1..D7, GENERADAS desde una corrida
+Cómo se generó (entregable R3-6 (a)): `gen_tables.py` (escrito con la herramienta de archivos) lee el output de `sui move test` de arriba (Gate 3) y `duel_tests.move`. Cada fila cita **un test**: el resultado esperado de la celda sale del atributo `#[expected_failure(abort_code = ...)]` del test en el fuente (o "OK: ..." con la descripción de la celda), y el veredicto `PASS` sale de la línea `[ PASS ]` del output de la corrida; una fila con un test ausente o que no corrió se imprime `MISSING TEST`/`NOT RUN`. No se usó `debug::print` (LIM-4). Convenciones: D = `deadline_ms` del duelo de la suite (1 600 000 ms); `to_move` 1 = creador, 2 = aceptante, 3 = ambos; "grace" = `CLAIM_GRACE_MS` = 604 800 000 ms (en los tests, el literal).
+**75 filas, 75 PASS, 0 problemas.**
+
+```
+TABLE OF TRANSITIONS (state x function x time vs deadline_ms D x to_move => result), one cell per test run
+
+state | function | time vs D | to_move | result | test | run
+Pending | record_move | - | - | abort duel::ENotActive | test_record_move_rejects_not_active | PASS
+Pending | claim_timeout | - | - | abort duel::ENotActive | test_claim_timeout_rejects_not_active | PASS
+Pending | refund_stalled | - | - | abort duel::ENotActive | test_refund_stalled_rejects_not_active | PASS
+Pending | collect | - | - | abort duel::ENotActive | test_collect_rejects_not_active | PASS
+Pending | pay (Collected forged) | - | - | abort duel::ENotActive | test_pay_rejects_not_active | PASS
+Resolved | record_move | any | - | abort duel::ENotActive | test_record_move_rejects_resolved_duel | PASS
+Resolved | claim_timeout | any | - | abort duel::ENotActive | test_claim_timeout_rejects_resolved_duel | PASS
+Resolved | refund_stalled | any | - | abort duel::ENotActive | test_refund_stalled_rejects_resolved_duel | PASS
+Resolved | collect | any | - | abort duel::ENotActive | test_collect_rejects_resolved_duel | PASS
+TimedOut | record_move | any | - | abort duel::ENotActive | test_record_move_rejects_timed_out_duel | PASS
+TimedOut | claim_timeout | any | - | abort duel::ENotActive | test_claim_timeout_rejects_timed_out_duel | PASS
+TimedOut | refund_stalled | any | - | abort duel::ENotActive | test_refund_stalled_rejects_timed_out_duel | PASS
+TimedOut | collect | any | - | abort duel::ENotActive | test_collect_rejects_timed_out_duel | PASS
+TimedOut | pay (Collected forged) | any | - | abort duel::ENotActive | test_pay_rejects_timed_out_duel | PASS
+Expired | record_move | any | - | abort duel::ENotActive | test_record_move_rejects_expired_duel | PASS
+Expired | claim_timeout | any | - | abort duel::ENotActive | test_claim_timeout_rejects_expired_duel | PASS
+Expired | refund_stalled | any | - | abort duel::ENotActive | test_refund_stalled_rejects_expired_duel | PASS
+Expired | collect | any | - | abort duel::ENotActive | test_collect_rejects_expired_duel | PASS
+Expired | pay (Collected forged) | any | - | abort duel::ENotActive | test_pay_rejects_expired_duel | PASS
+Active, turn_ms = 0 | record_move | - | 0 | abort duel::ENoClock | test_record_move_rejects_clockless_duel | PASS
+Active, turn_ms = 0 | claim_timeout | - | 0 | abort duel::ENoClock | test_claim_timeout_rejects_clockless_duel | PASS
+Active, turn_ms = 0 | refund_stalled | - | 0 | abort duel::ENoClock | test_refund_stalled_rejects_clockless_duel | PASS
+Active, turn_ms = 0 | collect | - | 0 | abort duel::ENoClock | test_collect_rejects_clockless_duel | PASS
+Active | record_move | before (D-1) | 1, by the creator (rem = 0) | OK: to_move = next, deadline = now + turn_ms | test_record_move_passes_one_ms_before_deadline | PASS
+Active | record_move | before | 1, by the creator, next = creator (rem = 0) | OK: to_move = 1, deadline = now + turn_ms (full plazo) | test_record_move_same_player_continuing_also_resets_deadline | PASS
+Active | record_move | before | 1, by the creator, next = acceptor (rem = 0) | OK: to_move = 2, deadline = now + turn_ms | test_record_move_turn_handoff_resets_deadline | PASS
+Active | record_move | before | 3, creator first (rem = 2) | OK: to_move = 2, deadline_ms intact | test_record_move_simultaneous_phase_first_a_keeps_deadline | PASS
+Active | record_move | before | 3, acceptor first (rem = 1) | OK: to_move = 1, deadline_ms intact | test_record_move_simultaneous_phase_first_b_keeps_deadline | PASS
+Active | record_move | before | 3 -> last to commit closes the phase (rem = 0) | OK: to_move = next, deadline = now + turn_ms (full plazo) | test_record_move_phase_close_resets_deadline_even_if_closer_moves_next | PASS
+Active | record_move | before | 2, by the creator | abort duel::ENotYourTurn | test_record_move_reports_not_your_turn_before_deadline | PASS
+Active | record_move | before | 1, by the acceptor | abort duel::ENotYourTurn | test_record_move_rejects_player_outside_to_move | PASS
+Active | record_move | before | 2 after the creator committed, creator again | abort duel::ENotYourTurn | test_record_move_rejects_second_commit_in_simultaneous_phase | PASS
+Active | record_move | before | 3, by a third party | abort duel::ENotPlayer | test_record_move_rejects_third_party | PASS
+Active | record_move | before | 1, rem = 0, next = 0 | abort duel::EBadMask | test_record_move_rejects_next_zero_or_above_three | PASS
+Active | record_move | before | 1, rem = 0, next = 4 | abort duel::EBadMask | test_record_move_rejects_next_above_three | PASS
+Active | record_move | before | 3 closing the phase, next = 0 | abort duel::EBadMask | test_record_move_rejects_next_zero_when_closing_a_simultaneous_phase | PASS
+Active | record_move | before | 3, creator first, next = 1 (rem = 2) | abort duel::EPhaseMismatch | test_record_move_rejects_next_other_than_rem_in_simultaneous_phase | PASS
+Active | record_move | before | 3, creator first, next = 3 (rem = 2) | abort duel::EPhaseMismatch | test_record_move_rejects_next_both_in_simultaneous_phase | PASS
+Active | record_move | before | 3, creator first, next = 0 (rem = 2) | abort duel::EPhaseMismatch | test_record_move_rejects_next_zero_in_simultaneous_phase | PASS
+Active | record_move | before | 3, acceptor first, next = 2 (rem = 1) | abort duel::EPhaseMismatch | test_record_move_rejects_next_other_than_rem_when_rem_is_creator | PASS
+Active | record_move | at (D) | 1, by the creator | abort duel::EDeadlinePassed | test_record_move_rejects_at_deadline | PASS
+Active | record_move | after (D+) | 1, by the creator | abort duel::EDeadlinePassed | test_record_move_rejects_after_deadline | PASS
+Active | collect | before (D-1) | 1, by the creator (in turn) | OK: Collected; pay => Resolved | test_collect_passes_one_ms_before_deadline | PASS
+Active | collect | before (D-1) | 2, by the creator (surrender, out of turn) | OK: Collected; pay => Resolved | test_surrender_out_of_turn_before_deadline_resolves | PASS
+Active | collect | before | 1, by a third party | abort duel::ENotPlayer | test_collect_rejects_third_party | PASS
+Active | collect | at (D) | 1, by the creator | abort duel::EDeadlinePassed | test_collect_rejects_at_deadline | PASS
+Active | collect | after (D+) | 1, by the creator | abort duel::EDeadlinePassed | test_collect_rejects_after_deadline | PASS
+Active | claim_timeout | before (D-1) | 1 | abort duel::ENotExpired | test_claim_timeout_rejects_one_ms_before_deadline | PASS
+Active | claim_timeout | before (D-1) | 2 | abort duel::ENotExpired | test_claim_timeout_rejects_one_ms_before_deadline_when_acceptor_pending | PASS
+Active | claim_timeout | before (D-1) | 3 | abort duel::ENotExpired | test_claim_timeout_reports_not_expired_before_both_pending | PASS
+Active | claim_timeout | between collect and pay (same tx, now < D) | 1 | abort duel::ENotExpired | test_claim_timeout_between_collect_and_pay_aborts_not_expired | PASS
+Active | claim_timeout | at (D) | 1, by the acceptor | OK: TimedOut; acceptor wins pot - fee | test_claim_timeout_succeeds_at_deadline | PASS
+Active | claim_timeout | at (D) | 1, by a third party | OK: TimedOut; acceptor (not the caller) wins pot - fee | test_claim_timeout_by_third_party_pays_the_rival_not_the_caller | PASS
+Active | claim_timeout | at (D) | 1, fee_rate 0/250/1000, odd pot | OK: TimedOut; acceptor wins, payout + fee = 2 x bet | test_claim_timeout_pays_acceptor_when_creator_pending | PASS
+Active | claim_timeout | at (D) | 2, fee_rate 0/250/1000, odd pot | OK: TimedOut; creator wins, payout + fee = 2 x bet | test_claim_timeout_pays_creator_when_acceptor_pending | PASS
+Active | claim_timeout | after (D+) | 2, by the pending acceptor itself | OK: TimedOut; creator (not the caller) wins | test_claim_timeout_by_the_pending_player_still_pays_the_rival | PASS
+Active | claim_timeout | after D + grace | 1 | OK: TimedOut; acceptor wins (race with refund_stalled) | test_claim_timeout_still_succeeds_after_grace | PASS
+Active | claim_timeout | at (D) | 3 | abort duel::EBothPending | test_claim_timeout_rejects_both_pending | PASS
+Active | claim_timeout | at (D) | 1, House of other version | abort house::EWrongVersion | test_claim_timeout_aborts_with_house_of_other_version | PASS
+Active | claim_timeout | at (D) | 1, other House | abort duel::EWrongHouse | test_claim_timeout_rejects_other_house | PASS
+Active | claim_timeout | at (D) | 1, duel of older version | abort duel::EVersionMismatch | test_claim_timeout_rejects_duel_of_older_version | PASS
+Active | claim_timeout | at (D) | 1, stake != 2 x bet | abort duel::EBrokenStake | test_claim_timeout_rejects_broken_stake | PASS
+Active | refund_stalled | before (D-1) | 3 | abort duel::ENotStalled | test_refund_stalled_both_pending_rejects_one_ms_before_deadline | PASS
+Active | refund_stalled | before (D) | 3 | abort duel::ENotStalled | test_refund_stalled_rejects_both_pending_before_deadline | PASS
+Active | refund_stalled | at (D) | 3, by a third party | OK: Expired; bet to each, no fee | test_refund_stalled_refunds_both_when_both_pending_at_deadline | PASS
+Active | refund_stalled | after (D+) | 3, by a third party | OK: Expired; bet to each, no fee | test_refund_stalled_both_pending_succeeds_after_deadline | PASS
+Active | refund_stalled | at (D) | 3, stake = 2 x bet + 1 | OK: Expired; creator bet, acceptor bet + 1 (no assert) | test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor | PASS
+Active | refund_stalled | at (D) | 3, House and duel of other versions | OK: Expired; bet to each (no House, no version) | test_refund_stalled_works_with_house_of_other_version | PASS
+Active | refund_stalled | at (D) | 1 (one pending) | abort duel::ENotStalled | test_refund_stalled_rejects_one_pending_before_grace | PASS
+Active | refund_stalled | D + grace - 1 ms | 1 (one pending) | abort duel::ENotStalled | test_refund_stalled_one_pending_rejects_one_ms_before_grace | PASS
+Active | refund_stalled | D + grace (604_800_000) | 1, by a third party | OK: Expired; bet to each, no fee | test_refund_stalled_one_pending_succeeds_at_deadline_plus_grace | PASS
+Active | refund_stalled | after D + grace | 2, by the pending acceptor | OK: Expired; bet to each, no fee | test_refund_stalled_refunds_both_after_grace_with_one_pending | PASS
+Active | refund_stalled | after D + grace | 1, a prior fee in the House | OK: Expired; fees_collected unchanged | test_refund_stalled_charges_no_fee | PASS
+Active | refund_stalled | after D + grace | 1, by a third party | OK: Expired; only the two players are paid | test_refund_stalled_by_third_party_pays_only_the_players | PASS
+Active (after refund_stalled) | claim_timeout | after D + grace | 1 | abort duel::ENotActive | test_claim_timeout_after_refund_stalled_aborts_not_active | PASS
+
+rows: 75, not PASS: 0
+
+MATRIX test <-> INV-D1..D7
+
+INV-D1 stake only custody: bet / 2 x bet / 0
+    PASS     test_stake_is_two_bets_after_activate
+    PASS     test_terminal_states_hold_no_stake
+    PASS     test_claim_timeout_stores_timed_out_state_and_event
+    PASS     test_refund_stalled_refunds_both_when_both_pending_at_deadline
+    PASS     test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor
+    PASS     test_turn_ms_is_never_changed_by_record_move
+    PASS     test_claim_timeout_rejects_broken_stake
+
+INV-D2 refunds without House or version
+    PASS     test_cancel_refunds_regardless_of_versions
+    PASS     test_reject_refunds_regardless_of_versions
+    PASS     test_refund_stalled_works_with_house_of_other_version
+    PASS     test_refund_stalled_rejects_not_active
+    PASS     test_refund_stalled_rejects_clockless_duel
+    PASS     test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor
+
+INV-D3 exits of Active: claim at the deadline, refund after the grace
+    PASS     test_claim_timeout_succeeds_at_deadline
+    PASS     test_refund_stalled_one_pending_succeeds_at_deadline_plus_grace
+    PASS     test_refund_stalled_refunds_both_when_both_pending_at_deadline
+    PASS     test_refund_stalled_works_with_house_of_other_version
+    PASS     test_claim_timeout_aborts_with_house_of_other_version
+    PASS     test_claim_timeout_still_succeeds_after_grace
+
+INV-D4 fee only when ending in Resolved/TimedOut; payout + fee = 2 x bet
+    PASS     test_fee_is_charged_only_when_resolving
+    PASS     test_claim_timeout_pays_acceptor_when_creator_pending
+    PASS     test_claim_timeout_pays_creator_when_acceptor_pending
+    PASS     test_refund_stalled_charges_no_fee
+    PASS     test_refund_stalled_refunds_both_when_both_pending_at_deadline
+    PASS     test_claim_timeout_by_third_party_pays_the_rival_not_the_caller
+
+INV-D5 no entry leaves a duel Active (every clock exit ends in a final state)
+    PASS     test_claim_timeout_stores_timed_out_state_and_event
+    PASS     test_refund_stalled_refunds_both_when_both_pending_at_deadline
+    PASS     test_claim_timeout_between_collect_and_pay_aborts_not_expired
+    PASS     test_pay_rejects_timed_out_duel
+
+INV-D6 the clock is applied by the base; disjoint sets at the deadline
+    PASS     test_record_move_passes_one_ms_before_deadline
+    PASS     test_record_move_rejects_at_deadline
+    PASS     test_collect_passes_one_ms_before_deadline
+    PASS     test_collect_rejects_at_deadline
+    PASS     test_claim_timeout_rejects_one_ms_before_deadline
+    PASS     test_claim_timeout_succeeds_at_deadline
+    PASS     test_refund_stalled_both_pending_rejects_one_ms_before_deadline
+    PASS     test_refund_stalled_one_pending_rejects_one_ms_before_grace
+    PASS     test_refund_stalled_one_pending_succeeds_at_deadline_plus_grace
+    PASS     test_claim_timeout_between_collect_and_pay_aborts_not_expired
+
+INV-D7 to_move in 1..=3 and deadline_ms only inside Active with turn_ms > 0
+    PASS     test_activate_rejects_invalid_first_to_move
+    PASS     test_record_move_rejects_next_zero_or_above_three
+    PASS     test_record_move_rejects_next_above_three
+    PASS     test_record_move_rejects_next_zero_in_simultaneous_phase
+    PASS     test_record_move_rejects_next_zero_when_closing_a_simultaneous_phase
+    PASS     test_record_move_rejects_clockless_duel
+    PASS     test_claim_timeout_stores_timed_out_state_and_event
+    PASS     test_refund_stalled_refunds_both_when_both_pending_at_deadline
+    PASS     test_activate_atomic_state_inside_tx_has_zero_mask_and_pending_fee_taken
+
+total problems (missing or not PASS): 0
+```
+
+#### E-5. Matriz de las tres barreras de `claim_timeout` entre `collect` y `pay` (recordatorio del MID de TASK-2)
+Cada barrera, qué la fija, y qué pasa si falta (la mutación o la sonda que lo demuestra):
+
+| # | Barrera | Qué la fija | Qué la ejercita | Si faltara |
+|---|---|---|---|---|
+| 1 | **INV-D6**: dentro de una transacción el reloj es uno solo; `collect` exige `ahora < deadline_ms` y `claim_timeout` exige `ahora >= deadline_ms`, así que no pasan los dos | `assert!(now_ms() >= deadline_ms, ENotExpired)` | test (a) `test_claim_timeout_between_collect_and_pay_aborts_not_expired`: en una tx, `collect` (en `deadline - 1`) y luego `claim_timeout` sobre el mismo `Duel`, con `fee_rate = 0` (así `EBrokenStake` no frena), aborta `ENotExpired` y revierte todo; más el borde de los dos lados (`test_collect_passes_one_ms_before_deadline` / `test_collect_rejects_at_deadline`, `test_claim_timeout_rejects_one_ms_before_deadline` / `test_claim_timeout_succeeds_at_deadline`) | M10 (quitar `ENotExpired`): el test (a) falla porque ahora aborta con `ENotActive` desde `pay` => entra la barrera 3 |
+| 2 | **H-14 (clique caliente)**: un PTB no puede intercalar una `entry` genérica (`claim_timeout`, `cancel`) sobre el mismo `Duel` entre `collect` y `pay` | `claim_timeout` y `refund_stalled` son `entry` **sin `public`** (verificado en el bytecode, E-2) | **no se puede probar en `test_scenario`**: es la sonda V-15 de TASK-1b (PASA: el PTB se rechaza antes de ejecutar cualquier comando; la tx queda `FailedTransaction`, gas cobrado, sin efectos) | si fueran `public entry` la regla no aplicaría (H-14); por eso el chequeo de visibilidad es 🟠 |
+| 3 | **`pay` aborta `ENotActive`** si el estado cambió (la tx entera revierte) | `active_state()` en `pay` (`ENotActive` tras `EWrongDuel`) | test (b) `test_pay_rejects_timed_out_duel` (y `test_pay_rejects_expired_duel`): `pay` con un `Collected` sobre un `Duel` ya `TimedOut`/`Expired` aborta `ENotActive`, sin pagar | la barrera 1 de arriba (M10 lo mostró: sin ella, `pay` aborta igual) |
+
+Conclusión: ninguna de las tres sola permite cobrar dos veces; las dos que se pueden probar en `test_scenario` (1 y 3) están fijadas por tests y mutaciones; la 2 por la visibilidad y la sonda V-15.
+
+#### E-6. Cobertura informativa (`sui move test -e testnet --coverage` y `sui move coverage summary [--summarize-functions]`, en una COPIA en `<scratchpad>/cov_work`, nunca en el worktree)
+Módulo `duel`: **99.48 %** (de 96.53 % en TASK-2); total 99.66 %. Por función de `duel` (las 3 nuevas, al 100 %); la única función por debajo del 100 % es `active_state` (89.66 %), cuya rama sin cubrir es el `_ => abort ENotActive`: la herramienta no acredita las instrucciones de aborto aunque la ejercitan decenas de tests (`..._rejects_not_active` y los de los estados terminales), igual que en TASK-2.
+
+```
++-------------------------+
+| Move Coverage Summary   |
++-------------------------+
+Module <pkg>::house
+>>> % Module coverage: 100.00
+Module <pkg>::duel
+>>> % Module coverage: 99.48
+Module <pkg>::game
+>>> % Module coverage: 100.00
++-------------------------+
+| % Move Coverage: 99.66  |
++-------------------------+
+Module <pkg>::duel 
+  fun activate  total=51 covered=51 (100.00 %) 
+  fun activate_atomic  total=33 covered=33 (100.00 %) 
+  fun active_state  total=58 covered=52 (89.66 %) 
+  fun assert_acceptable  total=90 covered=90 (100.00 %) 
+  fun cancel  total=33 covered=33 (100.00 %) 
+  fun claim_timeout  total=155 covered=155 (100.00 %) 
+  fun collect  total=106 covered=106 (100.00 %) 
+  fun collect_fee  total=26 covered=26 (100.00 %) 
+  fun create  total=82 covered=82 (100.00 %) 
+  fun fee_amount  total=9 covered=9 (100.00 %) 
+  fun is_pending  total=36 covered=36 (100.00 %) 
+  fun join_and_activate  total=31 covered=31 (100.00 %) 
+  fun now_ms  total=3 covered=3 (100.00 %) 
+  fun pay  total=75 covered=75 (100.00 %) 
+  fun record_move  total=147 covered=147 (100.00 %) 
+  fun refund_creator  total=27 covered=27 (100.00 %) 
+  fun refund_stalled  total=84 covered=84 (100.00 %) 
+  fun reject  total=45 covered=45 (100.00 %) 
+  fun turn_ms_of  total=72 covered=72 (100.00 %) >>> % Module coverage: 99.48
+```
+
+### Desviaciones del handoff
+1. **Helpers `#[test_only]` en `duel.move` (detalle interno, C-9):** 5 `public fun` nuevas, todas `#[test_only]` (`is_timed_out_for_testing`, `is_expired_for_testing` y los constructores de los tres eventos nuevos), y dos existentes ampliadas con los brazos `TimedOut`/`Expired` (`acceptor_for_testing`, `winner_for_testing`: antes devolvían `none` para esos estados, que no existían en uso). Ninguna entra al bytecode (E-2: 0 `_for_testing`). Los 102 tests de TASK-2 siguen igual y pasan.
+2. **Más tests que los obligatorios:** 84 contra los 49 nombres del handoff. Lo que pide el handoff con una lista de casos ("con `next` = 1, 3 y 0 cuando `rem = 2`, y con `rem = 1`"; `EBadMask` con 0 y arriba de 3) se partió en **un test por causa**, porque un `expected_failure` cubre una sola: `..._rejects_next_other_than_rem_in_simultaneous_phase` (next = 1, rem = 2), `..._next_both_...` (3), `..._next_zero_in_simultaneous_phase` (0), `..._rem_is_creator` (rem = 1); `..._rejects_next_zero_or_above_three` (0), `..._next_above_three` (4), `..._next_zero_when_closing_a_simultaneous_phase`. Además: órdenes de aborts de `claim_timeout` y de `record_move`, `test_record_move_rejects_second_commit_in_simultaneous_phase` (un jugador no puede comprometer dos veces para estirar la fase), `test_claim_timeout_by_the_pending_player_still_pays_the_rival`, `test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor` (fija "sin `assert` de `stake == 2 × bet`"), los tests de cierre de los tres estados terminales y los tres de borde que completan la tabla (`test_record_move_rejects_after_deadline`, `..._claim_timeout_rejects_one_ms_before_deadline_when_acceptor_pending`, `test_refund_stalled_both_pending_succeeds_after_deadline`).
+3. **`ENotPlayer` antes de `ENoClock`, y `ENoClock` antes de `ENotPlayer`, no se pueden aislar:** un `Active` sin reloj solo existe dentro de la tx de `activate_atomic`, donde quien firma es el aceptante (es jugador). Es el mismo caso que el MID dejó como `ENoClock` fijado por `test_collect_rejects_clockless_duel` en TASK-2 (T-2). El orden `ENoClock` -> `ENotYourTurn`/`EDeadlinePassed`/`EVersionMismatch` sí está fijado: `test_record_move_rejects_clockless_duel` (con `to_move = 0` y `deadline_ms = 0` el abort sería otro sin el chequeo; la mutación M24 lo mata) y `test_claim_timeout_reports_no_clock_before_version_mismatch`.
+4. **`ctx`:** `record_move` recibe `ctx: &TxContext` (solo lee `sender()`, como `activate`/`collect` en TASK-2); `claim_timeout` y `refund_stalled` reciben `&mut TxContext` porque crean los `Coin`. No cambia nada de lo visible (R.4 deja `ctx` sin tipo).
+5. **"Lectura de la House con versión, primera" de `claim_timeout`:** se implementó como `let _ = house.min_bet();` (valor descartado), igual que `assert_acceptable` de TASK-2; el handoff no fija qué lectura. El test `..._reports_house_version_first` y la mutación M16 lo fijan.
+6. **`claim_timeout` no devuelve ni usa `pay`:** consume el `Collected` de `collect_fee` desestructurándolo dentro de la función (solo `duel` puede hacerlo), así el potato no sale; reusa `collect_fee` (LIM-5) y escribe en línea el retiro del `stake`, el estado, el evento y la transferencia (3 líneas parecidas a `pay`). **No se refactorizó `pay`** (cero cambios en lo de TASK-2; el MID decide si una extracción compartida vale un cambio).
+7. **Cabecera de `duel.move`:** se quitó el comentario que reservaba los números 14, 20, 22, 23 y 25 (ya no aplica); se agregó `ACCEPTOR_MASK` (2) y el comentario de `CLAIM_GRACE_MS`; el doc de `DuelState` pasa a la redacción de N-3 del handoff.
+8. **La tabla de transiciones** se genera con un script que une fila -> test y toma el veredicto de la corrida (un test no puede imprimir su celda sin `debug::print`, que LIM-4 prohíbe): la cobertura de celdas es la de la lista de filas del script (75).
+9. **R-12 / C-13 (honesto):** el reporte y los scripts con comandos de la CLI (`run_mutations.py`) se escribieron **solo con la herramienta de archivos**. Se usó un heredoc **entrecomillado en 3 comandos, con texto que NO contiene `sui`, `suiup` ni acentos graves**: (i) el apéndice de 3 constructores `#[test_only]` al final de `duel.move`, (ii) `names_required.txt` (lista de nombres de tests, para el `grep` de cobertura de nombres) y (iii) un parche `python3 -I -` de 3 reemplazos sobre el borrador del bloque de tests en el scratchpad. Ninguno ejecutó nada ajeno; lo declaro aunque la regla apunta a texto con comandos de la CLI. `~/.sui` quedó idéntico en todas las tomas (ver la guarda).
+10. **Primera corrida de mutaciones** con 3 mutaciones mal armadas (E-3): corregidas y re-corrida toda la tanda.
+
+### Riesgos / pendientes
+- **Ningún STOP ni duda de fondos o de quién gana.** R.4 del handoff coincide con §2.5 del plan en las tres funciones (visibilidad, orden de aborts, evento, destinatario); los 5 números nuevos son los de R.3; la regla de bits y la elegibilidad de `refund_stalled` son las del handoff.
+- La carrera documentada pasada la gracia (`claim_timeout` vs `refund_stalled`): fijada por `test_claim_timeout_still_succeeds_after_grace` y `test_claim_timeout_after_refund_stalled_aborts_not_active`.
+- `claim_timeout` toma `&mut House` (contención y cancelación por congestión cerca del plazo: plan R-8; se mide en TASK-5).
+- Un juego que pase un `next_to_move` equivocado hace perder por tiempo al jugador equivocado: criterio de #18 (plan §9), no de la base; la base solo garantiza la regla de bits.
+- `deadline_ms + CLAIM_GRACE_MS` no puede desbordar `u64` (reloj + 7 días + 7 días en ms) y con `to_move == 3` ni se calcula; `now + turn_ms` en `record_move` es igual al de `activate`.
+- `claim_timeout` aborta `EBrokenStake` con un `stake != 2 × bet` (R.4), algo que la API no produce; en ese caso la salida es `refund_stalled`, que no aborta por eso (`test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor`).
+- La barrera H-14 (no intercalar una `entry` entre `collect` y `pay`) no se puede probar en `test_scenario`: la cubre la sonda V-15 de TASK-1b y la visibilidad `entry` sin `public` (E-2, E-5).
+
+### Docker (antes / después)
+`docker ps -aq | wc -l` = 6 antes, **5** después; `docker images -aq | wc -l` = 17 antes, 17 después. La diferencia (un contenedor menos) **no es mía**: no lancé, detuve ni borré ningún contenedor ni imagen (solo corrí esos dos conteos); es el efímero de otra sesión del host (el que ya se había declarado en TASK-1b y TASK-2) que terminó. No se tocó nada ajeno.
+
+### Cierre de la localnet
+No aplica: no se levantó ninguna localnet (solo unit tests con `test_scenario`), sin `sui client`, sin faucet, sin publicar, sin red. El puerto 9000 ajeno y `<puerto>` no se tocaron.
+
+### Documentación
+- READMEs / `agents.md` actualizados: **no aplica en este task** (el handoff asigna `contracts/README.md` y la tabla de abort codes a TASK-8, y este task no puede tocar `documents/*`; los números 14/20/22/23/25, los 3 eventos y las 2 `entry` nuevas se documentan ahí).
+- Snippet propuesto para `documents/STATUS.md` (fila): "contracts @ `feature/issue-73-multigame` (TASK-2b de #73), CLI `1.84.0-9dc25070cf2e`, 2026-11-20 | `battleship::duel` con reloj por jugada: `record_move` (`public(package)`), `claim_timeout` y `refund_stalled` (`entry` sin `public`), eventos `DuelTurn`/`DuelTimedOut`/`DuelExpired`, `CLAIM_GRACE_MS` = 7 días, 26 abort codes (0-25) | build y `--lint` con `--warnings-are-errors` en 0 | **269 tests PASS (83 + 102 + 84)** | `house.move`, `game.move` y `Move.lock` sin diff | bytecode: 0 `_for_testing`, `claim_timeout`/`refund_stalled` `entry` sin `public` | 28 mutaciones, todas muertas (T-1 en `collect` y `record_move`, regla de bits) | cobertura `duel` 99.48 %".
+- Mensaje de commit propuesto (en inglés, sin palabras de cierre con número): `contracts: add the per-move clock to the duel base: record_move, claim_timeout and refund_stalled (#73)`.
+
+### §R-6: los 4 greps (`/usr/bin/grep -nE`) sobre el diff y sobre este reporte, con la clasificación de cada coincidencia
+Patrones (C-7): (1) `[0-9a-fA-F]{40,64}` · (2) `0x[0-9a-fA-F]{8,}` · (3) `suiprivkey|mnemonic|seed phrase|/home/|/Users/` · (4) `[0-9a-fA-F]{4}(…|\.\.\.)[0-9a-fA-F]{4}`.
+
+**Sobre el diff** (`git diff` completo, 1773 líneas, guardado en el scratchpad; los 2 archivos modificados): los cuatro greps dan **0 coincidencias**. Las direcciones de los tests nuevos son cortas (`@0x20`, `@0x21`, `@0x22`, `@0x30`, `@0x31`, `@0x32`, más las `@0xA`..`@0xE` existentes): ninguna llega a 8 hex.
+
+**Sobre este reporte**: se corrieron sobre el borrador completo (946 líneas: todo salvo esta sección) **antes** de escribir esta sección, y dieron **0 coincidencias** en los cuatro. Sobre el reporte final, las únicas coincidencias que puede dar el patrón (3) y el (4) son **las líneas de esta sección que citan los patrones** (el texto del patrón no es un dato: clasificadas como "el propio patrón") y la línea de la guarda que nombra el HOME con un placeholder; no hay hash de 40-64 hex, dirección de cuenta, clave ni ruta personal. Los números que parecen hash (`9dc25070cf2e` de la versión de la CLI, `ef12fd09615f` = primeros 12 hex del `sha256sum` de `client.yaml`) tienen 12 caracteres: público (la versión) y permitido por C-13 (la guarda). El hash del paquete que imprimen `coverage`/`disassemble` (64 hex de la compilación local, no una cuenta) se reemplazó por `<pkg>` y el desensamblado se pegó solo como firmas.
+
+### Guarda de ~/.sui (C-13, R-12)
+Medida con `stat -c '%y %s'`, `ls -A` y `sha256sum` (nunca `cat`); línea base esperada: 244 bytes, mtime `2026-10-30 17:52:52.515735237 -0500`, un solo archivo (`client.yaml`, dentro del único subdirectorio de `<HOME real>/.sui`), primeros 12 hex `ef12fd09615f`.
+- **Inicio** (antes de tocar nada): 244 bytes, `2026-10-30 17:52:52.515735237 -0500`, solo `client.yaml`, `ef12fd09615f`: igual a la línea base.
+- **Tras escribir el reporte y los scripts** (borrador compuesto y revisado): 244 bytes, `2026-10-30 17:52:52.515735237 -0500`, solo `client.yaml`, `ef12fd09615f`: igual a la línea base.
+- **Al final** (después de cerrar todo): 244 bytes, `2026-10-30 17:52:52.515735237 -0500`, solo `client.yaml`, `ef12fd09615f`: igual a la línea base.
+- Sobre **cada borrador/script** (`run_mutations.py`, `gen_tables.py`, `check_abort_codes.py` y las partes del reporte): el conteo de la frase de error de "comando inexistente" del shell (`grep -c` con la frase literal de C-13) = **0**, y el `/usr/bin/grep -nE` de rastros de génesis de C-13 (los tres textos de rastros de una localnet accidental: el error de génesis, el directorio de configuración de la CLI y el puerto ocupado) = **vacío** sobre las 12 partes del reporte (el archivo final) y sobre los 3 scripts. Los textos literales de esos patrones no se escriben acá para que el `grep` sobre el archivo final dé 0 y no coincida consigo mismo.
+- Sin procesos `sui start` (`ps aux | grep -c '[s]ui start'` = 0) y sin localnet. **Ejecución accidental de `sui`: ninguna.** (Todas las invocaciones fueron los gates canónicos, `sui --version`, `sui move disassemble`, `sui move coverage` y las mutaciones, todas con `printf 'n\n' |` delante y sin red.)
+- Otras comprobaciones finales: `git status --short` = solo `duel.move` y `duel_tests.move`; `git stash list` vacío; `contracts/build` no existe; Docker 5/17.
+
+~~~~
+
+
+---
+
+## 8. TASK-2b (revisión del MID)
+
+> MID, TASK-2b: PASA (sin 🔴 ni 🟠; 2 🟡 y 6 🔵).
+
+PASA
+
+## Revisión TASK-2b (#73, reloj por jugada de la base `duel`): PASA (sin 🔴 ni 🟠; 2 🟡 y 6 🔵 que no bloquean)
+
+- **Fecha:** 2026-11-20. Handoff v1.2.5, plan v1.3.2, HEAD 5ba8286, cambios sin commitear en `contracts/sources/duel.move` (+221/−4) y `contracts/tests/duel_tests.move` (+1441/−1).
+- **Qué leí:** el reporte del DEV (962 líneas) entero; `duel.move` (830 líneas) entero y línea por línea; los tests nuevos (líneas 2011-3417 de `duel_tests.move`, más los dos tests de orden T-2 en sus lugares) con criterio de mutación; R.1-R.7 y TASK-2b del handoff.
+- **Qué ejecuté:** solo lecturas y `grep`/`awk` sobre los fuentes. No corrí `sui` ni gates (los corrió el orquestador).
+- **Resultado:** la segunda mitad del contrato que decide quién gana por abandono es correcta. `record_move` mantiene `to_move ∈ 1..=3` en todo estado alcanzable, `claim_timeout` paga siempre al rival del que debía mover y siempre cobra la comisión, `refund_stalled` devuelve 100/100 sin House ni versión, y no encuentro ninguna vía de dejar fondos dentro, pagarlos dos veces ni mover SUI antes del plazo. Los 28 mutantes del DEV mueren y los dos pedidos T-1 y T-2 están. Lo que queda son mejoras de proceso y de doc.
+
+## 0. Controles del orquestador: coinciden con el reporte
+
+`~/.sui` (244 B, `client.yaml`, `ef12fd09615f`) en las tres tomas del DEV y en la del orquestador; 0 procesos `sui`; 19000 libre y 9000 ajeno igual; **Docker 6/17 antes y 5/17 después** (el reporte del DEV lo declara y lo atribuye al efímero ajeno que terminó; no es de la corrida); worktree con solo los dos archivos modificados; gates 269/269 (185 + 84; `duel_tests` = 186), build y `--lint` en 0, cero diff en `house.move`, `game.move`, `Move.lock` y los tests viejos. Yo conté `^fun test_` = 186 en `duel_tests.move`, que cierra con 83 + 186 = 269.
+
+**Visibilidad (confirmada en la fuente; son 🟠 si fallan: pasan):** `cancel`, `reject`, `claim_timeout` y `refund_stalled` son `entry fun` sin `public` (líneas 243, 253, 426, 467); `create`, `activate`, `activate_atomic`, `collect`, `pay` y `record_move` son `public(package)` con `_: G` por valor; las 30 `public fun` del archivo son `*_for_testing` y un `awk` confirma que todas llevan `#[test_only]` en la línea anterior; `Collected` (línea 116) sin abilities; 0 `allow(`, `Random`, `fun init`, `debug`, `TODO` en `sources/` ni en `tests/`. El orquestador confirmó el bytecode de producción (0 `_for_testing`, 4 `entry`, el resto `public(friend)`), cerrando la prueba que pedí en TASK-2.
+
+## 1. Conformidad con R.1-R.7 y las decisiones del owner (punto 1)
+
+**`record_move` (líneas 380-414).**
+- **Orden de aborts:** `active_state()` (`ENotActive`), `ENoClock`, `ENotPlayer`, `ENotYourTurn`, `EDeadlinePassed`, y al final `EBadMask` o `EPhaseMismatch`. Es exactamente el R4-1. `ENoClock` va antes de leer al firmante, que es lo que permite el caso intra-tx de `activate_atomic` (`to_move = 0`, `deadline_ms = 0`).
+- **Regla de bits:** `rem = to_move & (3 ^ bit)` (Move no tiene NOT; `3 ^ bit` es el complemento dentro de los dos bits válidos). Con `rem != 0`, `next == rem` (si no `EPhaseMismatch`), `to_move = rem` y `deadline_ms` intacto. Con `rem == 0`, `next ∈ 1..=3` (si no `EBadMask`) y `deadline_ms = ahora + turn_ms` también si sigue el mismo jugador. `turn_ms` sale siempre del `Duel`. `ahora` se lee una sola vez.
+- **INV-D7 (¿puede quedar `to_move` en 0 o fuera de 1..=3?): no.** Los únicos escritores del campo son `activate` (valida `1..=3`), `activate_atomic` (el `0`, que desaparece al resolver en la misma tx y que `record_move` rechaza con `ENoClock`) y `record_move`, que asigna `rem` (1 o 2, porque es un bit único de una máscara de 2 bits) o `next_to_move` ya validado en `1..=3`. Los tests `test_record_move_rejects_next_zero_*` y `..._above_three` cubren las dos ramas.
+
+**`claim_timeout<G>` (líneas 426-455).**
+- **Orden de aborts:** `house.min_bet()` descartado (`house::EWrongVersion`), `ENotActive`, `ENoClock`, `EVersionMismatch`, `EWrongHouse`, `ENotExpired` (`ahora >= deadline_ms`), `EBothPending`, `EBrokenStake`. Coincide con R.4 palabra por palabra.
+- **Ganador:** `winner = if (to_move == 1) acceptor else creator`, y el pago es siempre al `winner`; **nunca a `ctx.sender()`**. Con un tercero llamando, o con el propio jugador que dejó pasar el plazo, el pago va al rival (`test_claim_timeout_by_third_party_pays_the_rival_not_the_caller` y `..._by_the_pending_player_still_pays_the_rival`). La mutación M11 (pagar a quien llama) la matan 3 tests.
+- **Comisión:** `collect_fee` usa el `fee_rate` copiado del `Duel` y llama a `add_fees` siempre, también con fee 0.
+- **Versión de la House:** la primera lectura (`min_bet()`) la corta si la House ya migró, y el `EVersionMismatch`/`add_fees` corta un `Duel` de versión anterior. Es **coherente con el corte de `VERSION`** de los caminos con comisión: cuando se corta, `claim_timeout` queda bloqueado y la salida es `refund_stalled` (que no lee House ni versión), tras el plazo (con ambos pendientes) o la gracia de 7 días. Los tests `..._aborts_with_house_of_other_version` y `test_refund_stalled_works_with_house_of_other_version` fijan las dos mitades.
+- **`Collected` por desestructuración (desviación 6; la pregunta del MID):** `let Collected { duel_id, pot, fee } = duel.collect_fee(house)` consume el hot potato dentro de la propia función (solo `duel` puede desestructurar el tipo). Después, `withdraw_all()` retira lo que queda (`pot − fee`) y se transfiere una sola vez al `winner`; el estado pasa a `TimedOut`. Una segunda llamada aborta `ENotActive`. **No puede dejar fondos sin pagar ni pagar dos veces:** la secuencia split-de-la-comisión, retiro, cambio de estado, evento y transferencia es una sola función sin llamadas intermedias, y un aborto en cualquier punto revierte todo. `pay` queda intacta: es el comportamiento que pidió el handoff ("cero cambios en lo de TASK-2"). Mi criterio sobre extraer una función común está en el hallazgo 🔵 N-2: **no cambiar ahora**.
+
+**`refund_stalled<G>` (líneas 467-483).**
+- **Orden de aborts:** `ENotActive`, `ENoClock`, `ENotStalled`. No lee la House, no lee versión y **no hace `assert` de `stake == 2 × bet`** (el comentario dice por qué).
+- **Elegibilidad:** `stalled_from = deadline` con `to_move == 3`, o `deadline + CLAIM_GRACE_MS` con un pendiente; `ahora >= stalled_from`.
+- **Pagos:** `creator_refund = split(bet)` al creador y el resto (`withdraw_all`) al aceptante guardado en el estado; `Expired { acceptor }`; `refund_each = bet`; comisión cero siempre (no llama a `add_fees`).
+- **¿Puede un tercero desviar algo?** No: los dos destinos son `duel.creator` y el `acceptor` del estado; quien llama no recibe nada (`test_refund_stalled_by_third_party_pays_only_the_players`, con dos transferencias exactas y el coin del tercero en 0).
+- **¿Y si `stake < bet`?** `stake.split(bet)` abortaría (`ENotEnough` del framework), pero **no es alcanzable**: un `Active` persistente tiene `stake == 2 × bet` por construcción (`activate*` une el pago exacto sobre `bet`, y el único camino que lo reduce, `collect_fee`, vive solo dentro de una tx que termina en un estado terminal o revierte). El excedente (`stake > 2 × bet`) sí se soporta y va al aceptante, y lo fija `test_refund_stalled_pays_the_rest_of_the_stake_to_the_acceptor`. Ver 🔵 N-3 (endurecimiento opcional).
+
+**Decisiones del owner (D-20261119-05): cumplidas.** El reloj por jugada estilo chess.com con tiempo agotado = derrota (`claim_timeout` paga al rival); S-1 (reembolso 100/100 sin comisión: `refund_stalled`, sin `add_fees`); S-2 (gracia de 7 días con un pendiente: `CLAIM_GRACE_MS = 604_800_000`, el literal en los tests); S-3 (quien llame, el pago va a la víctima). La carrera documentada pasada la gracia (el que perdió puede reembolsar antes de que el ganador reclame; el ganador puede reclamar si llega primero) está fijada por `test_claim_timeout_still_succeeds_after_grace` y `test_claim_timeout_after_refund_stalled_aborts_not_active`.
+
+**Eventos (R.5):** `DuelTurn { duel_id, actor, to_move, deadline_ms }`, `DuelTimedOut { duel_id, creator, acceptor, winner, claimed_by, pot, fee, payout }` y `DuelExpired { duel_id, creator, acceptor, refund_each }`, con `has copy, drop` y `phantom G`, en el orden de R.5. `payout` sale del valor realmente retirado. **Doc de `DuelState::Expired` (N-3 de la revisión de TASK-2):** corregida ("nadie movió **o** uno pendiente tras la gracia").
+
+**Constantes:** 26, con los números exactos de R.3, 14/20/22/23/25 en su lugar numérico y sin `#[allow]` (el DEV pegó la lista completa leída por script con 0 discrepancias y 0 movidas de las 21 anteriores; yo leí las 26 constantes de la fuente y coinciden).
+
+## 2. Seguridad e invariantes (punto 2)
+
+**¿Puede alguien...?**
+- **Cobrar sin comisión en `claim_timeout`.** No: el único retiro del pozo pasa por `collect_fee` (siempre `add_fees`). Las mutaciones M13 (sin comisión) y M14 (techo) mueren.
+- **Reclamar antes del plazo.** No: `now_ms() >= deadline_ms` (`ENotExpired`); borde fijado a ambos lados (`..._rejects_one_ms_before_deadline` con `to_move` 1 y 2, y `..._succeeds_at_deadline`); M9 (`>=` por `>`) mata 13 tests.
+- **Reclamar y reembolsar el mismo `Duel`.** No: el primero lo deja en un estado terminal y el segundo aborta `ENotActive` (`test_claim_timeout_after_refund_stalled_aborts_not_active` y los cierres sobre `TimedOut`/`Expired`).
+- **Cerrar un `Duel` con fondos dentro o bloquearlos (INV-D1).** `TimedOut`: `withdraw_all` y `stake == 0`. `Expired`: `split(bet)` más `withdraw_all`, `stake == 0`. `Resolved`: `pay`. `Cancelled`: `refund_creator`. Los tests `assert_timed_out`, `assert_expired` y `test_terminal_states_hold_no_stake` fijan `stake == 0` en todos.
+- **¿Existe aún un `Active` persistente sin salida? No.** Las salidas son: `collect` + `pay` (antes del plazo; el juego), `claim_timeout` (desde el plazo, con un pendiente, si la House no está cortada), y `refund_stalled` (desde el plazo con ambos pendientes, o desde plazo + 7 días con un pendiente; **sin House ni versión: ningún corte la bloquea**). Con la House cortada, el ganador pierde la reclamación pero nadie pierde fondos (INV-D3).
+- **Saltear el reloj.** No: `activate` fija `deadline_ms` con el reloj del consenso y `record_move`/`collect` exigen `ahora < deadline_ms`; los conjuntos son disjuntos en el borde (INV-D6).
+- **Ejecutar con el witness de otro juego.** No: las tres funciones con witness lo reciben por valor con `&mut Duel<G>` de la misma `G`.
+
+**H-14 y los 4 controles de visibilidad:** confirmados arriba. `claim_timeout` y `refund_stalled` no son `public`, así que ningún otro módulo (ni un PTB con un `Collected` vivo) puede componerlas en la transacción de un `collect`.
+
+**`claim_timeout` entre `collect` y `pay`: la matriz de las tres barreras (E-5 del DEV) es correcta y la valoro así:**
+1. **INV-D6 (reloj único por tx):** `collect` exige `ahora < deadline_ms` y `claim_timeout` exige `ahora >= deadline_ms`; no pueden pasar ambas en una transacción. Es una barrera **de verdad** (un test la fija: `test_claim_timeout_between_collect_and_pay_aborts_not_expired`, con `fee_rate = 0` para que `EBrokenStake` no ayude).
+2. **H-14 (visibilidad `entry`):** no se puede componer en un PTB. No se prueba en `test_scenario`, pero la fija la sonda V-15 de TASK-1b y el bytecode (4 `entry` sin `public`).
+3. **`pay` aborta `ENotActive`** si el estado cambió (`test_pay_rejects_timed_out_duel`/`..._expired_duel`): la tx revierte entera.
+
+**La mutación M10 (la pregunta del MID).** Sacar `ENotExpired` de `claim_timeout` hace que la tx igual aborte, ahora con `ENotActive` en `pay`. **Es una barrera válida (defensa en profundidad) y no enmascara ningún hueco:** `ENotExpired` tiene **dos** funciones y las dos están cubiertas. (a) Dentro de la tx de `collect` (la que M10 desactiva), lo que queda detrás es la barrera 3, que sigue protegiendo. (b) **Sola**, sin `collect`, `ENotExpired` es lo que impide reclamar **antes del plazo**: sin él, un `claim_timeout` suelto pagaría el pozo al rival antes de tiempo. Esa función **no la cubre ninguna otra barrera** y la matan `test_claim_timeout_rejects_one_ms_before_deadline`, `..._when_acceptor_pending` y `..._reports_not_expired_before_both_pending`. El hecho de que M10 deje vivo el test (a) con un código de aborto distinto (11 en vez de 14) es el comportamiento esperado: el test (a) fija el **código** de la barrera 1, y por eso falla al quitarla.
+
+**Re-entrada y orden de eventos.** Move no tiene re-entrada; cada función hace asserts, cambio de estado, evento y transferencia en ese orden, sin llamadas a código ajeno entre medias. `DuelTimedOut`/`DuelExpired` se emiten con el valor real retirado.
+
+**Desbordamiento.** `ahora + turn_ms` (`activate`, `record_move`) y `deadline_ms + CLAIM_GRACE_MS` (`refund_stalled`, solo con un pendiente) son sumas `u64` sobre un `Clock` en milisegundos (~1,7e12) más ≤ 1,2e9: no desbordan ni de lejos (`u64` ≈ 1,8e19; haría falta un reloj de otra era). Si lo hicieran, la tx **aborta con error aritmético** antes de mover nada (en `activate` y `record_move` sin efectos; en `refund_stalled` bloquearía ese reembolso, pero es inalcanzable con un reloj real). No hay camino a fondos bloqueados.
+
+## 3. Tests (punto 3)
+
+- **Nombres obligatorios:** los 49 del handoff están (el DEV los comprobó con `grep` de cada nombre y yo cotejé los de T-1 y T-2 y los del reloj en el listado del gate). 84 tests nuevos: partió los casos agrupados en uno por causa (`EPhaseMismatch` con `next` = 1, 3, 0 y con `rem = 1`; `EBadMask` con 0, 4 y al cerrar la fase) porque un `expected_failure` cubre una sola causa.
+- **T-1 y T-2 presentes y bien hechos:**
+  - `test_collect_passes_one_ms_before_deadline` (la mitad "pasa" que faltaba) y `test_collect_rejects_at_deadline`, con literales.
+  - `record_move`: `deadline − 1` pasa, `== deadline` aborta, después aborta.
+  - `claim_timeout`: `deadline − 1` aborta con `to_move` 1 y 2, `== deadline` pasa.
+  - Gracia con el literal `604_800_000` en los dos lados con un pendiente (`606_399_999` aborta, `606_400_000` pasa) y ambos pendientes (`1_599_999` aborta, `1_600_000` pasa).
+  - `test_collect_reports_version_mismatch_before_wrong_house` (Duel de versión anterior **y** otra House en la misma llamada).
+  - `test_create_reports_bet_too_high_before_self_invite` (`MAX_BET + 1` y `opponent = some(creator)`: el bet alto).
+- **Fase simultánea en los dos órdenes:** `..._first_a_keeps_deadline` y `..._first_b_keeps_deadline`, más el cierre con los tres `next` (`..._phase_close_resets_deadline_even_if_closer_moves_next`, con un nuevo plazo completo `base + 1_100_000` aunque el cierre sea a 100 ms del vencimiento) y `..._rejects_second_commit_in_simultaneous_phase` (un jugador no estira la fase).
+- **Partidas completas con el juego de test (`#[test_only]`, helpers `play_turn`/`commit_first`/`commit_last`):** por turnos hasta `collect`+`pay`, fase simultánea → turnos → `claim_timeout` en el borde exacto, y rendición fuera de turno a un ms del plazo.
+- **Conservación exacta:** `assert_timed_out` y `assert_expired` fijan el evento completo, el número y destino de las transferencias efectivas (una sola al ganador; dos exactas a los jugadores guardados con el coin del tercero en 0), `fees_collected` antes/después, `stake == 0`, el estado y `payout + fee == 2 × bet`. Con `fee_rate` 0/250/1000 y pozo impar para los dos sentidos, y `test_refund_stalled_charges_no_fee` con una comisión previa en la House.
+- **Cierres tras estado terminal:** `claim_timeout`, `refund_stalled`, `record_move`, `collect` y `pay` sobre `Resolved`, `TimedOut` y `Expired` abortan `ENotActive`.
+- **Mutaciones (28, todas mueren; yo las leí una a una):** cubren los bordes (`<` → `<=` en `collect` y `record_move`: M1 y M2), la regla de bits en tres variantes (M3-M5), `EPhaseMismatch`, la cota de la máscara, `ENotYourTurn`, `>=` → `>` en `claim_timeout` y `refund_stalled`, pagar a quien llama, ganador invertido, sin comisión, techo en vez de piso, la gracia acortada, sin gracia o con un ms de más, el `assert` de `stake` en `refund_stalled`, el reembolso del aceptante a quien llama, y cada orden de aborts de `claim_timeout`. Es un conjunto serio. La primera corrida tuvo 3 mutantes mal armados (no compilaban o coincidían en 3 lugares) que el DEV corrigió y re-corrió completos: correcto y declarado.
+- **¿Falta alguna mutación importante?** Ninguna que cambie el veredicto. Las que sobreviven hoy, todas 🔵: (1) `ENoClock` antes de `ENotPlayer` en `record_move` (no aislable: un `Active` sin reloj solo vive dentro de `activate_atomic`, donde firma el aceptante, que es jugador); (2) `claim_timeout` con el orden `EBothPending`/`EBrokenStake` ya lo fija `..._reports_both_pending_before_broken_stake` (cubierto); (3) un flujo combinado "primero compromete A, vence el plazo original y reclama": cada pieza está (el plazo intacto en `first_a_keeps_deadline`, el ganador del `to_move = 2` en los tests de reclamo) pero no el encadenado. Sugerencia opcional abajo (🔵 T-3).
+- **Tabla de transiciones (75 filas):** completa para las combinaciones relevantes y **fiel**: cada fila cita un test y el veredicto sale de la línea `[ PASS ]` del gate; el resultado esperado sale del `expected_failure` (o de la descripción de la celda) y no de lo que el test imprima (LIM-4: `debug::print` prohibido). Cubre estados (Pending, Active, Resolved, TimedOut, Expired) × funciones (record_move, claim_timeout, refund_stalled, collect, pay) × tiempo (antes, en el borde, después, después de la gracia) × `to_move` (1, 2, 3, 0 con `turn_ms = 0`). La coherencia filas ↔ tests la comprobé en una muestra de 15 filas (bordes, gracia, `EBothPending`, sandwich y cierres): coincide.
+- **Cobertura 99,48 %:** lo no cubierto es la rama `_ => abort ENotActive` de `active_state`, que la herramienta no acredita en tx que abortan aunque decenas de tests la recorran. Aceptable.
+
+## 4. Desviaciones del DEV y C-13/R-12 (punto 4)
+
+| # | Desviación | Mi valoración |
+|---|---|---|
+| 1 | 5 helpers `#[test_only]` nuevos; `acceptor_for_testing`/`winner_for_testing` ampliadas | **Aceptable.** Todos `#[test_only]` (30/30 verificado en la fuente y 0 `_for_testing` en el bytecode); los 102 tests de TASK-2 no cambian |
+| 2 | 84 tests contra 49 nombres | **Bienvenido** (un test por causa) |
+| 3 | `ENotPlayer`/`ENoClock` no aislables | **Aceptable**: igual que el T-2 de TASK-2; `ENoClock` antes de lo demás sí está fijado |
+| 4 | `ctx: &TxContext` en `record_move`; `&mut` en las dos `entry` | **Correcto** y más estricto |
+| 5 | `claim_timeout` consume el `Collected` por desestructuración, `pay` intacta | **Aceptable** (ver §1 y 🔵 N-2) |
+| 6 | Primera tanda de mutaciones con 3 mal armadas, re-corridas | **Correcto** |
+
+**Incumplimiento de C-13/R-12 (3 heredocs entrecomillados con texto sin `sui`, `suiup` ni acentos graves): lo acepto como declarado; no es 🟠.** Criterio:
+- La regla de C-13 y el §8 de TASK-2b del handoff v1.2.5 dicen "texto que contenga `sui`/`suiup`/acentos graves" y "todo script, borrador o reporte **con comandos `sui`**". Los tres textos (un apéndice de tres constructores `#[test_only]` en `duel.move`, una lista de nombres de tests y un parche de Python de tres reemplazos sobre un borrador de tests) **no contenían** ninguno de esos tres elementos, así que a la letra **cumplen**. Además el delimitador entrecomillado no expande nada, `~/.sui` quedó idéntico en las tres tomas y el orquestador lo confirmó; no hubo ejecución accidental de `sui`.
+- **Pero la ambigüedad existe y ya costó dos veces** (TASK-2 la declaró con un texto que sí contenía `sui`; TASK-2b con textos que no): la prueba de que "el texto no contiene `sui`" es más difícil de auditar que "no se usó un heredoc", y un apéndice de código Move escrito con heredoc salta la validación de la herramienta de edición (que obliga a leer antes y detecta un texto repetido).
+- **Ajuste propuesto a la regla (🟡 P-2):** C-13 y el §8 de 2b pasan a "**todo texto que se escribe en un archivo del repo, del scratchpad o de la documentación, con o sin `sui`, se escribe con la herramienta de escribir/editar archivos; no se usa heredoc (ni entrecomillado), `printf`, `echo` ni `sed -i` para ello**". Los resultados de comandos se pueden anexar con `cat archivo >> reporte` (sin expansión: es lo que hizo el DEV y es seguro). Hunk abajo.
+- Docker: `docker ps -aq`/`images -aq` antes (6/17) y después (5/17), y la diferencia atribuida (el efímero ajeno terminó): **correcto**, es lo que pedía v1.2.5.
+
+## 5. Comentarios (punto 5)
+
+Conforme. `///` en `DuelTurn`, `DuelTimedOut`, `DuelExpired`, `record_move` (regla de bits y el POR QUÉ de leer `ctx.sender()`), `claim_timeout` (por qué cualquiera la manda, por qué paga a la víctima, por qué es `entry` sin `public`, por qué lee la House con versión y que `refund_stalled` es la salida que ningún corte bloquea), `refund_stalled` (por qué no verifica `stake == 2 × bet`, que no la usa quien llama para escapar antes de la gracia). Internos: el orden de aborts y por qué `ENotActive` va primero, el reloj disjunto (`collect` vs `claim_timeout`), por qué `claim_timeout` desestructura el `Collected` y no lo pasa a `pay`, y el truco `3 ^ bit` por la falta de NOT en Move. Tres comentarios quedaron **desactualizados** por lo nuevo (🔵 N-4): el doc del módulo dice que solo "los caminos de reembolso" no llevan witness (`claim_timeout` tampoco); el doc de `Collected` dice que solo `pay` lo consume (también `claim_timeout`, por desestructuración); y el doc de `house_id` dice que solo `activate`, `activate_atomic` y `collect` la exigen (también `claim_timeout`).
+
+## 6. Hallazgos
+
+Ninguno 🔴 ni 🟠.
+
+- 🟡 **P-2 (regla R-12/C-13).** Aclarar la regla a "todo texto, con o sin `sui`, con la herramienta de archivos" (ver §4 y el hunk).
+- 🟡 **G-1 (siguiente paso de proceso).** Esta revisión no cambia nada del código, pero antes de TASK-3 conviene **commitear TASK-2b** y fijar el SHA, porque TASK-3 (coinflip) depende de `duel` y su DEV va a leer `duel.move` como fuente de verdad (ver §8).
+- 🔵 **N-1 (tests combinados).** Un flujo "primero compromete A en la fase simultánea, el plazo original vence y reclama el rival" (`record_move` → `claim_timeout` en el borde): hoy las piezas están por separado. Opcional, en el próximo toque del archivo de tests.
+- 🔵 **N-2 (duplicación `claim_timeout`/`pay`).** `claim_timeout` repite cuatro líneas de `pay` (retiro, estado, evento, transferencia). **Mi criterio: no extraer una función común ahora.** `pay` es código con fondos ya revisado y con 100 % de cobertura, y una extracción obliga a repasar `pay`, su orden de aborts y sus tests sin que aporte seguridad; el riesgo real es el de deriva futura (una corrección en una y no en la otra). Mitigación sin tocar el cuerpo: un comentario cruzado "mantener en sintonía con `pay`" en el próximo toque de `duel.move`.
+- 🔵 **N-3 (endurecimiento opcional de `refund_stalled`).** `stake.split(duel.bet)` aborta si `stake < bet`, que es inalcanzable (ver §1). Si se quisiera que `refund_stalled` **nunca** pueda abortar por el estado del `stake`, bastaría `min(bet, stake.value())`. No lo pido: cambiar el cuerpo de una `entry` es compatible en un upgrade futuro y no hay un camino real a ese estado.
+- 🔵 **N-4 (tres comentarios desactualizados).** Ver §5; se corrigen en el próximo toque de `duel.move` (no ahora: no se reabre un gate verde por un comentario).
+- 🔵 **N-5 (el tamaño de `tests`).** `duel_tests.move` pasa de 3400 líneas. No es un problema para el gate; si TASK-3 suma muchos helpers, considerar partirlo en un archivo de reloj aparte (decisión de estructura, C-9).
+- 🔵 **N-6 (recordatorio de TASK-5).** La sonda V-15 (H-14) se repite en el ensayo de localnet de TASK-5 contra el `claim_timeout` real (con un coinflip de producción no hay `Active` persistente: se cubre con el `testgame` del sandbox).
+
+## 7. Qué commitear (lista exacta)
+
+1. `contracts/sources/duel.move` y `contracts/tests/duel_tests.move`, sin editar. Mensaje propuesto (el del DEV, en inglés y sin palabras de cierre con número): `contracts: add the per-move clock to the duel base: record_move, claim_timeout and refund_stalled (#73)`.
+2. En `documents/REPORTES_MULTIGAME.md`: el reporte del DEV (`.../scratchpad/REPORTE_MULTIGAME_TASK-2b.txt`, leído entero y con el §R-6 corrido) y esta revisión.
+3. `documents/STATUS.md`: la fila de TASK-2b (snippet abajo).
+4. `documents/HANDOFF_MULTIGAME.md` **v1.2.6** con el único ajuste del hunk de abajo (P-2), si el orquestador lo acepta; es un toque pequeño y no afecta a TASK-3.
+5. Aparte, antes del merge: el `grep` de cuerpos de commit por `Closes #N` (regla de memoria) y la revisión de integración publicada en el PR.
+
+**Snippet para STATUS:** "contracts @ `feature/issue-73-multigame` (TASK-2b de #73), CLI `1.84.0-9dc25070cf2e`, 2026-11-20 | `battleship::duel` con reloj por jugada: `record_move` (`public(package)`), `claim_timeout` y `refund_stalled` (`entry` sin `public`), eventos `DuelTurn`/`DuelTimedOut`/`DuelExpired`, `CLAIM_GRACE_MS` = 7 días, 26 abort codes (0-25) | build y `--lint` con `--warnings-are-errors` en 0 | **269 tests PASS (83 + 102 + 84)** | `house.move`, `game.move` y `Move.lock` sin diff | bytecode de producción: 0 `_for_testing`, 4 `entry` sin `public` (cancel, reject, claim_timeout, refund_stalled), el resto `public(friend)` | MID: PASA (28 mutaciones, todas muertas, con T-1 en `collect` y `record_move` y la regla de bits; tabla de transiciones de 75 filas con veredicto de la corrida; matriz de las tres barreras de `claim_timeout` entre `collect` y `pay`) | cobertura `duel` 99,48 %."
+
+## 8. Lo que falta para la compuerta de pre-upgrade del MAYOR (§G)
+
+De los 14 puntos de §G, **ya cubierto con TASK-1a, 1b, 2 y 2b**:
+- (3) la **tabla de transiciones generada desde los tests** y la matriz test ↔ INV-D1..D7 (TASK-2b, E-4), y los gates con su conteo (269, build y `--lint`);
+- (4) las evidencias V-1..V-16 de TASK-1a y TASK-1b con mensaje esperado y control positivo (REPORTES, con mis revisiones);
+- (10) las revisiones del MID de TASK-1a, 1b, 2 y 2b;
+- (13) las sondas de compilación de `Collected` contra el `duel` real (TASK-2);
+- (2) en gran parte: los artefactos congelados se pueden sacar **ya** de `duel.move` (`Duel` con su orden de campos, las 6 variantes de `DuelState`, `Collected`, los 7 eventos, la tabla de controles y los 26 abort codes con sus números); falta sumar los de `coinflip`.
+
+**Falta:**
+- **TASK-3** (coinflip sobre `duel`): el diff de contrato completo y el grep de R.7 (puntos 2 y 12), con las medidas de `gasUsed` por resultado.
+- **TASK-4** (script de upgrade, esquema y runbook): runbook final y salida del dry run de localnet (punto 7), con la nota M-4 (`EUC01009` = STOP, nunca `--skip-verify-compatibility`) y la regla de `typeOrigins` por (módulo, nombre).
+- **TASK-5** (ensayo de punta a punta en la localnet): `SMOKE_MULTIGAME.md` en PASA en la parte localnet (punto 5: partidas viejas tras el upgrade, coinflip nuevo, reclamo por tiempo y reembolso con el sandbox `testgame`, comisiones en la misma House), `upgrades`/`typeOrigins` reales y `check` en verde (punto 6), y la evidencia de que el sandbox no tocó el árbol (punto 11, con el grep sin `-i`).
+- **TASK-7a, 7b y 8** (la app y las docs): gates de app y fixtures (punto 8); en TASK-8, `contracts/README.md` con la tabla de abort codes (26) y de eventos (7), el modelo de confianza con la restricción (d), `max_bet < 2^63` (N-1) y la regla del grep de CI (N-4).
+- **Decisiones y smoke de testnet:** la entrada de `DECISIONES.md` que referencia D-20261119-05 (punto 9) y la parte testnet de `SMOKE_MULTIGAME.md` que redacta el MID (punto 14).
+- **CI en verde sobre el head** y `master` integrado (punto 1) al momento de entregar la compuerta.
+
+## 9. Hunk propuesto para el handoff (P-2, si el orquestador lo acepta; v1.2.6)
+
+- **C-13** (línea de "Cómo se escriben los reportes"): sustituir "se escriben **solo con las herramientas de escribir/editar archivos** del harness. **Nunca** con un heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo` para texto que contenga `sui`, `suiup` o acentos graves" por "**todo texto que se escribe en un archivo (reportes, borradores, scripts, código Move o TypeScript, documentación), con o sin `sui`, se escribe solo con las herramientas de escribir/editar archivos del harness**: **nunca** con un heredoc (ni entrecomillado), `sed -i`, `printf` ni `echo`. Los resultados de un comando se anexan a un reporte con `cat <archivo-generado> >> <reporte>` (sin expansión)".
+- **TASK-2b §8 (P-1)** y los §8 de los tasks siguientes: la misma frase ("con o sin `sui`").
+
+## 10. Siguiente paso
+Autorizo **TASK-3** (coinflip sobre `duel`), que depende de TASK-2 y TASK-2b en PASA. El DEV de TASK-3 recibe: `duel.move` commiteado como fuente de verdad (los 26 códigos, `record_move`/`claim_timeout`/`refund_stalled` no se tocan), la regla de R.7 (el coinflip usa `activate_atomic` y `pay`, no el reloj), y la regla P-2 (todo texto con la herramienta de archivos).
+
+## §R-6 sobre esta revisión
+Greps con `/usr/bin/grep` sobre este archivo: hex de 40-64 caracteres, `0x` + 8 hex, claves y rutas personales, abreviaturas con puntos suspensivos: el resultado va en el mensaje de entrega. No incluye direcciones de cuenta ni hashes completos; las direcciones de prueba de los tests no se citan.
+
