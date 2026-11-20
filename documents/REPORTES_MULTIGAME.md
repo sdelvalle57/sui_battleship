@@ -291,3 +291,565 @@ PASA CON CAMBIOS
 ## §R-6 sobre esta revisión
 Greps con `/usr/bin/grep` sobre este archivo: hex de 40-64, `0x` + 8 hex, claves/rutas y abreviaturas con puntos suspensivos. Resultado en el mensaje de entrega; esta revisión no incluye direcciones de cuenta (ni completas ni abreviadas).
 
+
+
+---
+
+## 3. TASK-1b (reporte del DEV)
+
+> DEV, TASK-1b: sondas de tipos, reloj, witness y hot potato en la localnet aislada (puerto 19000).
+
+~~~~text
+## Task completado: HANDOFF_MULTIGAME — TASK-1b
+
+Convenciones: <repo> = worktree de la branch feature/issue-73-multigame; <HOME real> = home del usuario; <SMOKE_DIR> = carpeta de la corrida dentro del scratchpad (ya borrada); <scratchpad> = scratchpad de la sesion. Los comandos van tal como se corrieron salvo que las rutas absolutas literales se reemplazaron por esos placeholders y que las variables ($PKG1.., $HOUSE, $TA1..) salen de <SMOKE_DIR>/ids.env. Direcciones de cuentas de la genesis: ninguna en este reporte (las salidas que las traian se recortaron o no se pegaron; las ejecuciones de la CLI guardaron la salida completa en archivos de <SMOKE_DIR>, ya borrados). Todo comando de la CLI llevo delante el guard de entrada n por stdin (printf 'n\n' |), via suic/suic_v1 o directo. Ningun STOP del handoff. Ninguna ejecucion accidental de la CLI.
+
+Leyenda de IDs de la corrida (paquete de ensayo; son IDs publicos de una localnet desechable, no cuentas):
+- PKG1 (v1, original-id) = 0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509
+- PKG2 (v2) = 0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b
+- PKG3 (v3) = 0x5115ef518f1a01a2eba1f6ff293b9f63965679e0b7c7fa447525a3a27d65abc1
+- PKG4 (v4) = 0x8703046f017e66cf810d5054223b34ada4196310078a8d5a1f4f654b4b5fbd8e
+- PKG5 (v5) = 0xe755f94df695c89a68fbd1e6a1a6bee920ef659d0b316dba3f2c7424c99ad4f1
+- HOUSE = 0x15f7714f9ca4378ac078523acf7439729604b230a316eacbe0968710820b7bc2 ; UpgradeCap = 0x8e2c28d5336ebb3beb6d50088a6cabe55acc4889ccf604044bb7a7e6da893a03
+En las salidas pegadas, los IDs de paquete se reemplazaron por <PKG1>..<PKG5> (misma leyenda) para poder leerlas.
+
+### Branch (con SHA corto del HEAD)
+feature/issue-73-multigame @ b1461cc (worktree <repo>). Sin commits ni git add (el orquestador commitea).
+
+### Baseline medido (solo TASK-1a) y árbol de partida
+- git status al inicio: limpio; rama feature/issue-73-multigame; HEAD b1461cc. git merge-base --is-ancestor 8cc35ab HEAD -> estado 0 (PRE-1 integrado). git diff 26f2676..HEAD --stat -- contracts/sources -> vacio.
+- Baseline: el medido en TASK-1a (revision del MID: coincide fila por fila con §0). El arbol de contracts y app NO cambio desde TASK-1a: git diff e13856c..HEAD --stat -- contracts/sources contracts/tests contracts/Move.lock contracts/Move.toml contracts/Published.toml contracts/deployments app contracts/scripts/publish.mjs contracts/scripts/deployment.mjs package-lock.json -> vacio (lo unico que cambio entre e13856c y b1461cc son 5 fixtures de scripts/fixtures, contracts/README.md y documentos). Por eso NO se volvieron a correr los gates completos; baseline vigente = el de 1a (0 warnings / 0 lints / 83 tests PASS; node --test 104; check 1 despliegue; app 1246 tests en 66 archivos; dist 917.80 kB; gas de publicar 47246000 MIST; Docker 5/17). Mediciones parciales de esta sesion que lo confirman: el sui move test del arbol sandbox (HEAD + modulos de ensayo) dio "Total tests: 86; passed: 86" = 83 del baseline (26 house + 57 game) + 3 de ensayo (ver V-13), con --warnings-are-errors; el build y el --lint del mismo arbol dieron exit 0; la publicacion del v1 con la 1.83.0 costo 47246000 MIST, igual que el baseline.
+- CLI de la maquina: printf 'n\n' | sui --version -> sui 1.84.0-9dc25070cf2e. Node: export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && node --version -> v26.13.0.
+
+### Archivos modificados/creados (git diff --stat)
+git status --porcelain --untracked-files=all -> vacio; git diff --stat -> vacio. Ningun archivo del worktree se toco (ni siquiera node_modules, que solo se leyo). git diff --exit-code -- contracts/Move.lock contracts/Published.toml contracts/sources contracts/tests contracts/deployments app .github -> exit 0. Move.lock: ninguna corrida lo modifico (en <SMOKE_DIR> los Move.lock de v2, v3, v4a, v4b, v4c, v5 y sbx son iguales al de HEAD; los de v1 y v1c, al de 26f2676).
+Fixture candidata (NO esta en el worktree): <scratchpad>/fixtures_1b_candidatas/localnet-type-origins-upgraded.json (5920 bytes; respuesta real de LedgerService.GetObject con read_mask package de un paquete con 4 upgrades: linkage y type_origins, sin bytecode, sin cuentas; _meta.sandbox = true). Util como forma de referencia para V-6 de TASK-4. El orquestador decide si la copia a contracts/scripts/fixtures/ (no la copie yo para no escribir en el worktree).
+
+### Qué se implementó (3 líneas)
+Ensayo en una localnet aislada nueva (puerto 19000, Receta P + Receta V1): v1 = arbol 26f2676 publicado con el 1.83.0 verificado; upgrades sandbox v2 y v3 (Receta U) con modulos de ensayo (probe con tipo/evento/abort genericos, g_two/g_three, clock_probe, stand-in sb_thing/sb_game) y v4/v5 para V-2 additive. Sondas de V-3, V-12, V-4, V-5, V-13, V-14 (a, b, c), V-15 y V-2 additive con salida pegada; cero archivos de produccion; sin fixtures en el worktree (una candidata en el scratchpad).
+
+### Tests y gates (output pegado, por área tocada)
+- Agregados/modificados en el repo: ninguno (las sondas son las evidencias V-n). Tests del sandbox (solo en <SMOKE_DIR>, descartados): battleship::clock_probe_tests, 3 tests (ver V-13).
+- Gates del repo: no se corrieron (arbol sin cambios; baseline de 1a). Gate parcial sobre el arbol sandbox (v2 = HEAD + modulos de ensayo), con la CLI 1.84.0 y el prefijo aislado:
+  . <SMOKE_DIR>/env.sh && { . <SMOKE_DIR>/ids.env 2>/dev/null || true; } && smoke_guard && cd <SMOKE_DIR>/v2/contracts && printf 'n\n' | "$SUI" move build -e testnet --warnings-are-errors  -> exit 0 (INCLUDING DEPENDENCY MoveStdlib / INCLUDING DEPENDENCY Sui / BUILDING battleship)
+  ... "$SUI" move build -e testnet --lint --warnings-are-errors -> exit 0
+  ... "$SUI" move test -e testnet --warnings-are-errors -> Test result: OK. Total tests: 86; passed: 86; failed: 0 (0 coincidencias de "warning" en la salida)
+- Scripts / App: no aplica (no se tocaron). Tablas de contrato y app/src/sui: no aplica. git diff --exit-code de house.move, game.move y Move.lock: exit 0.
+
+### Verificación manual (localnet aislada; digests de tx)
+
+Entorno de la corrida (Receta P + Receta V1; mismo procedimiento que TASK-1a):
+- ss -ltn | grep ':9000 ' -> 2 lineas LISTEN (0.0.0.0:9000 y [::]:9000): ocupado por un servicio de otro proyecto del host, NO se toco (ni una llamada contra el). ss -ltn | grep -c ':19000 ' -> 0 (libre).
+- <SMOKE_DIR>/env.sh escrito con la herramienta de escribir archivos: RPC_URL=http://127.0.0.1:19000, SUI (1.84.0), SUI_V1 (binario 1.83.0 verificado, ruta literal), smoke_guard_pre, smoke_guard (RPC exacto), suic, act_as, suic_v1, smoke_guard_v1. ids.env se genero con jq (solo ADMIN y USER2 = direcciones de la genesis, sin imprimirlas).
+- Genesis sin ningun suic: . <SMOKE_DIR>/env.sh && [ ! -e "$SUI_CONFIG_DIR/client.yaml" ] && printf 'n\n' | "$SUI" genesis --working-dir "$SUI_CONFIG_DIR" > "$SMOKE_DIR/genesis.log" 2>&1; echo "exit=$?" -> exit=0. Guarda de ~/.sui despues de la genesis: igual a la linea base.
+- Arranque (comando en segundo plano del harness): . <SMOKE_DIR>/env.sh && smoke_guard_pre && echo $$ > "$SMOKE_DIR/sui.pid" && exec "$SUI" start --network.config "$SUI_CONFIG_DIR" --fullnode-rpc-port 19000 > "$SMOKE_DIR/sui-start.log" 2>&1 . PID 2656790 con linea de comando de la CLI 1.84.0 y --fullnode-rpc-port 19000; el puerto 19000 paso a LISTEN; sui-start.log quedo de 0 lineas.
+- Solo despues: . <SMOKE_DIR>/env.sh && smoke_guard && echo GUARD1_OK && suic chain-identifier && smoke_guard_v1 && echo GUARD_V1_OK; printf 'n\n' | "$SUI_V1" --version; printf 'n\n' | "$SUI" --version ->
+  GUARD1_OK / Base58: DVSBKixn6WyJCZbs5eEfeXrBwuacxsh1k9PEMTb53JMb / Hex: b994f97f / GUARD_V1_OK / sui 1.83.0-16d2dc1e05ed / sui 1.84.0-9dc25070cf2e
+  El cliente 1.83.0 habla sin problemas con la red levantada por la 1.84.0 (no hay STOP de la Receta V1 paso 4). Protocolo de la localnet: getProtocolConfig del SDK -> 142.
+
+#### V-16 (reverificacion del binario 1.83.0, Receta V1): PASA
+Valores esperados (git show 88dd53b:.github/workflows/ci.yml, lineas 24-25): SUI_TGZ_SHA256 = e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8 ; SUI_BIN_SHA256 = 29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa .
+Comandos (sin ejecutar nada del binario; <SMOKE_DIR>/dl183 y <SMOKE_DIR>/bin183 nuevos y vacios):
+  cp <HOME real>/.cache/suiup/releases/sui-testnet-v1.83.0-ubuntu-x86_64.tgz <SMOKE_DIR>/dl183/ && cd <SMOKE_DIR>/dl183 && sha256sum *.tgz
+    -> e51168051bca14f1500de9a81520c927dfd583092628bc36582d01f9d2c1d7d8  sui-testnet-v1.83.0-ubuntu-x86_64.tgz   (= SUI_TGZ_SHA256: COINCIDE)
+  tar -tzf sui-testnet-v1.83.0-ubuntu-x86_64.tgz | head -5 -> ./  ./sui-node  ./move-analyzer  ./sui-debug  ./sui-bridge  (el tgz trae ./sui en la raiz)
+  cd <SMOKE_DIR>/bin183 && tar -xzf ../dl183/sui-testnet-v1.83.0-ubuntu-x86_64.tgz ./sui && sha256sum sui <HOME real>/.local/share/suiup/binaries/testnet/sui-v1.83.0
+    -> 29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa  sui  (= SUI_BIN_SHA256: COINCIDE)
+    -> 29e1beb96434d0d2e00642929dbab1d8813039b80c3eb514bbae2751fb2648fa  <HOME real>/.local/share/suiup/binaries/testnet/sui-v1.83.0  (la copia de suiup es identica)
+Constancia: el binario 1.83.0 NO se ejecuto antes de esa verificacion; su primera ejecucion fue smoke_guard_v1 (con el prefijo aislado, con la red 1.84.0 ya arriba y los dos hashes verificados). Ninguna llamada al 1.83.0 sin el prefijo. suiup remove/cleanup: no se usaron. printf 'n\n' | "$SUI_V1" --version -> sui 1.83.0-16d2dc1e05ed (esperada).
+
+#### v1 (paquete de testnet, binario 1.83.0): PASA
+git archive 26f2676 contracts | tar -x -C <SMOKE_DIR>/v1  (arbol del sourceCommit con su Move.lock)
+. <SMOKE_DIR>/env.sh && { . <SMOKE_DIR>/ids.env 2>/dev/null || true; } && smoke_guard && smoke_guard_v1 && cd <repo> && git archive 26f2676 contracts | tar -x -C "$SMOKE_DIR/v1" && act_as "$ADMIN" && cd "$SMOKE_DIR/v1/contracts" && suic_v1 --json test-publish --pubfile-path "$SMOKE_DIR/Pub.localnet.toml" --build-env testnet > "$SMOKE_DIR/out/v1-publish.json" 2> "$SMOKE_DIR/out/v1-publish.err"; echo "exit=$?"
+  -> exit=0; stderr: INCLUDING DEPENDENCY MoveStdlib / INCLUDING DEPENDENCY Sui / BUILDING battleship
+  jq: status success; digest R1zpv3L8Dabgvfp2LPi8e5KZ2WdeypP5AdZHV9H9r9o; gasUsed computationCost 1000000, storageCost 46246000, storageRebate 0 (= 47246000 MIST, igual al baseline); comandos Publish, TransferObjects; creados: House, Publisher, HouseCap, UpgradeCap; published packageId = PKG1.
+  Pubfile: build-env "testnet", chain-id "b994f97f", [[published]] source.local = <SMOKE_DIR>/v1/contracts, published-at = original-id = PKG1, version = 1, toolchain-version = "1.83.0", upgrade-capability = el UpgradeCap.
+
+#### Upgrades sandbox v2 y v3 (Receta U), CLI 1.84.0
+Arboles: git archive HEAD contracts | tar -x -C <SMOKE_DIR>/v2 mas, en <SMOKE_DIR>/v2/contracts/sources, los modulos de ensayo (sin tocar house.move ni game.move; diff -q de house.move y game.move contra <repo> = iguales; ningun modulo nuevo ni existente tiene init):
+- probe: Probe<phantom G> has key, ProbeEvent<phantom G> has copy, drop, ProbeWitness has drop, const EProbe = 77, entry make<G>(ctx) (crea y comparte un Probe<G> y emite ProbeEvent<G>), entry touch<G>(&mut Probe<G>), entry fail() (abort EProbe).
+- g_two: public struct GTwo has drop {} (tipo G introducido en v2). En v3 se agrega g_three con GThree has drop (tipo G introducido en OTRO upgrade).
+- clock_probe: eventos BothRead{via_borrow, via_object}, BorrowRead{ms}, ObjectRead{ms}; entry read_both(&Clock), read_borrow(), read_object(&Clock).
+- sb_thing y sb_game (stand-in de la base; ver V-14/V-15): Thing<phantom G> has key {id, touches}, Collected {thing_id} SIN abilities, public(package) create/collect/pay con witness G: drop, entry cancel<G>(&mut Thing<G>); sb_game con witnesses SbA y SbB, entry new_a/new_b y public collect_a/pay_a/collect_b/pay_b (envoltorios solo para poder probar V-15 desde un PTB).
+v3 = git archive HEAD contracts + los mismos modulos + g_three. Pubfiles segun la Receta U: Pub.v2.toml = copia de Pub.localnet.toml con source.local = <SMOKE_DIR>/v2/contracts (diff contra el original: solo esa linea); Pub.v3.toml = copia del Pub.v2.toml ya actualizado, con source.local = <SMOKE_DIR>/v3/contracts. Copias hechas con la herramienta de escribir archivos.
+v2: . <SMOKE_DIR>/env.sh && { . <SMOKE_DIR>/ids.env 2>/dev/null || true; } && smoke_guard && act_as "$ADMIN" && cd "$SMOKE_DIR/v2/contracts" && suic --json test-upgrade --pubfile-path "$SMOKE_DIR/Pub.v2.toml" --build-env testnet [--dry-run primero]
+  dry run: status success; comandos MoveCall, Upgrade, MoveCall (3, un solo PTB); real: exit=0, status success, digest AczRPYqQRC2aGnvwKUVtKuA65QdZLJcpWjYsSpRoKzuv, gas computo 1000000 / storage 62593600 / rebate 2621738; published PKG2, version 2, modulos clock_probe,g_two,game,house,probe,sb_game,sb_thing. Pubfile: published-at -> PKG2, version 1 -> 2, toolchain-version "1.83.0" -> "1.84.0"; el resto igual.
+v3: igual con --pubfile-path "$SMOKE_DIR/Pub.v3.toml" desde <SMOKE_DIR>/v3/contracts: exit=0, digest 4Upe5Pmy9yAt4RwRb9iq2A1WQcA2KWVqHZWDdwAv7jMw, gas 1000000 / 63710800 / 2621738; published PKG3, version 3, modulos clock_probe,g_three,g_two,game,house,probe,sb_game,sb_thing. Mensaje de la CLI: "[Note]: Dependency sources are no longer verified automatically ... --verify-deps".
+
+#### V-3 — prefijo de eventos y objetos genericos de un upgrade = ID de definicion (typeOrigins): PASA
+Llamadas (script <SMOKE_DIR>/probes/ptb.sh = suic ptb "$@" --gas-budget 200000000 dentro del prefijo aislado; imprime digest y estado; la salida completa, con la cuenta de la genesis, no se pega):
+  c1: probes/ptb.sh c1 --move-call "$PKG3::probe::make<$PKG2::g_two::GTwo>"   -> digest 2tMVZgKKcrUDKzHoc4VFFEAqYj12ifB6EV6EtjXXXCUq, Success
+  c2: ... --move-call "$PKG3::probe::make<$PKG3::g_two::GTwo>"                -> digest 9FgJN3tPcnf5FyDU327CxpjymepvHVEi1kG8dMZrWcuj, Success  (ver V-12)
+  c3: ... --move-call "$PKG2::probe::make<$PKG2::g_two::GTwo>"                -> digest 6jM3A3E4PZpeo3jMeqrHyPDWHmbnemLknEySYJHDc1sR, Success
+  c4: ... --move-call "$PKG3::probe::make<$PKG3::g_three::GThree>"            -> digest AxSBN5YzhTNQkv8f3cobxuBPFju9Uwo4P8nQkYBosovv, Success
+Sonda de lectura con SuiGrpcClient (Node 26, script v3_origins.mjs, importa el SDK por ruta absoluta del node_modules del worktree; exige RPC_URL=http://127.0.0.1:19000, nada mas): export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && RPC_URL=http://127.0.0.1:19000 node v3_origins.mjs c1 c2 c3 c4 c5 c6 c7. La tabla de origenes sale de client.ledgerService.getObject({ objectId, readMask: { paths: ['package'] } }).response.object.package.typeOrigins; los tipos, de client.getTransaction({ digest, include: { effects: true, events: true, objectTypes: true } }). Salida:
+== typeOrigins del paquete (LedgerService.GetObject, readMask=package), por storage id ==
+-- PKG3: 26 origenes; los de los modulos del ensayo:
+   clock_probe::BothRead -> <PKG2> | clock_probe::BorrowRead -> <PKG2> | clock_probe::ObjectRead -> <PKG2> | g_three::GThree -> <PKG3> | g_two::GTwo -> <PKG2>
+   probe::Probe -> <PKG2> | probe::ProbeEvent -> <PKG2> | probe::ProbeWitness -> <PKG2> | sb_thing::Thing -> <PKG2> | sb_thing::Collected -> <PKG2> | sb_thing::ThingCancelled -> <PKG2> | sb_game::SbA -> <PKG2> | sb_game::SbB -> <PKG2>
+   (el de PKG2 trae 25 origenes: los mismos sin g_three; house::* y game::* -> <PKG1> en ambos)
+== transacciones ==
+-- [c1] ...: Transaction status=success
+   event.eventType = <PKG2>::probe::ProbeEvent<<PKG2>::g_two::GTwo>   event.packageId = <PKG3>  event.module = probe
+   object type = <PKG2>::probe::Probe<<PKG2>::g_two::GTwo>
+-- [c2] ...: status=success   event.eventType = <PKG2>::probe::ProbeEvent<<PKG2>::g_two::GTwo>   event.packageId = <PKG3>   object type = <PKG2>::probe::Probe<<PKG2>::g_two::GTwo>
+-- [c3] ...: status=success   event.eventType = <PKG2>::probe::ProbeEvent<<PKG2>::g_two::GTwo>   event.packageId = <PKG2>   object type = <PKG2>::probe::Probe<<PKG2>::g_two::GTwo>
+-- [c4] ...: status=success   event.eventType = <PKG2>::probe::ProbeEvent<<PKG3>::g_three::GThree>   event.packageId = <PKG3>   object type = <PKG2>::probe::Probe<<PKG3>::g_three::GThree>
+Comprobacion automatica (script v3_check.mjs, con client.getObject para los objetos y ListEvents con filtro eventType = <PKG2>::probe::ProbeEvent para los eventos; tipos y argumentos de tipo contra typeOrigins del ultimo paquete, PKG5):
+getObject(PROBE_G2).type: <PKG2>::probe::Probe<<PKG2>::g_two::GTwo>
+   <PKG2>::probe::Probe typeOrigins=<PKG2> COINCIDE
+   <PKG2>::g_two::GTwo typeOrigins=<PKG2> COINCIDE
+getObject(PROBE_G3).type: <PKG2>::probe::Probe<<PKG3>::g_three::GThree>
+   <PKG2>::probe::Probe typeOrigins=<PKG2> COINCIDE
+   <PKG3>::g_three::GThree typeOrigins=<PKG3> COINCIDE
+listEvents.event_type: <PKG2>::probe::ProbeEvent<<PKG2>::g_two::GTwo>        (2 lineas, ambas COINCIDE)
+listEvents.event_type: <PKG2>::probe::ProbeEvent<<PKG3>::g_three::GThree>    (2 lineas, ambas COINCIDE)
+RESULTADO V-3: todos los prefijos coinciden con typeOrigins
+Datos adicionales: (i) el prefijo del tipo es siempre el ID de DEFINICION (el del upgrade que introdujo el modulo: PKG2 para probe y g_two, PKG3 para g_three), aunque la llamada se haga por el paquete PKG3 o PKG2 y aunque el tipo se haya escrito con otro ID en el typeArgument (c2 escribio <PKG3>::g_two::GTwo y el tipo resultante es <PKG2>::g_two::GTwo); (ii) event.packageId (campo del evento) es el ID de almacenamiento del paquete cuya funcion emitio (PKG3 si se llamo por PKG3, PKG2 si por PKG2), NO el de definicion; (iii) client.movePackageService.getPackage({ packageId }) devuelve storageId, originalId y version, pero typeOrigins VACIO (length 0) y linkage vacio (hallazgo H-f).
+
+#### V-12 — typeArguments de una entry generica con ID de almacenamiento vs de definicion: NO PASA la hipotesis ("con el de almacenamiento falla"); con el de definicion PASA siempre
+Matriz (probe::make/touch son entry genericas del modulo introducido en v2; G de modulos introducidos en v2 (g_two) y en v3 (g_three); cada fila es una transaccion real; "ok" = Success; los fallos son transacciones ejecutadas con status failure, gas cobrado):
+  c1  PKG3::probe::make<PKG2::g_two::GTwo>   (G definido en v2, ID de definicion)                  ok
+  c2  PKG3::probe::make<PKG3::g_two::GTwo>   (ID de almacenamiento del ultimo upgrade, v3)         ok   <- la hipotesis esperaba fallo
+  c3  PKG2::probe::make<PKG2::g_two::GTwo>   (target y tipo con el ID de v2)                       ok
+  c4  PKG3::probe::make<PKG3::g_three::GThree> (G definido en v3, de OTRO upgrade que probe)       ok
+  c5  PKG3::probe::make<PKG2::g_three::GThree> (ID de una version anterior a la que lo define)     FALLA: digest 6Kj1G9CB1Gx4ZnZWMdnbWVKYyv1a5U2S4s5aed5xKrz4: TypeArgumentError { argument_idx: 0, kind: TypeNotFound } in command 0
+  c6  PKG1::probe::make<PKG2::g_two::GTwo>   (target con el ID original: el modulo no existe alli)  la CLI no lo envia: "Encountered error when building PTB: Error when processing PTB"
+  c7  PKG3::probe::make<PKG1::g_two::GTwo>   (ID original para un tipo de v2)                      FALLA: digest J97ktYyvnL3T12ohKDxmTeg3b7w7io1iAgwqQDLu9oQG: TypeNotFound
+  t1..t4 touch<G> sobre los Probe ya creados (PROBE_G2 y PROBE_G3):
+  t1 PKG3::probe::touch<PKG2::g_two::GTwo>  ok (FdGL2iDRePW9s4EvBPZKpkHbVdjce5gyCFwUVHDSXpzC); t2 PKG3::probe::touch<PKG3::g_two::GTwo> ok (7q59jXz65spmNob7kLCTo6Pks3x7STXcDVSWhbbV3CXj); t3 PKG2::probe::touch<PKG3::g_two::GTwo> ok (E7wyPQQC7v8ANAvosvbCizuxiDQMzgQAA1xRxVpcadpi); t4 PKG3::probe::touch<PKG3::g_three::GThree> ok (5FRfuqwENJTPj8v35eqUYH7sxdnPWu8qfgoLwfPrSgv9); t5 PKG3::probe::touch<PKG2::g_three::GThree> FALLA TypeNotFound (F4xge4YCdHzFC4qmA6J8WzJfNQPRQkJuq2up2A6erGRL); t6 PKG3::probe::touch<PKG1::g_two::GTwo> FALLA TypeNotFound (FF8164oBvLs72vmhzbyLFWadse9EVcyW2xXtZ5QxTTRE); t7 PKG1::probe::touch<...> no se envia (modulo inexistente en el original).
+  Repetido tras los upgrades v4 y v5 (G = g_three, definido en v3): x1 PKG5::probe::make<PKG5::g_three::GThree> ok; x2 ...<PKG4::g_three::GThree> ok; x3 ...<PKG3::g_three::GThree> (definicion) ok; x4 ...<PKG2::g_three::GThree> FALLA TypeNotFound (FTBbSVxq6m6JQccV9DASAEyyPy2j4sHfXRDQnXK8Q2pA); x5 PKG5::probe::touch<PKG5::g_three::GThree> sobre el Probe<GThree> existente ok. Todas las ok producen el tipo canonico con el ID de definicion (ver V-3).
+  Comando de ejemplo: cd <SMOKE_DIR>; . ./ids.env; probes/ptb.sh c2 --move-call "$PKG3::probe::make<$PKG3::g_two::GTwo>"
+Conclusion: el ID de DEFINICION del tipo pasa siempre (media hipotesis confirmada), pero el de almacenamiento de CUALQUIER version igual o posterior a la que define el modulo tambien pasa (el runtime normaliza el tag al ID de definicion); solo falla un ID de una version anterior a la que introdujo el tipo (TypeNotFound). La afirmacion del plan §4.4 / V-12 ("armar claim_timeout<...v3...::coinflip::Coinflip apuntaria a un tipo que no existe con ese ID") NO se cumple en esta CLI/PV 142: con coinflip definido en v2, <v3>::coinflip::Coinflip funciona. No es un riesgo de fondos ni invalida el diseno (armar typeArguments con definingId de typeOrigins sigue siendo correcto y siempre pasa), pero el motivo de R-5 para los typeArguments es mas debil de lo que dice el plan; lo que si es real es la lectura de TIPOS en eventos/objetos (V-3, V-4). Hallazgo H-d. Que el DoD no marque V-12 como condicion de arranque; lo dejo para decision del MID/MAYOR.
+
+#### V-4 — filtro eventType del ListEvents crudo y limite de la DNF: PASA (medido)
+Sonda v4_filters.mjs (Node 26, RPC_URL=http://127.0.0.1:19000, client.ledgerService.listEvents como app/src/sui/eventScan.ts: DESCENDING, startCheckpoint 0n, limit 100; el read mask suma package_id y module para ver el emisor). Construccion de los filtros:
+  const eventType = (value) => ({ negated: false, predicate: { oneofKind: 'eventType', eventType: { eventType: value } } });
+  const emitModule = (value) => ({ negated: false, predicate: { oneofKind: 'emitModule', emitModule: { module: value } } });
+  const single = (literal) => ({ terms: [{ literals: [literal] }] });
+  DNF de N terminos: { terms: [ { literals: [eventType('<PKG2>::probe::ProbeEvent<<PKG2>::g_two::GTwo>')] }, ...N-1 terminos de un literal con 0x<64 hex>::dummy::Ev ] }
+Estado de la cadena en ese momento: 8 ProbeEvent (6 con G = GTwo, 2 con G = GThree; 6 emitidos por la funcion de PKG3 y 2 por la de PKG2). Salida:
+- eventType <PKG2>::probe::ProbeEvent (sin parametros de tipo) => 8 eventos; por tipo {GTwo:6, GThree:2}; por package_id {<PKG3>:6,<PKG2>:2}
+- eventType <PKG2>::probe::ProbeEvent<<PKG2>::g_two::GTwo> (tag completo, ids de definicion) => 6 eventos; por tipo {GTwo:6}
+- eventType <PKG2>::probe::ProbeEvent<<PKG3>::g_three::GThree> (tag completo, G de otro upgrade) => 2 eventos
+- eventType <PKG3>::probe::ProbeEvent (sin parametros, ID de almacenamiento del ultimo upgrade) => 0 eventos
+- eventType <PKG3>::probe::ProbeEvent<<PKG3>::g_two::GTwo> (tag completo con ids de almacenamiento) => 0 eventos
+- eventType <PKG1>::probe::ProbeEvent (id original) => 0 eventos
+- eventType <PKG2>::probe (paquete::modulo, como eventTypeModule del SDK) => 8 eventos
+- eventType <PKG2> (solo el paquete) => 8 eventos
+- emitModule <PKG2>::probe => 2 eventos (solo los emitidos por la funcion de PKG2, package_id <PKG2>)
+- emitModule <PKG3>::probe => 6 eventos (solo los emitidos por la funcion de PKG3)
+- emitModule <PKG1>::probe => 0 eventos ; emitModule <PKG2>::clock_probe (aun sin eventos) => 0
+- AND eventType<GTwo> + emitModule <PKG3>::probe => 4 eventos
+(todos terminan con end=CHECKPOINT_BOUND)
+Conclusiones: (1) el filtro eventType SIN parametros de tipo funciona y es un prefijo: devuelve todas las instanciaciones de G (no hace falta el tag completo; con el tag completo se filtra por juego); tambien admite paquete::modulo y solo el paquete. (2) El filtro eventType exige el ID de DEFINICION: con el ID de almacenamiento posterior o el original devuelve 0 eventos. (3) emitModule NO sustituye al OR de literales: compara con el ID de almacenamiento de la version que EMITIO (cambia con cada upgrade y con el paquete por el que se llame; con el original da 0) y un evento de una llamada hecha por un paquete viejo queda fuera del filtro del nuevo. (4) El servidor exige direcciones de 64 hex en el literal: con 0x2::coin::CoinCreated o 0x3::validator::... responde INVALID_ARGUMENT "invalid address: Invalid value was given to the function" (diagnostico v4_debug.mjs; con la direccion 0x2 completada a 64 hex acepta).
+DNF (1 termino real + N-1 de relleno):
+N=1: ok, 6 eventos, end=CHECKPOINT_BOUND ; N=2: ok ; N=4: ok ; N=8: ok (6 eventos cada una)
+N=16: RECHAZO INVALID_ARGUMENT: filter contains 11 literals; at most 10 are allowed
+  bisec N=12: RECHAZO (mismo mensaje) ; bisec N=10: ok (6 eventos) ; bisec N=11: RECHAZO (mismo mensaje)
+=> maximo de terminos aceptado = 10; primer rechazo = 11. El limite es de 10 LITERALES por filtro (cada termino de un literal cuenta 1). Hallazgo H-i: el OR de literales de la app (fuentes x juegos) no puede pasar de 10.
+(Nota: una primera corrida con rellenos 0x1001::dummy::Ev dio INVALID_ARGUMENT "invalid address" en N=2: era el relleno invalido, no el limite; corregido con direcciones de 64 hex.)
+
+#### V-5 — que ID informa MoveAbort.location.package: PASA (medido)
+Abort propio del modulo nuevo y abort de un modulo existente, llamando por distintas versiones (CLI, tx ejecutadas y fallidas; lectura via gRPC como la app, client.getTransaction({ digest, include: { effects: true } }).FailedTransaction.status.error):
+  a1: probes/ptb.sh a1 --move-call "$PKG3::probe::fail"   -> Error executing transaction 'C2oNe4Qq1wiPTuVVo6JJN228wXtguH6Lh5K9WpiLS1MS': 1st command aborted within function '<PKG3>::probe::fail' at instruction 1 with code 77
+  a2: ... --move-call "$PKG2::probe::fail"                -> 'BPbrwEJjNGyHdpMd1sEbLyiCV42aQxLddWpiLK5YdDGp': ... '<PKG2>::probe::fail' ... code 77
+  a3: ... --move-call "$PKG1::house::migrate" @$HOUSE @$HOUSECAP -> 'E91ch5ptw4yJyQfgBzbSKhJtvg5N6yLJDoKGoAyRZ9S5': ... '<PKG1>::house::migrate' at instruction 10 with code 4 (ENotUpgrade)
+  a4: ... "$PKG2::house::migrate" ...                     -> 'DSCQv75R8bctariyL21buCLUoadGtsZj6dV9uAQZgPc1': '<PKG2>::house::migrate' ... code 4
+  a5: ... "$PKG3::house::migrate" ...                     -> 'HDgAr7dadhjvNRVF7pz4ZWTMty1XPVirkjDHLT8wq17q': '<PKG3>::house::migrate' ... code 4
+  Sonda v5_abort.mjs a1 a2 a3 a4 a5 (status.error):
+-- [a1] FailedTransaction  status.error = { "$kind": "MoveAbort", "message": "MoveAbort in 1st command, abort code: 77, in '<PKG3>::probe::fail' (instruction 1)", "command": 0, "MoveAbort": { "abortCode": "77", "location": { "package": "<PKG3>", "module": "probe", "function": 2, "instruction": 1, "functionName": "fail" } } }
+-- [a2] ... "location": { "package": "<PKG2>", "module": "probe", "function": 2, "instruction": 1, "functionName": "fail" }
+-- [a3] ... "abortCode": "4" ... "location": { "package": "<PKG1>", "module": "house", "function": 4, "instruction": 10, "functionName": "migrate" }
+-- [a4] ... "location": { "package": "<PKG2>", "module": "house", ... }
+-- [a5] ... "location": { "package": "<PKG3>", "module": "house", ... }
+  Abort anidado (h7, ver V-15: sb_game::pay_a -> sb_thing::pay con la cosa equivocada, EWrongThing = 1, llamado por PKG3): MoveAbort ... abort code: 1, in '<PKG3>::sb_thing::pay' ... "location": { "package": "<PKG3>", "module": "sb_thing", "function": 2, "instruction": 11, "functionName": "pay" }.
+Resultado: MoveAbort.location.package es el ID de ALMACENAMIENTO del paquete (version) cuyo codigo se ejecuto, o sea el ID del paquete por el que se hizo la llamada (PKG3 al llamar por PKG3): ni el original (PKG1) ni el de definicion del modulo (PKG2 para probe). Para un modulo existente tambien (house por PKG3 informa PKG3). Consecuencia para errors.ts:195-206: hoy acepta packageId y originalPackageId; con la app llamando siempre por el ultimo packageId funciona, pero un abort de una version anterior (p. ej. una tx lanzada con la app anterior) lleva el ID de esa version: conviene sumar los de upgrades[] (plan §4.4, ya previsto). Hallazgo H-j.
+
+#### V-13 — clock::borrow() frente al Clock (0x6) y set_clock_timestamp: PASA
+(a) Compila y ejecuta con el framework de PV 142: el modulo clock_probe (sandbox, v2) usa sui::clock::borrow(); build/lint/test del arbol sandbox con --warnings-are-errors: exit 0 (arriba); la red de la localnet corre PV 142.
+(b) Misma transaccion, dos lecturas: PTB k3 = read_borrow() + read_object(&Clock 0x6) + read_both(&Clock 0x6); y k1, k2, k4 con read_both:
+  cd <SMOKE_DIR>; . ./ids.env
+  probes/ptb.sh k1 --move-call "$PKG3::clock_probe::read_both" @0x6  -> Transaction Digest: 5qY7DKhKLqgoQaL8WEtCxoFp3wraC1R51hWnAkuR8U2h, Success
+  probes/ptb.sh k2 --move-call "$PKG3::clock_probe::read_both" @0x6  -> 5MMqhzSi1B1BDiriNfkwkg1vjxBGuq1ThZxCuFfx8Lrz, Success
+  probes/ptb.sh k3 --move-call "$PKG3::clock_probe::read_borrow" --move-call "$PKG3::clock_probe::read_object" @0x6 --move-call "$PKG3::clock_probe::read_both" @0x6 -> 3oVdJLpFSbLakFodzCyfkUnME4Ur7cbrA8yc8jmwnT2V, Success
+  probes/ptb.sh k4 --move-call "$PKG2::clock_probe::read_both" @0x6  -> 92nwFexSUYGZSRmWVok3J9WekDfaSPpZXg7oaaBE517x, Success
+  Sonda v13_clock.mjs k1 k2 k3 k4 (decodifica los eventos con bcs.u64()):
+-- [k1] 5qY7DKhKLqgoQaL8WEtCxoFp3wraC1R51hWnAkuR8U2h: status=success checkpoint=1851 timestampMs(checkpoint)=1795155241356
+   BothRead  via_borrow=1795155241164 via_object(0x6)=1795155241164 igual=true
+-- [k2] 5MMqhzSi1B1BDiriNfkwkg1vjxBGuq1ThZxCuFfx8Lrz: status=success checkpoint=1854 timestampMs(checkpoint)=1795155241974
+   BothRead  via_borrow=1795155241922 via_object(0x6)=1795155241922 igual=true
+-- [k3] 3oVdJLpFSbLakFodzCyfkUnME4Ur7cbrA8yc8jmwnT2V: status=success checkpoint=1857 timestampMs(checkpoint)=1795155242612
+   BorrowRead ms=1795155242509  (funcion read_borrow, sin argumentos)
+   ObjectRead ms=1795155242509  (funcion read_object, con el objeto Clock 0x6)
+   BothRead  via_borrow=1795155242509 via_object(0x6)=1795155242509 igual=true
+   mismo PTB, dos funciones distintas: borrow=1795155242509 objeto=1795155242509 igual=true
+-- [k4] 92nwFexSUYGZSRmWVok3J9WekDfaSPpZXg7oaaBE517x: status=success checkpoint=1859 timestampMs(checkpoint)=1795155243058
+   BothRead  via_borrow=1795155243058 via_object(0x6)=1795155243058 igual=true
+RESULTADO: borrow() == Clock(0x6) en todas las transacciones. (Las dos transacciones consecutivas k1 y k2 avanzan: 1795155241164 -> 1795155241922; en cada una borrow() y 0x6 coinciden; tambien al llamar por el paquete v2, k4.)
+(c) sui move test con set_clock_timestamp (arbol sandbox, <SMOKE_DIR>/v2/contracts/tests/clock_probe_tests.move, con la CLI 1.84.0, prefijo aislado, --warnings-are-errors):
+  . <SMOKE_DIR>/env.sh && { . <SMOKE_DIR>/ids.env 2>/dev/null || true; } && smoke_guard && cd "$SMOKE_DIR/v2/contracts" && printf 'n\n' | "$SUI" move test -e testnet --warnings-are-errors 2>&1 | sed 's/\x1b\[[0-9;]*m//g' > "$SMOKE_DIR/out/v13-move-test.txt"; echo "test exit=${PIPESTATUS[1]}"
+  -> test exit=0 ; salida sin los 83 tests del repo:
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+Running Move unit tests
+[ PASS    ] battleship::clock_probe_tests::test_borrow_advances_one_ms_per_transaction_without_setter
+[ PASS    ] battleship::clock_probe_tests::test_set_clock_timestamp_moves_borrow_with_increasing_values
+[ PASS    ] battleship::clock_probe_tests::test_set_clock_timestamp_rejects_a_value_that_does_not_increase
+Test result: OK. Total tests: 86; passed: 86; failed: 0
+  (0 warnings.) Los tests: (1) sin setter cada next_tx avanza el reloj exactamente 1 ms (t1 == t0 + 1, luego t1 + 1); (2) set_clock_timestamp con valores crecientes (t0 + 600_000 y luego t0 + 604_800_000) deja a borrow() en ese valor; (3) #[expected_failure(abort_code = 12, location = sui::test_scenario)] con ms no creciente (EClockTimestampNotIncreased = 12, test_scenario.move:64 del framework PV 142).
+  HALLAZGO H-g (cambia la forma del helper de TASK-2b): la forma del handoff, scenario.next_with_context(ts::ctx_builder_from_sender(USER).set_clock_timestamp(t0 + 600_000)), compila pero FALLA al ejecutar:
+  ┌── test_set_clock_timestamp_moves_borrow_with_increasing_values ──────
+  │ error[EC11001]: test failure
+  │     ┌─ <HOME real>/.move/git/https___github_com_MystenLabs_sui_git_e6f43880f4b65e2c1f0397583a9690b4b22c9223/crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move:354:5
+  │ 344 │ public fun next_with_context(  ... In this function in sui::test_scenario
+  │ 354 │     assert!(ctx_builder.rgp.is_none_or!(|rgp| *rgp == current_rgp) || epoch > current_epoch);
+  │     ^^^^^^ Test was not expected to error, but it aborted originating in the module sui::test_scenario rooted here
+  │ stack trace: clock_probe_tests::test_set_clock_timestamp_moves_borrow_with_increasing_values(./tests/clock_probe_tests.move:29)
+  Test result: FAILED. Total tests: 86; passed: 85; failed: 1
+  La forma que funciona es derivar el builder del scenario: let builder = ts::ctx_builder(&scenario).set_clock_timestamp(ms); scenario.next_with_context(builder); (hay que ligarlo a una variable: ts::ctx_builder(&scenario) dentro del argumento de next_with_context da error[EC07001] referential transparency violated por el prestamo de scenario). Declarado para TASK-2b.
+(d) PV por GraphQL publico de solo lectura (curl -fsS -m 30 -X POST -H 'content-type: application/json' -d '{"query":"{ epoch { epochId protocolConfigs { protocolVersion } } }"}' https://graphql.<red>.sui.io/graphql; sin claves; informativo), 2026-11-20 06:14 UTC:
+  mainnet -> {"data":{"epoch":{"epochId":1317,"protocolConfigs":{"protocolVersion":142}}}} (el primer intento dio "curl: (35) TLS connect error ... unexpected eof" y el reintento respondio; mismo resultado en un segundo reintento)
+  testnet -> {"data":{"epoch":{"epochId":1289,"protocolConfigs":{"protocolVersion":142}}}}
+  => mainnet, testnet y la localnet corren PV 142: clock::borrow() esta disponible en mainnet hoy.
+
+#### V-14 — witness y Collected sin abilities (stand-in): PASA (a, b y c; cada caso con su mensaje y su control)
+Procedimiento: arbol <SMOKE_DIR>/sbx/contracts = copia de v3 (HEAD + modulos de ensayo, sin build/); cada sonda es el archivo sources/zz_probe.move (modulo battleship::zz_probe) y se compila con el script <SMOKE_DIR>/probes/v14.sh <sonda>... = . <SMOKE_DIR>/env.sh; { . <SMOKE_DIR>/ids.env 2>/dev/null || true; }; smoke_guard; cd <SMOKE_DIR>/sbx/contracts; cp <sonda> sources/zz_probe.move; printf 'n\n' | "$SUI" move build -e testnet --warnings-are-errors 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; rm -f sources/zz_probe.move. Nada se commitea. Salida (se omiten las lineas INCLUDING DEPENDENCY; las rutas del cache de dependencias de la CLI figuran como <HOME real>/.move/...):
+
+(a1) un modulo ajeno empaqueta el witness de otro (sb_game::SbA):
+  zz_probe: use battleship::sb_game::SbA; use battleship::sb_thing; public fun forge(ctx: &mut TxContext) { sb_thing::create(SbA {}, ctx); }
+  control "sin la linea ofensiva" (a1_control: public fun forge(_ctx: &mut TxContext) {}) -> BUILDING battleship; exit=0
+  control con witness PROPIO (a1_control_own_witness: public struct Mine has drop {} ... sb_thing::create(Mine {}, ctx)) -> BUILDING battleship; exit=0
+  ofensiva (a1_foreign_witness):
+error[EC04001]: restricted visibility
+  ┌─ ./sources/zz_probe.move:8:22
+8 │     sb_thing::create(SbA {}, ctx);
+  │                      ^^^^^^ Struct 'battleship::sb_game::SbA' can only be instantiated within its defining module 'battleship::sb_game'
+  ┌─ ./sources/sb_game.move:8:15
+8 │ public struct SbA has drop {}
+  │               --- Struct defined in module 'battleship::sb_game'
+Failed to build Move modules: Compilation error.
+exit=1
+(a2) llamar a la funcion de la base sin el witness (a2_no_witness: sb_thing::create(ctx);):
+error[EC04016]: too few arguments
+  ┌─ ./sources/zz_probe.move:7:5
+ 7 │     sb_thing::create(ctx);
+   │     ^^^^^^^^^^^^^^^^^^^^^
+   │     Invalid call of 'battleship::sb_thing::create'. The call expected 2 argument(s) but got 1  (Found 1 argument(s) here)
+   ┌─ ./sources/sb_thing.move:23:21
+23 │ public(package) fun create<G: drop>(_: G, ctx: &mut TxContext) {  -> Expected 2 argument(s)
+error[EC04004]: expected a single non-reference type
+ ... Expected a single non-reference type, but found: '&mut sui::tx_context::TxContext' ... Invalid type argument
+Failed to build Move modules: Compilation error.
+exit=1
+(b) descartar el struct sin abilities (Collected). Control comun b_control (la misma funcion SIN la linea ofensiva: let c = sb_thing::collect(W {}, thing); sb_thing::pay(W {}, thing, c);) -> BUILDING battleship; exit=0.
+(b1) let _ = sb_thing::collect(W {}, thing);
+error[EC05001]: ability constraint not satisfied
+ 9 │     let _ = sb_thing::collect(W {}, thing);
+   │         ^ Cannot ignore values without the 'drop' ability. The value must be used
+   ┌─ ./sources/sb_thing.move:15:15
+15 │ public struct Collected {   --------- To satisfy the constraint, the 'drop' ability would need to be added here
+27 │ public(package) fun collect<G: drop>(_: G, thing: &mut Thing<G>): Collected {   The type 'battleship::sb_thing::Collected' does not have the ability 'drop'
+Failed to build Move modules: Compilation error.   exit=1
+(b2) sb_thing::collect(W {}, thing);  (sentencia suelta)
+error[EC05001]: ability constraint not satisfied
+ 9 │     sb_thing::collect(W {}, thing);
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot ignore values without the 'drop' ability. The value must be used
+   (mismo detalle: 'drop' ability would need to be added to Collected)   exit=1
+(b3) let _c = sb_thing::collect(W {}, thing);  (ligado y sin consumir)
+error[EC06001]: unused value without 'drop'
+ 9 │     let _c = sb_thing::collect(W {}, thing);
+   │         --                                 ^ Invalid return
+   │         The local variable '_c' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+   (mismo detalle)   exit=1
+(c) guardar el struct sin abilities. Control comun c_control (Holder has key { id: UID } que no guarda el struct; la funcion lo consume con pay) -> BUILDING battleship; exit=0.
+(c1) public struct Holder has key { id: UID, c: Collected } + transfer::share_object(Holder { id: object::new(ctx), c });
+error[EC05001]: ability constraint not satisfied
+10 │     c: Collected,
+   │        ^^^^^^^^^
+   │        Invalid field type. The struct was declared with the ability 'key' so all fields require the ability 'store'
+   │        The type 'battleship::sb_thing::Collected' does not have the ability 'store'
+   ┌─ ./sources/sb_thing.move:15:15 ... To satisfy the constraint, the 'store' ability would need to be added here
+Failed to build Move modules: Compilation error.   exit=1
+(c2) public struct Wrapper has store, drop { c: Collected }
+error[EC05001]: ability constraint not satisfied  ... Invalid field type. The struct was declared with the ability 'drop' so all fields require the ability 'drop' ... The type 'battleship::sb_thing::Collected' does not have the ability 'drop'
+error[EC05001]: ability constraint not satisfied  ... Invalid field type. The struct was declared with the ability 'store' so all fields require the ability 'store' ... does not have the ability 'store'
+   exit=1
+(c3) transfer::public_transfer(c, @0x1);
+error[EC05001]: ability constraint not satisfied  ... 'key' constraint not satisifed ... The type 'battleship::sb_thing::Collected' does not have the ability 'key' ... transfer.move:63:31 public fun public_transfer<T: key + store>(obj: T, recipient: address)
+error[EC05001]: ability constraint not satisfied  ... 'store' constraint not satisifed ... does not have the ability 'store'
+   exit=1
+Los mensajes son los esperados (witness no construible fuera de su modulo; falta de drop; falta de store/key), no un error por otra causa. Aclaracion de alcance: sb_thing::create es public(package): un modulo del MISMO paquete SI puede llamarla con SU PROPIO witness (control a1_control_own_witness compila): el aislamiento por witness impide forjar el de otro juego, no que un modulo nuevo del paquete cree su propio Thing<G>; "solo duel llama a add_fees" sigue siendo regla de revision (plan §2.3, R.7).
+
+#### V-15 — hot potato: un PTB no puede intercalar una entry con el mismo objeto: PASA (con una precision sobre "antes de ejecutar")
+Setup (v3, modulos sb_thing/sb_game, la entry cancel<G> es entry generica sin witness; las public collect_a/pay_a son el "collect-equivalente"): objetos TA1 y TA2 = Thing<SbA>, TB1 = Thing<SbB>:
+  probes/ptb.sh n1 --move-call "$PKG3::sb_game::new_a" -> 95PwgmkSkuEJB5tFEpkjBEQ1GTkG6exdGGW5bztobFTu ; n2 (otro new_a) -> DCYY5rsE9wQqWSkN7tytUEU9k3u9DqUt7xRvA2qg5rpL ; n3 (new_b) -> ApketcU29BTezHZapm9n8LRZ5n1enP7BEgNSnaYyk1CL (los tres Success; ids guardados con save_created.mjs)
+PTBs (CLI, ejecutados; la salida de cada uno se consulto con tx_status.mjs: getTransaction con effects, events y transaction):
+  h0 control (collect + pay):  probes/ptb.sh h0 --move-call "$PKG3::sb_game::collect_a" @$TA1 --assign c --move-call "$PKG3::sb_game::pay_a" @$TA1 c
+     -> 7s8LZhzozFsR9KTvA3SW4C3rz1VeS6nurJD44k82wS6Z: Success (comandos collect_a, pay_a)
+  h1 ATAQUE (collect, cancel con el MISMO objeto, pay):  probes/ptb.sh h1 --move-call "$PKG3::sb_game::collect_a" @$TA1 --assign c --move-call "$PKG3::sb_thing::cancel<$PKG2::sb_game::SbA>" @$TA1 --move-call "$PKG3::sb_game::pay_a" @$TA1 c
+     -> Error executing transaction 'BwYZfToX7LU8L5cnd39Logs4Qt7tccgQxFzmAovoGHKj': CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1
+     tx_status: FailedTransaction; comandos collect_a, cancel, pay_a; eventos: 0; error: { "$kind": "CommandArgumentError", "message": "CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1", "command": 1, "CommandArgumentError": { "argument": 0, "name": "InvalidArgumentToPrivateEntryFunction" } }
+  h2 (collect, pay, y recien despues cancel del mismo objeto): ... --move-call collect_a @$TA1 --assign c --move-call pay_a @$TA1 c --move-call "$PKG3::sb_thing::cancel<$PKG2::sb_game::SbA>" @$TA1 -> 2zbmDsgj8h2TnkZaSVeQDvwhxLXNwLdpDBNvq2qq8DWE: Success (1 evento: una vez consumido el hot potato, la entry se puede usar)
+  h3 (collect(TA1), cancel(TA2 = OTRO objeto del mismo juego), pay(TA1)) -> Bx7CN4C4JT24adMpEKaTa86AVYdsYSDPWEzcyygb1imW: Success (el clique caliente es por objeto: INV-D1 se cumple por Duel)
+  h4 cancel<SbA> sobre Thing<SbB>:  probes/ptb.sh h4 --move-call "$PKG3::sb_thing::cancel<$PKG2::sb_game::SbA>" @$TB1 -> 5DPYbair35rhLp69XEGpjWKqEhAiW1WdDA55Kq8SLjnV: FailedTransaction, CommandArgumentError { arg_idx: 0, kind: TypeMismatch } in command 0, eventos 0 (rechazo por tipo)
+  h5 cancel<SbB> sobre Thing<SbB> (control) -> 6Y9pjdtAb3gbQ7xLDmjZU56yJR6nZRjqba5cTGoAhF3L: Success ; h6 cancel<SbA> sobre TA1 (control) -> 2f1wmhEWwsPt6rbHzq22DJYQ2sv6M7FkxSyY61jTzWkU: Success
+  h7 (collect(TA1), pay en TA2): -> G7soa1tMY7sfHQwFqSPWY15i9DZ8MiYpUHh4KvfwVpJJ: MoveAbort, code 1 (EWrongThing), en '<PKG3>::sb_thing::pay' (ver V-5)
+Misma comprobacion SIMULADA por gRPC (sin firmar ni ejecutar; Transaction del SDK, client.simulateTransaction({ transaction, include: { effects: true, commandResults: true } }), sender = la cuenta de la genesis sin imprimir):
+  const c = tx.moveCall({ target: `${PKG3}::sb_game::collect_a`, arguments: [tx.object(TA1)] });
+  tx.moveCall({ target: `${PKG3}::sb_thing::cancel`, typeArguments: [`${PKG2}::sb_game::SbA`], arguments: [tx.object(TA1)] });
+  tx.moveCall({ target: `${PKG3}::sb_game::pay_a`, arguments: [tx.object(TA1), c] });
+- control (collect + pay): Transaction; status=success; comandos con resultado=2
+- ataque (collect, cancel mismo objeto, pay): FailedTransaction; status=failure; comandos con resultado=0
+    error: { "$kind": "CommandArgumentError", "message": "CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 1", "command": 1, "CommandArgumentError": { "argument": 0, "name": "InvalidArgumentToPrivateEntryFunction" } }
+- cancel<SbA> sobre Thing<SbB>: FailedTransaction; status=failure; comandos con resultado=0
+    error: { "$kind": "CommandArgumentError", "message": "CommandArgumentError { arg_idx: 0, kind: TypeMismatch } in command 0", "command": 0, "CommandArgumentError": { "argument": 0, "name": "TypeMismatch" } }
+Precision sobre "antes de ejecutar" (prueba de orden): para saber si el rechazo ocurre antes de ejecutar CUALQUIER comando, se antepuso un comando que abortaria en ejecucion (probe::fail, code 77):
+  h8: probes/ptb.sh h8 --move-call "$PKG3::probe::fail" --move-call "$PKG3::sb_game::collect_a" @$TA1 --assign c --move-call "$PKG3::sb_thing::cancel<$PKG2::sb_game::SbA>" @$TA1 --move-call "$PKG3::sb_game::pay_a" @$TA1 c
+     -> Error executing transaction '3G1u5y3QytDA1Qy6VSBKGGrjCXRPsNjjwUYPCBShABNV': CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } in command 2   (NO el MoveAbort 77 del comando 0)
+  h9: probes/ptb.sh h9 --move-call "$PKG3::probe::fail" --move-call "$PKG3::sb_thing::cancel<$PKG2::sb_game::SbA>" @$TB1
+     -> Error executing transaction 'HRuiHiGJ3T7EgbTQXYdYQQ1gcWwwGxujmi4Bzmx43q9a': CommandArgumentError { arg_idx: 0, kind: TypeMismatch } in command 1   (tampoco el MoveAbort del comando 0)
+tx_status.mjs h8 h9 (FailedTransaction; h8: comandos fail, collect_a, cancel, pay_a, eventos 0, error InvalidArgumentToPrivateEntryFunction en command 2; h9: comandos fail, cancel, eventos 0, TypeMismatch en command 1).
+Resultado: el PTB de ataque se rechaza (InvalidArgumentToPrivateEntryFunction en el comando de la entry), la regla de "clique caliente" (plan H-14) se cumple y un cancel<A> sobre un Thing<B> se rechaza por tipo (TypeMismatch). La regla es ESTATICA y previa a la ejecucion de cualquier comando: con un comando 0 que abortaria en ejecucion, el error informado es el del comando infractor, no el aborto (h8/h9). PRECISION a decidir por el MID: la transaccion no se descarta en la validacion de entrada; llega a un checkpoint como FailedTransaction con el gas cobrado (computo 1000000) y sin ningun efecto de estado (eventos 0); "rechazado antes de ejecutar" vale en el sentido de que ningun comando corre, no en el de que el nodo la rechace sin cobrar. La propiedad que importa para los fondos (INV-D1/D5: nadie puede intercalar cancel/claim_timeout/refund_stalled con el mismo Duel entre collect/activate_atomic y pay) se cumple. Mismo comportamiento por simulateTransaction y por ejecucion real. Datos extra: una vez consumido el hot potato (h2) la entry vuelve a poder usarse en el mismo PTB, y un OTRO objeto del mismo juego no esta en el clique (h3); ambos coherentes con H-14. Hallazgo H-h (matiz de redaccion de V-15).
+
+#### V-2 (additive) — only_additive_upgrades sobre el UpgradeCap de la prueba: PASA (informado; con un hallazgo sobre la CLI)
+Estado de partida: cap del paquete de ensayo en politica 0 (compatible), version 3 (PKG3). Comando: probes/ptb.sh p0 --move-call 0x2::package::only_additive_upgrades @$UPCAP -> HLgHqqNWhmZVzH983scccHw7V9HZWcd6AktoQxQ6AsFp, Success. suic --json object $UPCAP | jq '.content | {policy, version}' -> {"policy": 128.0, "version": "3"} (additive).
+(b) cambio de CUERPO en house (arbol v4b = HEAD + modulos de ensayo, con la unica edicion public fun version(house: &House): u64 { house.version + 0 }; Pub.v4b.toml = copia de Pub.v3.toml con source.local = <SMOKE_DIR>/v4b/contracts):
+  suic --json test-upgrade --pubfile-path "$SMOKE_DIR/Pub.v4b.toml" --build-env testnet --dry-run (desde <SMOKE_DIR>/v4b/contracts) -> effects.status failure: "PackageUpgradeError { upgrade_error: IncompatibleUpgrade } in command 1"
+  real (mismo comando sin --dry-run): exit=1; Error executing transaction 'J5ixNzW5qUAEMDrioGAUmBBN3f6kcnazULmcBfQSXFcL': PackageUpgradeError { upgrade_error: IncompatibleUpgrade } in command 1. El pubfile queda sin cambio (cmp) y el cap sigue en {"policy":128,"version":"3"}. Se ejecuta y falla pagando gas, como V-10.
+  Control (que la causa es additive y no el cambio): segundo paquete "C" publicado con el 1.83.0 (git archive 26f2676 en <SMOKE_DIR>/v1c, Pub.v1c.toml; cap en {"policy":0,"version":"1"}) y upgrade desde <SMOKE_DIR>/v4c (git archive HEAD + la misma edicion de house; Pub.v4c.toml = copia con source.local = v4c): exit=0, status success, digest 5JSxCcMBg8MqGVPNa78gzfB4h5J7LA82c5xqc4paKpL1, version 2, modulos game,house, gas 1000000 / 41648000 / 2621738. Con la politica compatible el mismo cambio pasa; con additive se rechaza en cadena.
+(a1) modulo nuevo que NO toca house (arbol v4a = v3 + mod_a.move, un struct y una funcion; Pub.v4a.toml = copia de Pub.v3.toml con source.local = <SMOKE_DIR>/v4a/contracts): suic --json test-upgrade --pubfile-path "$SMOKE_DIR/Pub.v4a.toml" --build-env testnet -> exit=0, status success, digest BuapD7R1bLumUbZcjetFh8zSiMwPQ8AYphEsBY4ppZ74, gas 1000000 / 65010400 / 2621738, published PKG4, version 4, modulos clock_probe,g_three,g_two,game,house,mod_a,probe,sb_game,sb_thing. Cap: {"policy":128,"version":"4"}. PASA con additive.
+(a2) modulo nuevo que llama a house::add_fees (arbol v5 = v4a + fee_probe.move: entry fun deposit(house: &mut House, coin: Coin<SUI>) { house::add_fees(house, coin.into_balance()); }; Pub.v5.toml = copia del Pub.v4a.toml ya actualizado a version 4, con source.local = <SMOKE_DIR>/v5/contracts):
+  suic --json test-upgrade --pubfile-path "$SMOKE_DIR/Pub.v5.toml" --build-env testnet --dry-run -> exit=1, la CLI NO envia nada:
+    error[EUC01009]: friend mismatch
+      ┌─ <SMOKE_DIR>/v5/contracts/sources/house.move:6:8
+      │  module battleship::house;
+      │         ^^^^^^^^^^^^^^^^^ Friends links are mismatched
+  Es la verificacion LOCAL de compatibilidad de la CLI (additive la aplica sobre la lista de amigos de house, que cambia al agregar un modulo que llama a una public(package)). Con la bandera de la CLI --skip-verify-compatibility ("Skip verifying package compatibility locally before publishing"):
+  suic --json test-upgrade --pubfile-path "$SMOKE_DIR/Pub.v5.toml" --build-env testnet --dry-run --skip-verify-compatibility -> exit=0, effects.status success
+  real: ... --skip-verify-compatibility -> exit=0, status success, digest AgseVud1WCvWh7Afr5BDYUDE3vnytjAjRf4N1AQupger, gas 1000000 / 67328400 / 2621738, published PKG5, version 5, modulos clock_probe,fee_probe,g_three,g_two,game,house,mod_a,probe,sb_game,sb_thing; cap {"policy":128,"version":"5"}. Luego probes/ptb.sh f1 --split-coins gas "[1000000]" --assign coins --move-call "$PKG5::fee_probe::deposit" @$HOUSE coins.0 -> Gk7cHTV64HxqALijG5miEfregzYZZUXHX6EYoXu79n9D, Success; suic --json object $HOUSE | jq -c '.content|{fees_collected,version}' -> {"fees_collected":"1000000","version":"1"} (add_fees funciono desde el modulo nuevo del upgrade bajo additive).
+Resultado y hallazgo H-e: (1) la VM acepta bajo additive un modulo nuevo que llama a add_fees (cambia la lista de amigos de house): el upgrade real con la bandera pasa y deposita; (2) pero la CLI 1.84.0 lo rechaza LOCALMENTE sin la bandera (EUC01009 friend mismatch): el plan §3.1 punto 3 ("additive tampoco compara amigos") vale para la cadena, no para la verificacion local de la CLI; (3) un cambio de cuerpo en house se rechaza en cadena con additive (IncompatibleUpgrade) y pasa con compatible; (4) la CLI nueva no rompe additive sobre un paquete publicado con la 1.83.0 (los upgrades a v4 y v5 los hizo la 1.84.0 sobre un paquete publicado con la 1.83.0). Consecuencia: D7 (el cap sigue compatible hasta despues de #18) no se ve afectada; si algun dia se pasa a additive, el upgrade de un modulo que llame a una public(package) necesita --skip-verify-compatibility. V-2 es de prioridad normal y no condiciona TASK-2.
+
+#### Otros datos medidos (no pedidos)
+- Via de lectura de la tabla de origenes (V-6 de TASK-4): suic --json object $PKG5 -> content.Package.{id, linkage_table, module_map, type_origin_table, version}; type_origin_table de 27 entradas ({module_name, datatype_name, package}); version 5. client.ledgerService.getObject({ objectId, readMask: { paths: ['package'] } }) devuelve las mismas entradas (26 en PKG3, 27 en PKG5) sin original_id/version dentro del mensaje Package; client.movePackageService.getPackage no trae typeOrigins.
+- Gas de los upgrades de ensayo (computo / storage / rebate): v2 1000000 / 62593600 / 2621738; v3 1000000 / 63710800 / 2621738; v4 1000000 / 65010400 / 2621738; v5 1000000 / 67328400 / 2621738.
+
+### Evidencias específicas del task: veredictos
+| V | Veredicto | Resumen |
+|---|---|---|
+| V-16 (reverificacion) | PASA | los dos SHA-256 coinciden con 88dd53b antes de ejecutar; 1.83.0-16d2dc1e05ed |
+| V-3 | PASA | prefijos de eventos y objetos = ID de definicion = typeOrigins (leida con LedgerService.GetObject, readMask package); event.packageId = ID de almacenamiento del emisor |
+| V-12 | NO PASA la hipotesis (definicion pasa; el ID de almacenamiento de una version >= la que define el modulo TAMBIEN pasa; falla solo un ID anterior) | sin riesgo de fondos; H-d |
+| V-4 | PASA (medido) | eventType sin parametros = prefijo (todas las instanciaciones); exige ID de definicion; emitModule depende del ID de la version emisora; limite = 10 literales; direcciones de 64 hex |
+| V-5 | PASA (medido) | location.package = ID de almacenamiento de la version ejecutada (la llamada), no el original ni el de definicion |
+| V-13 | PASA | borrow() == Clock 0x6 en la misma tx y en txs consecutivas; set_clock_timestamp sin warnings (forma con ctx_builder(&scenario)); PV 142 en mainnet, testnet y localnet |
+| V-14 (a) | PASA | witness ajeno no se puede empaquetar (EC04001) ni omitir (EC04016); controles compilan |
+| V-14 (b) | PASA | descartar Collected: EC05001 (let _, sentencia) y EC06001 (ligado sin consumir); control compila |
+| V-14 (c) | PASA | guardarlo en un struct key/store+drop o transferirlo: EC05001 (falta store/drop/key); control compila |
+| V-15 | PASA (con la precision de H-h) | la entry con el mismo objeto se rechaza (InvalidArgumentToPrivateEntryFunction) antes de ejecutar cualquier comando; cancel<A> sobre Thing<B> = TypeMismatch; la tx queda como FailedTransaction con gas cobrado y sin efectos |
+| V-2 additive | PASA (informado) | modulo nuevo pasa; body change de house se rechaza en cadena; modulo que llama a add_fees: la CLI lo rechaza localmente (friend mismatch) y la cadena lo acepta con --skip-verify-compatibility |
+
+### Smoke: tabla de resultados (FLUJO §6)
+| # | Acción | Resultado esperado | Resultado |
+|---|---|---|---|
+| 1 | Receta P (9000 ajeno intacto, 19000 libre, genesis sin suic, sui start --fullnode-rpc-port 19000, luego smoke_guard y smoke_guard_v1; sondas de SuiGrpcClient/ListEvents con RPC_URL) + v1 (1.83.0) + v2/v3 sandbox | como en TASK-1a | PASA (chain b994f97f; ambos guards OK; v1 = 47246000 MIST; v2 y v3 success) |
+| 2 | V-3, V-12 con el upgrade v3 sandbox | prefijos = IDs de definicion; typeArguments con ID de definicion pasa y con el de almacenamiento falla | V-3 PASA; V-12: definicion pasa, almacenamiento NO falla (solo un ID anterior a la definicion falla): NO PASA la hipotesis (H-d) |
+| 3 | V-4 | resultados de filtro con/sin parametros de tipo, con emitModule y limite de la DNF | PASA (medido: limite 10 literales) |
+| 4 | V-5 | ID de MoveAbort.location.package informado | PASA (medido: ID de la version ejecutada) |
+| 5 | V-13 | borrow() = 0x6; set_clock_timestamp sin warnings | PASA |
+| 6 | V-14 (a, b, c) | los tres casos no compilan; salida pegada | PASA (mensajes esperados y controles que compilan) |
+| 7 | V-15 | PTB con hot potato + entry rechazado antes de ejecutar; cancel<A> sobre Thing<B> rechazado | PASA (rechazo estatico previo a cualquier comando; FailedTransaction con gas cobrado, H-h) |
+| 8 | V-2 additive | resultado informado | PASA (informado; H-e) |
+| 9 | Cierre | como en TASK-1a | PASA (abajo) |
+
+### Desviaciones del handoff
+1. Binario 1.83.0 y tgz tomados del cache de suiup (<HOME real>/.cache/suiup/releases y <HOME real>/.local/share/suiup/binaries/testnet), como en TASK-1a, no de una descarga; los dos SHA-256 se verificaron contra 88dd53b antes de ejecutar (autorizado por el encargo). Como el binario de 1a se borro al cerrar, se volvio a extraer solo ./sui del tgz a <SMOKE_DIR>/bin183.
+2. Stand-in de V-14/V-15: como public(package) no se puede llamar desde un PTB, el "juego de prueba" sb_game expone public collect_a/pay_a (y _b) como envoltorios solo de ensayo; en el coinflip real la entry llama a activate_atomic y pay adentro y nada de eso es publico. Tambien se agrego un modulo g_two (v2) y g_three (v3) para tener tipos G de dos upgrades distintos, mas clock_probe y probe.
+3. V-2: ademas del upgrade (a) con modulo nuevo y (b) con cambio de cuerpo, se hicieron un upgrade (a2) con un modulo que llama a add_fees, un paquete de control "C" (compatible) para atribuir el rechazo de (b) a additive, y los upgrades v4 y v5 se aprovecharon para repetir V-12 con IDs posteriores. Todo en el sandbox.
+4. V-13: el handoff dice ctx_builder_from_sender(addr).set_clock_timestamp(ms) con next_with_context; esa forma falla en ejecucion (assert de rgp, H-g). Se uso ctx_builder(&scenario) ligado a una variable.
+5. Fixtures: ninguna se escribio en el worktree. Una candidata esta en <scratchpad>/fixtures_1b_candidatas/localnet-type-origins-upgraded.json (ver arriba); el orquestador decide.
+6. Baseline: no se re-midieron los gates completos porque el arbol de contracts y app no cambio desde TASK-1a (ver "Baseline"); medicion parcial en el arbol sandbox (86 tests = 83 + 3).
+7. PV de mainnet: el primer curl dio un error TLS transitorio; dos reintentos respondieron.
+8. Docker: al terminar hay 6 contenedores en vez de 5 (ver "Cierre"): el extra no es mio.
+9. Los scripts de sonda (lib.mjs, v3_origins.mjs, v3_check.mjs, v4_filters.mjs, v4_debug.mjs, v5_abort.mjs, v13_clock.mjs, v15_sim.mjs, tx_status.mjs, save_created.mjs, capture_origins.mjs) vivieron en <SMOKE_DIR>/probes y se borraron con la corrida; en este reporte van pegados los fragmentos esenciales y todas las salidas. Si el MID quiere los archivos, hay que repetir el ensayo.
+
+### Riesgos / pendientes
+- H-d (V-12): la premisa de plan §4.4/R-5 sobre typeArguments con el ID de almacenamiento no se cumple en esta CLI/PV; el diseno con definingId sigue siendo correcto (siempre pasa). El MAYOR puede suavizar R-5 para los typeArguments; la lectura de tipos (V-3/V-4) si exige definingId.
+- H-e (V-2): additive + modulo que llama a una public(package) = rechazo local de la CLI (friend mismatch) y necesidad de --skip-verify-compatibility; corrige la lectura de plan §3.1 (3). No afecta D7.
+- H-f: client.movePackageService.getPackage devuelve typeOrigins y linkage vacios; la tabla de origenes sale de client.ledgerService.getObject({ objectId, readMask: { paths: ['package'] } }) o de suic --json object <paquete> (content.Package.type_origin_table). Para V-6/TASK-4.
+- H-g (V-13): la forma correcta del helper de reloj para TASK-2b es ctx_builder(&scenario).set_clock_timestamp(ms) + next_with_context; el handoff (TASK-2, "Contexto") nombra ctx_builder_from_sender.
+- H-h (V-15): "rechazado antes de ejecutar" es cierto en el sentido de "no corre ningun comando"; la tx igual se secuencia como FailedTransaction y cobra gas.
+- H-i (V-4): maximo 10 literales por filtro de ListEvents; direcciones de 64 hex; el emitModule depende de la version emisora (no sirve para el lobby).
+- H-j (V-5): MoveAbort.location.package = ID de la version ejecutada: errors.ts debe aceptar los IDs de upgrades[] ademas de packageId y originalPackageId si quiere reconocer aborts de versiones anteriores.
+- Sin pendientes de seguridad ni de fondos; V-13 y V-15 estan en PASA (condicion de TASK-2/2b).
+
+### §R-6: los 4 greps sobre el diff y sobre este reporte
+Diff del worktree: vacio (git status y git diff --stat sin entradas): los 4 greps sobre el diff no tienen nada que revisar. Sobre la fixture candidata (<scratchpad>/fixtures_1b_candidatas/localnet-type-origins-upgraded.json) y sobre este reporte: ver el bloque "Resultado de los greps §R-6" al final de este archivo.
+
+### Cierre de la localnet
+- kill "$(cat <SMOKE_DIR>/sui.pid)" (PID 2656790) -> rc 0; el comando en segundo plano termino con exit code 144 (esperado: SIGTERM). kill -0 "$(cat <SMOKE_DIR>/sui.pid)" -> "No such process", rc 1. ps aux | grep -c '[s]ui start' -> 0.
+- ss -ltn | grep -c ':19000 ' -> 0 (queda libre); ss -ltn | grep ':9000 ' -> las mismas 2 lineas LISTEN que al empezar (el servicio de otro proyecto, intacto).
+- sui-start.log: 0 lineas (0 coincidencias de panic, de puerto en uso ni de ERROR). rm -rf <SMOKE_DIR> verificado (test ! -e <SMOKE_DIR> -> existe=no): se borraron la genesis (con las claves desechables), los arboles v1, v1c, v2, v3, v4a, v4b, v4c, v5 y sbx, el binario 1.83.0 (bin183/dl183), las sondas, los pubfiles y todo el output.
+- rm -f contracts/deployments/localnet.json (nunca se creo); test ! -e contracts/deployments/localnet.json -> 0; ! compgen -G 'contracts/Pub.*.toml' -> 0.
+- git status --porcelain --untracked-files=all -> 0 lineas; git diff --stat -> vacio; git diff --exit-code -- contracts/Move.lock contracts/Published.toml contracts/sources contracts/tests contracts/deployments app .github -> exit 0.
+- Docker: antes (al empezar) docker ps -aq | wc -l = 5, docker images -aq | wc -l = 17. Despues: contenedores 6, imagenes 17, 0 imagenes <none>. El contenedor extra es pg-smoke-189, creado a las 01:13 (-0500) durante la corrida y "Up" a la hora del cierre; NO lo creo esta tarea (esta sesion no ejecuto ningun docker run ni compose; solo docker ps/images de lectura): otra sesion o proyecto del host. No se toco. Los otros 5 son los de antes.
+
+### Guarda de ~/.sui (C-13, R-12)
+- Inicio: stat -c '%y %s %n' del client.yaml de la carpeta de config del usuario (<HOME real>/.sui/...) ->2026-10-30 17:52:52.515735237 -0500 244; ls -la de la carpeta: solo client.yaml; sha256sum de client.yaml = ef12fd09615f (primeros 12 hex) = linea base.
+- Despues de escribir env.sh (con la herramienta de escribir): igual. Despues de la genesis: igual (mismo mtime, 244 bytes, solo client.yaml, ef12fd09615f). A lo largo de las llamadas: sin cambios observados. Despues de cerrar la genesis y borrar <SMOKE_DIR>: igual (2026-10-30 17:52:52.515735237 -0500, 244 bytes, solo client.yaml, ef12fd09615f). Despues de escribir este reporte y al final: ver el bloque final del archivo.
+- Todos los scripts (env.sh, ptb.sh, v14.sh, las sondas .mjs), las fuentes Move, los pubfiles y este reporte se escribieron SOLO con las herramientas de escribir/editar archivos; sin heredoc, sed -i, printf ni echo para texto con la CLI. Para el paquete de control se hizo un unico sed hacia un archivo NUEVO (Pub.v4c.toml, nunca -i, sin texto de la CLI), como permite la Receta U.
+- Ejecucion accidental de la CLI: ninguna.
+
+### Documentación
+- READMEs / agents.md actualizados: no aplica (TASK-1b no cambia arquitectura, layout, comandos, contrato ni tests; no se tocaron docs). Se sugiere que el orquestador anote H-d..H-j en la revision del MID y, si copia la fixture candidata, la documente en contracts/README.md ("Tests").
+- Snippet propuesto para documents/STATUS.md (fila "localnet aislada @ feature/issue-73-multigame (TASK-1b de #73)"): localnet aislada @ feature/issue-73-multigame (TASK-1b de #73), CLI 1.84.0-9dc25070cf2e (red y upgrades) + 1.83.0-16d2dc1e05ed (v1, SHA-256 del tgz y del binario re-verificados contra 88dd53b antes de ejecutar), Node v26.13.0, 2026-11-20, puerto 19000 (el 9000 lo ocupa un servicio de otro proyecto, no se toco) | sin delta de baseline (arbol sin cambios desde 1a) | V-3 PASA (los prefijos de tipos y eventos de un upgrade son el ID de definicion = typeOrigins); V-12 NO PASA la hipotesis (el ID de almacenamiento de una version >= la que define el modulo tambien pasa; falla solo un ID anterior); V-4 (eventType sin parametros = prefijo de todas las instanciaciones, exige ID de definicion; emitModule depende de la version emisora; maximo 10 literales); V-5 (MoveAbort.location.package = ID de la version ejecutada); V-13 PASA (borrow() == Clock 0x6; PV 142 en mainnet/testnet/localnet; helper de test con ctx_builder(&scenario)); V-14 (a)-(c) PASA con mensaje y control; V-15 PASA (rechazo estatico previo a cualquier comando, la tx queda FailedTransaction con gas cobrado); V-2 additive informado (el modulo nuevo pasa; un modulo que llama a add_fees exige --skip-verify-compatibility por el friend mismatch local de la CLI; el body change de house se rechaza en cadena).
+
+### Resultado de los greps §R-6 y de la guarda (corridos con /usr/bin/grep -nE DESPUES de escribir y corregir este reporte)
+Diff del worktree: vacio (git status --porcelain --untracked-files=all y git diff --stat sin entradas).
+Sobre este reporte:
+1. [0-9a-fA-F]{40,64}: 11 lineas, 10 valores distintos, todos publicos: los 5 IDs de paquete de la leyenda (PKG1..PKG5), la House y el UpgradeCap de una localnet desechable (IDs de objeto, no cuentas); los dos SHA-256 esperados y verificados del tgz y del binario 1.83.0 (de ci.yml en 88dd53b, publicos; el del binario aparece 2 veces) y el SHA de commit del framework de PV 142 (e6f43880..., commit publico de MystenLabs/sui, en la ruta del cache del mensaje de V-13). Ninguna cuenta de la genesis, ninguna clave.
+2. 0x[0-9a-fA-F]{8,}: 6 lineas, las de la leyenda (los 5 paquetes y la House): IDs de paquete/objeto. Ninguna cuenta.
+3. claves, frases y rutas personales (tercer patron del handoff): 0 coincidencias (la unica que habia, un texto que enumeraba una ruta del cache en V-14, se reformulo).
+4. direcciones abreviadas con puntos suspensivos (cuarto patron del handoff): 0 coincidencias (la unica, un ejemplo de direccion de V-4, se reformulo).
+Sobre la fixture candidata <scratchpad>/fixtures_1b_candidatas/localnet-type-origins-upgraded.json (no esta en el worktree): grep 1 y 2: 32 lineas cada uno, todos IDs de paquete de la localnet desechable (PKG1, PKG2, PKG3, PKG4, PKG5) y las direcciones del sistema 0x1 y 0x2 (en la linkage); grep 3 y 4: 0. La cuenta de la genesis (ADMIN) no aparece en el archivo (grep del valor: 0 coincidencias); el archivo no tiene rutas.
+Guarda de rastros sobre este borrador: el conteo de la cadena de error de comando inexistente (grep -c con el texto del handoff) da 0, y el grep de rastros de una ejecucion accidental (los tres textos del handoff: fallo de genesis, carpeta de config del usuario y puerto en uso) da 0 lineas, tras reformular las dos lineas del cierre y de la guarda que nombraban esas condiciones como algo que no ocurrio.
+Guarda de ~/.sui tras escribir este reporte: stat -> 2026-10-30 17:52:52.515735237 -0500 244 bytes; ls -la: solo client.yaml; sha256sum de client.yaml = ef12fd09615f = linea base. Al final de la sesion: ver la respuesta del DEV (misma comprobacion repetida despues de la ultima edicion).
+
+~~~~
+
+
+---
+
+## 4. TASK-1b (revisión del MID)
+
+> MID, TASK-1b: PASA CON CAMBIOS (V-12 contradice una premisa del plan; handoff v1.2.3; fixture de typeOrigins).
+
+PASA CON CAMBIOS
+
+## Revisión TASK-1b: PASA CON CAMBIOS (HANDOFF_MULTIGAME v1.2.2; reporte del DEV de 415 líneas y la fixture candidata)
+
+- **Fecha:** 2026-11-20. Solo lecturas (reporte, fixture, fuentes de `MystenLabs/sui` @ `testnet-v1.84.1` para el helper del reloj) y la edición del handoff (v1.2.3). No corrí gates ni `sui`; el worktree no tiene cambios del DEV.
+- **Resultado:** el task cumple el DoD: **V-3, V-4, V-5, V-13, V-14 (a, b, c), V-15 y V-2 `additive` están respaldados** por salida pegada y **V-12 está medido** (con un resultado distinto del que suponía el plan: no es un fallo del task, es un hallazgo). **V-13 y V-15 están en PASA**, así que TASK-2 y TASK-2b pueden arrancar. Los cambios que pido son de documentación:
+  - el handoff v1.2.3 (ya aplicado);
+  - una errata mínima del plan (**v1.3.2**, propuesta abajo, sin tocar decisiones del owner), que conviene pasar al MAYOR como delta;
+  - commitear la fixture candidata y documentarla.
+- **Controles del orquestador:** coinciden con el reporte (`~/.sui` 244 B, solo `client.yaml`, los 12 hex de línea base, 19000 libre, 9000 ajeno igual, worktree limpio, 0 `command not found`). **Docker:** el reporte declara 6 contenedores al cierre y atribuye el extra a otra sesión (un postgres creado a las 01:13 durante la corrida); la sesión nunca ejecutó Docker salvo lecturas. Lo acepto como **no atribuible a la corrida**; la regla es "no tocar lo ajeno" y el conteo de referencia de §0 pasó a "los 5 de siempre más los efímeros de otras sesiones" (handoff v1.2.3).
+
+## 1. Verificación de cada V
+
+| V | Veredicto del DEV | Mi veredicto | Respaldo que verifiqué |
+|---|---|---|---|
+| **V-16** (re-verificación) | PASA | **PASA** | Los dos SHA-256 se re-verificaron contra `88dd53b` **antes** de ejecutar; primera ejecución = `smoke_guard_v1`; versión `1.83.0-16d2dc1e05ed`. |
+| **V-3** prefijos = ID de definición | PASA | **PASA** | La tabla de orígenes (`ledgerService.getObject` con `readMask` `package`) coincide con los prefijos de **objetos** (`getObject.type`) y de **eventos** (`listEvents.event_type`) para `Probe<GTwo>` y `Probe<GThree>`. Dato útil: `event.packageId` es el ID de almacenamiento del **emisor**, no el de definición. |
+| **V-12** `typeArguments` | NO PASA la hipótesis | **RESUELTO: la hipótesis del plan es falsa en una parte (ver §2)** | Matriz c1-c7, t1-t7, x1-x5 con digests: el ID de definición **siempre** pasa; un ID de almacenamiento de versión **≥** la definición **también** pasa (c2, t2, t3, x2, x3); falla un ID **anterior** a la definición (c5, t5, x4) o el **original** para un tipo de un upgrade (c7, t6), con `TypeNotFound`. No es un fallo del task: la evidencia está completa. |
+| **V-4** filtro `ListEvents` | PASA | **PASA** | Medido: `eventType` sin parámetros = **prefijo** de todas las instanciaciones (8 eventos; 6 y 2 por tipo); exige ID de definición (con el posterior u original: 0); `emitModule` depende de la versión emisora (2 y 6 eventos según el paquete que se llamó); **máximo 10 literales por filtro** (N=10 ok, N=11 `INVALID_ARGUMENT` "filter contains 11 literals; at most 10 are allowed"); el servidor exige direcciones de 64 hex (con `0x2` corto da `INVALID_ARGUMENT`). El DEV corrigió su propio relleno inválido (nota de la línea 149): el límite está bien aislado. |
+| **V-5** `MoveAbort.location.package` | PASA | **PASA** | a1-a5 + el abort anidado: el ID es el de la **versión ejecutada** (el del paquete por el que se llamó), también para `house` (PKG1/PKG2/PKG3 según la llamada), nunca el original ni el de definición del módulo. |
+| **V-13** `clock::borrow()` | PASA | **PASA** | (a) compila y ejecuta con el framework PV 142 (`build`, `--lint` y `test` en 0 con `--warnings-are-errors`, 86 = 83 + 3); (b) `borrow()` = objeto `Clock` `0x6` en **la misma** transacción (k3: dos funciones distintas en un PTB) y en transacciones consecutivas (k1, k2, k4, también llamando por el paquete v2); (c) `set_clock_timestamp` exige `ms` creciente (test de abort con código 12) y sin setter cada tx avanza 1 ms; (d) PV de mainnet por GraphQL público de solo lectura = 142 (informativo; antes del upgrade de testnet no cambia nada). El hallazgo H-g (helper) cambia el handoff: ver §3. |
+| **V-14** witness y `Collected` | PASA (a, b, c) | **PASA** | Cada caso con el **mensaje esperado y un control positivo que compila**: (a1) `EC04001` "can only be instantiated within its defining module", (a2) `EC04016` "too few arguments", controles (a1_control y witness propio) en 0; (b1/b2) `EC05001` "Cannot ignore values without the 'drop' ability", (b3) `EC06001` "unused value without 'drop'"; (c1) `EC05001` "all fields require the ability 'store'" (struct `key`), (c2) idem `drop`/`store`, (c3) `public_transfer` exige `key`+`store`; control (b_control, c_control) en 0. Cumple R2-3 de TASK-1a/handoff. |
+| **V-15** hot potato | PASA (con precisión) | **PASA** | h1 (collect, `cancel` con el **mismo** objeto, pay) ⇒ `InvalidArgumentToPrivateEntryFunction` en el comando de la `entry`; h0 (control) y h2 (después de consumir el potato) pasan; h3 (otro objeto del mismo juego) pasa; h4 `cancel<A>` sobre `Thing<B>` ⇒ `TypeMismatch`; h8/h9 anteponen un comando que abortaría (`probe::fail`) y el error informado es el del comando infractor, no el aborto ⇒ **ningún comando se ejecuta**; la misma conclusión por `simulateTransaction`. La precisión H-h (redacción) va al handoff (R.7). |
+| **V-2 `additive`** | PASA (informado) | **PASA** (informado) | (a1) módulo nuevo que no toca `house`: pasa bajo `additive`; (b) cambio de cuerpo en `house` bajo `additive`: `IncompatibleUpgrade` **en cadena** y, con el paquete de control "C" (compatible), el mismo cambio pasa ⇒ la causa es la política; (a2) módulo nuevo que llama a `add_fees`: la CLI 1.84.0 lo rechaza **localmente** (`EUC01009 friend mismatch`) y la cadena lo acepta con `--skip-verify-compatibility`, y el depósito funciona (`fees_collected` 1000000); además, la CLI 1.84 no rompe `additive` sobre un paquete publicado con la 1.83. |
+
+**Baseline:** aceptable que no se re-midieran los gates completos: `git diff e13856c..HEAD` sobre `contracts/sources`, `tests`, `Move.lock`, `Move.toml`, `Published.toml`, `deployments`, `app` y los scripts es vacío (solo cambiaron fixtures, README y docs), y la medición parcial en el sandbox (86 = 83 + 3, build y `--lint` en 0) y el gas de publicar (47246000 MIST) coinciden con §0.
+
+## 2. Punto 1: V-12 y plan §4.4 / R-5 (el importante)
+
+**¿La matriz respalda la lectura del DEV?** Sí, completa y consistente:
+- **Pasan:** c1 (definición), c2 (ID del último upgrade v3 para un tipo definido en v2), c3 (target y tipo con ID v2), c4 (tipo de v3), t1-t4 (`touch` sobre los mismos objetos con IDs distintos), x1-x3 y x5 (tras v4 y v5).
+- **Fallan con `TypeNotFound`:** c5 (`PKG2::g_three`: ID anterior a la definición en v3), c7 y t6 (ID original para un tipo de v2), x4 (`PKG2::g_three` tras v5).
+- **No se envían:** c6, t7 (target con el ID original: el módulo no existe ahí).
+- Patrón: el runtime resuelve `<id>::mod::Tipo` cargando **esa versión del paquete** y buscando `mod::Tipo` en ella; si la versión contiene el módulo (versión ≥ la definición), el tipo se normaliza a su ID de definición; si no la contiene, `TypeNotFound`.
+
+**¿Hay riesgo de fondos o de confusión de tipos? No.** Razones, con evidencia:
+1. **El par módulo+nombre mapea a un único origen.** La tabla de orígenes de un upgrade hereda las del predecesor (`move_package.rs:837-892`, líneas 853 y 868: `existing_table.remove(&mod_key).unwrap_or(storage_id)`); un tipo que desaparece es error de compatibilidad (plan H-2). Un tipo no se puede borrar ni redefinir con otro layout en un upgrade compatible, así que ningún ID ≥ la definición puede resolver a un tipo **distinto**: o es el mismo tipo o no existe.
+2. **Es el mismo tipo canónico, no uno equivalente:** V-3 muestra que `c2` (escrito con el ID de almacenamiento v3) produce `<PKG2>::g_two::GTwo`; y t1-t3 operan sobre **el mismo objeto** `Probe<GTwo>` con tres variantes del ID, sin `TypeMismatch`. El tipo del **objeto** y de los **eventos** es siempre el de definición (V-3, V-4).
+3. **Entre paquetes distintos no hay colisión:** los IDs de familias distintas son distintos; un ID de otra familia da `TypeNotFound`.
+4. **El fallo de los IDs anteriores es cerrado** (la transacción aborta sin efectos), no una resolución a otro tipo (c5, c7, t5, t6, x4).
+
+**Qué NO cambia:** la regla de diseño "los `typeArguments` se arman con el `definingId` de `typeOrigins`" **se mantiene** (siempre resuelve, es una sola regla y no depende del comportamiento del runtime), y la **lectura** de tipos en eventos, objetos y filtros **sí exige** el ID de definición (V-3, V-4).
+
+**Qué se suaviza:** el **motivo** de §4.4 y de R-5 para los `typeArguments`. El plan dice que armar `claim_timeout<…v3…::coinflip::Coinflip>` "apuntaría a un tipo que no existe con ese ID y el usuario no podría cancelar desde la app": medido, con `coinflip` definido en v2 funciona. Lo que sí es cierto es el target (el ID original no sirve para módulos de upgrades: se usa el `packageId` vigente) y la lectura.
+
+**¿Plan v1.3.2 y nueva revisión del MAYOR, o alcanza una nota en el handoff?**
+- El **handoff ya quedó correcto** (R.7, TASK-1b, TASK-7b en v1.2.3) y el DEV no necesita nada más.
+- Pero el **plan aprobado** conserva afirmaciones que la medición desmiente (§4.4 segundo bullet, R-5, fila V-12 de §13). No es una afirmación de **seguridad** (la conclusión de seguridad —usar `definingId`— no cambia), pero el MAYOR **sí** usó ese escenario como respaldo de su hallazgo M-6 en la ronda 2, y dejar una premisa falsa en un documento aprobado viola PROY-20 (docs coherentes con la evidencia). **Recomiendo una errata mínima v1.3.2 del plan y pasarla al MAYOR como revisión de delta, sin bloquear TASK-2/2b** (no dependen de ella).
+
+**Hunks propuestos para el plan v1.3.2 (para que el MID/orquestador los aplique; no los apliqué porque el encargo limitaba la edición al handoff):**
+1. **§3.1 punto 3** (H-e): "La compatibilidad `compatible` no compara la lista de amigos (`compatibility_mode.rs:264-275`); en la **cadena**, `additive` tampoco (solo `dep_only`, `inclusion_mode.rs:131-133`). Medido en TASK-1b (V-2): la **CLI 1.84.0 sí** verifica localmente `additive` contra la lista de amigos de `house` (`EUC01009 friend mismatch`) y exige `--skip-verify-compatibility`; con `compatible` (D7) no ocurre."
+2. **§4.4, segundo bullet** (H-d): "**También los `typeArguments` de las `entry` genéricas** (`cancel<G>`, `reject<G>`, `claim_timeout<G>`, `refund_stalled<G>`) se arman por diseño con el ID de **definición** de `G`, que siempre resuelve. Medido (V-12, TASK-1b): un ID de almacenamiento de una versión **≥** la que introduce el módulo también resuelve (el runtime normaliza al ID de definición, sin confusión de tipos); solo falla uno **anterior** a la definición o el original (`TypeNotFound`). El motivo de la regla es tener **una sola** forma que no dependa de ese comportamiento; el target sí necesita una versión que contenga el módulo (`packageId` vigente)."
+3. **Fila R-5 de §12:** reemplazar "; V-12" por "; los `typeArguments` con `definingId` siempre resuelven (V-12)".
+4. **Fila V-12 de §13:** "`typeArguments` de una `entry` genérica con IDs de definición (pasa siempre), de almacenamiento posterior (pasa, medido) y anterior a la definición o el original (`TypeNotFound`, medido)" y marcarla **resuelta en TASK-1b**.
+5. **Fila R-9 de §12** (H-b): agregar "un `init` agregado a un módulo ya publicado hace rechazar el upgrade (`IncompatibleUpgrade`, TASK-1a V-8): solo un módulo **nuevo** puede tener `init`".
+6. **§8.2 (V-4) y fila V-13 de §13:** "medido en TASK-1b: máximo **10 literales** por filtro; `eventType` sin parámetros es un prefijo; `emitModule` no sirve para el lobby" y "PV de mainnet = 142 (informativo)".
+
+**Para el MAYOR (lo tramita el MID), separado:**
+- **Qué decisión haría falta del MAYOR:** una revisión de **delta** (no de diseño) de la errata v1.3.2. Preguntas: (1) ¿confirmás que el argumento de no-confusión (origen único por módulo+nombre, tipos no borrables ni redefinibles, objeto de tipo canónico idéntico con IDs distintos) basta para dar por cerrada la premisa de R-5 y que mantener "`typeArguments` desde `typeOrigins`" como **regla de diseño** (defensa en profundidad) es suficiente? (2) ¿aceptás que el DoD de TASK-5/7b fije **solo** "con `definingId` pasa" y no exija que el otro ID falle? (3) ¿alguna objeción a que el plan cite H-e (`--skip-verify-compatibility` bajo `additive`) en §3.1 sin tocar P-7?
+- **Qué decisión haría falta del owner:** **ninguna**. No cambia D1-D14 ni ninguna decisión de fondos.
+
+## 3. Puntos 2 a 9
+
+**Punto 2 (H-e, V-2 `additive`): confirmado y no exige nada del DEV.**
+- La CLI 1.84.0 rechaza **localmente** `additive` + módulo nuevo que llama a `add_fees` (`EUC01009 friend mismatch`; en la cadena pasa con `--skip-verify-compatibility`, y el depósito funciona). Corrige el plan §3.1 (3) (hunk 1 arriba).
+- D7 no se ve afectada: la política es `compatible` hasta después de #18 y V-1 (TASK-1a) pasó bajo `compatible`.
+- **Handoff v1.2.3:** TASK-4 declara que el script **nunca** pasa `--skip-verify-compatibility` y deja la nota para el runbook de TASK-6 y para la decisión de mainnet. No hay más cambios.
+
+**Punto 3 (H-g, helper del reloj): corregido en el handoff.**
+- Fuente verificada: `next_with_context` exige que `rgp` del builder coincida con el del scenario o que la época avance (`test_scenario.move:354`), y `ctx_builder_from_sender` fija `rgp = 700` y `ids_created = 0`: por eso compila y falla al ejecutar.
+- La forma válida (medida por el DEV): `let builder = test_scenario::ctx_builder(&scenario).set_clock_timestamp(ms); scenario.next_with_context(builder);` (**ligar a una variable**; dentro del argumento da `EC07001`).
+- `ctx_builder(&scenario)` hereda el sender de la transacción **actual** y no existe `set_sender` (revisé los setters del builder): para cambiar de sender hace falta un `next_tx(sender)` previo. Escribí el helper `at(scenario, sender, ms)` ILUSTRATIVO en TASK-2 "Contexto" y apunté el encabezado de TASK-2b a él. Dejé dicho que el cambio de sender con ese `next_tx` **no fue ejercido** (el DEV de TASK-2 lo valida con su primer test; si falla, desviación declarada con evidencia). Es la única parte no verificada de H-g.
+
+**Punto 4 (H-i, V-4): recogido en TASK-7b.**
+- Regla nueva: contar **literales** (no términos), tope de **10** por filtro, partir en trozos con test (11 literales ⇒ 2 pedidos de ≤ 10); "Todos" usa el literal **prefijo** (`eventType` sin parámetros de tipo) y un juego usa el tag completo; `emitModule` no se usa; direcciones de 64 hex (`normalizeStructTag` ya las completa; test con un tipo del framework).
+- Con un solo juego se está en ≤ 8 literales (estimado): la regla evita el problema cuando entren Battleship y más eventos. No toca TASK-5/7a salvo por el DoD ya descrito.
+
+**Punto 5 (H-j, V-5): TASK-7a lo exige.** `transactionErrorMessage` acepta todos los IDs de `upgrades[]` además de `packageId` y `originalPackageId` (hoy `errors.ts:195-206` solo acepta esos dos), con un test por cada ID (un abort de `duel` y uno de `house` con `location.package` = cada uno). Antes decía "si V-5 mostró otro ID": ahora es obligatorio, porque V-5 lo midió.
+
+**Punto 6 (H-f): TASK-4 lo dice; la fixture se commitea.**
+- TASK-4 (V-6) ahora especifica la fuente de la tabla: `ledgerService.getObject` con `readMask: { paths: ['package'] }` (`package.typeOrigins` con `moduleName`, `datatypeName`, `packageId`), la CLI (`object <paquete> --json`, `type_origin_table`) o el GraphQL público, y **no** `movePackageService.getPackage` (devuelve vacío).
+- **Decisión: sí, commitear** `localnet-type-origins-upgraded.json` en `contracts/scripts/fixtures/`. Es la forma real de la respuesta que TASK-4 tiene que parsear (V-6), pesa 5.9 KB, lleva `_meta.sandbox = true`, **no tiene cuentas** (verifiqué: solo IDs de paquete y las direcciones del sistema `0x1` y `0x2` de la `linkage`; sin rutas ni claves) y queda fuera de `contracts/sources` y `app/src`, así que no toca el control de R2-1.
+- **Texto del README** (`contracts/README.md`, sección "### Tests"; ampliar el párrafo que agregó el orquestador para las fixtures de TASK-1a):
+  > "`localnet-type-origins-upgraded.json` (#73, TASK-1b) es la respuesta real de `LedgerService.GetObject` con `read_mask` `package` sobre un paquete de ensayo con 4 upgrades de una localnet desechable: conserva `linkage` y `typeOrigins` (`moduleName`, `datatypeName`, `packageId`) y omite los módulos con su bytecode. Lleva `_meta.sandbox = true`: los módulos (`probe`, `g_two`, `g_three`, `sb_thing`, `sb_game`, `clock_probe`, `mod_a`, `fee_probe`) son de ensayo y la fixture sirve solo por la **forma** de la tabla de orígenes (V-6 de TASK-4). No trae cuentas."
+
+**Punto 7 (H-h, V-15): confirmo la redacción y que INV-D1/D5 se sostienen.**
+- Redacción correcta: **"ningún comando se ejecuta"** (rechazo estático y previo a la ejecución de cualquier comando; h8/h9 lo prueban anteponiendo un comando que abortaría y el error informado es el del infractor). **No** "el nodo la descarta sin cobrar": la transacción se secuencia como `FailedTransaction`, con gas cobrado (cómputo 1000000) y sin efectos de estado (0 eventos).
+- INV-D1/D5 se sostienen: la propiedad que importa es que nadie intercale `cancel`/`claim_timeout`/`refund_stalled` con el **mismo** `Duel` entre `collect`/`activate_atomic` y `pay` (h1, h8). El clique es **por objeto** (h3: otro objeto del mismo juego no está en el clique, y eso es correcto: no afecta a los fondos del `Duel` en curso). Cualquier valor que se enrede con el potato solo hace el clique **más** restrictivo.
+- Redacté la precisión en R.7 del handoff.
+
+**Punto 8 (V-14, witness y `public(package)`): R.7 ahora lo dice así.** El witness impide forjar el de **otro** juego, no que un módulo del **mismo paquete** cree un `Duel<G>` con **su propio** witness (control a1_control_own_witness compila); "solo `duel` llama a `add_fees`" y "cada juego usa su witness" son **reglas de revisión** (plan §2.3), no garantías del compilador. Antes R.7 no lo decía.
+
+**Punto 9 (desviaciones, baseline y plantilla): aceptables.**
+- Binario 1.83.0 y tgz del cache de `suiup` con ambos SHA-256 re-verificados antes de ejecutar: igual que en 1a.
+- Envoltorios `public collect_a/pay_a` en el stand-in: necesarios porque `public(package)` no se llama desde un PTB; la `entry` real llama a `activate_atomic`/`pay` adentro y nada es público (R.7 lo prohíbe). Solo vive en el sandbox.
+- Paquete de control "C" y v4/v5: necesarios para atribuir el rechazo de V-2 a la política y repetir V-12 con IDs posteriores.
+- Lectura de PV de mainnet: solo `epoch`/`protocolVersion` por GraphQL público, sin claves, informativa (primer intento con error TLS transitorio y dos reintentos correctos).
+- Docker: ver arriba.
+- Plantilla §R y R-12/C-13: **cumplen.** Todas las secciones de §R, guarda de `~/.sui` en inicio, tras env.sh, tras la génesis, tras cerrar y tras el reporte (los 12 hex de línea base), reporte y scripts escritos con herramientas de archivos, greps de rastros en 0 (tras reformular dos líneas), sin ejecución accidental. El reporte pega los IDs (paquetes, `House`, `UpgradeCap`) de una localnet desechable, no cuentas. Los scripts de sonda se borraron con la corrida (desviación 9, declarada): el reporte pega los fragmentos esenciales y todas las salidas; no hace falta repetir.
+- **Observación:** el DEV midió el límite de 10 literales y el comportamiento de prefijo contra la localnet 1.84.0; el fullnode público de testnet (`sui-node 1.84.1`) debería comportarse igual, pero no se midió ahí. Se confirma en el smoke de testnet (TASK-9, lecturas públicas), no antes.
+
+## 4. Qué commitear (lista exacta)
+1. `contracts/scripts/fixtures/localnet-type-origins-upgraded.json`, copiada tal cual desde `.../scratchpad/fixtures_1b_candidatas/` (sin editar).
+2. `contracts/README.md`: la frase del punto 6 (junto al párrafo de las fixtures de TASK-1a).
+3. `documents/HANDOFF_MULTIGAME.md` **v1.2.3** (ya editado; hunks abajo).
+4. Reporte del DEV a `documents/REPORTES_MULTIGAME.md` tras §R-6.
+5. **Aparte, sin bloquear TASK-2/2b:** errata del plan v1.3.2 (hunks 1-6 del punto 1) y su pase al MAYOR.
+
+**Snippet de STATUS (ajustado a mi veredicto):** "localnet aislada @ `feature/issue-73-multigame` (TASK-1b de #73), CLI `1.84.0-9dc25070cf2e` (red y upgrades) + `1.83.0-16d2dc1e05ed` (v1; SHA-256 del tgz y del binario re-verificados contra `88dd53b` antes de ejecutar), Node `v26.13.0`, 2026-11-20, puerto 19000 | sin delta de baseline | **V-13 y V-15 PASA** (condición de TASK-2/2b); V-3 PASA (los prefijos de tipos y eventos son el ID de definición = `typeOrigins`); **V-12 medido: el ID de definición siempre pasa y un ID de almacenamiento ≥ la definición también (el runtime normaliza, sin confusión de tipos); falla solo uno anterior a la definición (`TypeNotFound`)** ⇒ errata del plan; V-4 (≤ 10 literales por filtro, `eventType` sin parámetros = prefijo, `emitModule` no sirve); V-5 (`MoveAbort.location.package` = ID de la versión ejecutada); V-14 (a)-(c) PASA con mensaje y control; V-15 (rechazo estático previo a cualquier comando; la tx queda `FailedTransaction` con gas cobrado y sin efectos); V-2 `additive` (módulo nuevo pasa; cambio de cuerpo se rechaza en cadena; módulo que llama a `add_fees` exige `--skip-verify-compatibility` por el `friend mismatch` local); mainnet en PV 142 (informativo); helper del reloj con `ctx_builder(&scenario)` ligado a una variable."
+
+## 5. Hunks del handoff v1.2.3 (líneas v1.2.2 → v1.2.3; copia previa en `.../scratchpad/handoff73_v122.md`)
+- **2c2:** versión v1.2.3.
+- **12a13,28:** sección "Cambios de v1.2.2 a v1.2.3" (tabla H-d..H-j, witness y Docker).
+- **78c94:** §0, Docker de referencia + los efímeros ajenos.
+- **262a279,281:** R.7 (v1.2.2 línea 263): bullets nuevos de `typeArguments`, witness con `public(package)` y V-15.
+- **330c349, 346c365:** TASK-1b, resultado medido de V-12.
+- **374c393,402:** TASK-2 "Contexto", helper del reloj `at(...)` (H-g).
+- **436c464:** TASK-2b, encabezado de tests apuntando al helper.
+- **506a535, 509c538:** TASK-4, "Sin `--skip-verify-compatibility`" y fuente de la tabla de orígenes + fixture.
+- **624c653:** TASK-7a, errores con todos los IDs de `upgrades[]` (H-j).
+- **656c685, 664c693:** TASK-7b, reglas de V-4 (10 literales, prefijo, `emitModule`) y tests.
+
+## 6. Siguiente paso
+**Autorizo TASK-2** (depende de V-1 de 1a y de V-13 de 1b, ambos en PASA) y **TASK-2b** cuando cierre TASK-2 (V-13 y V-15 en PASA). El DEV de TASK-2 usa el helper `at(...)` del handoff v1.2.3 y declara si el cambio de sender con `next_tx` previo no funciona.
+
+## §R-6 sobre esta revisión
+Greps con `/usr/bin/grep` sobre este archivo: hex de 40-64 caracteres, `0x` + 8 hex, claves/rutas y abreviaturas con puntos suspensivos; resultado en el mensaje de entrega. No incluye direcciones de cuenta ni hashes completos.
+
