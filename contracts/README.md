@@ -8,8 +8,11 @@ código discrepan, manda el código y se corrige la tabla en el mismo PR (`agent
 |---|---|
 | `sources/house.move` | `battleship::house` |
 | `sources/game.move` | `battleship::game` |
+| `sources/duel.move` | `battleship::duel` (#73): base común de los juegos 1 vs 1 con reloj por jugada |
+| `sources/coinflip.move` | `battleship::coinflip` (#73): el coinflip nuevo sobre `duel` |
 | `tests/house_tests.move` | Suite de `battleship::house` (`sui::test_scenario`) |
 | `tests/game_tests.move` | Suite de `battleship::game` (`sui::test_scenario`) |
+| `tests/duel_tests.move`, `tests/coinflip_tests.move` | Suites de `battleship::duel` y `battleship::coinflip` (`sui::test_scenario`) |
 | `scripts/publish.mjs` | Publicación con guardas, `record` y `check` de los despliegues (#7, ver "Despliegues") |
 | `scripts/deployment.mjs` | Formato de `deployments/<red>.json`: funciones puras que usan el script y la CI |
 | `scripts/*.test.mjs`, `scripts/fixtures/` | Tests (`node --test`) y salidas reales de la CLI 1.84.0 en una localnet desechable |
@@ -639,6 +642,229 @@ determinista: dos capturas seguidas dan el mismo archivo salvo `_meta.capturedAt
   cuya última transacción es un `cancel` con un `typeArgument` de un ID anterior a la definición del tipo (`TypeNotFound`).
 - **Comando** (dentro de la localnet aislada, desde `<repo>`, con Node 26): `node app/scripts/capture-duel-reads.mjs --url "$RPC_URL"`
   (y los otros dos igual). Con el 9000 ocupado por un servicio de otro proyecto, **nunca** una captura sin `--url`.
+
+## `battleship::duel` y `battleship::coinflip` (#73)
+
+Plataforma multijuego: `duel` es la **base común** de los juegos 1 vs 1 (custodia de las dos apuestas, ciclo de vida, comisión y
+**reloj por jugada**) y `coinflip` es el primer juego sobre ella. Los dos módulos los agrega un **upgrade compatible** del paquete
+v1 (`house` y `game` no cambian: `game::Game` sigue en pie y sus partidas `Pending` se aceptan, cancelan o rechazan por las dos
+versiones del paquete). Dependencias de módulos: `coinflip → duel → house` y `game → house`. Fuente canónica: `sources/duel.move` y
+`sources/coinflip.move`; si estas tablas y el código discrepan, manda el código (`agents.md` §5). La app los lee desde
+`app/src/sui/` (`duel.ts`, `events.ts`, `gameRegistry.ts`, `transactions/duel.ts`; mapa en `app/README.md`).
+
+### Objetos
+
+| Tipo | Abilities | Campos (en el orden del BCS, congelado por el upgrade) |
+|---|---|---|
+| `Duel<phantom G>` | `key` | `id`, `version` (la de la House al crear), `house_id`, `creator`, `opponent: Option<address>`, `bet` (MIST), `stake: Balance<SUI>` (la **única** custodia: `bet` en `Pending`, `2 × bet` en `Active`, 0 en los estados finales), `fee_rate` (bps, copiado al crear), `turn_ms` (plazo por jugada de su control; 0 = sin reloj), `state` |
+| `DuelState` | `copy, drop, store` | Seis variantes **en este orden**: `Pending`, `Cancelled`, `Active { acceptor, to_move: u8, deadline_ms: u64 }`, `Resolved { acceptor, winner }`, `TimedOut { acceptor, winner }`, `Expired { acceptor }` |
+| `Collected` | **ninguna** (hot potato) | `duel_id`, `pot`, `fee`: lo devuelven `activate_atomic` y `collect` tras cobrar la comisión y solo lo consume `pay` |
+| `Coinflip` | `drop` | El witness del juego (nunca `COINFLIP`: sería candidato a OTW), sin constructor `public`, sin `copy` ni `store` |
+
+`Duel` no tiene `store` (solo `duel` lo comparte). `to_move` es una máscara fija en toda versión futura: `1` = el creador, `2` = el
+aceptante, `3` = ambos a la vez; el `0` solo existe dentro de la transacción de un `activate_atomic`. `deadline_ms` es absoluto, en ms
+del `Clock`.
+
+### Estados
+
+| Estado | Cómo se llega | Salidas | `stake` |
+|---|---|---|---|
+| `Pending` | `create` (no expira nunca) | `cancel` (creador), `reject` (invitado) → `Cancelled`; `activate` / `activate_atomic` → `Active` | `bet` |
+| `Cancelled` | `cancel`, `reject` | terminal | 0 |
+| `Active` | `activate` (juegos con reloj); en `activate_atomic` solo dentro de la transacción | `record_move` → `Active`; `pay` → `Resolved`; `claim_timeout` → `TimedOut`; `refund_stalled` → `Expired` | `2 × bet` |
+| `Resolved` | `pay` (lo decide el juego) | terminal | 0 |
+| `TimedOut` | `claim_timeout`: el plazo de quien debía mover venció y se pagó el pozo menos la comisión a su **rival** | terminal | 0 |
+| `Expired` | `refund_stalled`: nadie movió (ambos pendientes tras el plazo) o un jugador sigue pendiente pasada la gracia | terminal | 0 |
+
+Con el coinflip, **ningún** `Duel<Coinflip>` queda `Active` entre transacciones (INV-D5): se acepta de forma atómica.
+
+### Controles de tiempo
+
+La base recibe el **id** del control (`u8`), nunca milisegundos libres; un id > 7 aborta con `EBadControl` (`duel`/16). Los ids
+publicados no cambian de significado (PROY-2); un upgrade puede agregar ids nuevos.
+
+| Id | Control | `turn_ms` | | Id | Control | `turn_ms` |
+|---|---|---|---|---|---|---|
+| 0 | sin reloj (solo juegos atómicos) | 0 | | 4 | rapid 60 min | 3 600 000 |
+| 1 | rapid 10 min | 600 000 | | 5 | daily 1 día | 86 400 000 |
+| 2 | rapid 20 min | 1 200 000 | | 6 | daily 3 días | 259 200 000 |
+| 3 | rapid 30 min | 1 800 000 | | 7 | daily 7 días (`MAX_TURN_MS`) | 604 800 000 |
+
+`CLAIM_GRACE_MS` = 604 800 000 (7 días): con un solo jugador pendiente, `refund_stalled` se habilita a los 7 días **después** del
+plazo. La app guarda un **espejo** de la tabla y de la gracia (`TIME_CONTROLS` y `CLAIM_GRACE_MS` en `app/src/sui/gameRegistry.ts`,
+solo para mostrar; `agents.md` §5): el contrato aborta igual, y un `turn_ms` que el espejo no conoce se muestra en formato genérico,
+nunca como un error. El coinflip crea siempre con el control 0.
+
+### Funciones
+
+`G` es el witness del juego: toda función que crea, muta o paga un `Duel<G>` lo recibe **por valor** (`_: G`, `G: drop`) y es
+`public(package)`; las salidas que no dependen del juego son `entry` genéricas. Los aborts van **en el orden de la tabla**.
+
+| Función | Visibilidad | Estado → | Aborts, en orden | Evento | Fondos |
+|---|---|---|---|---|---|
+| `create<G>(_, house, stake, opponent, control)` | `public(package)` | → `Pending` | `house::EWrongVersion`, `EBetTooLow`, `EBetTooHigh`, `ESelfInvite`, `EBadControl` | `DuelCreated` | todo el `Coin` es `stake`; copia `version`, `house_id`, `fee_rate` y `turn_ms`; comparte el `Duel` |
+| `cancel<G>(duel)` | **`entry`** | `Pending` → `Cancelled` | `ENotCreator`, `ENotPending` | `DuelCancelled` | 100 % al creador; no recibe la House ni lee la versión |
+| `reject<G>(duel)` | **`entry`** | `Pending` → `Cancelled` | `ENoInvitation`, `ENotInvited`, `ENotPending` | `DuelCancelled` | 100 % al creador; sin House ni versión |
+| `activate<G>(_, duel, house, payment, first_to_move)` (con reloj) | `public(package)` | `Pending` → `Active` | `house::EWrongVersion`, `EVersionMismatch`, `EWrongHouse`, `ESelfPlay`, `ENotInvited`, `ENotPending`, `EWrongStake`, `ENoClock`, `EBadMask` | `DuelActivated` | `payment` (exacto `bet`) se suma a `stake` |
+| `activate_atomic<G>(_, duel, house, payment): Collected` (sin reloj) | `public(package)` | `Pending` → `Active` (solo en la transacción) | los de `activate` con `EHasClock` en lugar de `ENoClock` y `EBadMask`; luego `house::EWrongVersion` en `add_fees` | `DuelActivated` | cobra `fee = ⌊pozo × fee_rate / 10 000⌋` (`u128`) a `House.fees_collected` (siempre, también 0) |
+| `record_move<G>(_, duel, next_to_move)` | `public(package)` | `Active` → `Active` | `ENotActive`, `ENoClock`, `ENotPlayer`, `ENotYourTurn`, `EDeadlinePassed`, `EBadMask` o `EPhaseMismatch` | `DuelTurn` | sin fondos |
+| `collect<G>(_, duel, house): Collected` | `public(package)` | `Active` → `Active` | `ENotActive`, `ENotPlayer`, `ENoClock`, `EDeadlinePassed`, `EVersionMismatch`, `EWrongHouse`, `EBrokenStake`, `house::EWrongVersion` | — | cobra la comisión |
+| `pay<G>(_, duel, c, winner_index)` | `public(package)` | `Active` → `Resolved` | `EWrongDuel`, `ENotActive`, `EBadWinnerIndex` | `DuelResolved` | `pozo − fee` al ganador (una dirección **guardada**, nunca `ctx.sender()`) |
+| `claim_timeout<G>(duel, house)` | **`entry`**, cualquiera | `Active` → `TimedOut` | `house::EWrongVersion`, `ENotActive`, `ENoClock`, `EVersionMismatch`, `EWrongHouse`, `ENotExpired`, `EBothPending`, `EBrokenStake` | `DuelTimedOut` | comisión a la House y `pozo − fee` al **rival** del que debía mover, nunca a quien llama |
+| `refund_stalled<G>(duel)` | **`entry`**, cualquiera | `Active` → `Expired` | `ENotActive`, `ENoClock`, `ENotStalled` | `DuelExpired` | `bet` al creador y el resto al aceptante, **sin comisión**, sin House ni versión |
+
+Antes de `deadline_ms` solo se puede mover o liquidar por jugada (`EDeadlinePassed` desde el plazo); desde `deadline_ms` solo reclamar:
+los dos conjuntos son disjuntos (INV-D6), así que no hay carrera en el borde. `collect`, `activate_atomic` y `claim_timeout` son las
+**únicas** que llaman a `house::add_fees`.
+
+**`battleship::coinflip`** (sin `init`, sin `public`): dos `entry`.
+
+| Función | Qué hace |
+|---|---|
+| `create(house, stake, opponent)` | `duel::create` con el control 0; abierta (`opponent` `none`) o invitación. Emite `DuelCreated<Coinflip>` |
+| `accept(duel, house, payment, random)` | Acepta y resuelve en la **misma transacción**: `activate_atomic` (valida y cobra la comisión) → sorteo por índice, sin ramas (`generate_u8_in_range(0, 1)`: `0` = creador, `1` = aceptante) → `pay`. El remitente es el aceptante y emite `DuelActivated<Coinflip>` **y** `DuelResolved<Coinflip>`: el resultado de aceptar es el `DuelResolved` |
+
+`cancel` y `reject` del coinflip son las genéricas de `duel` con `typeArguments = [<definingId>::coinflip::Coinflip]`.
+
+### Eventos
+
+Los siete llevan el juego en el tipo (`<definingId>::duel::<Evento><<definingId>::coinflip::Coinflip>`) y tienen `copy, drop`.
+
+| Evento | Campos | Lo emite |
+|---|---|---|
+| `DuelCreated<G>` | `duel_id`, `creator`, `opponent: Option<address>`, `bet`, `fee_rate`, `control: u8`, `turn_ms` | `create` |
+| `DuelCancelled<G>` | `duel_id`, `creator`, `cancelled_by`, `refund` | `cancel`, `reject` |
+| `DuelActivated<G>` | `duel_id`, `creator`, `acceptor`, `bet`, `turn_ms`, `to_move`, `deadline_ms` | `activate`, `activate_atomic` |
+| `DuelTurn<G>` | `duel_id`, `actor`, `to_move`, `deadline_ms` | `record_move` |
+| `DuelResolved<G>` | `duel_id`, `creator`, `acceptor`, `winner`, `pot`, `fee`, `payout` (`pot == payout + fee`) | `pay` |
+| `DuelTimedOut<G>` | `duel_id`, `creator`, `acceptor`, `winner`, `claimed_by`, `pot`, `fee`, `payout` | `claim_timeout` |
+| `DuelExpired<G>` | `duel_id`, `creator`, `acceptor`, `refund_each` | `refund_stalled` |
+
+### Abort codes de `duel` (0-25; `coinflip` no define ninguno)
+
+Estables desde el primer upgrade (PROY-2), una causa por código. `house::EWrongVersion` (3 del módulo `house`) también aborta en
+`create`, `activate`, `activate_atomic`, `collect` y `claim_timeout`: el número 3 existe en `house`, `game` y `duel`, así que la app
+mapea por **módulo + código** (`ABORT_MESSAGES` en `app/src/sui/errors.ts`; un abort informa el ID de la versión **ejecutada**).
+
+| Código | Constante | Causa |
+|---|---|---|
+| 0 | `EBetTooLow` | `stake` < `house.min_bet()` |
+| 1 | `EBetTooHigh` | `stake` > `house.max_bet()` |
+| 2 | `ESelfInvite` | `opponent` es quien crea |
+| 3 | `ENotCreator` | quien cancela no es el creador |
+| 4 | `ENotPending` | el estado no es `Pending` |
+| 5 | `ENotInvited` | el duelo es una invitación a otra dirección |
+| 6 | `ENoInvitation` | `reject` sobre un duelo abierto |
+| 7 | `EVersionMismatch` | `duel.version` ≠ `house.version()` |
+| 8 | `EWrongHouse` | la House no es la del duelo |
+| 9 | `ESelfPlay` | el creador intenta aceptar lo suyo |
+| 10 | `EWrongStake` | el pago no es exactamente `bet` |
+| 11 | `ENotActive` | el estado no es `Active` |
+| 12 | `EWrongDuel` | el `Collected` es de otro duelo |
+| 13 | `EBadWinnerIndex` | `winner_index` > 1 |
+| 14 | `ENotExpired` | `claim_timeout` antes del plazo |
+| 15 | `EBrokenStake` | un `Active` cuyo `stake` ≠ `2 × bet` |
+| 16 | `EBadControl` | id de control fuera de la tabla |
+| 17 | `ENoClock` | `activate`, `collect`, `record_move`, `claim_timeout` o `refund_stalled` sobre un duelo sin reloj |
+| 18 | `EHasClock` | `activate_atomic` sobre un duelo con reloj |
+| 19 | `EBadMask` | máscara `to_move` fuera de `1..=3` |
+| 20 | `ENotYourTurn` | `record_move` de un jugador fuera de `to_move` |
+| 21 | `EDeadlinePassed` | `record_move` o `collect` desde el plazo |
+| 22 | `EBothPending` | `claim_timeout` con ambos pendientes (no hay rival a quien pagar) |
+| 23 | `ENotStalled` | `refund_stalled` antes del plazo (ambos pendientes) o de la gracia |
+| 24 | `ENotPlayer` | quien firma no es jugador del duelo |
+| 25 | `EPhaseMismatch` | `record_move` en fase simultánea con `next_to_move` distinto del bit pendiente del otro |
+
+### Fondos, comisión y versionado
+
+- **Misma fórmula que `game`**: `fee = ⌊pozo × fee_rate / 10 000⌋` con intermedio `u128` sobre el **pozo completo** (`2 × bet`),
+  redondeada hacia abajo (el resto es del ganador), con el `fee_rate` **copiado al crear** y `add_fees` siempre (también con 0); también
+  en el reclamo por tiempo. La House es **la misma** que la de `game`: `fees_collected` suma las dos fuentes. `fee_amount` está duplicada
+  en `duel` (la de `game.move` es privada y no se toca; LIM-5 aceptado).
+- **`max_bet` debe quedar por debajo de 2^63 MIST.** Con un `max_bet` mayor, un `Duel` con apuesta ≥ 2^63 se crea y el creador lo puede
+  cancelar (sin pérdida), pero **no se puede activar**: `2 × bet` no cabe en `u64` y la suma del `Balance` y `bet * 2` abortan antes de
+  mover nada. Es el mismo comportamiento que `game.move`; los límites por defecto (50 SUI) están lejos y el límite lo fija el titular del
+  `HouseCap`.
+- **Versionado.** `VERSION` no se sube con el upgrade de #73. Cada `Duel` guarda la `version` de la House al crearse; `activate`,
+  `activate_atomic`, `collect` y `claim_timeout` exigen `EVersionMismatch` (duelo y House de la misma versión) y leen la House con el
+  chequeo de versión **antes** de mover fondos, así que un corte por `VERSION` los alcanza. `cancel`, `reject` y `refund_stalled` no
+  reciben la House ni leen la versión: funcionan en toda versión.
+- **Las partidas de `game::Game` siguen valiendo** por el ID original del paquete y por el del upgrade, con la misma House.
+
+### PTB
+
+- **Crear (coinflip nuevo):** `splitCoins(gas, [monto])` y `coinflip::create(house, coin, opponent)`; el control es siempre el 0.
+- **Aceptar:** `splitCoins(gas, [bet])` y `coinflip::accept(duel, house, coin, random)` con `tx.object.random()` **último** (después del
+  comando con `Random` solo `TransferObjects` y `MergeCoins`).
+- **`cancel`, `reject`, `claim_timeout`, `refund_stalled`:** `duel::<función>` con `typeArguments = [<definingId de G>::<módulo>::<G>]`. El
+  **target** lleva el `packageId` **vigente** (el ID original no tiene los módulos del upgrade); el **argumento de tipo**, el ID de
+  **definición** de `G` (`typeOrigins`; el del almacenamiento de una versión anterior a la definición, o el original para un tipo de un
+  upgrade, falla con `TypeNotFound`). `claim_timeout` lleva además la House.
+- **Lectura:** los tipos de objetos, eventos y filtros llevan el ID de **definición**; el lobby "Todos" usa el literal **prefijo** de cada
+  evento (sin parámetros de tipo) y un juego, el tag completo (regla del nodo, `agents.md` §5).
+
+## Modelo de confianza (#73, `duel` y `coinflip`)
+
+Lo que el contrato garantiza, lo que **no**, y de qué depende. Se suma al modelo del `UpgradeCap` de "Versionado" (su titular es de
+confianza total y la política `compatible` vale hasta después de #18).
+
+### Restricción permanente (d) del `Duel` (D-20261119-05, P-13)
+
+Las `entry` genéricas (`cancel<G>`, `reject<G>`, `claim_timeout<G>`, `refund_stalled<G>`) valen para **todo `G` futuro** para siempre
+(Battleship incluido). En toda versión futura y para todo juego:
+
+1. `stake` es la **única** custodia de fondos del `Duel`.
+2. En `Pending`, `stake` contiene **solo** la apuesta del creador: un juego futuro no puede hacer que el aceptante deposite mientras el
+   estado sigue `Pending` (`cancel<G>` se llevaría su apuesta al creador).
+3. Ningún dato con valor va a *dynamic fields*.
+4. `DuelState` no cambia de significado.
+5. **Reloj por jugada: tiempo agotado = derrota.** En `Active`, cuando vence el plazo de quien debe mover, el **rival** puede reclamar el
+   pozo menos la comisión (`claim_timeout`), para todo `G` y toda versión; el plazo y esa regla los aplica **la base**, nunca el juego.
+   La codificación es fija: `to_move ∈ 1..=3` con los bits 1 = creador, 2 = aceptante, 3 = ambos (si vence con 1 gana el aceptante, con 2
+   el creador, con 3 hay 100/100) y `deadline_ms` absoluto, en ms del `Clock`. Salvedad: el reclamo **cobra comisión y lee la House con
+   versión**, así que un corte por `VERSION` lo bloquea; no se puede cortar nunca la salida mínima `refund_stalled`.
+6. Los estados terminales `Resolved`, `TimedOut` y `Expired` no cambian de significado.
+
+Es criterio de aceptación de #18.
+
+### Garantía de `Active`
+
+Ningún camino deja SUI bloqueado en `Active`: `stake == 2 × bet` exacto y la comisión se cobra **solo** en una transacción que termina en
+`Resolved` o `TimedOut` (el `Collected`, sin abilities, solo lo consume `pay`). Desde el plazo, cualquiera puede reclamar (`claim_timeout`,
+el pozo menos la comisión al rival) y, a los `CLAIM_GRACE_MS` (7 días), reembolsar 100/100 **sin comisión y sin House ni versión**
+(`refund_stalled`), aunque la House esté cortada: el peor caso de bloqueo es el plazo más la gracia (≤ 14 días). Costo aceptado: un ganador
+que no reclama en la gracia pierde el cobro y cada jugador recupera su apuesta. Con ambos pendientes al vencer, el estado es `Expired` con
+100/100 sin comisión (nadie jugó).
+
+### Aleatoriedad (SEG-5) y reglas de revisión
+
+- `duel` **no recibe `Random`**; solo `coinflip` combina `Random` con la base, en una `entry` no `public`, con el orden
+  **validar y cobrar (`activate_atomic`) → sortear → pagar (`pay`)**, el generador creado adentro y el sorteo por índice sin ramas; ambos
+  resultados gastan lo mismo (medido en la localnet aislada).
+- El lint `public_random` no alcanza (solo mira funciones `public` con `Random` directo y se puede silenciar). Reglas de revisión, con un
+  `grep` de CI: **ningún** `#[allow(lint(public_random))]` en `sources/`; **ningún** struct con un campo `RandomGenerator`; **ninguna**
+  `public fun` de `duel` ni de un módulo de juego devuelve `Collected` ni recibe `&mut Duel<G>`; toda función con `Random` es `entry` con el
+  generador creado adentro. **El grep excluye las funciones `#[test_only]`** (p. ej. `new_collected_for_testing` es `public fun` y devuelve
+  `Collected`, pero solo se compila en tests): se comprueba que no entran al bytecode del `build` con
+  `strings build/battleship/bytecode_modules/duel.mv | grep -c _for_testing` = 0.
+- El witness impide forjar el de **otro** juego, pero un módulo del **mismo paquete** puede crear un `Duel<G>` con **su propio** witness
+  (`public(package)` lo permite): "solo `duel` llama a `house::add_fees`" y "cada juego usa solo su witness" son **reglas de revisión**, no
+  garantías del compilador. Un juego de terceros reabre el ataque de abortar-y-reintentar y es un STOP aparte.
+- El control de fuga del ensayo de reloj se corre **sin `-i`** (sensible a mayúsculas) y solo sobre las líneas **agregadas** del ciclo
+  (`git diff <merge-base> -U0 -- contracts/sources app/src` y los archivos nuevos): con `-i` el witness `TestGame` de `contracts/tests` daría
+  falsos positivos.
+
+### Dependencias del protocolo (no del contrato)
+
+SEG-5 e INV-D1 dependen de **dos reglas del protocolo de Sui**, medidas con la **PV 142** (CLI `1.84.0`):
+
+1. **Tras el comando que usa `Random` solo se admiten `TransferObjects` y `MergeCoins`** (`PostRandomCommandRestrictions`): un PTB que
+   intercala otro comando después de `accept` se **rechaza en la validación de entrada del nodo**, sin digest, sin gas y sin efectos.
+2. **El "clique caliente" (H-14):** una `entry` privada no admite en un PTB un valor del clique de un `Collected`; esa transacción **se
+   secuencia como `FailedTransaction`**, con gas cobrado y sin efectos (no la descarta el nodo sin cobrar).
+
+Las dos reglas se **re-verifican en cada task de toolchain que suba la PV**; si alguna cambiara, se reabre la revisión de SEG-5 antes de
+seguir. También del protocolo (no del contrato): la cota de 10 literales por filtro de `ListEvents` (`agents.md` §5).
 
 ## Despliegues (#7)
 
