@@ -928,3 +928,9 @@ solo por su **forma** (comandos del PTB, `published`, `UpgradeCap`). `Published.
 el placeholder `<SMOKE_DIR>`); `localnet-upgrade-retry-error.txt` es el error real de reintentar el upgrade con el pubfile
 viejo (`PackageIDDoesNotMatch`). Llevan la cuenta efímera de la misma génesis desechable, sin valor y con la clave
 destruida.
+
+`localnet-type-origins-upgraded.json` (#73, TASK-1b) es la respuesta real de `LedgerService.GetObject` con `read_mask`
+`package` sobre un paquete de ensayo con 4 upgrades de una localnet desechable: conserva `linkage` y `typeOrigins`
+(`moduleName`, `datatypeName`, `packageId`) y omite los módulos con su bytecode. Lleva `_meta.sandbox = true`: los módulos
+(`probe`, `g_two`, `g_three`, `sb_thing`, `sb_game`, `clock_probe`, `mod_a`, `fee_probe`) son de ensayo y la fixture sirve
+solo por la **forma** de la tabla de orígenes (V-6 de TASK-4). No trae cuentas.

@@ -1,0 +1,160 @@
+{
+  "_meta": {
+    "source": "LedgerService.GetObject con read_mask [object_id, version, package] sobre un paquete con 4 upgrades (v5) de una localnet aislada desechable; se conservan linkage y type_origins (se omiten los modulos, con su bytecode; con este read_mask el mensaje Package no trae storage_id, original_id ni version: el id y la version salen del objeto)",
+    "sandbox": true,
+    "note": "Los modulos (probe, g_two, g_three, clock_probe, sb_thing, sb_game, mod_a, fee_probe) son de ensayo (TASK-1b de #73): la fixture sirve solo por la FORMA de la tabla de origenes"
+  },
+  "objectId": "0xe755f94df695c89a68fbd1e6a1a6bee920ef659d0b316dba3f2c7424c99ad4f1",
+  "version": "5",
+  "package": {
+    "linkage": [
+      {
+        "originalId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "upgradedId": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "upgradedVersion": "1"
+      },
+      {
+        "originalId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+        "upgradedId": "0x0000000000000000000000000000000000000000000000000000000000000002",
+        "upgradedVersion": "1"
+      }
+    ],
+    "typeOrigins": [
+      {
+        "moduleName": "clock_probe",
+        "datatypeName": "BothRead",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      },
+      {
+        "moduleName": "clock_probe",
+        "datatypeName": "BorrowRead",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      },
+      {
+        "moduleName": "clock_probe",
+        "datatypeName": "ObjectRead",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      },
+      {
+        "moduleName": "house",
+        "datatypeName": "House",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "house",
+        "datatypeName": "HouseCap",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "house",
+        "datatypeName": "HOUSE",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "house",
+        "datatypeName": "FeeRateUpdated",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "house",
+        "datatypeName": "BetLimitsUpdated",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "house",
+        "datatypeName": "FeesWithdrawn",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "house",
+        "datatypeName": "HouseCapTransferred",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "house",
+        "datatypeName": "HouseMigrated",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "g_three",
+        "datatypeName": "GThree",
+        "packageId": "0x5115ef518f1a01a2eba1f6ff293b9f63965679e0b7c7fa447525a3a27d65abc1"
+      },
+      {
+        "moduleName": "g_two",
+        "datatypeName": "GTwo",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      },
+      {
+        "moduleName": "game",
+        "datatypeName": "Game",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "game",
+        "datatypeName": "GameCreated",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "game",
+        "datatypeName": "GameCancelled",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "game",
+        "datatypeName": "GameResolved",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "game",
+        "datatypeName": "GameState",
+        "packageId": "0x29d8f0543cc025064557a46b965061f761309c54c0126223c94d425025ff6509"
+      },
+      {
+        "moduleName": "mod_a",
+        "datatypeName": "ModA",
+        "packageId": "0x8703046f017e66cf810d5054223b34ada4196310078a8d5a1f4f654b4b5fbd8e"
+      },
+      {
+        "moduleName": "probe",
+        "datatypeName": "Probe",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      },
+      {
+        "moduleName": "probe",
+        "datatypeName": "ProbeEvent",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      },
+      {
+        "moduleName": "probe",
+        "datatypeName": "ProbeWitness",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      },
+      {
+        "moduleName": "sb_thing",
+        "datatypeName": "Thing",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      },
+      {
+        "moduleName": "sb_thing",
+        "datatypeName": "Collected",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      },
+      {
+        "moduleName": "sb_thing",
+        "datatypeName": "ThingCancelled",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      },
+      {
+        "moduleName": "sb_game",
+        "datatypeName": "SbA",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      },
+      {
+        "moduleName": "sb_game",
+        "datatypeName": "SbB",
+        "packageId": "0xcda25a78da8be99ccff19ee1ee184041de9b20e43344de95b9fa3b29aadd5c6b"
+      }
+    ]
+  }
+}
