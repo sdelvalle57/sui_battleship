@@ -10805,3 +10805,83 @@ Hecha sobre el árbol sin commitear (HEAD `0ec278a`) cuando el DEV entregó el r
 
 **Pendientes que no entran en estos commits:** el recorrido de UX del owner (≈ 15 minutos sobre `npm run dev` con la localnet aislada) y el paso 7 del smoke, obligatorio en #18; a #18 van además el builder de creación con control de tiempo y el campo de control por defecto en `GameDef`; a #72, UX-1..UX-15 como criterios de aceptación del rediseño y alinear las acciones anteriores a PROY-16; a #58, el code-splitting.
 
+
+
+---
+
+## 33. Compuerta §G: evidencia de contratos sobre el head
+
+> Orquestador: build, lint, 309 tests, diff de duel.move desde 6ffecf9 y control permanente de bytecode sobre un build de producción limpio, con la CLI 1.84.0 (las rutas del worktree sustituidas por <repo>).
+
+~~~~text
+$ bash -c cd <repo>/contracts && printf 'n\n' | sui --version
+sui 1.84.0-9dc25070cf2e
+exit=0
+$ bash -c cd <repo>/contracts && printf 'n\n' | sui move build -e testnet --warnings-are-errors 2>&1 | tail -4
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+$ bash -c cd <repo>/contracts && printf 'n\n' | sui move build -e testnet --lint --warnings-are-errors 2>&1 | tail -4
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+exit=0
+$ bash -c cd <repo>/contracts && printf 'n\n' | sui move test -e testnet --warnings-are-errors 2>&1 | tail -3
+[ PASS    ] battleship::duel_tests::test_turn_based_game_runs_to_resolution_by_collect_and_pay
+[ PASS    ] battleship::duel_tests::test_turn_ms_is_never_changed_by_record_move
+Test result: OK. Total tests: 309; passed: 309; failed: 0
+exit=0
+$ bash -c cd <repo>/contracts && git diff --stat 6ffecf9..HEAD -- sources/duel.move | tail -2; echo diff-duel-exit=$(git diff --quiet 6ffecf9..HEAD -- sources/duel.move; echo $?); git diff --exit-code origin/master -- Move.lock Published.toml; echo lock-exit=$?
+diff-duel-exit=0
+lock-exit=0
+exit=0
+$ bash -c cd <repo>/contracts && ls build/battleship/bytecode_modules/ && strings build/battleship/bytecode_modules/*.mv | grep -c _for_testing
+coinflip.mv
+coinflip_tests.mv
+dependencies
+duel.mv
+duel_tests.mv
+game.mv
+game_tests.mv
+house.mv
+house_tests.mv
+143
+exit=0
+$ bash -c cd <repo>/contracts && printf 'n\n' | sui move disassemble build/battleship/bytecode_modules/coinflip.mv 2>&1 | grep -E '^(public|entry|public\(friend\)|friend|public entry|public\(package\)|fun|entry fun) ' | sed -E 's/\(.*//' | sort | uniq -c | sort -rn | head -40
+      1 entry create
+      1 entry accept
+exit=0
+$ bash -c cd <repo>/contracts && printf 'n\n' | sui move disassemble build/battleship/bytecode_modules/duel.mv 2>&1 | grep -E '^(public|entry|public\(friend\)|friend|public entry|public\(package\)|fun|entry fun) ' | sed -E 's/\(.*//' | sort | uniq -c | sort -rn | head -40
+      6 public
+      1 entry reject<G>
+      1 entry refund_stalled<G>
+      1 entry claim_timeout<G>
+      1 entry cancel<G>
+exit=0
+$ bash -c cd <repo>/contracts && printf 'n\n' | sui move build -e testnet 2>&1 | tail -2 && ls build/battleship/bytecode_modules/ && echo strings-for_testing=$(strings build/battleship/bytecode_modules/*.mv | grep -c _for_testing)
+INCLUDING DEPENDENCY Sui
+BUILDING battleship
+coinflip.mv
+dependencies
+duel.mv
+game.mv
+house.mv
+strings-for_testing=0
+exit=0
+$ bash -c cd <repo>/contracts && printf 'n\n' | sui move disassemble build/battleship/bytecode_modules/duel.mv 2>&1 | grep -E '^(public\(friend\)|public|entry|public entry) ' | cut -c1-60 | sort | uniq -c | sort -rn | head; printf 'n\n' | sui move disassemble build/battleship/bytecode_modules/coinflip.mv 2>&1 | grep -E '^(public\(friend\)|public|entry|public entry) ' | cut -c1-60
+      1 public(friend) record_move<G: drop>(_#0#0: G, duel#0#0: &mut
+      1 public(friend) pay<G: drop>(_#0#0: G, duel#0#0: &mut Duel<G>
+      1 public(friend) create<G: drop>(_#0#0: G, house#0#0: &House, 
+      1 public(friend) collect<G: drop>(_#0#0: G, duel#0#0: &mut Due
+      1 public(friend) activate_atomic<G: drop>(_#0#0: G, duel#0#0: 
+      1 public(friend) activate<G: drop>(_#0#0: G, duel#0#0: &mut Du
+      1 entry reject<G>(duel#0#0: &mut Duel<G>, ctx#0#0: &mut TxCont
+      1 entry refund_stalled<G>(duel#0#0: &mut Duel<G>, ctx#0#0: &mu
+      1 entry claim_timeout<G>(duel#0#0: &mut Duel<G>, house#0#0: &m
+      1 entry cancel<G>(duel#0#0: &mut Duel<G>, ctx#0#0: &mut TxCont
+entry create(house#0#0: &House, stake#0#0: Coin<SUI>, oppone
+entry accept(duel#0#0: &mut Duel<Coinflip>, house#0#0: &mut 
+exit=0
+
+~~~~
