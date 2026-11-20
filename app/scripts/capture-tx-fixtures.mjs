@@ -4,10 +4,10 @@
 //
 // Uso (dentro de la localnet aislada, con `app.env` cargado y después de las transacciones de la CLI de
 // `contracts/README.md`, "Lectura desde la app" → "Recaptura de la fixture de transacciones"):
-//   node app/scripts/capture-tx-fixtures.mjs [--url http://127.0.0.1:9000]
+//   node app/scripts/capture-tx-fixtures.mjs [--url http://127.0.0.1:<puerto>]
 //
-// Solo acepta la localnet en `http://127.0.0.1:9000` (guarda compartida `localnet-guard.mjs`): con cualquier otra URL
-// sale con código 2 **antes** de importar el SDK o hacer pedidos. Lee `contracts/deployments/localnet.json`, exige que
+// Solo acepta loopback `http://127.0.0.1:<puerto>` (1024-65535; por defecto `http://127.0.0.1:9000`; guarda compartida
+// `localnet-guard.mjs`): con cualquier otra URL sale con código 2 **antes** de importar el SDK o hacer pedidos. Lee `contracts/deployments/localnet.json`, exige que
 // el chain id del nodo coincida y escribe `contracts/fixtures/game-tx.localnet.json`. Las simulaciones **no firman**:
 // `setSender` con una cuenta de la génesis y `build({ client })`. Las direcciones e IDs del archivo son de cuentas
 // efímeras de una génesis desechable; ninguna clave. Sin `sender`: los casos llevan el rol (`A`, `B`, `C`, `ADMIN`).

@@ -3,7 +3,7 @@
 // simulación (S-3), la preflight sin el cap (S-5), el objeto `HouseCap` y la House después del retiro.
 //
 // Uso (dentro de la localnet aislada, génesis nueva y publicación variante B, con `app.env` cargado):
-//   node app/scripts/capture-house-fixtures.mjs [--url http://127.0.0.1:9000]
+//   node app/scripts/capture-house-fixtures.mjs [--url http://127.0.0.1:<puerto>]
 //
 // Antes, estas transacciones por CLI, **en este orden** y con el cap en `ADMIN` todo el tiempo (el que publicó):
 //   1. `ADMIN`: `update_fee_rate` 250;
@@ -13,8 +13,8 @@
 //   5. `ADMIN`: `withdraw_fees` + `TransferObjects` a sí mismo en una PTB (la House queda con `fees_collected` 0).
 // Nada más: ni otra partida, ni otra transacción de admin, ni `transfer_house_cap` (S-2 va después de la captura).
 //
-// Solo acepta la localnet en `http://127.0.0.1:9000` (guarda compartida `localnet-guard.mjs`): con cualquier otra URL
-// sale con código 2 **antes** de importar el SDK o hacer pedidos. Lee `contracts/deployments/localnet.json`, exige que
+// Solo acepta loopback `http://127.0.0.1:<puerto>` (1024-65535; por defecto `http://127.0.0.1:9000`; guarda compartida
+// `localnet-guard.mjs`): con cualquier otra URL sale con código 2 **antes** de importar el SDK o hacer pedidos. Lee `contracts/deployments/localnet.json`, exige que
 // el chain id del nodo coincida y escribe `contracts/fixtures/house-admin.localnet.json`. **Solo lee y simula**: las
 // simulaciones no firman (`setSender` con una cuenta de la génesis y `build({ client })`). Las direcciones e IDs del
 // archivo son de cuentas efímeras de una génesis desechable; ninguna clave. Sin `sender`: los casos llevan el rol

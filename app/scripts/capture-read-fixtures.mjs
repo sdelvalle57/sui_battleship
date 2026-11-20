@@ -1,10 +1,10 @@
 // Captura las fixtures reales de lectura por gRPC (#10, D-20261031-01) desde la localnet aislada de `agents.md` §3.
 //
 // Uso (dentro de la localnet aislada, con `app.env` cargado; ver `contracts/README.md`, "Lectura desde la app"):
-//   node app/scripts/capture-read-fixtures.mjs [--url http://127.0.0.1:9000]
+//   node app/scripts/capture-read-fixtures.mjs [--url http://127.0.0.1:<puerto>]
 //
-// Solo acepta la localnet en `http://127.0.0.1:9000`: con cualquier otra URL sale con error **antes** de crear el
-// cliente o hacer pedidos. Lee `contracts/deployments/localnet.json`, exige que el chain id del nodo coincida y escribe
+// Solo acepta loopback `http://127.0.0.1:<puerto>` (1024-65535; por defecto `http://127.0.0.1:9000`): con cualquier otra
+// URL sale con error **antes** de crear el cliente o hacer pedidos. Lee `contracts/deployments/localnet.json`, exige que el chain id del nodo coincida y escribe
 // `contracts/fixtures/game-reads.localnet.json`. Las direcciones e IDs del archivo son de cuentas efímeras de una génesis
 // desechable; ninguna clave. Los eventos se guardan sin `sender`.
 import process from 'node:process';
