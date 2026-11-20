@@ -422,6 +422,7 @@ el depósito sigue inmovilizado en el objeto terminal. Es reversible en una vers
 borra. La UI lo muestra al crear (#11): una nota previa con lo medido aquí (`GAME_STORAGE_DEPOSIT_MIST` de
 `app/src/sui/createGame.ts`: 1953200 abierta, 2196400 con invitación) y, tras el éxito, el costo real de red de la
 transacción (cómputo + storage − rebate de `effects.gasUsed`).
+El `Duel<G>` de #73 (más campos: `turn_ms` y un `DuelState` mayor) deposita **+456000 MIST** sobre el del `Game`: **2409200 MIST** abierta y **2652400** con invitación (medido en la localnet aislada con el precio de storage de testnet; `DUEL_STORAGE_DEPOSIT_MIST` de `app/src/sui/createGame.ts`).
 
 ### PTB
 

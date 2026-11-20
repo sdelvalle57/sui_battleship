@@ -407,14 +407,33 @@ compatible o republicación con IDs nuevos.
   (con `cancelled_by`) y `GameResolved` (`acceptor`, `winner`, `pot`, `fee`, `payout`); abort codes 0–10 (más
   `house::EWrongVersion` en `create_game` y en el cobro de `accept_game`). `GameState` y el layout de `Game`
   quedan cerrados en #8: #18 usa un objeto nuevo o dynamic fields. Tablas en `contracts/README.md`.
+- **`battleship::duel`** (#73, upgrade pendiente de autorización del owner) — base común `Duel<phantom G>` (shared, uno por
+  partida, `key` sin `store`: `version`, `house_id`, `creator`, `opponent` opcional, `bet`, `stake: Balance<SUI>`,
+  `fee_rate`, `turn_ms`, `state`), enum `DuelState` (6 variantes: `Pending | Cancelled | Active { acceptor, to_move,
+  deadline_ms } | Resolved | TimedOut | Expired`) y **reloj por jugada** aplicado por la base (8 controles por id, 0 = sin
+  reloj, y `CLAIM_GRACE_MS` = 7 días; quien deja vencer su plazo pierde). Los juegos usan la API `public(package)` (`create`,
+  `activate`, `activate_atomic`, `record_move`, `collect`, `pay`); cuatro `entry` genéricas sin witness: `cancel` y `reject`
+  (100 % al creador), `claim_timeout` (cualquiera; el pozo menos la comisión al rival de quien no movió) y `refund_stalled`
+  (cualquiera; 100/100 sin comisión, sin House ni versión); 7 eventos (`DuelCreated`, `DuelCancelled`, `DuelActivated`,
+  `DuelTurn`, `DuelResolved`, `DuelTimedOut`, `DuelExpired`) y abort codes 0–25. Entre los módulos nuevos, solo `duel` llama a `house::add_fees` (el `game` anterior la sigue llamando).
+  Tablas en `contracts/README.md`.
+- **`battleship::coinflip`** (#73) — el coinflip nuevo sobre `Duel<Coinflip>` (witness `Coinflip`, solo `drop`): `entry
+  create` (control 0, sin reloj) y `entry accept` (atómico: activa, cobra la comisión, sortea con `Random` en el último
+  comando y paga). El `game::Game` anterior queda intacto; la app lee las dos fuentes con un registro de juegos
+  (`app/src/sui/gameRegistry.ts`).
 
 ## 9. Entidades Clave
 
 `House` · `HouseCap` · `Game` (objeto compartido por partida: `version`, `house_id`, `creator`, `opponent`
 opcional, `bet`, `stake: Balance<SUI>`, `fee_rate`, `state`; sin timestamps) · `GameState` (`Pending`,
 `Cancelled`, `Resolved { acceptor, winner }`) · eventos de transición (`GameCreated`, `GameCancelled`,
-`GameResolved` con el ganador, el pozo, la comisión y el pago) · (futuro, #18) `Board`/`Ship`/
-`Coordinate` del borrador 2025 (`git show f063a0e:sources/battleship.move`).
+`GameResolved` con el ganador, el pozo, la comisión y el pago) · (#73) `Duel<G>` (la base común con reloj por jugada:
+`turn_ms`, `stake`, `state`) · `DuelState` (`Pending`, `Cancelled`, `Active { acceptor, to_move, deadline_ms }`,
+`Resolved`, `TimedOut`, `Expired`) · `Coinflip` (witness del coinflip nuevo) · eventos `Duel*` (`DuelCreated`,
+`DuelCancelled`, `DuelActivated`, `DuelTurn`, `DuelResolved`, `DuelTimedOut`, `DuelExpired`) · en la app, la **fila neutral a la
+fuente** (`GameRow`, `app/src/hooks/gameRow.ts`) y el **registro de juegos** (`GameDef`, `app/src/sui/gameRegistry.ts`) que
+dibujan las pantallas, con la UI de reloj de TASK-8b (`GameStatus`, `Countdown`, `TimeoutActions`; `app/README.md`, "Vistas con
+reloj y estándar de UX") · (futuro, #18) `Board`/`Ship`/`Coordinate` del borrador 2025 (`git show f063a0e:sources/battleship.move`).
 
 ## 10. Testing
 
