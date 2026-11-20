@@ -48,16 +48,16 @@ const PUBLISHED_TOML = readRepoFile('./fixtures/Published.localnet.toml');
 const DEPLOYMENT_FIXTURE_TEXT = readRepoFile('./fixtures/localnet.deployment.json');
 const CI_YAML = readRepoFile('../../.github/workflows/ci.yml');
 
-const LOCALNET_CHAIN_ID = '87818ef5';
+const LOCALNET_CHAIN_ID = 'cb1e492c';
 const TESTNET_CHAIN_ID = '4c78adac';
 const MAINNET_CHAIN_ID = '35834a8a';
 // Valores fijos con los que se generó `fixtures/localnet.deployment.json` (`record`, TASK-2 §3.2).
 const FIXTURE_META = Object.freeze({
   network: 'localnet',
   chainId: LOCALNET_CHAIN_ID,
-  sourceCommit: 'ef1a72026cdf02ffbabf46c34016cc151cacc620',
-  suiCliVersion: '1.83.0-16d2dc1e05ed',
-  frameworkRev: '719fb2960ccfbf9f4d33041f8ea5146d30671696',
+  sourceCommit: '88dd53b21bc8ac4b38cf6232346edfbc2e459f28',
+  suiCliVersion: '1.84.0-9dc25070cf2e',
+  frameworkRev: 'e6f43880f4b65e2c1f0397583a9690b4b22c9223',
 });
 const CONFIG_DIR = '/srv/battleship/net';
 
@@ -495,7 +495,7 @@ test('readCliJson y chainIdFromCli leen la salida --json de active-env y chain-i
   assert.equal(readCliJson({ status: 0, stdout: '"localnet"\n', stderr: '' }, 'active-env'), 'localnet');
   const cid = readCliJson({ status: 0, stdout: `{"base58":"A7xd","hex":"${LOCALNET_CHAIN_ID}"}`, stderr: '' }, 'x');
   assert.equal(chainIdFromCli(cid), LOCALNET_CHAIN_ID);
-  assert.equal(chainIdFromCli('87818ef5'), undefined);
+  assert.equal(chainIdFromCli('cb1e492c'), undefined);
   assert.throws(() => readCliJson({ status: 0, stdout: 'no json', stderr: '' }, 'active-env'), /no devolvió JSON/);
   const address = ACCOUNT_ADDRESSES[0];
   assert.throws(
@@ -693,10 +693,10 @@ test('checkDeployments: testnet coherente con su [published.testnet]; una difere
     ...localnetDeployment(),
     network: 'testnet',
     chainId: TESTNET_CHAIN_ID,
-    packageId: '0x06501a59986ee126787b2e18b133737d37ee89d1ffd207f38b2ffe61b18a4ec8',
-    originalPackageId: '0x06501a59986ee126787b2e18b133737d37ee89d1ffd207f38b2ffe61b18a4ec8',
+    packageId: '0xc1c2c06f1d7d60da6eadc482a2f0983f07d1c917e9ad0e35f30e8ba3c3ef9514',
+    originalPackageId: '0xc1c2c06f1d7d60da6eadc482a2f0983f07d1c917e9ad0e35f30e8ba3c3ef9514',
     packageVersion: 1,
-    upgradeCapId: '0xf47132acbaeb5c58715c658a84f05119bf95523dd9ea099a3d3364ce1518acbb',
+    upgradeCapId: '0x32ea9b07651911fc31c4c56ce234b33d37823b8553b0f09c33d8282196f13081',
   };
   const files = [{ name: 'testnet.json', text: JSON.stringify(testnet) }];
   assert.deepEqual(checkDeployments({ files, publishedTomlText: tomlText }), { count: 1, errors: [] });
