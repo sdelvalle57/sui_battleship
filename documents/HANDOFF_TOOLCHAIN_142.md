@@ -1,9 +1,34 @@
 # HANDOFF_TOOLCHAIN_142
-> Plan: PLAN_MULTIGAME v1.3, tarea PRE-1 (§4.5, §14, V-7 y V-9; `git show edfcdc2:documents/PLAN_MULTIGAME.md`) | Issue: #75 | Branch: `feature/issue-75-toolchain-1840` (desde `master` = `88dd53b`) | Versión: v1.2 | Fecha: 2026-11-19
+> Plan: PLAN_MULTIGAME v1.3, tarea PRE-1 (§4.5, §14, V-7 y V-9; `git show edfcdc2:documents/PLAN_MULTIGAME.md`) | Issue: #75 | Branch: `feature/issue-75-toolchain-1840` (desde `master` = `88dd53b`) | Versión: v1.3.1 | Fecha: 2026-11-19
 
 > Un solo archivo consolidado: lo es **todo** lo que el DEV necesita. Reportes del ciclo: `documents/REPORTES_TOOLCHAIN_142.md`
 > (los escribe el orquestador desde los `.txt` del DEV, §2 R-3). Al mergear, housekeeping (FLUJO §9): `git rm` de este
 > handoff y de los reportes.
+
+## Cambios de v1.3 a v1.3.1 (ronda 3 del MAYOR, `REVISION_HANDOFF_TOOLCHAIN_142_v1.3.md`: guarda de puerto aprobada)
+
+| Hallazgo | Resolución en v1.3.1 |
+|---|---|
+| N-1 | TASK-2b 2.4 pasa a ser un **punto de control formal**: el DEV termina 2.4.1-2.4.6, deja `REPORTE_TOOLCHAIN_142_TASK-2b-guarda.txt` y **se detiene**; el MID revisa; el orquestador commitea (a) solo con la guarda, el `.d.mts`, el test y los comentarios; recién después sigue 2.5. El texto de versión de los `capture-*` (2.5) va en el commit (b). Escrito en 2.4.7, en "Al terminar" de 2b y en "Commits propuestos". |
+| N-2 | El conteo nuevo de `app` ("1156 + N en 66 archivos") también en el contexto de TASK-3, en "Tests obligatorios", en el DoD de TASK-3, en el snippet de STATUS y en la tabla de gates del PR. 1156/65 queda solo como línea base de TASK-1 (§0). |
+| N-3 | Cuerpo propuesto del PR y commit de TASK-4 actualizados: guarda, `.d.mts` y test; docs (`app/README.md:328, :840`, `agents.md` §3); gates con N-2; "Seguridad" con la guarda y el incidente de TASK-2a; "Pendientes" con `networks.ts:11`. Sin nombrar el servicio ajeno del host. |
+| N-4 | **R-12** promovida a §2 (con los cuatro puntos del MAYOR) y **S-10** a §3. |
+| N-5 | Test de la guarda: se suman `http://127.0.0.1:99999` y los valores no `string` coercibles (`['http://127.0.0.1:19000']`, `new String('http://127.0.0.1:19000')`); `// @vitest-environment node` opcional. |
+| N-6 | `env.sh` con `RPC_URL=http://127.0.0.1:19000` usado por `smoke_guard` y por cada captura (`--url "$RPC_URL"`); la plantilla de `agents.md` (TASK-4) con `<puerto>` parametrizado. |
+| N-7 | Línea de sincronía en el `.d.mts` y en el JSDoc de la guarda. |
+| N-8 | Encabezado y dependencia de TASK-2b: "aprobado por el MAYOR (ronda 3), con N-1..N-4 aplicados"; sin "pendiente de la revisión del MAYOR". |
+
+## Cambios de v1.2 a v1.3 (addendum de TASK-2b: puerto de las capturas; aprobado por el MAYOR en la ronda 3)
+
+| Cambio | Dónde |
+|---|---|
+| **Contexto:** el puerto 9000 del host lo ocupa un contenedor de otro proyecto (no se toca). El owner autorizó la localnet en el puerto **19000** (`sui start --fullnode-rpc-port 19000`). `app/scripts/localnet-guard.mjs:10, :21-35` acepta solo `http://127.0.0.1:9000`, así que los tres `capture-*.mjs` saldrían con código 2. | TASK-2b, contexto |
+| Nuevo paso **2.4**: cambio mínimo de la guarda (loopback con puerto 1024-65535, regex anclada; el valor por defecto sigue siendo `http://127.0.0.1:9000`), `app/scripts/localnet-guard.d.mts`, test nuevo `app/src/test/localnet-guard.test.ts`, comentarios de ayuda con `9000` de los tres `capture-*.mjs`. El antiguo 2.4 (textos de versión) pasa a **2.5**; G-B pasa a **2.6**, G-C a **2.7**, comparación y cierre a **2.8**. | TASK-2b |
+| Arranque y capturas en el puerto 19000 con `smoke_guard` que comprueba el RPC (de la sección "Desviación autorizada" del reporte de 2a); una génesis a la vez; G-B se cierra antes de abrir G-C. | TASK-2b 2.6, 2.7 |
+| Archivos a tocar/NO tocar, tests, DoD, STOP nuevo **S-10**, riesgos y regla de reportes **R-12** (incidente de 2a), todo dentro de TASK-2b. | TASK-2b |
+| Consecuencia en TASK-3: el conteo esperado de `app` pasa a 1156 + los tests nuevos del test de la guarda, en 66 archivos. | TASK-3 3.1 |
+| Consecuencia en TASK-4: documentar el puerto y la guarda (`agents.md` §3 paso 4 y plantilla de `env.sh`, `contracts/README.md:466`, `app/README.md:328, :840`); `app/README.md` entra en "Tocar" y la lista final de archivos del PR. | TASK-4 |
+| Commits: TASK-2b se parte en dos (guarda; fixtures). | Commits propuestos |
 
 ## Cambios de v1.1 a v1.2 (ronda 2 del MAYOR, `REVISION_HANDOFF_TOOLCHAIN_142_v1.1.md`)
 
@@ -157,6 +182,11 @@ SHA-256: **los valores de los hashes viven solo en `ci.yml`**, la tabla guarda e
 - **R-9 Node 26:** `nvm use` o `export PATH=<HOME real>/.nvm/versions/node/v26.13.0/bin:$PATH && node --version` (debe dar `v26.13.0`; con otra, `npm ci` falla con `EBADENGINE` y `publish.mjs` sale con 1).
 - **R-10 Sin tocar** lo no listado en "Archivos a tocar" de cada task. Todo cambio fuera de esa lista es una desviación y va en el reporte con su motivo (FLUJO §4).
 - **R-11 Lock.** `Move.lock` **nunca** se edita a mano; solo lo cambia `update-deps` (TASK-1). Después de ese paso, cada gate se cierra sin delta del lock: **dentro de TASK-1**, con `cmp` contra la copia `Move.lock.despues` (el lock repineado todavía no está commiteado, así que `git diff --exit-code -- Move.lock` falla por construcción); **desde TASK-2a** (lock commiteado), con `git diff --exit-code -- Move.lock`.
+- **R-12 Reportes y docs sin ejecución accidental (incidente de TASK-2a; vale para todos los tasks, con más riesgo en TASK-3 y TASK-4).** Un heredoc sin comillas con acentos graves ejecutó por sustitución de comandos un `sui start` a secas con el HOME real; lo contuvo una sola barrera (que `~/.sui/sui_config/` no estaba vacío). Por eso:
+  1. Los reportes `.txt`, los borradores y las ediciones de docs se escriben **solo con las herramientas de escribir/editar archivos del harness**: nada de heredoc (ni siquiera entrecomillado), `sed -i`, `printf` ni `echo` para texto que contenga `sui`, `suiup` o acentos graves.
+  2. La guarda de R-2 de `~/.sui` (`stat`, `ls -la` y, si se tomó, `sha256sum` de `client.yaml`) se corre también **después de escribir cada reporte o borrador** y **después de cerrar cada génesis**, además de al principio y al final de cada task.
+  3. Sobre cada borrador: `grep -c 'command not found'` (debe dar 0) y `/usr/bin/grep -nE 'Cannot run genesis|sui_config|Address already in use'` (rastros de una ejecución accidental), sin coincidencias que no sean citas deliberadas ya revisadas.
+  4. Ante **cualquier** ejecución accidental de `sui`: parar, verificar `~/.sui` (R-2) y declararlo en el reporte (S-7 si algo cambió).
 
 ## 3. STOPs: frenar de inmediato y reportar al orquestador (sin tocar nada más)
 
@@ -172,6 +202,7 @@ Los que agrega el MID (mismo criterio, "cualquier otra desviación"):
 - **S-7** `~/.sui/sui_config/` cambia (mtime, tamaño o archivos nuevos) tras cualquier comando.
 - **S-8** la forma del `--json` de la 1.84 obliga a cambiar `contracts/scripts/deployment.mjs` o `publish.mjs` (este handoff autoriza adaptar **tests y fixtures**, no el código de los scripts: D-20261102-01). Se reporta con el diff de formas.
 - **S-9** un test de `app` falla tras recapturar y la causa **no** es un literal copiado de la fixture (ver TASK-3, 3.2), o arreglarlo exigiría cambiar un matcher, borrar una aserción o tocar una fórmula esperada.
+- **S-10** (guarda de puerto de TASK-2b): el lint o el `typecheck` no se cumplen con la estructura del paso 2.4 (por ejemplo el `.d.mts` no resuelve), un test existente de la guarda falla por el cambio (hoy no hay ninguno), o algún `capture-*.mjs` usa el puerto por otro camino que la `url` devuelta por `assertLocalnetUrl` (verificado hoy: ninguno). Se frena y se reporta; no se improvisa otra solución.
 
 La regla de "si solo cambia `_meta.capturedAt`, no se commitea" (regla de #10, recogida en el issue; la parte documentada hoy en
 `contracts/README.md:468, :501, :535` es la determinista: "solo cambia `_meta.capturedAt`") se aplica en TASK-2a paso 2.0 (y 2b).
@@ -361,7 +392,7 @@ Reporte `.txt`; sin commits.
 
 ## TASK-2b: fixtures de la app — área: contracts/app (tooling)
 
-Depende de TASK-2a aprobado y commiteado. Dos génesis aisladas, una a la vez (G-B y G-C).
+Depende de TASK-2a aprobado y commiteado. El cambio de la guarda de puerto (paso 2.4, v1.3) está **aprobado por el MAYOR (ronda 3), con N-1..N-4 aplicados**. Dos génesis aisladas, una a la vez (G-B y G-C), en el puerto **19000**.
 
 ### 1. Historia de usuario del task
 **Como** desarrollador, **quiero** que las fixtures reales de lectura y transacciones de la app (`contracts/fixtures/*.localnet.json`) vengan de la localnet de la 1.84.0, **para** que los parsers y la máquina de transacciones de la app se verifiquen con la forma real que va a servir el nodo.
@@ -370,37 +401,74 @@ Depende de TASK-2a aprobado y commiteado. Dos génesis aisladas, una a la vez (G
 - `contracts/fixtures/game-reads.localnet.json` (`_meta.suiCliVersion`, #10), `game-tx.localnet.json` (#11-#12) y `house-admin.localnet.json` (#14), con `_meta.suiCliVersion` = `1.83.0-16d2dc1e05ed` (de `contracts/deployments/localnet.json`, que escribe el script: `capture-*.mjs:169, :292, :267`). Los scripts de captura escriben **en el lugar** (`contracts/fixtures/…`), solo hablan con `http://127.0.0.1:9000` (`app/scripts/localnet-guard.mjs:41-54`), **no firman** y son deterministas sobre la misma red. Recetas: `contracts/README.md:464-468` (lecturas), `:486-501` (transacciones), `:517-535` (panel de la House); la secuencia de CLI de #12 como modelo: `git show b6177ae:documents/REPORTES_ACCEPT.md` (tabla de transacciones 2.x).
 - Textos con la versión dentro de los scripts de captura, que terminan en el `_meta` de la fixture: `app/scripts/capture-tx-fixtures.mjs:280` (comentario) y `:301` (`…hechas con la CLI 1.83; …`), `app/scripts/capture-house-fixtures.mjs:272` (`Transacciones por CLI 1.83, …`). `capture-read-fixtures.mjs` no tiene.
 - `agents.md:176` y `:245` dicen que el fullnode 1.83 no sirve JSON-RPC: es una medición pasada, no se reescribe.
+- **Puerto (decisión del owner, desviación del paso 4 de `agents.md` §3):** el 9000/tcp del host lo ocupa un contenedor de otro proyecto (que **no se toca**); un `sui start` sin flag muere con `Address already in use` y un `suic` con el alias apuntando al 9000 le habla al servicio ajeno. El owner autorizó correr la localnet en el **19000**. La sonda de TASK-2a (`REPORTE_TOOLCHAIN_142_SONDA_PUERTO.txt`) confirmó: `sui start --help` tiene `--fullnode-rpc-port <PUERTO>` (por defecto 9000); `sui start --network.config <dir>` **reescribe el alias `localnet`** del `client.yaml` de `<dir>` con el RPC nuevo (`crates/sui/src/sui_commands.rs:1292-1297` y `update_wallet_config_rpc` `:1951-1970` @ `testnet-v1.84.0`, según la sonda), y no hay `remove-env`; por eso el orden es génesis → `start` con el flag → recién después cualquier `suic`/`publish.mjs`. `publish.mjs` no tiene puerto (usa el alias `localnet` del `client.yaml` aislado). Las fixtures no contienen la URL (0 apariciones de `127.0.0.1` o `:9000`).
+- **La guarda hoy** (`app/scripts/localnet-guard.mjs`): `LOCALNET_URL = 'http://127.0.0.1:9000'` (`:10`) y `assertLocalnetUrl` (`:21-35`) acepta **solo esa URL exacta** (`:25`); con otra `--url`, o con argumentos desconocidos, escribe el motivo por `stderr` y sale con **código 2 antes de cualquier pedido**. Los tres `capture-*.mjs` la llaman como primera instrucción y usan solo la `url` que devuelve (`capture-read-fixtures.mjs:14, :60`, `capture-tx-fixtures.mjs:18, :66`, `capture-house-fixtures.mjs:26, :77`): **ninguno usa el puerto por otro camino**. No existe test de la guarda. Vitest solo corre `app/src/**/*.test.{ts,tsx}` (`app/vite.config.ts`), y `app/tsconfig.json` no carga los tipos de Node en `src/`.
 - La comparación de forma y la regla de commit son las de TASK-2a paso 2.0 (mismas funciones `jq`, mismo criterio de las dos corridas por génesis).
 
 ### 3. Qué implementar
 
-**2.4 Textos de captura.** Cambiar `1.83` por `1.84` **solo** en `app/scripts/capture-tx-fixtures.mjs:280, :301` y `app/scripts/capture-house-fixtures.mjs:272` (la versión que dice el `_meta`), **antes** de capturar. Nada más en `app/scripts/`.
+**2.4 Cambio mínimo de la guarda de puerto (v1.3) — PUNTO DE CONTROL FORMAL.** El DEV hace 2.4.1-2.4.6, escribe `<scratchpad>/REPORTE_TOOLCHAIN_142_TASK-2b-guarda.txt` (plantilla de reporte, con lint, typecheck, `npm test -w app` y la evidencia de rechazo pegados completos) y **se detiene**: no abre ninguna génesis ni sigue con 2.5. El MID revisa ese reporte, el orquestador commitea (a) y recién entonces el DEV continúa con 2.5. La restricción "solo loopback" **se conserva**; solo se generaliza el puerto.
+1. `app/scripts/localnet-guard.mjs`:
+   - `LOCALNET_URL` sigue siendo `'http://127.0.0.1:9000'` y es el valor por defecto **sin `--url`** (comportamiento idéntico al de hoy).
+   - Nueva función pura exportada `isLoopbackUrl(url)` → `true` si y solo si `url` es un `string` que cumple la regex **anclada** `^http://127\.0\.0\.1:([1-9][0-9]{3,4})$` **y** el puerto, como entero, está entre **1024 y 65535** (sin ceros a la izquierda, sin espacios, sin `https`, sin `localhost`, sin `0.0.0.0`, sin credenciales, sin path, query ni fragmento; en JavaScript `$` solo ancla al final de la cadena).
+   - Nueva función pura exportada `checkLocalnetArgs(argv)` → `{ ok: true, url }` o `{ ok: false, message }`: es la lógica que hoy está dentro de `assertLocalnetUrl` (`--url <valor>` opcional; sin `--url` la URL es `LOCALNET_URL`; el valor se valida con `isLoopbackUrl`; cualquier argumento desconocido es error; mismo texto de motivo, ajustado a "http://127.0.0.1:<puerto>, 1024-65535, por defecto 9000").
+   - JSDoc de las funciones nuevas con una línea: "Mantener en sincronía con `localnet-guard.d.mts`; los tests de `app/src/test/localnet-guard.test.ts` son la verificación" (con `skipLibCheck` y sin `checkJs`, nada más compara el `.d.mts` con el `.mjs`).
+   - `assertLocalnetUrl(argv, scriptName)` sigue igual de cara afuera: usa `checkLocalnetArgs`, y ante error escribe el mensaje por `stderr` (con "No se hizo ningún pedido.") y `process.exit(2)` **antes de cualquier pedido**; la firma, el código 2 y el efecto no cambian. `assertDeployment` no cambia (segunda barrera: el chain id del nodo tiene que ser el de `contracts/deployments/localnet.json`).
+2. `app/scripts/localnet-guard.d.mts` (archivo nuevo): solo declaraciones de tipos de las cuatro exportaciones (`LOCALNET_URL: string`, `isLoopbackUrl(url: unknown): boolean`, `checkLocalnetArgs(argv: string[])` con la unión de arriba, `assertLocalnetUrl(argv: string[], scriptName: string): string`, `assertDeployment(deployment: { network?: unknown; chainId?: unknown }, nodeChainIdShort: string): void`); existe para que el test de `app/src/` importe el `.mjs` con tipos (sin `allowJs`). Lleva una línea de comentario en la cabecera: "Mantener en sincronía con `localnet-guard.mjs`; los tests de `src/test/localnet-guard.test.ts` son la verificación".
+3. **Test nuevo** `app/src/test/localnet-guard.test.ts` (Vitest, entra en `npm test -w app`; sin `process`, sin red, sin `console`):
+   - **aceptadas** (`isLoopbackUrl` y `checkLocalnetArgs` con `--url`): `http://127.0.0.1:9000`, `http://127.0.0.1:19000`, `http://127.0.0.1:1024`, `http://127.0.0.1:65535`;
+   - **rechazadas** (`isLoopbackUrl` falso y `checkLocalnetArgs` con `ok: false`), la lista hostil mínima: `http://127.0.0.1:1023`, `:0`, `:65536`, `:099999`, `:019000`, `http://127.0.0.1`, `http://127.0.0.1:`, `http://127.0.0.1:19000/`, `http://127.0.0.1:19000/x`, `http://127.0.0.1:19000?x=1`, `http://127.0.0.1:19000#x`, `https://127.0.0.1:19000`, `HTTP://127.0.0.1:19000`, `http://localhost:19000`, `http://127.0.0.2:19000`, `http://127.1:19000`, `http://2130706433:19000`, `http://0x7f.0.0.1:19000`, `http://0.0.0.0:19000`, `http://[::1]:19000`, `http://192.168.1.10:19000`, `http://127.0.0.1.evil.com:19000`, `http://127.0.0.1:9000@evil.com`, `http://127.0.0.1:19000@evil.com`, `http://user:pw@127.0.0.1:19000`, `http://127.0.0.1:19000:1`, `http://127.0.0.1:19000 ` (espacio final), ` http://127.0.0.1:19000` (espacio inicial), `http://127.0.0.1:19000\n`, un puerto con dígitos no ASCII, `http://127.0.0.1:99999` (la regex sí lo acepta; lo frena el rango), la cadena vacía, y valores que no son `string` (`undefined`, `null`, número y los **coercibles**: `['http://127.0.0.1:19000']` y `new String('http://127.0.0.1:19000')`, que solo frena el `typeof`). El archivo puede llevar `// @vitest-environment node` (opcional: no usa DOM);
+   - `checkLocalnetArgs`: sin argumentos ⇒ `url` = `LOCALNET_URL`; `--url` sin valor ⇒ error; `--url` repetido ⇒ error; argumento desconocido con una URL válida ⇒ error; `--url=http://127.0.0.1:19000` (forma con `=`) ⇒ error;
+   - `assertDeployment`: red distinta de `localnet` ⇒ lanza; chain id distinto ⇒ lanza; coincidencia ⇒ no lanza (comportamiento que se conserva).
+   El conteo total de tests de `app` **no baja**: sube en N (el DEV informa N y los archivos: 66).
+4. **Comentarios de ayuda** (solo comentarios, ningún código): `app/scripts/capture-read-fixtures.mjs:4, :6`, `capture-tx-fixtures.mjs:7, :9` y `capture-house-fixtures.mjs:6, :16`: `[--url http://127.0.0.1:<puerto>]` y "solo acepta loopback `http://127.0.0.1:<puerto>` (1024-65535; por defecto `http://127.0.0.1:9000`)".
+5. **Gates de la guarda antes de seguir** (R-9; con `npm ci` hecho): `npm run lint -w app` (0 problemas), `npm run typecheck -w app` (0 errores), `npm test -w app` (1156 + N, 66 archivos), pegados completos. Si el lint o el `typecheck` no se pueden cumplir con esta estructura (p. ej. el `.d.mts` no resuelve): **S-10**, sin improvisar otra ubicación del test.
+6. **Evidencia de rechazo antes de cualquier pedido** (no requiere localnet; **nunca** correr un `capture-*.mjs` **sin `--url`** mientras el 9000 lo ocupe un servicio ajeno: pediría a ese servicio): para cada uno de los tres scripts, con Node 26, `node app/scripts/capture-<x>-fixtures.mjs --url <URL hostil>; echo "exit=$?"` con al menos `http://127.0.0.2:19000`, `http://localhost:19000`, `http://127.0.0.1:19000/x` y `http://127.0.0.1:9000@evil.com`: `exit=2` y el mensaje con "No se hizo ningún pedido." (9 a 12 corridas; el nombre del script va en el mensaje).
+7. **Punto de control (N-1).** El DEV **no commitea** (R-1) y los cambios de este paso y los del 2.5 caen en archivos comunes (`capture-tx-fixtures.mjs`, `capture-house-fixtures.mjs`) que no se pueden separar sin staging por hunk (`git add -p` no está soportado): por eso el DEV termina 2.4.1-2.4.6, deja `REPORTE_TOOLCHAIN_142_TASK-2b-guarda.txt` y se detiene. El MID lo revisa; el orquestador commitea el commit **(a)** con **solo** la guarda, el `.d.mts`, el test y los comentarios de ayuda; recién después el DEV sigue con 2.5. El texto de versión de los `capture-*` (2.5) va en el commit **(b)** junto con las fixtures.
 
-**2.5 Génesis G-B (lecturas y transacciones).** Génesis nueva; publicación **variante B** (`agents.md:165-166`, sin `--out`, escribe `contracts/deployments/localnet.json`, ignorado por git) con `ADMIN`; `node scripts/publish.mjs check` → `2 despliegue(s) válidos y coherentes con Published.toml` (la de localnet no tiene entrada en `Published.toml`, es válido). Roles: `ADMIN` (publica y tiene el `HouseCap`), `A` (crea todas las partidas), `B` (invitado y quien acepta), `C` (tercero); cuatro cuentas distintas de la génesis. Seguir **exactamente** la receta de `contracts/README.md:486-499` (`update_fee_rate` 250; `G_OPEN` 1000001 **primera** transacción de `A`; `G_INV` 2000002; `G_CANCEL` abierta 3000003 cancelada; `G_REJ` 4000004 rechazada; `cancel_game` de `B` sobre `G_OPEN` con `--gas-budget 100000000` ⇒ `game`/3; `G_ACC1..n` 1000001 aceptadas por `B` hasta tener un ganador `A` y uno `B` (tope 8); `G_ACCINV` 1000001 aceptada por `B`; `C` acepta `G_ACC1` con `--gas-budget 100000000` ⇒ `game`/4). El `accept_game` lleva `0x8` (`Random`) y es el **último** `MoveCall` del PTB (`agents.md:302-305`). Después, con `"$NODE"` (con el `env.sh` cargado) y desde `<repo>`: `app/scripts/capture-read-fixtures.mjs` y `app/scripts/capture-tx-fixtures.mjs`, cada uno **dos veces** (2a, 2.0.2). Si `capture-read-fixtures` aborta con "no hay una partida de esta variante…", reportarlo (la fixture de #10 usó otra secuencia: apuestas 1000001-1000005; fallback: G-B' con esa secuencia solo para las lecturas, declarado). Al terminar las capturas, **cerrar G-B con 2.7 antes de 2.6**.
+**2.5 Textos de captura.** Cambiar `1.83` por `1.84` **solo** en `app/scripts/capture-tx-fixtures.mjs:280, :301` y `app/scripts/capture-house-fixtures.mjs:272` (la versión que dice el `_meta`), **antes** de capturar. Nada más en `app/scripts/`.
 
-**2.6 Génesis G-C (panel de la House).** Génesis nueva, variante B, receta de `contracts/README.md:519-535` (los 5 pasos, **sin** ninguna otra transacción de admin), `capture-house-fixtures.mjs` dos veces. Al terminar, **cerrar G-C con 2.7**.
+**2.6 Génesis G-B (lecturas y transacciones), en el puerto 19000.** Antes de arrancar: `ss -ltn | grep -c ':19000 '` = 0 (puerto libre) y registrar `ss -ltn | grep ':9000 '` (el servicio ajeno, que no se toca). `<SMOKE_DIR>/env.sh` como el de `agents.md` §3 paso 2 **más** estas funciones (el arranque usa `smoke_guard_pre`; el resto de las llamadas, `smoke_guard`, que exige que el RPC del env activo sea exactamente el 19000):
+```sh
+RPC_URL=http://127.0.0.1:19000      # en env.sh: lo usan smoke_guard y cada captura (--url "$RPC_URL")
+smoke_guard_pre() { [ -f "$SUI_CONFIG_DIR/client.yaml" ] && [ "$(printf 'n\n' | "$SUI" client active-env)" = localnet ] || { echo GUARD-FAIL; return 97; }; }
+smoke_guard()     { smoke_guard_pre || return 97; [ "$(printf 'n\n' | "$SUI" client --json envs | jq -r '.[1] as $a | .[0][] | select(.alias==$a) | .rpc')" = "$RPC_URL" ] || { echo GUARD-FAIL; return 97; }; }
+```
+Orden: génesis (sin `suic`) → arranque como comando en segundo plano del harness: `. <SMOKE_DIR>/env.sh && smoke_guard_pre && echo $$ > "$SMOKE_DIR/sui.pid" && exec "$SUI" start --network.config "$SUI_CONFIG_DIR" --fullnode-rpc-port 19000 > "$SMOKE_DIR/sui-start.log" 2>&1` → **recién** entonces `smoke_guard` (porque `start` reescribe el alias `localnet`) y `suic`/`publish.mjs`; un `GUARD-FAIL` detiene todo y se reporta. Las capturas se corren **siempre con `--url "$RPC_URL"`** (= `http://127.0.0.1:19000`); si por error se corriera una captura sin `--url`, se declara. Publicación **variante B** (`agents.md:165-166`, sin `--out`, escribe `contracts/deployments/localnet.json`, ignorado por git) con `ADMIN`; `node scripts/publish.mjs check` → `2 despliegue(s) válidos y coherentes con Published.toml` (la de localnet no tiene entrada en `Published.toml`, es válido). Roles: `ADMIN` (publica y tiene el `HouseCap`), `A` (crea todas las partidas), `B` (invitado y quien acepta), `C` (tercero); cuatro cuentas distintas de la génesis. Seguir **exactamente** la receta de `contracts/README.md:486-499` (`update_fee_rate` 250; `G_OPEN` 1000001 **primera** transacción de `A`; `G_INV` 2000002; `G_CANCEL` abierta 3000003 cancelada; `G_REJ` 4000004 rechazada; `cancel_game` de `B` sobre `G_OPEN` con `--gas-budget 100000000` ⇒ `game`/3; `G_ACC1..n` 1000001 aceptadas por `B` hasta tener un ganador `A` y uno `B` (tope 8); `G_ACCINV` 1000001 aceptada por `B`; `C` acepta `G_ACC1` con `--gas-budget 100000000` ⇒ `game`/4). El `accept_game` lleva `0x8` (`Random`) y es el **último** `MoveCall` del PTB (`agents.md:302-305`). Después, con `"$NODE"` (con el `env.sh` cargado) y desde `<repo>`: `app/scripts/capture-read-fixtures.mjs` y `app/scripts/capture-tx-fixtures.mjs`, cada uno **dos veces** (2a, 2.0.2) y con `--url "$RPC_URL"`. Si `capture-read-fixtures` aborta con "no hay una partida de esta variante…", reportarlo (la fixture de #10 usó otra secuencia: apuestas 1000001-1000005; fallback: G-B' con esa secuencia solo para las lecturas, declarado). Al terminar las capturas, **cerrar G-B con 2.8 antes de 2.7**.
 
-**2.7 Comparación y cierre.** Comparación de forma (pares ruta-tipo y longitudes, más el cotejo de valores no derivados, **incluidos los costos de gas** de `effects.gasUsed`: si cambian con la PV 142, decirlo explícitamente, es dato para #73) de las 3 fixtures. Cierre de **cada** génesis (R-4; `rm -f contracts/deployments/localnet.json`, `rmdir contracts/deployments 2>/dev/null || true`, `git status` limpio de entradas de la corrida, `git diff --exit-code -- contracts/Move.lock contracts/Published.toml`, `test ! -e contracts/deployments/localnet.json`, `! compgen -G 'contracts/Pub.*.toml'`). Registrar el código de salida de `sui start` al `kill` (R-4).
+**2.7 Génesis G-C (panel de la House), en el puerto 19000.** **Solo después de cerrar G-B con 2.8** (una génesis a la vez; el puerto se libera). Génesis nueva, mismo arranque y `smoke_guard` que en 2.6, variante B, receta de `contracts/README.md:519-535` (los 5 pasos, **sin** ninguna otra transacción de admin), `capture-house-fixtures.mjs --url "$RPC_URL"` dos veces. Al terminar, **cerrar G-C con 2.8**.
+
+**2.8 Comparación y cierre.** Comparación de forma (pares ruta-tipo y longitudes, más el cotejo de valores no derivados, **incluidos los costos de gas** de `effects.gasUsed`: si cambian con la PV 142, decirlo explícitamente, es dato para #73) de las 3 fixtures. Cierre de **cada** génesis (R-4; `rm -f contracts/deployments/localnet.json`, `rmdir contracts/deployments 2>/dev/null || true`, `git status` limpio de entradas de la corrida, `git diff --exit-code -- contracts/Move.lock contracts/Published.toml`, `test ! -e contracts/deployments/localnet.json`, `! compgen -G 'contracts/Pub.*.toml'`). Registrar el código de salida de `sui start` al `kill` (R-4) y comprobar que el 19000 queda libre (`ss -ltn | grep -c ':19000 '` = 0) y que el 9000 sigue como estaba.
+
+**R-12 (§2)** rige todo este task: reportes y borradores solo con las herramientas de escribir/editar archivos, y la guarda de `~/.sui` también después de escribir cada reporte y de cerrar cada génesis.
 
 ### 4. Archivos a tocar / NO tocar
-- **Tocar:** `contracts/fixtures/{game-reads,game-tx,house-admin}.localnet.json` (los escriben los scripts, sin editar a mano), `app/scripts/capture-tx-fixtures.mjs` y `app/scripts/capture-house-fixtures.mjs` (solo el texto de la versión).
-- **NO tocar:** `contracts/scripts/`, `contracts/scripts/fixtures/`, `app/scripts/localnet-guard.mjs`, `capture-read-fixtures.mjs`, `app/src/`, `contracts/sources|tests`, `Move.lock`, `Move.toml`, `Published.toml`, `deployments/testnet.json`, `ci.yml`, docs.
+- **Tocar:** `app/scripts/localnet-guard.mjs`, `app/scripts/localnet-guard.d.mts` (nuevo), `app/src/test/localnet-guard.test.ts` (nuevo), los comentarios de ayuda de `app/scripts/capture-read-fixtures.mjs`, `capture-tx-fixtures.mjs` y `capture-house-fixtures.mjs`, `contracts/fixtures/{game-reads,game-tx,house-admin}.localnet.json` (los escriben los scripts, sin editar a mano), y el texto de la versión de `app/scripts/capture-tx-fixtures.mjs` y `capture-house-fixtures.mjs`.
+- **NO tocar:** `contracts/scripts/` (incluidos `publish.mjs` y `deployment.mjs`), `contracts/scripts/fixtures/`, `app/src/sui/networks.ts` (el navegador contra otro puerto va en #73 TASK-8 o en un issue aparte), el resto de `app/src/`, el código (no los comentarios) de los `capture-*.mjs`, `contracts/sources|tests`, `Move.lock`, `Move.toml`, `Published.toml`, `deployments/testnet.json`, `ci.yml`, docs.
 
 ### 5. Tests obligatorios
-Determinismo de las tres capturas (2 corridas por génesis, solo `capturedAt`); `node --test scripts/*.test.mjs` sigue en 104 y `check` en `1 despliegue(s)` (el árbol de `scripts/` no cambia). Los de `app` se corren en TASK-3.
+Los tests nuevos de la guarda (lista de URLs hostiles del paso 2.4.3) y el rechazo con código 2 de los tres scripts (2.4.6); determinismo de las tres capturas (2 corridas por génesis, solo `capturedAt`); `node --test scripts/*.test.mjs` sigue en 104 y `check` en `1 despliegue(s)` (el árbol de `scripts/` no cambia). Los de `app` se corren en TASK-3.
 
 ### 6. Smoke
-La variante B del script + `check` (2.5). Smoke de producto: no aplica.
+La variante B del script + `check` (2.6). Smoke de producto: no aplica.
 
 ### 7. Criterios de aceptación (DoD)
 - [ ] Las 3 fixtures de la app recapturadas con la 1.84.0 en localnet aislada (2 génesis, una a la vez), sin editar; tabla de forma "igual / distinta" por archivo con el cotejo de valores no derivados y la nota de costos de gas.
 - [ ] `_meta.suiCliVersion` de las tres = `1.84.0-<SUI_COMMIT>`.
+- [ ] Guarda: `isLoopbackUrl`/`checkLocalnetArgs` con la lista aceptada y la hostil (tests PASS); lint 0, typecheck 0, `npm test -w app` = 1156 + N en 66 archivos (el conteo **no baja**); los tres `capture-*.mjs` rechazan una URL hostil con **exit 2 antes de pedir nada** y capturan con `--url http://127.0.0.1:19000`; sin `--url` el comportamiento por defecto sigue siendo `http://127.0.0.1:9000`; la restricción "solo loopback" se conserva.
+- [ ] `smoke_guard` con la comprobación del RPC en cada llamada, ningún `GUARD-FAIL`; una génesis a la vez, G-B cerrada antes de abrir G-C; el 9000 ajeno sin tocar.
 - [ ] Cada captura corrida dos veces y determinista (solo `capturedAt`).
 - [ ] `Move.lock`, `Published.toml` y `deployments/testnet.json` sin delta; `~/.sui/` en la línea base; cierre limpio de las dos génesis.
 - [ ] R-6: los 4 greps sobre el diff, con el grupo "fixtures" clasificado por conteo.
 
+### Riesgos (v1.3)
+- **S-10** (§3): el lint o el `typecheck` no se cumplen con la estructura del paso 2.4, un test existente de la guarda falla, o algún `capture-*.mjs` usa el puerto por otro camino.
+- **Riesgo:** un puerto de loopback puede estar ocupado por un servicio de otro proyecto (como el 9000 hoy). Barreras: las capturas **no firman** (solo leen y simulan); `assertDeployment` exige que el chain id del nodo sea el de `contracts/deployments/localnet.json` (un servicio ajeno falla en `getServiceInfo` antes de capturar nada); `ss -ltn` antes de arrancar; el `smoke_guard` con el RPC exacto; y la regla de no correr una captura sin `--url` mientras el 9000 esté ocupado.
+- **Railway:** el diff de este task no toca ninguna watch path (`app/scripts/**`, `app/src/test/**` y los `*.test.ts` están negados; `contracts/fixtures/` no figura: `app/README.md:246-266`); el merge no publica el sitio.
+- **Navegador:** `app/src/sui/networks.ts:11` sigue fijo en `http://127.0.0.1:9000`; los smokes con navegador contra una localnet en otro puerto no se resuelven aquí.
+
 ### 8. Al terminar
-Reporte `.txt`; sin commits.
+Dos entregas, ambas con la plantilla de reporte y **sin commits**: (1) al cerrar 2.4.1-2.4.6, `REPORTE_TOOLCHAIN_142_TASK-2b-guarda.txt` y **detenerse** hasta que el MID lo revise y el orquestador commitee (a); (2) al cerrar 2.5-2.8, `REPORTE_TOOLCHAIN_142_TASK-2b.txt` para el commit (b).
 
 ---
 
@@ -412,14 +480,14 @@ Depende de TASK-2b aprobado y commiteado.
 **Como** desarrollador, **quiero** comprobar que `app` y la imagen de Railway siguen en verde con las fixtures de la 1.84.0 y saber cómo falla el fullnode público al leer eventos bajo su piso de historial, **para** llegar a #73 sabiendo que la app y el despliegue no se mueven y qué habría que ajustar en la lectura de eventos.
 
 ### 2. Contexto (rutas reales)
-- Gates de `app`: `agents.md:204-221` (steps del job `app`, `ci.yml:142-181`); línea base: 1156 tests en 65 archivos.
+- Gates de `app`: `agents.md:204-221` (steps del job `app`, `ci.yml:142-181`); línea base de TASK-1: 1156 tests en 65 archivos; **esperado en este task: 1156 + N tests en 66 archivos**, con N = los tests de `app/src/test/localnet-guard.test.ts` informados en el reporte de TASK-2b (commit (a)).
 - `app/src/sui/execution.test.ts:281-283` y otros tests (25 archivos importan fixtures `*.localnet.json`) tienen literales derivados de las fixtures (p. ej. `computationCost: '1000000'`, `storageCost: '2941200'`, `networkCost … 3_941_200n`): si la nueva génesis o la 1.84 cambian un valor real, hay que verlo.
 - V-9 (`PLAN_MULTIGAME` §13): cómo falla `ListEvents` bajo el piso tras la 1.84 y si `app/src/sui/eventScan.ts:130-140` lo reconoce. Lo que dice el código de la 1.84.0 (leído, no medido): un descendente que llega al piso falla con `OutOfRange` + `ErrorInfo.reason = BELOW_EARLIEST_AVAILABLE` (`crates/sui-rpc-api/src/error.rs:207-224` @ `testnet-v1.84.0`), y las notas del release agregan que un descendente con `start_checkpoint` bajo el piso falla igual (PR 28527 en las notas del release). En la app, `isHistoryPruned` (`eventScan.ts:130-140`) devuelve `true` ante **`OUT_OF_RANGE`** sin releer el piso (`:132`); ante otro `RpcError` que no sea `CANCELLED` relee el piso por `fetchNodeInfo` (`:135`) y compara `piso > startCheckpoint` (`:139`); `requestEvents` lanza `ReadDataError('malformed')` si el stream termina sin `QueryEnd` (`:104`) o con un `reason` desconocido (`:117`). Riesgo a descartar: `ABOVE_LATEST_AVAILABLE` es **también** `OutOfRange` (`error.rs:226-262`): un `OUT_OF_RANGE` por estar por encima de lo indexado se clasificaría como "historial podado".
 - Las notas del release 1.84.0 (gRPC) además: los cursores de `ListEvents` de servidores anteriores a la 1.83 (y los de 1.83) se rechazan con `INVALID_ARGUMENT` (PR 28541); `Watermark` trae `cursor_position`. La app no persiste cursores entre sesiones; solo importa si un cursor vivo cruza el cambio de versión del nodo.
 
 ### 3. Qué implementar
 
-**3.1 Gates de `app`** (R-9; mismos comandos y orden que 1.0 paso 4, **con las fixtures de TASK-2a y 2b**): `npm ci`, firmas, auditoría de producción, lint, typecheck, `npm test -w app`, build de testnet, `git status --porcelain --untracked-files=all` vacío. Esperado: sin delta contra la línea base medida en TASK-1 (1156/65; el tamaño del bundle no depende de las fixtures: `index-*.js` igual). Al cierre: `git diff --stat` y `git status --porcelain --untracked-files=all`.
+**3.1 Gates de `app`** (R-9; mismos comandos y orden que 1.0 paso 4, **con las fixtures de TASK-2a y 2b**): `npm ci`, firmas, auditoría de producción, lint, typecheck, `npm test -w app`, build de testnet, `git status --porcelain --untracked-files=all` vacío. Esperado: sin delta contra la línea base medida en TASK-1 **salvo** los N tests y el archivo nuevos de la guarda de TASK-2b (1156 + N tests en 66 archivos; N informado en el reporte de 2b). El tamaño del bundle no depende de las fixtures: `index-*.js` igual. Al cierre: `git diff --stat` y `git status --porcelain --untracked-files=all`.
 
 **3.2 Si fallan tests por las fixtures (H-4).** Diagnosticar primero. Si la causa es **un literal copiado de la fixture** que cambió porque el valor real es otro con la 1.84 o con la génesis nueva: se reemplaza **solo ese literal de entrada** en el `*.test.ts(x)` correspondiente (y los resultados que el propio test deriva de él por su fórmula, p. ej. `networkCost`), uno por uno, con estas condiciones:
 - cada valor nuevo **sale de la fixture por `jq`**, con el comando y su salida pegados en el reporte, y una tabla **ruta → valor viejo → valor nuevo** (en "Desviaciones");
@@ -443,13 +511,13 @@ Si la causa es **otra** (forma, BCS, texto de error del nodo, orden de eventos, 
 - **NO tocar:** código de `app/src` que no sea un test, `app/scripts/`, `Dockerfile`, `.dockerignore`, `app/Caddyfile`, `package-lock.json`, `.npmrc`, `contracts/`.
 
 ### 5. Tests obligatorios
-Los de `app` (1156 en 65, sin delta) y el `deploy-image`. V-9 no agrega tests (es medición).
+Los de `app` (1156 + N en 66 archivos: la línea base de TASK-1 más los de la guarda de TASK-2b, sin otro delta) y el `deploy-image`. V-9 no agrega tests (es medición).
 
 ### 6. Smoke
 No aplica (la medición V-9 es de solo lectura; sin navegador).
 
 ### 7. Criterios de aceptación (DoD)
-- [ ] `npm ci`/firmas/auditoría/lint 0/typecheck 0/**1156 tests en 65 archivos**/build sin delta, o cada literal cambiado justificado (3.2); si los costos de gas cambiaron, dicho explícitamente.
+- [ ] `npm ci`/firmas/auditoría/lint 0/typecheck 0/**1156 + N tests en 66 archivos** (N = los de la guarda de TASK-2b)/build sin otro delta, o cada literal cambiado justificado (3.2); si los costos de gas cambiaron, dicho explícitamente.
 - [ ] `deploy-image` verde por el camino positivo; Docker en la línea base.
 - [ ] V-9 documentado: servidor (versión) y piso, los casos (a)-(c) (y (d) si se corrió) con código, mensaje y detalle; reconocimiento por `eventScan.ts:130-140`; marcado **concluyente / no concluyente** según la versión del servidor, con los issues de seguimiento que correspondan.
 - [ ] Cada literal de test de `app` cambiado (si hubo) con su `jq`, su tabla ruta, viejo, nuevo y sin tocar matchers ni aserciones.
@@ -473,7 +541,7 @@ Depende de TASK-1, 2a, 2b y 3 aprobados. Solo documentación (PROY-20); los valo
 - `documents/STATUS.md`: Toolchain `:27` (CLI), `:28` (CI), `:32` (Framework), H1 `:146`, H13 `:158`, H14 `:159`, tabla de baselines (`:51-52` encabezado; filas nuevas van **arriba**, antes de la de `:53`).
 - `contracts/README.md:15` (descripción de `scripts/fixtures/`: "salidas reales de la CLI 1.83.0"), `:723` (runbook: `# sui 1.83.0-16d2dc1e05ed (= SUI_VERSION/SUI_COMMIT de ci.yml)`). **No** se reescriben las citas "@ `testnet-v1.83.0`" (`:375, :430, :443`), ni `:441, :552, :816, :851` (mediciones de la 1.83) ni `:605` (ejemplo del json de la publicación de #8).
 - `README.md:93-94` (raíz): "Sui CLI `1.83.0` … `suiup install sui@testnet-1.83.0`" (M-3).
-- `app/README.md`: sin cambios (sus menciones de 1.83 son mediciones pasadas).
+- `app/README.md`: las menciones de 1.83 son mediciones pasadas (no se tocan), **pero** `:328` (árbol: "guarda compartida de las capturas: solo http://127.0.0.1:9000 y la génesis del despliegue") y `:840` ("solo acepta `http://127.0.0.1:9000`") describen la guarda y cambian con TASK-2b (v1.3); `contracts/README.md:466` ("acepta `http://127.0.0.1:9000` (con otra `--url` sale con error antes de cualquier pedido)") también. `agents.md` §3 paso 4 (`:155-166`) y la plantilla de `env.sh` (paso 2, `:132-146`) no documentan el puerto.
 
 ### 3. Qué implementar
 1. **`agents.md`:** `:75-79` → "Instalada el 2026-11-19 (#75): Sui CLI `1.84.0` (release `testnet`) vía `suiup` en `~/.local/bin` (antes `1.83.0`, 2026-10-30; STATUS H1, sección Toolchain)"; `:382` → `1.84.0-<SUI_COMMIT>`. Si el `sui start` de 1.84 salió con otro código que 144 en TASK-2a/2b, `:194` pasa al código medido; si salió con 144, `:194` pasa a "`sui start` 1.83 y 1.84 salen con código 144" (y H14 de STATUS igual).
@@ -481,10 +549,16 @@ Depende de TASK-1, 2a, 2b y 3 aprobados. Solo documentación (PROY-20); los valo
    "Framework" → `Move.lock` v4 pineado a `e6f43880f4b65e2c1f0397583a9690b4b22c9223`, piso de la PV **142** = PV de testnet (repin de #75 el 2026-11-19, época `<medida>`, `sui move update-deps -e testnet`; H13); antes `05ad86a3…` (PV 140, #8) y `719fb296…` (PV 139, #1). H1 → CLI `1.84.0-<SUI_COMMIT>` (2026-11-19, #75), con la 1.83.0 como histórico. H13 → agregar "✅ **2026-11-19 (#75)**: CLI 1.84.0 (PV máx 142), lock repineado a `e6f43880…` (PV 142, época `<n>`); `framework-drift` sin 'CLI atrasada'. El paquete publicado (#8) sigue compilado con 1.83.0 (`Published.toml:10`) y un upgrade lo escribe con la 1.84.0". Fila nueva de baselines (la plantilla está más abajo) con los conteos medidos.
 3. **`contracts/README.md`:** `:15` → "CLI 1.84.0"; `:723` → `# sui 1.84.0-<SUI_COMMIT> (= SUI_VERSION/SUI_COMMIT de ci.yml)`. Si TASK-2a/2b mostraron que alguna forma del `--json` de la CLI de los pasos 6-10 del runbook (`:795-860`) cambió (los valores esperados de `:816` y `:851` son "formas exactas de la CLI 1.83"), **medirlo** en la localnet de TASK-2b (`suic object <game> --json` sobre una partida y la House) y actualizar esos valores; si no se midió, declararlo ("no re-verificado con 1.84") en el reporte.
 4. **`README.md` (raíz)** `:93-94` → `1.84.0` y `suiup install sui@testnet-1.84.0`.
-5. **No** tocar: "Ciclo activo", "Mergeadas", "Siguiente" y "Pendientes" de STATUS (housekeeping del orquestador); `app/README.md`; las citas históricas listadas arriba.
+5. **Puerto y guarda (v1.3):**
+   - `agents.md` §3: en el paso 4, `--fullnode-rpc-port <P>` (por defecto 9000) para cuando el 9000 está ocupado, el orden génesis → `start` con el flag → recién después `suic`/`publish.mjs`, que `sui start --network.config <dir>` reescribe el alias `localnet` del config aislado, y el chequeo previo `ss -ltn | grep ':9000 '`; en la plantilla de `env.sh` del paso 2, las funciones `smoke_guard_pre` y `smoke_guard` con la comprobación del RPC (las de TASK-2b 2.6) **parametrizadas**: `RPC_URL=http://127.0.0.1:<puerto>` (el puerto por defecto es 9000; el 19000 fue el de #75, no se hardcodea en la plantilla); en el paso 7 (cierre) que el puerto queda libre. Las capturas de la app se corren con `--url "$RPC_URL"`.
+   - `contracts/README.md:466`: "acepta `http://127.0.0.1:<puerto>` (loopback, 1024-65535; por defecto 9000) y con cualquier otra `--url` sale con error antes de cualquier pedido".
+   - `app/README.md:328` y `:840`: el mismo cambio de texto (guarda de loopback con puerto; por defecto 9000). Nada más de `app/README.md`.
+   - `agents.md:176` y `:245` (mediciones de la 1.83) no se reescriben.
+   - Ningún texto commiteable nombra el contenedor ni el proyecto ajeno que ocupa el 9000: se dice "un servicio de otro proyecto del host".
+6. **No** tocar: "Ciclo activo", "Mergeadas", "Siguiente" y "Pendientes" de STATUS (housekeeping del orquestador); el resto de `app/README.md`; las citas históricas listadas arriba.
 
 ### 4. Archivos a tocar / NO tocar
-- **Tocar:** `agents.md`, `documents/STATUS.md`, `contracts/README.md`, `README.md`.
+- **Tocar:** `agents.md`, `documents/STATUS.md`, `contracts/README.md`, `README.md` y, solo las líneas `:328` y `:840`, `app/README.md`.
 - **NO tocar:** todo lo demás.
 
 ### 5. Tests obligatorios
@@ -498,7 +572,7 @@ No aplica.
 - [ ] Docs coherentes con `ci.yml` (`SUI_VERSION`/`SUI_COMMIT` = STATUS = `agents.md` = `README.md` = `contracts/README.md`).
 - [ ] Fila de baselines con los conteos medidos (no los del §0 copiados: los del reporte).
 - [ ] Ninguna cita histórica reescrita; las menciones "1.83" que quedan, justificadas.
-- [ ] Diff final solo en: `.github/workflows/ci.yml`, `contracts/Move.lock`, `contracts/scripts/{deployment,publish}.test.mjs`, `contracts/scripts/fixtures/*`, `contracts/fixtures/*.localnet.json`, `app/scripts/capture-tx-fixtures.mjs`, `app/scripts/capture-house-fixtures.mjs`, (tests de `app` solo bajo 3.2), `agents.md`, `documents/STATUS.md`, `contracts/README.md`, `README.md`. Cualquier otro archivo es una desviación.
+- [ ] Diff final solo en: `.github/workflows/ci.yml`, `contracts/Move.lock`, `contracts/scripts/{deployment,publish}.test.mjs`, `contracts/scripts/fixtures/*`, `contracts/fixtures/*.localnet.json`, `app/scripts/capture-tx-fixtures.mjs`, `app/scripts/capture-house-fixtures.mjs`, `app/scripts/capture-read-fixtures.mjs` (solo comentarios), `app/scripts/localnet-guard.mjs`, `app/scripts/localnet-guard.d.mts`, `app/src/test/localnet-guard.test.ts`, (tests de `app` solo bajo 3.2), `agents.md`, `documents/STATUS.md`, `contracts/README.md`, `README.md`, `app/README.md` (solo `:328` y `:840`). Cualquier otro archivo es una desviación.
 - [ ] R-6 sobre el diff completo del PR (`git diff master...HEAD`, solo líneas `+`) y sobre el reporte, clasificado.
 
 ### 8. Al terminar
@@ -550,23 +624,25 @@ Reporte `.txt`; sin commits.
 ```markdown
 | toolchain @ `feature/issue-75-toolchain-1840` (#75), CLI `1.84.0-<SUI_COMMIT>`, Node `v26.13.0`, 2026-11-19 | `ci.yml` (`SUI_VERSION`/`SUI_COMMIT`, SHA-256 del tgz y del binario), `Move.lock`, gates de `contracts`, `node --test`, `check` | 🟢 CLI 1.84.0 (release `testnet`, 2026-11-10), V-7: testnet PV 142 (época `<n>`), PV máx de la CLI 142; tgz `0f006fb4…` = cache de `suiup`; binario = `suiup` = extraído del tgz. `Move.lock` repineado con `update-deps -e testnet`: `05ad86a3…` (PV 140) → `e6f43880…` (PV 142), delta `<declarado>`. **0 warnings / 0 lints / 83 tests PASS**; lock, `Published.toml` y `deployments/testnet.json` sin delta; `node --test` **104**, `check` `1 despliegue(s)`. Línea base con la 1.83.0 re-medida antes de cambiar nada: `<sin delta | delta>`. Histórico de la 1.83.0 (V-16 de #73): tgz `e5116805…`, binario `29e1beb9…` (completos en las líneas 24-25 de `git show 88dd53b:.github/workflows/ci.yml`) |
 | localnet aislada @ `feature/issue-75-toolchain-1840` (TASK-2a y 2b de #75), CLI `1.84.0-<SUI_COMMIT>`, 2026-11-19 | recaptura de `contracts/scripts/fixtures/*` y `contracts/fixtures/*.localnet.json`; variantes A y B de `publish.mjs` | 🟢 chains `<G-A>`, `<G-B>`, `<G-C>`; costos de gas `<iguales | cambian: …>`; forma del `--json` y de las lecturas `<igual | distinta en …>`; cada captura determinista (solo `capturedAt`); `publish.mjs` de punta a punta con la 1.84 (sin aviso de CLI); `sui start` sale con `<código>`; cierre limpio |
-| app + deploy-image @ `feature/issue-75-toolchain-1840` (TASK-3 de #75), Node `v26.13.0`, 2026-11-19 | gates de `app`, `check-deploy-image.sh . 8090`, V-9 | 🟢 293 paquetes / 292 firmas / 0 vulnerabilidades de producción; lint 0 / typecheck 0 / **1156 tests en 65 archivos** (sin delta `<o literales cambiados>`) / `index-*.js` `<kB>`; `deploy-image` P1-P13 `OK (positivo)`. V-9 (fullnode público `<versión del servidor>`): `<cómo falla ListEvents bajo el piso; reconocido por eventScan.ts:130-140 sí/no>`, **`<concluyente | no concluyente: issue de seguimiento #__>`** |
+| app + deploy-image @ `feature/issue-75-toolchain-1840` (TASK-3 de #75), Node `v26.13.0`, 2026-11-19 | gates de `app`, `check-deploy-image.sh . 8090`, V-9 | 🟢 293 paquetes / 292 firmas / 0 vulnerabilidades de producción; lint 0 / typecheck 0 / **1156 + N tests en 66 archivos** (N = los de `localnet-guard.test.ts`; sin otro delta `<o literales cambiados>`) / `index-*.js` `<kB>`; `deploy-image` P1-P13 `OK (positivo)`. V-9 (fullnode público `<versión del servidor>`): `<cómo falla ListEvents bajo el piso; reconocido por eventScan.ts:130-140 sí/no>`, **`<concluyente | no concluyente: issue de seguimiento #__>`** |
 ```
 
 ## Mensajes de commit propuestos (los commitea el orquestador; sin palabras de cierre con número)
 
 El orquestador agrega el trailer de atribución vigente. Nada de `Closes/Fixes/Resolves #N` en ningún commit: `Refs #75` sí (solo el body del PR cierra el issue).
 
-0. Handoff (orquestador, antes de TASK-1): `docs: add the CLI 1.84.0 toolchain handoff v1.1 (#75)`
+0. Handoff (orquestador, antes de TASK-1): `docs: add the CLI 1.84.0 toolchain handoff v1.3.1 (#75)`
 1. TASK-1: `ci: bump the Sui CLI to 1.84.0 and repin Move.lock to the PV 142 framework (#75)`
    Cuerpo: "testnet runs protocol version 142 and CLI 1.83.0 stops at 140, so the lock pinned the PV 140 framework, which has no sui::clock::borrow. ci.yml now pins 1.84.0 with its commit and the SHA-256 of the release tgz and of the binary; Move.lock is regenerated by the CLI (update-deps -e testnet) from 05ad86a3 to e6f43880. Gates unchanged: 0 warnings, 0 lints, 83 tests, 104 script tests; the two script tests that read ci.yml and the lock follow them; Published.toml and deployments/testnet.json untouched. Refs #75"
 2. TASK-2a: `test: recapture the script fixtures with the 1.84.0 localnet and adapt the script tests (#75)`
    Cuerpo: "Fixtures from an isolated localnet (new genesis, so IDs and digests change); script tests keep their 104 cases with literals read from the new fixtures. Shape of the CLI json: <igual | distinta>. Refs #75"
-3. TASK-2b: `test: recapture the app fixtures with the 1.84.0 localnet (#75)`
+3. TASK-2b (a), guarda (el orquestador lo commitea en el punto de control 2.4.7, **solo** con la guarda, el `.d.mts`, el test y los comentarios de ayuda; el texto de versión de los `capture-*` queda para (b)): `app: let the localnet capture guard accept any loopback port (#75)`
+   Cuerpo: "The capture scripts only accepted http://127.0.0.1:9000, but that port can be taken by another service on the host. assertLocalnetUrl now accepts exactly http://127.0.0.1:<port> with an integer port from 1024 to 65535 (anchored match: no hostnames, no https, no credentials, no path) and still rejects everything else with exit code 2 before any request; without --url the default stays port 9000. The pure checks are covered by a new test with a list of hostile URLs, and only comments change in the three capture scripts. Refs #75"
+3. TASK-2b (b), fixtures (después de 2.5-2.8): `test: recapture the app fixtures with the 1.84.0 localnet (#75)`
    Cuerpo: "Reads, transactions and House admin fixtures from two isolated genesis; the capture scripts only change the CLI version in the text of _meta. Shape of the gRPC reads and gas costs: <igual | distinta>. Refs #75"
 4. TASK-3: normalmente **sin commit**. Si se adaptaron literales de tests de `app` (3.2): `test: update fixture-derived literals after the 1.84.0 recapture (#75)` con el detalle de cada valor. Refs #75
 5. TASK-4: `docs: record the Sui CLI 1.84.0, the PV 142 lock pin and the new baselines (#75)`
-   Cuerpo: "agents.md, STATUS (Toolchain, H1, H13, baselines), contracts/README.md and README.md follow ci.yml. Historical 1.83 measurements and sources are not rewritten. Refs #75"
+   Cuerpo: "agents.md, STATUS (Toolchain, H1, H13, baselines), contracts/README.md and README.md follow ci.yml; the isolated-localnet procedure in agents.md (section 3) documents --fullnode-rpc-port, the genesis, start, client order and the RPC check of smoke_guard, and contracts/README.md and app/README.md describe the capture guard as loopback with a port (default 9000). Historical 1.83 measurements and sources are not rewritten. Refs #75"
 6. Reportes (orquestador): `docs: add the #75 DEV reports and MID reviews` (sin número de cierre).
 
 ## Cuerpo propuesto del PR (lo escribe el orquestador con los números reales de los reportes)
@@ -588,7 +664,8 @@ plataforma multijuego. **Sin cambios de código de contrato**: `contracts/source
 - Fixtures de `contracts/scripts/fixtures/` y `contracts/fixtures/*.localnet.json` recapturadas con la 1.84.0 en la
   localnet aislada (tres génesis); tests de `scripts/` con los literales nuevos (104 casos, ninguno debilitado; los dos que leen `ci.yml` y el lock se adaptan en el commit de la CLI).
   Forma del `--json` y de las lecturas gRPC: <igual | distinta en …>.
-- Docs: `agents.md`, `documents/STATUS.md` (Toolchain, H1, H13, baselines), `contracts/README.md`, `README.md`.
+- Guarda de las capturas de la app (`app/scripts/localnet-guard.mjs`): ahora acepta exactamente `http://127.0.0.1:<puerto>` con puerto entero 1024-65535 (por defecto 9000; solo loopback; todo lo demás, exit 2 antes de pedir nada), porque el 9000 del host lo ocupa un servicio de otro proyecto. Archivos nuevos: `app/scripts/localnet-guard.d.mts` y `app/src/test/localnet-guard.test.ts` (los tests de `app` pasan a 1156 + N en 66 archivos). Solo comentarios en los tres `capture-*.mjs`.
+- Docs: `agents.md` (§3: puerto con `--fullnode-rpc-port`, orden génesis → `start` → `suic`, `smoke_guard` con la comprobación del RPC), `documents/STATUS.md` (Toolchain, H1, H13, baselines), `contracts/README.md`, `app/README.md` (`:328`, `:840`), `README.md`.
 
 ## Decisiones
 - CLI `1.84.0` (no `1.84.1`), D-20261119-05 P-8. No se reabre.
@@ -601,18 +678,21 @@ plataforma multijuego. **Sin cambios de código de contrato**: `contracts/source
 | build / lint / test (`-e testnet --warnings-are-errors`) | 0 / 0 / 83 | 0 / 0 / 83 |
 | `Move.lock`, `Published.toml`, `deployments/testnet.json` | sin delta | `Move.lock` repineado; los otros dos sin delta |
 | `node --test` / `check` | 104 / `1 despliegue(s)` | 104 / `1 despliegue(s)` |
-| app lint / typecheck / tests / build | 0 / 0 / 1156 en 65 / `index-*.js` <kB> | <igual> |
+| app lint / typecheck / tests / build | 0 / 0 / 1156 en 65 / `index-*.js` <kB> | 0 / 0 / 1156 + N en 66 (N = tests nuevos de la guarda) / <igual> |
 | `deploy-image` | OK (positivo) | OK (positivo) |
 | CI del PR: `contracts`, `app`, `deploy-image` | | verde; `framework-drift` sin "CLI atrasada" ni lock atrasado |
 
 ## Seguridad
 Sin claves, mnemónicos, `.env` ni direcciones de cuenta fuera de las fixtures de una génesis desechable (cuentas efímeras,
 clave destruida; precedente de #7). `~/.sui/sui_config/` sin claves y sin cambios. Greps R-6 clasificados en los reportes.
-Nada contra testnet salvo lecturas públicas.
+Nada contra testnet salvo lecturas públicas. La guarda de las capturas conserva "solo loopback" (puerto 1024-65535) y rechaza
+todo lo demás con exit 2 antes de pedir nada. Incidente de proceso en TASK-2a: un `sui start` accidental (heredoc sin
+comillas) con el HOME real, rechazado por la CLI; `~/.sui` verificado sin cambios; regla R-12; detalle en
+`REPORTES_TOOLCHAIN_142.md`.
 
 ## Pendientes del usuario
 Ninguno para el merge. Los mensajes de `framework-drift` en `ci.yml:246, 250-251` siguen diciendo "pre-vuelo de #8": se dejan así en este PR y se actualizan en TASK-4 de #73, cuando el runbook de upgrade reemplace al pre-vuelo de #8. Para #73: la máquina queda con la 1.84.0 como `sui` por defecto (`suiup`) y la 1.83.0 sigue instalada
-(el ensayo de upgrade de #73 publica el v1 con ese binario: no correr `suiup remove`). Rollback del PR: revertirlo.
+(el ensayo de upgrade de #73 publica el v1 con ese binario: no correr `suiup remove`). `app/src/sui/networks.ts:11` sigue fijo en `http://127.0.0.1:9000` para el navegador: los smokes con navegador contra otro puerto se resuelven en #73 TASK-8 o en un issue aparte. Rollback del PR: revertirlo.
 
 Closes #75
 Relacionado: #73 (este PR no lo cierra).
