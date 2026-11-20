@@ -39,15 +39,42 @@ la app muestra la pantalla "La app no está configurada" con la causa y la acci�
   "Despliegues"), que lee **solo** `app/src/sui/config.ts`. Falta el archivo, `schemaVersion` ≠ 1, `network` distinta
   de la variable o un ID con formato inválido → pantalla de error con el campo o archivo y la acción.
 
+### Puerto de la localnet: `VITE_LOCALNET_URL` (#77)
+
+Parámetro **solo de localnet** para apuntar el navegador a una localnet aislada que corre en otro puerto (con
+`sui start --fullnode-rpc-port <puerto>`, p. ej. cuando el 9000 lo ocupa otro servicio del host).
+
+- **Regla** (`app/src/sui/localnetUrl.mjs`, la misma función que la guarda de las capturas de `app/scripts`): solo
+  `http://127.0.0.1:<puerto>`, con el puerto de 4 o 5 dígitos sin ceros a la izquierda entre 1024 y 65535. Nada más: ni
+  `localhost`, ni IPv6, ni otro host, ni `https`, ni credenciales, ruta, query, fragmento, espacios o mayúsculas.
+- **Sin la variable** (ausente), el endpoint es el de siempre, `http://127.0.0.1:9000`. Es el único caso que significa "por
+  defecto": un valor definido pero inválido, **incluida la cadena vacía** (`VITE_LOCALNET_URL=`, o `"$RPC_URL"` con
+  `RPC_URL` sin definir), muestra la pantalla "La app no está configurada" con el mensaje `VITE_LOCALNET_URL="…" no es
+  válida: solo se admite http://127.0.0.1:<puerto> (loopback, puerto 1024-65535); sin la variable, la app usa el puerto
+  9000`; nunca vuelve en silencio al 9000. Se valida antes de buscar `contracts/deployments/<red>.json`.
+- **Con `VITE_SUI_NETWORK=testnet` se ignora** por construcción (`loadConfig` no la pasa y `resolveConfig` no la lee):
+  ni da error ni cambia el endpoint, y un build de testnet no embebe su valor (el bundle es idéntico con y sin la variable).
+  La CSP de producción (`app/Caddyfile`) no la admite: producción nunca habla con una localnet.
+- Vale para `npm run dev` y para un build o preview de `localnet`. Como todo `VITE_*` es público (SEG-3); un
+  `http://127.0.0.1:<puerto>` no es un secreto. Ejemplo comentado: `app/.env.example`.
+- Defensa si el puerto lo atiende otro nodo: el chain id del nodo se compara con el del `localnet.json` (`wrong_chain`,
+  `nodeInfo.ts`); un proceso local en `127.0.0.1` es del propio usuario (riesgo residual aceptado).
+- `npm run dev` y `vite preview` **sin `--host`** (solo `localhost`): con `--host` la app, con la burner wallet de
+  `npm run dev`, quedaría escuchando en la red local. La CSP vive solo en producción: en dev, la regla de loopback es el
+  único control del endpoint.
+
 ### Localnet
 
 1. Localnet **aislada** de `agents.md` §3 ("Localnet aislada (smokes)"), con la publicación del paso 4 en la
-   **variante B** (sin `--out`): escribe `contracts/deployments/localnet.json` (ignorado por git). Aviso: el navegador
-   (`npm run dev` con `VITE_SUI_NETWORK=localnet`) solo conecta al puerto 9000 (`app/src/sui/networks.ts:11`), mientras que las capturas de `app/scripts` aceptan `http://127.0.0.1:<puerto>`; seguimiento: #77.
-2. `VITE_SUI_NETWORK=localnet npm run dev -w app` y abrir `http://localhost:5173`. Si `localnet.json` se crea (o se
-   vuelve a crear) con `vite` dev ya arrancado, la app sigue en "La app no está configurada" aunque se recargue:
-   reiniciar `npm run dev -w app` (`vite` ve los cambios y el borrado del archivo, pero no uno nuevo fuera de `app/`;
-   el build no se ve afectado).
+   **variante B** (sin `--out`): escribe `contracts/deployments/localnet.json` (ignorado por git). Con el 9000 ocupado por
+   otro servicio, la localnet corre en otro puerto (`--fullnode-rpc-port`) y el navegador la alcanza con
+   `VITE_LOCALNET_URL` (sección anterior).
+2. `VITE_SUI_NETWORK=localnet npm run dev -w app` y abrir `http://localhost:5173`; con una localnet aislada en otro puerto:
+   `VITE_SUI_NETWORK=localnet VITE_LOCALNET_URL="$RPC_URL" npm run dev -w app` (con `RPC_URL=http://127.0.0.1:<puerto>`
+   del `env.sh` de `agents.md` §3). Si `localnet.json` se crea (o se vuelve a crear) con `vite` dev ya arrancado, la app
+   sigue en "La app no está configurada" aunque se recargue: reiniciar `npm run dev -w app` (`vite` ve los cambios y el
+   borrado del archivo, pero no uno nuevo fuera de `app/`; el build no se ve afectado). Lo mismo si cambia
+   `VITE_LOCALNET_URL`.
 3. **Wallet de desarrollo** (burner del kit): solo en localnet **y** con `npm run dev` (D-20261102-02 (5)). Nace sin
    fondos: se fondea por CLI (ver "Wallet"). Para firmar con una wallet de navegador, esa wallet tiene que apuntar a la
    misma localnet.
@@ -323,10 +350,11 @@ src/
 │                #   MyGamesSection, HouseAdminPanel, HistoryTime…)
 ├── pages/       # páginas del router por hash: HomePage (#/), GameDetailPage (#/game/:id), MyGamesPage (#/my-games),
 │                #   HouseAdminPage (#/admin), NotFoundPage
-├── test/        # setup de Vitest, arneses de TanStack Query, de la máquina de transacciones y del escaneo de eventos
+├── test/        # setup de Vitest, arneses de TanStack Query, de la máquina de transacciones y del escaneo de eventos,
+│                #   y el corpus único de la regla de la URL de la localnet (localnetCorpus.ts, #77)
 └── App.tsx      # rutas (appRoutes) + RouterProvider
 scripts/
-├── localnet-guard.mjs          # guarda compartida de las capturas: solo loopback http://127.0.0.1:<puerto> (1024-65535; por defecto 9000) y la génesis del despliegue
+├── localnet-guard.mjs          # guarda compartida de las capturas: la regla de la URL se importa de src/sui/localnetUrl.mjs (#77; solo loopback http://127.0.0.1:<puerto>, 1024-65535, por defecto 9000) y la génesis del despliegue
 ├── capture-read-fixtures.mjs   # captura de las fixtures reales de lectura (ver "Fixtures de lectura")
 ├── capture-tx-fixtures.mjs     # captura de las fixtures reales de transacciones (ver "Fixtures de lectura")
 └── capture-house-fixtures.mjs  # (#14) captura de la fixture real del panel de la House (ver "Fixtures de lectura")
@@ -345,8 +373,9 @@ La regla de capas la hace cumplir ESLint (`app/eslint.config.js`, `no-restricted
 
 | Archivo | Contenido | Issue |
 |---|---|---|
-| `networks.ts` | `Network`, URL gRPC y base del explorador por red, `isNetwork`, `shortChainId` | #9 |
-| `config.ts` | **único** lector de `import.meta.env` y de `contracts/deployments/*.json`; valida el esquema de #7 (incluido `publishTxDigest`, cota del lobby) | #9, #10 |
+| `networks.ts` | `Network`, URL gRPC **por defecto** y base del explorador por red (el endpoint efectivo es `AppConfig.grpcUrl`), `isNetwork`, `shortChainId` | #9, #77 |
+| `localnetUrl.mjs` (+ `localnetUrl.d.mts`) | regla única de la URL de una localnet: `LOCALNET_URL` (9000) e `isLoopbackUrl` (solo `http://127.0.0.1:<puerto>`, 1024-65535); pura, sin imports; la usan `config.ts`, `networks.ts` y la guarda de las capturas (`app/scripts/localnet-guard.mjs`) | #75, #77 |
+| `config.ts` | **único** lector de `import.meta.env` (por propiedad, nunca el objeto) y de `contracts/deployments/*.json`; valida el esquema de #7 (incluido `publishTxDigest`, cota del lobby) y `VITE_LOCALNET_URL` (solo localnet, con `isLoopbackUrl`) | #9, #10, #77 |
 | `format.ts` | SUI ↔ MIST con `bigint` (`parseSuiToMist`, `formatMist`), `shortAddress`, `formatBps`, `formatTimestamp` | #9, #10 |
 | `explorer.ts` | links a transacción, objeto y cuenta (`explorerAccountUrl`, "Ver tu historial completo en el explorador"; Suiscan en testnet; `null` en localnet); validan antes de mirar la red | #9, #13 |
 | `nodeInfo.ts` | `fetchNodeInfo` (consulta viva con el corte común; trae el piso `lowestAvailableCheckpoint`) y `deriveNodeStatus` (con `retrying`) | #9, #10 |
