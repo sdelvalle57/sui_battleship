@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { Game } from '../sui/game';
+import { rowFromGame, type GameRow } from '../hooks/gameRow';
 import { formatMist } from '../sui/format';
+import type { Game } from '../sui/game';
 import { GameDetail } from './GameDetail';
 
 // Las vistas no importan el SDK (capas, ARQ-1): el `Game` se arma desde el `json` real de la fixture, que TASK-2 ya
@@ -25,23 +26,26 @@ const fixture = import.meta.glob<Fixture>('../../../contracts/fixtures/game-read
   import: 'default',
 })[FIXTURE_PATH] as Fixture;
 
-function gameOf(name: Name): Game {
+function gameOf(name: Name): GameRow {
   const j = fixture.objects[name].json;
   const state: Game['state'] =
     j.state['@variant'] === 'Resolved'
       ? { kind: 'resolved', acceptor: j.state.acceptor ?? '', winner: j.state.winner ?? '' }
       : { kind: j.state['@variant'] === 'Pending' ? 'pending' : 'cancelled' };
-  return {
-    id: j.id,
-    version: BigInt(j.version),
-    houseId: j.house_id,
-    creator: j.creator,
-    opponent: j.opponent,
-    bet: BigInt(j.bet),
-    stake: BigInt(j.stake),
-    feeRate: j.fee_rate,
-    state,
-  };
+  return rowFromGame(
+    {
+      id: j.id,
+      version: BigInt(j.version),
+      houseId: j.house_id,
+      creator: j.creator,
+      opponent: j.opponent,
+      bet: BigInt(j.bet),
+      stake: BigInt(j.stake),
+      feeRate: j.fee_rate,
+      state,
+    },
+    'coinflip',
+  );
 }
 const value = (label: string) => screen.getByText(label).nextElementSibling;
 
@@ -84,13 +88,13 @@ describe('GameDetail', () => {
   });
 
   describe('Resultado para ti (T4-12, DL-12)', () => {
-    const resolvedWith = (winner: 'creator' | 'acceptor'): Game => {
+    const resolvedWith = (winner: 'creator' | 'acceptor'): GameRow => {
       const game = gameOf('resolved');
       if (game.state.kind !== 'resolved') throw new Error('fixture');
       return { ...game, state: { ...game.state, winner: winner === 'creator' ? game.creator : game.state.acceptor } };
     };
     const upper = (address: string) => address.toUpperCase().replace('0X', '0x');
-    const resultFor = (game: Game, account: string | null) => {
+    const resultFor = (game: GameRow, account: string | null) => {
       const { unmount } = render(<GameDetail game={game} lastActivityMs={null} network="localnet" account={account} />);
       const label = screen.queryByText('Resultado para ti');
       const text = label?.nextElementSibling?.textContent ?? null;

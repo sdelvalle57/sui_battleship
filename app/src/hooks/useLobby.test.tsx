@@ -6,11 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { advance, createPolicyQueryClient, queryWrapper } from '../test/queryHarness';
 import type { AppConfig } from '../sui/config';
 import type { Game } from '../sui/game';
-import { fetchLobbyPage, type LobbyPage } from '../sui/lobby';
+import { fetchLobbyPage, type LobbyItem, type LobbyPage } from '../sui/lobby';
 import { NotYetCheckpointedError, PaginationStalledError } from '../sui/readErrors';
 import { fetchPublishCheckpoint } from '../sui/transactionInfo';
+import type { ListedRow } from './gameRow';
 import { useAppConfig } from './useAppConfig';
-import { useLobby } from './useLobby';
+import { queryKeys } from './queryKeys';
+import { useLobby, useLobbyEntries } from './useLobby';
 import { useWalletAccount } from './useWalletAccount';
 
 vi.mock('@mysten/dapp-kit-react', () => ({ useCurrentClient: vi.fn() }));
@@ -64,7 +66,8 @@ const lobbyMock = vi.mocked(fetchLobbyPage);
 const publishMock = vi.mocked(fetchPublishCheckpoint);
 let queryClient: QueryClient;
 const render = () => renderHook(() => useLobby(), { wrapper: queryWrapper(queryClient) });
-const ids = (items: { kind: string; game?: Game }[]) => items.map((i) => i.game?.id);
+const ids = (items: ListedRow[]) => items.map((i) => (i.kind === 'game' ? i.row.id : undefined));
+const mine = (items: ListedRow[]) => items.map((i) => i.role === 'creator');
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -192,21 +195,21 @@ describe('useLobby: pages', () => {
     lobbyMock.mockResolvedValue(lobbyPage([game(1, CREATOR), game(2)], null));
     const { result } = render();
     await advance(0);
-    expect(result.current.items.map((i) => i.isMine)).toEqual([true, false]);
+    expect(mine(result.current.items)).toEqual([true, false]);
   });
 
   it('marks nothing as mine without a connected account', async () => {
     lobbyMock.mockResolvedValue(lobbyPage([game(1, CREATOR)], null));
     const { result } = render();
     await advance(0);
-    expect(result.current.items.map((i) => i.isMine)).toEqual([false]);
+    expect(mine(result.current.items)).toEqual([false]);
   });
 
   it('keeps unreadable rows', async () => {
     lobbyMock.mockResolvedValue({ ...lobbyPage([game(1)], null), items: [{ kind: 'unreadable', gameId: null, txDigest: 'tx-x' }] });
     const { result } = render();
     await advance(0);
-    expect(result.current.items).toEqual([{ kind: 'unreadable', gameId: null, txDigest: 'tx-x', isMine: false }]);
+    expect(result.current.items).toEqual([{ kind: 'unreadable', gameId: null, txDigest: 'tx-x', role: null }]);
   });
 
   it('flags a stalled next page and stops offering more pages', async () => {
@@ -218,5 +221,111 @@ describe('useLobby: pages', () => {
     expect(result.current).toMatchObject({ stalled: true, hasNextPage: false, status: { kind: 'ready' } });
     expect(result.current.nextPageError).toBeInstanceOf(PaginationStalledError);
     expect(result.current.items).toHaveLength(1);
+  });
+});
+
+// #73, TASK-7b: las dos fuentes del coinflip, el filtro por juego y el registro armado de la config completa.
+describe('useLobbyEntries and the registry (#73)', () => {
+  const duelIdOf = (n: number) => `0x${(0x100 + n).toString(16).padStart(64, '0')}`;
+  const duelRow = (n: number, creator = OTHER): LobbyItem => ({
+    kind: 'duel',
+    gameKey: 'coinflip',
+    duel: {
+      id: duelIdOf(n),
+      version: 1n,
+      houseId: CONFIG.houseId,
+      creator,
+      opponent: null,
+      bet: 1_000_000n,
+      stake: 1_000_000n,
+      feeRate: 250,
+      turnMs: 0n,
+      state: { kind: 'pending' },
+    },
+    control: { id: 0, turnMs: 0n, label: 'sin reloj' },
+    createdTxDigest: `tx-duel-${String(n)}`,
+  });
+  const mixedPage = (): LobbyPage => ({ ...lobbyPage([game(1)], null), items: [...lobbyPage([game(1)], null).items, duelRow(1, CREATOR), duelRow(2)] });
+
+  beforeEach(() => {
+    publishMock.mockResolvedValue(59n);
+  });
+
+  it('useLobby does not filter the rows of the new source: both sources come in the neutral model, in the lobby order', async () => {
+    lobbyMock.mockResolvedValue(mixedPage());
+    const { result } = render();
+    await advance(0);
+    expect(result.current.items.map((i) => (i.kind === 'game' ? i.row.source : i.kind))).toEqual(['legacy', 'duel', 'duel']);
+    expect(ids(result.current.items)).toEqual([game(1).id, duelIdOf(1), duelIdOf(2)]);
+    const entries = renderHook(() => useLobbyEntries(), { wrapper: queryWrapper(queryClient) });
+    await advance(0);
+    expect(entries.result.current.entries.map((e) => e.kind)).toEqual(['game', 'duel', 'duel']);
+  });
+
+  it('gives each row of the new source the control of its DuelCreated and the legacy rows none, and marks the account\'s own rows with the role creator', async () => {
+    vi.mocked(useWalletAccount).mockReturnValue({ address: CREATOR, short: 'x' });
+    lobbyMock.mockResolvedValue(mixedPage());
+    const { result } = render();
+    await advance(0);
+    const rows = result.current.items.flatMap((i) => (i.kind === 'game' ? [i.row] : []));
+    expect(rows.map((r) => r.control)).toEqual([null, { id: 0, turnMs: 0n, label: 'sin reloj' }, { id: 0, turnMs: 0n, label: 'sin reloj' }]);
+    expect(rows.map((r) => r.gameKey)).toEqual(['coinflip', 'coinflip', 'coinflip']);
+    expect(mine(result.current.items)).toEqual([false, true, false]);
+  });
+
+  it('marks isMine on the rows of the new source with the connected address, and deduplicates by the id of either source', async () => {
+    vi.mocked(useWalletAccount).mockReturnValue({ address: CREATOR, short: 'x' });
+    lobbyMock.mockResolvedValue({ ...mixedPage(), items: [...mixedPage().items, duelRow(1, CREATOR)] });
+    const { result } = renderHook(() => useLobbyEntries(), { wrapper: queryWrapper(queryClient) });
+    await advance(0);
+    expect(result.current.entries.map((e) => e.isMine)).toEqual([false, true, false]);
+  });
+
+  it('passes the registry built from the WHOLE config and the game selection to the page fetch', async () => {
+    lobbyMock.mockResolvedValue(lobbyPage([], null));
+    renderHook(() => useLobbyEntries('coinflip'), { wrapper: queryWrapper(queryClient) });
+    await advance(0);
+    const [, args] = lobbyMock.mock.calls[0] ?? [];
+    expect(args).toMatchObject({ games: 'coinflip', publishCheckpoint: 59n, before: null });
+    expect(args?.registry.map((def) => def.key)).toEqual(['coinflip']);
+    expect(args?.registry[0]?.sources.map((source) => source.kind)).toEqual(['legacy']);
+  });
+
+  it('useLobby(games) is the filter by game (TASK-8b): "Todos" by default and one game with its own query key, rows in the neutral model', async () => {
+    lobbyMock.mockResolvedValue(mixedPage());
+    const all = renderHook(() => useLobby(), { wrapper: queryWrapper(queryClient) });
+    await advance(0);
+    expect(lobbyMock.mock.calls[0]?.[1]).toMatchObject({ games: 'all' });
+    const one = renderHook(() => useLobby('coinflip'), { wrapper: queryWrapper(queryClient) });
+    await advance(0);
+    expect(lobbyMock).toHaveBeenCalledTimes(2);
+    expect(lobbyMock.mock.calls[1]?.[1]).toMatchObject({ games: 'coinflip' });
+    expect(one.result.current.items.map((i) => (i.kind === 'game' ? i.row.source : i.kind))).toEqual(['legacy', 'duel', 'duel']);
+    expect(all.result.current.items).toHaveLength(3);
+  });
+
+  it('with upgrades in the config the registry has the new source too', async () => {
+    const upgraded = `0x${'2'.repeat(64)}`;
+    const typeOrigins = [
+      ...['Game', 'GameCreated', 'GameCancelled', 'GameResolved'].map((name) => ({ module: 'game', name, definingId: PKG })),
+      { module: 'coinflip', name: 'Coinflip', definingId: upgraded },
+      ...['Duel', 'DuelCreated', 'DuelCancelled', 'DuelActivated', 'DuelTurn', 'DuelResolved', 'DuelTimedOut', 'DuelExpired'].map((name) => ({ module: 'duel', name, definingId: upgraded })),
+    ];
+    vi.mocked(useAppConfig).mockReturnValue({ ...CONFIG, packageId: upgraded, upgrades: [{ version: 2, packageId: upgraded, txDigest: '11111111111111111111111111111111' }], typeOrigins });
+    lobbyMock.mockResolvedValue(lobbyPage([], null));
+    renderHook(() => useLobbyEntries(), { wrapper: queryWrapper(queryClient) });
+    await advance(0);
+    const [, args] = lobbyMock.mock.calls[0] ?? [];
+    expect(args?.registry[0]?.sources.map((source) => source.kind)).toEqual(['legacy', 'duel']);
+  });
+
+  it('each game selection has its own query (the key carries the game dimension) and "Todos" is the base key', async () => {
+    lobbyMock.mockResolvedValue(lobbyPage([], null));
+    renderHook(() => useLobbyEntries('coinflip'), { wrapper: queryWrapper(queryClient) });
+    renderHook(() => useLobbyEntries(), { wrapper: queryWrapper(queryClient) });
+    await advance(0);
+    const keys = queryClient.getQueryCache().findAll({ queryKey: queryKeys.lobby('testnet', PKG) }).map((q) => q.queryKey);
+    expect(keys).toEqual(expect.arrayContaining([queryKeys.lobby('testnet', PKG), queryKeys.lobby('testnet', PKG, 'coinflip')]));
+    expect(keys).toHaveLength(2);
   });
 });

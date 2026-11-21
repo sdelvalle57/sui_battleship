@@ -98,6 +98,8 @@ function adoptedHouseStatus(adopted: AdoptedTx): { action: HouseActionKind; outc
     case 'cancel':
     case 'reject':
     case 'accept':
+    case 'claim':
+    case 'refundStalled':
       return null;
   }
 }

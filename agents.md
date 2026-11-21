@@ -101,6 +101,7 @@ Los gates se corren con `cd contracts && printf 'n\n' | sui move …` (equivalen
 | `sui move test -e testnet --coverage && sui move coverage summary -e testnet` | Cobertura (informativo) |
 | Red local para smokes: **solo aislada** | Ver "Localnet aislada (smokes)" abajo; nunca `sui start` a secas |
 | `node scripts/publish.mjs publish --network testnet` | Publicación — **solo el owner, con su `SUI_CONFIG_DIR` propio** (§12, D-20261102-03); agentes: solo `--network localnet` dentro de la localnet aislada |
+| `node scripts/publish.mjs upgrade --network testnet` | Upgrade del paquete (#73) — **solo el owner, con su `SUI_CONFIG_DIR` propio y una autorización registrada en `DECISIONES.md`** (runbook: `contracts/README.md`, "Uso en testnet → Upgrade"); agentes: solo `--network localnet --pubfile-path <copia del pubfile>` dentro de la localnet aislada |
 
 Las seis primeras filas son exactamente los steps de gate del job `contracts` de
 `.github/workflows/ci.yml` (PROY-18); el job además exige árbol limpio y cero claves. Baseline vigente
@@ -112,8 +113,11 @@ de los gates: `documents/STATUS.md`.
 |---|---|---|
 | `node --test scripts/*.test.mjs`, `node scripts/publish.mjs check` | sí (gate) | sí |
 | `node scripts/publish.mjs record …` | sí (con salidas de localnet) | sí |
+| `node scripts/publish.mjs record --upgrade …` (offline: `--from` y `--type-origins`) | sí (con salidas de localnet; no invoca `sui` ni toca la red) | sí |
 | `node scripts/publish.mjs publish --network localnet …` | **solo** con el prefijo de la localnet aislada (`. env.sh && smoke_guard &&`, abajo) | sí, con su localnet aislada |
+| `node scripts/publish.mjs upgrade --network localnet --pubfile-path <copia> …` | **solo** con el prefijo de la localnet aislada, sobre un paquete publicado en esa génesis y con la copia del pubfile de la Receta U (`source.local` = `contracts/`; el script no lo edita y aborta si no coincide) | sí, con su localnet aislada |
 | `node scripts/publish.mjs publish --network testnet …` (con o sin `--dry-run`) | **nunca** (D4) | sí, con `SUI_CONFIG_DIR` propio |
+| `node scripts/publish.mjs upgrade --network testnet …` (con o sin `--dry-run`) | **nunca** (D4) | sí, con `SUI_CONFIG_DIR` propio y **solo con una autorización explícita registrada en `DECISIONES.md`** (runbook de `contracts/README.md`) |
 
 #### Localnet aislada (smokes)
 
@@ -237,7 +241,8 @@ borradas al cerrar. Nada en `~/.sui/`.
    una ejecución accidental). Ante cualquier ejecución accidental de `sui`: parar, verificar `~/.sui/` y declararlo en el reporte.
 
 **Reglas del script de publicación para agentes (D-20261102-03):** ningún agente corre
-`publish.mjs publish --network testnet`, ni con `--dry-run`. Un agente solo define `SUI_CONFIG_DIR` como
+`publish.mjs publish --network testnet` ni `publish.mjs upgrade --network testnet`, ni con `--dry-run` (#73: el
+dry run también corre contra testnet con la config del owner). Un agente solo define `SUI_CONFIG_DIR` como
 `$SMOKE_DIR/net`; la ruta de la config del owner nunca se escribe en el repo, issues, handoffs ni reportes. **Ninguna**
 llamada `sui client …` (ni `publish.mjs publish`) sin el prefijo del paso 3, tampoco las de solo lectura
 (`active-env`, `chain-identifier`, `addresses`): la única forma de ver la salida real de un `sui client` es esta
@@ -304,12 +309,16 @@ eventos y códigos de abort. La UI los consume desde un único módulo (`app/src
 |---|---|---|
 | Package ID / object IDs por red | `contracts/deployments/<red>.json`; testnet: `deployments/testnet.json` (#8) | Lo escribe `contracts/scripts/publish.mjs` (nunca a mano), en el mismo PR que la publicación; `Published.toml` es la fuente de los datos del paquete y la CI verifica la coherencia (`publish.mjs check`). La app lo importa (nunca IDs hardcodeados en componentes) |
 | Firmas y eventos | `contracts/sources/*.move` | Tabla en `contracts/README.md`; cambios = STOP (§6 de FLUJO) |
-| Abort codes | constantes `E*` de cada módulo | Tabla en `contracts/README.md` + `ABORT_MESSAGES` (módulo + código → mensaje) en `app/src/sui/errors.ts` (#11), con un test por código; un código nuevo entra en los dos en el mismo PR |
+| Abort codes | constantes `E*` de cada módulo | Tabla en `contracts/README.md` + `ABORT_MESSAGES` (módulo + código → mensaje) en `app/src/sui/errors.ts` (#11), con un test por código; un código nuevo entra en los dos en el mismo PR. #73: `duel` 0-25 (`coinflip` no define códigos); un abort informa el ID de la versión **ejecutada**, así que `transactionErrorMessage` acepta `packageId`, `originalPackageId` y todos los de `upgrades[]` |
 | Layout BCS de `Game` y de sus eventos | `contracts/sources/game.move` | Esquemas en `app/src/sui/game.ts` y `events.ts`; fixtures en `contracts/fixtures/game-reads.localnet.json` (se recapturan si cambia el layout) |
+| Layout BCS de `Duel<G>`, de `DuelState` (6 variantes, en el orden `Pending`, `Cancelled`, `Active`, `Resolved`, `TimedOut`, `Expired`) y de sus 7 eventos (`DuelCreated`, `DuelCancelled`, `DuelActivated`, `DuelTurn`, `DuelResolved`, `DuelTimedOut`, `DuelExpired`) (#73) | `contracts/sources/duel.move` | Esquemas en `app/src/sui/duel.ts` y `events.ts`; el orden de campos y de variantes es el del BCS y queda congelado por el upgrade (PROY-2); tipos exactos con el ID de **definición** de `typeOrigins` (para `duel`/`coinflip`, el del upgrade; plan §4.4); fixtures en `contracts/fixtures/duel-reads.localnet.json` y `duel-tx.localnet.json` (producción) y `duel-clock.localnet.json` (ensayo: solo el mecanismo del reloj) (se recapturan si cambia el layout) |
+| Controles de tiempo (id → `turn_ms`) y `CLAIM_GRACE_MS` | `duel.move` (`turn_ms_of`, `CLAIM_GRACE_MS`) | Espejo `TIME_CONTROLS` (ids 0-7: sin reloj, rapid 10/20/30/60 min, daily 1/3/7 días) y `CLAIM_GRACE_MS` (7 días) en `app/src/sui/gameRegistry.ts` (#73), solo para mostrar: el contrato aborta igual con `duel`/16; un `turn_ms` fuera del espejo (un id agregado en un upgrade) se muestra en formato genérico (`controlLabel`), nunca es un error de lectura ni de configuración. **Se revisa en todo upgrade que toque la tabla o la gracia**, en el mismo PR |
+| Cota de literales de `ListEvents` y literal prefijo | regla del **nodo** (V-4 de TASK-1b, PV 142), no del contrato | `MAX_FILTER_LITERALS` = 10 en `app/src/sui/eventScan.ts` (#73, TASK-7b): con 11 literales por filtro el fullnode responde `INVALID_ARGUMENT` (se cuentan literales: un `sender ∧ eventType` son 2), así que `requestOrPruned` parte el filtro en trozos con un cursor cada uno y fusiona por (checkpoint, transacción, evento). El literal `eventType` **sin** parámetros de tipo es un **prefijo** de todas las instanciaciones de `G` (el lobby "Todos" usa uno por evento y la app ignora un `G` desconocido; un juego usa el tag completo); `eventType` exige el ID de **definición** y `emitModule` no se usa. **Se re-verifica en todo task de toolchain que suba la PV** |
 | Layout BCS de la `House` | `contracts/sources/house.move` | Esquema en `app/src/sui/house.ts` (#11; lo reutiliza #14); fixtures en `contracts/fixtures/game-tx.localnet.json` y `house-admin.localnet.json` (se recapturan si cambia el layout) |
 | Layout BCS del `HouseCap` y de los eventos de admin (`FeeRateUpdated`, `BetLimitsUpdated`, `FeesWithdrawn`) | `contracts/sources/house.move` | Esquemas en `app/src/sui/houseCap.ts` y `houseAdmin.ts` (#14); fixture en `contracts/fixtures/house-admin.localnet.json` (se recaptura si cambia el layout) |
 | Comisión máxima | `house::MAX_FEE_BPS` (`house.move`) | Espejo `HOUSE_MAX_FEE_BPS` = 1000 en `app/src/sui/houseAdmin.ts` (#14), solo para la validación de cortesía del panel; el contrato aborta igual con `house`/0. **Se revisa en todo upgrade que toque `MAX_FEE_BPS`**, en el mismo PR |
-| Fórmula de la comisión y del pago | `game.move` (`accept_game`) | `resolutionAmounts` de `app/src/sui/game.ts` = fórmula de la v1 (D-20261030-16 D2/D3). Un upgrade que la cambie conserva la vieja para las partidas resueltas con el código viejo (por versión del `Game` o leyendo `GameResolved`) en el mismo PR. El panel de #14 replica `house::MAX_FEE_BPS` (fila "Comisión máxima") |
+| Fórmula de la comisión y del pago | `game.move` (`accept_game`) | `resolutionAmounts` de `app/src/sui/game.ts` = fórmula de la v1 (D-20261030-16 D2/D3). Un upgrade que la cambie conserva la vieja para las partidas resueltas con el código viejo (por versión del `Game` o leyendo `GameResolved`) en el mismo PR. El panel de #14 replica `house::MAX_FEE_BPS` (fila "Comisión máxima"). #73 (D10): el `Duel` usa **la misma fórmula** (`duel.move`, `fee_amount` duplicada; también en el reclamo por tiempo), así que `resolutionAmounts` vale para las dos fuentes |
+| Interpretado de lo que lee la app de una partida y de su resultado (#73, TASK-8a) | `game.move`, `duel.move`, `coinflip.move` | **Detalle** por el **tipo exacto del objeto** (`fetchGameDetail` de `app/src/sui/gameDetail.ts`: un `Game` o un `Duel<G>` del registro; otro tipo = `NotAGameError`). **Resultados** (`app/src/sui/gameTx.ts`): con la fuente nueva, aceptar (atómico) emite `DuelActivated` **y** `DuelResolved` y el resultado es el `DuelResolved` con el aceptante = el remitente; `cancel`/`reject` emiten `DuelCancelled`; `claim_timeout`, `DuelTimedOut` (con `claimed_by` = el remitente); `refund_stalled`, `DuelExpired`. Los tipos de evento salen de `DuelSource.eventTypes` (registro), nunca de un tag armado en un hook. Las dos fuentes devuelven una forma **neutral** (`gameId`; `txSession.ts`) y las pantallas dibujan el **modelo de fila neutral** (`app/src/hooks/gameRow.ts`). **Se revisa si cambia un evento de `duel` o de `game`** |
 
 **Regla:** tras la primera publicación en testnet, un cambio incompatible con upgrade (firma pública,
 layout de struct con `key`/`store`, eliminar función pública) es **STOP**: se decide entre upgrade
@@ -398,14 +407,33 @@ compatible o republicación con IDs nuevos.
   (con `cancelled_by`) y `GameResolved` (`acceptor`, `winner`, `pot`, `fee`, `payout`); abort codes 0–10 (más
   `house::EWrongVersion` en `create_game` y en el cobro de `accept_game`). `GameState` y el layout de `Game`
   quedan cerrados en #8: #18 usa un objeto nuevo o dynamic fields. Tablas en `contracts/README.md`.
+- **`battleship::duel`** (#73, upgrade pendiente de autorización del owner) — base común `Duel<phantom G>` (shared, uno por
+  partida, `key` sin `store`: `version`, `house_id`, `creator`, `opponent` opcional, `bet`, `stake: Balance<SUI>`,
+  `fee_rate`, `turn_ms`, `state`), enum `DuelState` (6 variantes: `Pending | Cancelled | Active { acceptor, to_move,
+  deadline_ms } | Resolved | TimedOut | Expired`) y **reloj por jugada** aplicado por la base (8 controles por id, 0 = sin
+  reloj, y `CLAIM_GRACE_MS` = 7 días; quien deja vencer su plazo pierde). Los juegos usan la API `public(package)` (`create`,
+  `activate`, `activate_atomic`, `record_move`, `collect`, `pay`); cuatro `entry` genéricas sin witness: `cancel` y `reject`
+  (100 % al creador), `claim_timeout` (cualquiera; el pozo menos la comisión al rival de quien no movió) y `refund_stalled`
+  (cualquiera; 100/100 sin comisión, sin House ni versión); 7 eventos (`DuelCreated`, `DuelCancelled`, `DuelActivated`,
+  `DuelTurn`, `DuelResolved`, `DuelTimedOut`, `DuelExpired`) y abort codes 0–25. Entre los módulos nuevos, solo `duel` llama a `house::add_fees` (el `game` anterior la sigue llamando).
+  Tablas en `contracts/README.md`.
+- **`battleship::coinflip`** (#73) — el coinflip nuevo sobre `Duel<Coinflip>` (witness `Coinflip`, solo `drop`): `entry
+  create` (control 0, sin reloj) y `entry accept` (atómico: activa, cobra la comisión, sortea con `Random` en el último
+  comando y paga). El `game::Game` anterior queda intacto; la app lee las dos fuentes con un registro de juegos
+  (`app/src/sui/gameRegistry.ts`).
 
 ## 9. Entidades Clave
 
 `House` · `HouseCap` · `Game` (objeto compartido por partida: `version`, `house_id`, `creator`, `opponent`
 opcional, `bet`, `stake: Balance<SUI>`, `fee_rate`, `state`; sin timestamps) · `GameState` (`Pending`,
 `Cancelled`, `Resolved { acceptor, winner }`) · eventos de transición (`GameCreated`, `GameCancelled`,
-`GameResolved` con el ganador, el pozo, la comisión y el pago) · (futuro, #18) `Board`/`Ship`/
-`Coordinate` del borrador 2025 (`git show f063a0e:sources/battleship.move`).
+`GameResolved` con el ganador, el pozo, la comisión y el pago) · (#73) `Duel<G>` (la base común con reloj por jugada:
+`turn_ms`, `stake`, `state`) · `DuelState` (`Pending`, `Cancelled`, `Active { acceptor, to_move, deadline_ms }`,
+`Resolved`, `TimedOut`, `Expired`) · `Coinflip` (witness del coinflip nuevo) · eventos `Duel*` (`DuelCreated`,
+`DuelCancelled`, `DuelActivated`, `DuelTurn`, `DuelResolved`, `DuelTimedOut`, `DuelExpired`) · en la app, la **fila neutral a la
+fuente** (`GameRow`, `app/src/hooks/gameRow.ts`) y el **registro de juegos** (`GameDef`, `app/src/sui/gameRegistry.ts`) que
+dibujan las pantallas, con la UI de reloj de TASK-8b (`GameStatus`, `Countdown`, `TimeoutActions`; `app/README.md`, "Vistas con
+reloj y estándar de UX") · (futuro, #18) `Board`/`Ship`/`Coordinate` del borrador 2025 (`git show f063a0e:sources/battleship.move`).
 
 ## 10. Testing
 

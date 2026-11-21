@@ -1,9 +1,12 @@
 import { useLocation, useParams } from 'react-router';
+import { ChainClockSampler } from '../components/ChainClockSampler';
 import { readCreatedNotice } from '../components/createdNotice';
 import { GameActions } from '../components/GameActions';
 import { GameDetail } from '../components/GameDetail';
+import { asActiveDuel } from '../components/gameTexts';
 import { ReadState } from '../components/ReadState';
 import { TransactionStatus } from '../components/TransactionStatus';
+import { rowFromDetail } from '../hooks/gameRow';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useGame } from '../hooks/useGame';
 import { useTransactionTime } from '../hooks/useTransactionTime';
@@ -22,6 +25,8 @@ export function GameDetailPage() {
   const { address } = useWalletAccount();
   const result = useGame(id);
   const { timestampMs } = useTransactionTime(result.kind === 'read' ? result.previousTransaction : null);
+  // La fila neutral a la fuente (#73, TASK-8a): una partida anterior y una nueva se dibujan igual.
+  const game = result.kind === 'read' && result.detail !== null ? rowFromDetail(result.detail) : null;
 
   if (result.kind === 'invalid_id') {
     return (
@@ -52,10 +57,12 @@ export function GameDetailPage() {
         </TransactionStatus>
       )}
       <ReadState status={result.status} onRetry={result.refetch} busy={result.isFetching} />
-      {result.game !== null && (
+      {game !== null && (
         <>
-          <GameDetail game={result.game} lastActivityMs={timestampMs} network={network} account={address} />
-          <GameActions game={result.game} />
+          {/* Solo una partida activa con reloj cuenta un plazo: sin ella no se pide la hora de la cadena (TASK-8b). */}
+          {asActiveDuel(game) !== null && <ChainClockSampler />}
+          <GameDetail game={game} lastActivityMs={timestampMs} network={network} account={address} />
+          <GameActions game={game} />
         </>
       )}
     </section>

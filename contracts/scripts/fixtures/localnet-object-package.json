@@ -1,0 +1,147 @@
+{
+  "objectId": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617",
+  "version": 2,
+  "digest": "DBaqHoWac2RPKrS3spd1ozJzT6icypV2wx2Y5ZHyZfWY",
+  "objType": "package",
+  "owner": "Immutable",
+  "prevTx": "9K1PE3EfwtutpCb3qFL4VPRwcTouffgBvwGezB6hDnB3",
+  "storageRebate": 84679200,
+  "content": {
+    "Package": {
+      "id": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617",
+      "version": 2,
+      "type_origin_table": [
+        {
+          "module_name": "house",
+          "datatype_name": "House",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "house",
+          "datatype_name": "HouseCap",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "house",
+          "datatype_name": "HOUSE",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "house",
+          "datatype_name": "FeeRateUpdated",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "house",
+          "datatype_name": "BetLimitsUpdated",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "house",
+          "datatype_name": "FeesWithdrawn",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "house",
+          "datatype_name": "HouseCapTransferred",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "house",
+          "datatype_name": "HouseMigrated",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "duel",
+          "datatype_name": "Duel",
+          "package": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+        },
+        {
+          "module_name": "duel",
+          "datatype_name": "Collected",
+          "package": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+        },
+        {
+          "module_name": "duel",
+          "datatype_name": "DuelCreated",
+          "package": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+        },
+        {
+          "module_name": "duel",
+          "datatype_name": "DuelCancelled",
+          "package": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+        },
+        {
+          "module_name": "duel",
+          "datatype_name": "DuelActivated",
+          "package": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+        },
+        {
+          "module_name": "duel",
+          "datatype_name": "DuelResolved",
+          "package": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+        },
+        {
+          "module_name": "duel",
+          "datatype_name": "DuelTurn",
+          "package": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+        },
+        {
+          "module_name": "duel",
+          "datatype_name": "DuelTimedOut",
+          "package": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+        },
+        {
+          "module_name": "duel",
+          "datatype_name": "DuelExpired",
+          "package": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+        },
+        {
+          "module_name": "duel",
+          "datatype_name": "DuelState",
+          "package": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+        },
+        {
+          "module_name": "coinflip",
+          "datatype_name": "Coinflip",
+          "package": "0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617"
+        },
+        {
+          "module_name": "game",
+          "datatype_name": "Game",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "game",
+          "datatype_name": "GameCreated",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "game",
+          "datatype_name": "GameCancelled",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "game",
+          "datatype_name": "GameResolved",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        },
+        {
+          "module_name": "game",
+          "datatype_name": "GameState",
+          "package": "0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36"
+        }
+      ],
+      "linkage_table": {
+        "0x0000000000000000000000000000000000000000000000000000000000000001": {
+          "upgraded_id": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "upgraded_version": 1
+        },
+        "0x0000000000000000000000000000000000000000000000000000000000000002": {
+          "upgraded_id": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "upgraded_version": 1
+        }
+      }
+    }
+  }
+}

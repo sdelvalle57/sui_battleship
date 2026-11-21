@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   CREATE_GAS_RESERVE_MIST,
+  DUEL_STORAGE_DEPOSIT_MIST,
   GAME_STORAGE_DEPOSIT_MIST,
   houseChangeMessage,
   houseTermsChanges,
+  storageDepositFor,
   validateCreateGame,
   type HouseTerms,
 } from './createGame';
@@ -21,6 +23,19 @@ describe('constants', () => {
   it('keeps the gas reserve and the storage deposit measured in #6', () => {
     expect(CREATE_GAS_RESERVE_MIST).toBe(10_000_000n);
     expect(GAME_STORAGE_DEPOSIT_MIST).toEqual({ open: 1_953_200n, invitation: 2_196_400n });
+  });
+
+  it('keeps the storage deposit of a Duel measured in 8a (+456000 MIST over the Game one)', () => {
+    expect(DUEL_STORAGE_DEPOSIT_MIST).toEqual({ open: 2_409_200n, invitation: 2_652_400n });
+    expect(DUEL_STORAGE_DEPOSIT_MIST.open - GAME_STORAGE_DEPOSIT_MIST.open).toBe(456_000n);
+    expect(DUEL_STORAGE_DEPOSIT_MIST.invitation - GAME_STORAGE_DEPOSIT_MIST.invitation).toBe(456_000n);
+  });
+});
+
+describe('storageDepositFor', () => {
+  it('picks the Game deposit for the previous source and the Duel deposit for the new one', () => {
+    expect(storageDepositFor('legacy')).toBe(GAME_STORAGE_DEPOSIT_MIST);
+    expect(storageDepositFor('duel')).toBe(DUEL_STORAGE_DEPOSIT_MIST);
   });
 });
 

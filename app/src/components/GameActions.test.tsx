@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { rowFromDuel, rowFromGame, type GameRow } from '../hooks/gameRow';
 import { useAcceptGame } from '../hooks/useAcceptGame';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useCancelGame } from '../hooks/useCancelGame';
@@ -12,6 +13,7 @@ import { useWalletAccount } from '../hooks/useWalletAccount';
 import { ACCEPT_GAS_RESERVE_MIST } from '../sui/acceptGame';
 import type { AppConfig } from '../sui/config';
 import { RUNTIME_CANCELLED_MESSAGES } from '../sui/errors';
+import type { DuelState } from '../sui/duel';
 import type { GameResolvedEvent } from '../sui/events';
 import type { Game, GameState } from '../sui/game';
 import { NOT_INVITED_HINT } from '../sui/gameActions';
@@ -32,8 +34,9 @@ const OTHER = `0x${'c'.repeat(64)}`;
 const ID = `0x${'6'.repeat(64)}`;
 const DIGEST = '7VXtB8Pc47Jss33zYQRMXJDfLsY7XvdWFX78gzj7q7YH';
 
-function game(opponent: string | null, state: GameState = { kind: 'pending' }): Game {
-  return { id: ID, version: 1n, houseId: ID, creator: CREATOR, opponent, bet: 2_000_000n, stake: 2_000_000n, feeRate: 250, state };
+function game(opponent: string | null, state: GameState = { kind: 'pending' }): GameRow {
+  const legacy: Game = { id: ID, version: 1n, houseId: ID, creator: CREATOR, opponent, bet: 2_000_000n, stake: 2_000_000n, feeRate: 250, state };
+  return rowFromGame(legacy, 'coinflip');
 }
 function txHook(overrides: Partial<UseExecuteTransaction<bigint | null>> = {}) {
   return { stage: 'idle', outcome: null, execute: vi.fn(), ...overrides } as UseExecuteTransaction<bigint | null>;
@@ -359,5 +362,72 @@ describe("GameActions variant='row' (DL-6, H-3 of #13)", () => {
     expect(screen.getByRole('alert')).toHaveTextContent('La transacción se envió pero la red no la confirmó todavía');
     expect(acceptButton()).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Ya la revisé' })).toBeInTheDocument();
+  });
+});
+
+// #73, TASK-8a: la misma pantalla para una partida de la fuente nueva (fila neutral): los hooks reciben la fila para enrutar.
+function duelGame(opponent: string | null, state: DuelState = { kind: 'pending' }): GameRow {
+  return rowFromDuel(
+    { id: ID, version: 1n, houseId: ID, creator: CREATOR, opponent, bet: 2_000_000n, stake: 0n, feeRate: 250, turnMs: 0n, state },
+    'coinflip',
+    { id: 0, turnMs: 0n, label: 'sin reloj' },
+  );
+}
+
+describe('GameActions with a row of the new source', () => {
+  it('draws the same buttons and texts as for a game of the previous source, with no source label or time control', () => {
+    setup(OTHER);
+    const previous = render(<GameActions game={game(null)} />);
+    const previousHtml = previous.container.innerHTML;
+    previous.unmount();
+    const next = render(<GameActions game={duelGame(null)} />);
+    expect(next.container.innerHTML).toBe(previousHtml);
+    expect(screen.getByRole('button', { name: 'Aceptar' })).toBeInTheDocument();
+    expect(next.container).not.toHaveTextContent(/anterior|nueva|sin reloj|por jugada/i);
+  });
+
+  it('passes the row (its source and its game) to the three hooks, so each routes to its own builder', () => {
+    setup(CREATOR);
+    render(<GameActions game={duelGame(null)} />);
+    expect(useCancelGame).toHaveBeenCalledWith(VIEW, expect.objectContaining({ source: 'duel', gameKey: 'coinflip' }));
+    expect(useRejectGame).toHaveBeenCalledWith(VIEW, expect.objectContaining({ source: 'duel', gameKey: 'coinflip' }));
+    expect(useAcceptGame).toHaveBeenCalledWith(VIEW, expect.objectContaining({ source: 'duel', gameKey: 'coinflip', bet: 2_000_000n }));
+  });
+
+  it('accepts, cancels and rejects a pending new-source game through the same buttons', () => {
+    setup(OTHER);
+    const accepting = render(<GameActions game={duelGame(null)} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Aceptar' }));
+    expect(accept).toHaveBeenCalledWith();
+    accepting.unmount();
+    setup(CREATOR);
+    const cancelling = render(<GameActions game={duelGame(null)} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(cancel).toHaveBeenCalledWith();
+    cancelling.unmount();
+    setup(INVITEE);
+    render(<GameActions game={duelGame(INVITEE)} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Rechazar' }));
+    expect(reject).toHaveBeenCalledWith();
+  });
+
+  // TASK-8b: una partida `Active` ya ofrece las acciones de tiempo (GameActions.timeout.test.tsx); las terminadas, ninguna.
+  it.each([
+    ['timed out', { kind: 'timed_out', acceptor: OTHER, winner: CREATOR }],
+    ['expired', { kind: 'expired', acceptor: OTHER }],
+  ] as [string, DuelState][])('offers no action on a %s new-source game, for any account', (_name, state) => {
+    for (const account of [CREATOR, OTHER, INVITEE, null]) {
+      setup(account);
+      const view = render(<GameActions game={duelGame(INVITEE, state)} />);
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Conecta tu wallet/)).not.toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
+  it('shows the result of an accepted new-source game with the same text (winner, pot, fee, payout)', () => {
+    setup(OTHER, { accept: { stage: 'done', outcome: accepted(resolved(OTHER)) } });
+    render(<GameActions game={duelGame(null)} />);
+    expect(screen.getByRole('status')).toHaveTextContent('¡Ganaste! Recibiste 0.0039 SUI (pozo 0.004 SUI − comisión 0.0001 SUI)');
   });
 });

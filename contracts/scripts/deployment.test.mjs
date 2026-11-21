@@ -10,14 +10,21 @@ import {
   OPTIONAL_FIELDS,
   TESTNET_CHAIN_ID,
   buildDeployment,
+  buildUpgradeDeployment,
   checkConsistency,
   normalizeId,
   parseDryRunOutput,
+  parsePubfile,
   parsePublishOutput,
   parsePublishedToml,
+  parseTypeOriginsOutput,
+  parseUpgradeDryRunOutput,
+  parseUpgradeOutput,
   readFrameworkRev,
   redactAddresses,
   validateDeployment,
+  validateTypeOriginsField,
+  validateUpgradesField,
 } from './deployment.mjs';
 
 const readFixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
@@ -225,7 +232,8 @@ for (const [name, make, expected] of invalidCases) {
 }
 
 test('validateDeployment: opcional registrado ausente es válido y con formato malo es error', () => {
-  assert.deepEqual(OPTIONAL_FIELDS, {});
+  // #73 (TASK-4) registra `upgrades` y `typeOrigins`: ya no está vacío.
+  assert.deepEqual(Object.keys(OPTIONAL_FIELDS), ['upgrades', 'typeOrigins']);
   const optionalFields = {
     packageTxDigest: (v) => (typeof v === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v) ? null : 'digest base58'),
   };
@@ -341,4 +349,447 @@ test('normalizeId rellena, pasa a minúsculas y rechaza lo que no es hex', () =>
   assert.equal(normalizeId(`0x${'AB'.repeat(32)}`), `0x${'ab'.repeat(32)}`);
   assert.throws(() => normalizeId('0xzz'), /no es hex/);
   assert.throws(() => normalizeId(`0x${'1'.repeat(65)}`), /más de 64/);
+});
+
+// ---------- Upgrade (#73, TASK-4) ----------
+//
+// Fuentes reales (localnet aislada y desechable, CLI 1.84.0 sobre un v1 compilado con la 1.83.0):
+// - `localnet-upgrade.json` y `localnet-upgrade-dry-run.json` (TASK-1a): `sui client test-upgrade` con un módulo de ensayo.
+// - `localnet-upgrade-duel-coinflip.json` + `localnet-object-package.json` + `localnet-upgrade-base.deployment.json`
+//   (TASK-4): el upgrade real v1 → v2 que agrega `duel` y `coinflip`, la lectura `object --json` del paquete nuevo y el
+//   `record` del v1; `localnet.upgraded.deployment.json` es el json que arma el script con esas tres.
+// No existe una salida real de `sui client upgrade` (testnet): la corre solo el owner. Los tests de parseo usan la forma
+// de `test-upgrade` y lo dicen en el nombre (`…_with_the_test_upgrade_shape`); no afirman que sea la de testnet.
+const UPGRADE_TEST_SHAPE = JSON.parse(readFixture('localnet-upgrade.json'));
+const UPGRADE_DRY_RUN_TEST_SHAPE = JSON.parse(readFixture('localnet-upgrade-dry-run.json'));
+const UPGRADE_DUEL = JSON.parse(readFixture('localnet-upgrade-duel-coinflip.json'));
+const OBJECT_PACKAGE = JSON.parse(readFixture('localnet-object-package.json'));
+const UPGRADE_BASE = JSON.parse(readFixture('localnet-upgrade-base.deployment.json'));
+const UPGRADED_TEXT = readFixture('localnet.upgraded.deployment.json');
+const UPGRADED = JSON.parse(UPGRADED_TEXT);
+
+const ORIGINAL_PKG = '0x3235fb9f142718bc7b7eb878b87e45b463f91e93c5353db9425308fc234fdf36';
+const UPGRADED_PKG = '0x14e041f974145b3a4d0921dda50eb43f8d9dcd6fd6c181f2cd07e025bbfc1617';
+const UPGRADED_CAP = '0x4367c28e169586f024ebcf963c9e14a5516a53441885fa5108a2d2ea0a24ea84';
+const UPGRADED_DIGEST = '9K1PE3EfwtutpCb3qFL4VPRwcTouffgBvwGezB6hDnB3';
+const UPGRADE_META = Object.freeze({
+  sourceCommit: 'ab61256275c31ba3d4050bed1e33c695159ca92a',
+  suiCliVersion: '1.84.0-9dc25070cf2e',
+  frameworkRev: 'e6f43880f4b65e2c1f0397583a9690b4b22c9223',
+});
+const DIGEST_V3 = 'GH5sBfbPhhNwiJ4uQXgzP5agEfqx6nYgtSxRuH3trKKQ';
+const PKG_V3 = `0x${'c3'.repeat(32)}`;
+
+const parsedUpgrade = () => parseUpgradeOutput(UPGRADE_DUEL);
+const realTypeOrigins = () => parseTypeOriginsOutput(OBJECT_PACKAGE, { packageId: UPGRADED_PKG, packageVersion: 2 });
+// Copias en memoria de `objectChanges` del upgrade real; el archivo nunca se edita.
+const upgradeWithChanges = (transform, source = UPGRADE_DUEL) => {
+  const copy = structuredClone(source);
+  copy.objectChanges = transform(copy.objectChanges);
+  return copy;
+};
+const objectWithTable = (transform) => {
+  const copy = structuredClone(OBJECT_PACKAGE);
+  copy.content.Package.type_origin_table = transform(copy.content.Package.type_origin_table);
+  return copy;
+};
+
+test('parseUpgradeOutput_with_the_test_upgrade_shape: ID nuevo, versión, digest, timestamp y UpgradeCap del upgrade real', () => {
+  assert.deepEqual(parseUpgradeOutput(UPGRADE_TEST_SHAPE), {
+    digest: 'A4smWEU3g79gVWWfr2AxHmuom7EHFgcZb71ovmMjDneN',
+    timestampMs: '1795153813508',
+    packageId: '0xc2e358707175dea52a29ca7e958e1c5738cc268fe874d9803a745c332882ccfa',
+    packageVersion: 2,
+    upgradeCapId: '0x599718fb636381effbc379131907ab6c6facff02c4542206c41472369d713fbd',
+  });
+  assert.deepEqual(parsedUpgrade(), {
+    digest: UPGRADED_DIGEST,
+    timestampMs: '1795161810823',
+    packageId: UPGRADED_PKG,
+    packageVersion: 2,
+    upgradeCapId: UPGRADED_CAP,
+  });
+});
+
+test('parseUpgradeOutput_with_the_test_upgrade_shape no depende de la posición en objectChanges ni devuelve cuentas', () => {
+  assert.deepEqual(parseUpgradeOutput(upgradeWithChanges((c) => c.reverse())), parsedUpgrade());
+  const addresses = accountAddresses(UPGRADE_DUEL);
+  assert.ok(addresses.size > 0);
+  for (const value of allValues(parsedUpgrade())) {
+    if (typeof value === 'string' && /^0x[0-9a-f]+$/.test(value)) assert.ok(!addresses.has(normalizeId(value)));
+  }
+});
+
+test('parseUpgradeOutput rechaza lo que no es un upgrade registrable (sin success, sin published, dos, sin UpgradeCap mutado)', () => {
+  const failed = structuredClone(UPGRADE_DUEL);
+  failed.effects.status = { status: 'failure', error: 'PackageUpgradeError' };
+  assert.throws(() => parseUpgradeOutput(failed), /success/);
+  assert.throws(() => parseUpgradeOutput(upgradeWithChanges((c) => c.filter((x) => x.type !== 'published'))), /no trae el cambio de paquete/);
+  assert.throws(
+    () => parseUpgradeOutput(upgradeWithChanges((c) => [...c, structuredClone(c.find((x) => x.type === 'published'))])),
+    /exactamente un objeto published y hay 2/,
+  );
+  assert.throws(
+    () => parseUpgradeOutput(upgradeWithChanges((c) => c.filter((x) => !String(x.objectType).endsWith('::package::UpgradeCap')))),
+    /UpgradeCap mutado y hay 0/,
+  );
+  const created = upgradeWithChanges((c) => {
+    c.find((x) => String(x.objectType).endsWith('::package::UpgradeCap')).type = 'created';
+    return c;
+  });
+  assert.throws(() => parseUpgradeOutput(created), /UpgradeCap mutado y hay 0/);
+  assert.throws(() => parseUpgradeOutput({ ...structuredClone(UPGRADE_DUEL), digest: 'x' }), /digest/);
+  assert.throws(() => parseUpgradeOutput({ ...structuredClone(UPGRADE_DUEL), timestampMs: undefined }), /timestampMs/);
+  assert.throws(() => parseUpgradeOutput({ ...structuredClone(UPGRADE_DUEL), objectChanges: undefined }), /objectChanges/);
+});
+
+test('parseUpgradeOutput rechaza la salida de una publicación (versión 1 y sin UpgradeCap mutado)', () => {
+  assert.throws(() => parseUpgradeOutput(PUBLISH), /versión del paquete inválida para un upgrade.*UpgradeCap mutado y hay 0/);
+});
+
+test('parseUpgradeDryRunOutput_with_the_test_upgrade_shape: ok, gas estimado y los IDs simulados', () => {
+  const result = parseUpgradeDryRunOutput(UPGRADE_DRY_RUN_TEST_SHAPE);
+  assert.equal(result.ok, true);
+  assert.equal(result.gasEstimate, 46_600_163n);
+  assert.deepEqual(result.created, {
+    packageId: '0xf7e29186fda2b5426c7e3ccaf795fdd0293bc1d32eb37aff87bdbbab2707b23a',
+    packageVersion: 2,
+    upgradeCapId: '0x599718fb636381effbc379131907ab6c6facff02c4542206c41472369d713fbd',
+  });
+  const failed = structuredClone(UPGRADE_DRY_RUN_TEST_SHAPE);
+  failed.effects.status = { status: 'failure', error: 'IncompatibleUpgrade' };
+  assert.equal(parseUpgradeDryRunOutput(failed).ok, false);
+  const noPackage = structuredClone(UPGRADE_DRY_RUN_TEST_SHAPE);
+  noPackage.objectChanges = noPackage.objectChanges.filter((x) => x.type !== 'published');
+  assert.equal(parseUpgradeDryRunOutput(noPackage).ok, false);
+  assert.throws(() => parseUpgradeDryRunOutput({ ...structuredClone(UPGRADE_DRY_RUN_TEST_SHAPE), effects: {} }), /gasUsed/);
+});
+
+// ----- typeOrigins desde `sui client --json object <paquete>` (hueco 1; fixture capturada en el smoke) -----
+
+test('parseTypeOriginsOutput (fixture real de object --json): 24 tipos con IDs a 64 hex, house y game en el original', () => {
+  const origins = realTypeOrigins();
+  assert.equal(origins.length, 24);
+  assert.ok(origins.every((o) => /^0x[0-9a-f]{64}$/.test(o.definingId)));
+  const byPair = Object.fromEntries(origins.map((o) => [`${o.module}::${o.name}`, o.definingId]));
+  for (const pair of ['house::House', 'house::HouseCap', 'game::Game', 'game::GameResolved']) {
+    assert.equal(byPair[pair], ORIGINAL_PKG, pair);
+  }
+  for (const pair of ['duel::Duel', 'duel::Collected', 'duel::DuelState', 'coinflip::Coinflip']) {
+    assert.equal(byPair[pair], UPGRADED_PKG, pair);
+  }
+  assert.equal(origins.filter((o) => o.definingId === UPGRADED_PKG).length, 11);
+  assert.equal(origins.filter((o) => o.definingId === ORIGINAL_PKG).length, 13);
+});
+
+test('parseTypeOriginsOutput: ordenado por (módulo, nombre) con texto plano y determinista (dos corridas, mismo resultado)', () => {
+  const origins = realTypeOrigins();
+  const keys = origins.map((o) => `${o.module}\u0000${o.name}`);
+  assert.deepEqual(keys, keys.toSorted());
+  assert.deepEqual(realTypeOrigins(), origins);
+  assert.equal(JSON.stringify(realTypeOrigins()), JSON.stringify(origins));
+  // La tabla cruda de la CLI NO viene ordenada: el orden sale del parser, no de la salida.
+  const raw = OBJECT_PACKAGE.content.Package.type_origin_table.map((e) => `${e.module_name}\u0000${e.datatype_name}`);
+  assert.notDeepEqual(raw, raw.toSorted());
+  // Un orden de entrada distinto da el mismo json.
+  const reversed = objectWithTable((t) => t.toReversed());
+  assert.deepEqual(parseTypeOriginsOutput(reversed, { packageId: UPGRADED_PKG, packageVersion: 2 }), origins);
+});
+
+test('parseTypeOriginsOutput: un ID no normalizado (corto, mayúsculas) se normaliza a 0x + 64 hex', () => {
+  const messy = objectWithTable((t) => {
+    t[0].package = '0X2';
+    t[1].package = ORIGINAL_PKG.toUpperCase().replace('0X', '0x');
+    return t;
+  });
+  const origins = parseTypeOriginsOutput(messy, { packageId: UPGRADED_PKG });
+  const find = (name) => origins.find((o) => o.module === 'house' && o.name === name);
+  assert.equal(find('House').definingId, `0x${'0'.repeat(63)}2`);
+  assert.equal(find('HouseCap').definingId, ORIGINAL_PKG);
+});
+
+test('parseTypeOriginsOutput: tabla vacía, ausente, entrada mal formada, par repetido, paquete o versión ajenos ⇒ mensaje claro', () => {
+  const opts = { packageId: UPGRADED_PKG, packageVersion: 2 };
+  assert.throws(() => parseTypeOriginsOutput(objectWithTable(() => []), opts), /type_origin_table.*vacía/);
+  const noTable = structuredClone(OBJECT_PACKAGE);
+  delete noTable.content.Package.type_origin_table;
+  assert.throws(() => parseTypeOriginsOutput(noTable, opts), /no trae content\.Package\.type_origin_table/);
+  const noContent = structuredClone(OBJECT_PACKAGE);
+  delete noContent.content;
+  assert.throws(() => parseTypeOriginsOutput(noContent, opts), /no trae content\.Package/);
+  assert.throws(() => parseTypeOriginsOutput({ ...structuredClone(OBJECT_PACKAGE), objType: '0x2::coin::Coin' }, opts), /no es un paquete/);
+  assert.throws(() => parseTypeOriginsOutput(null, opts), /no es un paquete/);
+  assert.throws(
+    () => parseTypeOriginsOutput(objectWithTable((t) => [...t, { module_name: 'house' }]), opts),
+    /type_origin_table\[24\] mal formada/,
+  );
+  assert.throws(
+    () => parseTypeOriginsOutput(objectWithTable((t) => [...t, structuredClone(t[0])]), opts),
+    /repite el par \(módulo, nombre\) house::House/,
+  );
+  assert.throws(() => parseTypeOriginsOutput(OBJECT_PACKAGE, { packageId: ORIGINAL_PKG }), /es de otro paquete/);
+  assert.throws(() => parseTypeOriginsOutput(OBJECT_PACKAGE, { packageId: UPGRADED_PKG, packageVersion: 3 }), /versión del paquete leído \(2\)/);
+});
+
+test('parseTypeOriginsOutput: dos tipos del mismo módulo con definingId distintos se conservan (S-2)', () => {
+  const extended = objectWithTable((t) => [
+    ...t,
+    { module_name: 'game', datatype_name: 'GameExtra', package: UPGRADED_PKG },
+  ]);
+  const origins = parseTypeOriginsOutput(extended, { packageId: UPGRADED_PKG, packageVersion: 2 });
+  const game = origins.filter((o) => o.module === 'game');
+  assert.equal(game.find((o) => o.name === 'Game').definingId, ORIGINAL_PKG);
+  assert.equal(game.find((o) => o.name === 'GameExtra').definingId, UPGRADED_PKG);
+  assert.equal(origins.length, 25);
+});
+
+// ----- buildUpgradeDeployment -----
+
+test('buildUpgradeDeployment: el upgrade real sobre el despliegue base da exactamente el json de la fixture', () => {
+  assert.deepEqual(validateDeployment(UPGRADE_BASE), []);
+  const deployment = buildUpgradeDeployment({
+    base: UPGRADE_BASE,
+    parsed: parsedUpgrade(),
+    typeOrigins: realTypeOrigins(),
+    ...UPGRADE_META,
+  });
+  assert.equal(`${JSON.stringify(deployment, null, 2)}\n`, UPGRADED_TEXT);
+  assert.deepEqual(validateDeployment(deployment), []);
+  assert.deepEqual(Object.keys(deployment), [...DEPLOYMENT_FIELDS, 'upgrades', 'typeOrigins']);
+});
+
+test('buildUpgradeDeployment: solo cambian los campos de "versión vigente"; la publicación original no se toca', () => {
+  const deployment = UPGRADED;
+  const changed = DEPLOYMENT_FIELDS.filter((k) => deployment[k] !== UPGRADE_BASE[k]);
+  assert.deepEqual(changed, ['packageId', 'packageVersion', 'sourceCommit', 'suiCliVersion', 'frameworkRev']);
+  for (const key of ['originalPackageId', 'upgradeCapId', 'houseId', 'houseCapId', 'publishTxDigest', 'publishTimestamp', 'chainId']) {
+    assert.equal(deployment[key], UPGRADE_BASE[key], key);
+  }
+  assert.equal(deployment.publishTxDigest, 'HP5TN8bVeECsZiTwiWjsxFxXNQDcb45wnhiHZ9Fn2hYC');
+  assert.deepEqual(deployment.upgrades, [{ version: 2, packageId: UPGRADED_PKG, txDigest: UPGRADED_DIGEST }]);
+});
+
+test('SEG-3: el json del upgrade no trae ninguna dirección de cuenta de la salida de la CLI', () => {
+  const addresses = accountAddresses(UPGRADE_DUEL);
+  assert.ok(addresses.size > 0);
+  for (const value of allValues(UPGRADED)) {
+    if (typeof value === 'string' && /^0x[0-9a-f]+$/.test(value)) assert.ok(!addresses.has(normalizeId(value)), value);
+  }
+});
+
+test('buildUpgradeDeployment: un segundo upgrade (v2 → v3) suma una entrada y reemplaza typeOrigins', () => {
+  const parsed = { digest: DIGEST_V3, timestampMs: '1', packageId: PKG_V3, packageVersion: 3, upgradeCapId: UPGRADED_CAP };
+  const typeOrigins = [...realTypeOrigins(), { module: 'zz', name: 'Nuevo', definingId: PKG_V3 }];
+  const third = buildUpgradeDeployment({ base: UPGRADED, parsed, typeOrigins, ...UPGRADE_META });
+  assert.equal(third.packageVersion, 3);
+  assert.equal(third.packageId, PKG_V3);
+  assert.deepEqual(third.upgrades, [
+    { version: 2, packageId: UPGRADED_PKG, txDigest: UPGRADED_DIGEST },
+    { version: 3, packageId: PKG_V3, txDigest: DIGEST_V3 },
+  ]);
+  assert.deepEqual(validateDeployment(third), []);
+});
+
+test('buildUpgradeDeployment: versión que no es la siguiente (p. ej. registrar dos veces el mismo upgrade) o UpgradeCap ajeno ⇒ error', () => {
+  const args = { base: UPGRADE_BASE, parsed: parsedUpgrade(), typeOrigins: realTypeOrigins(), ...UPGRADE_META };
+  assert.throws(() => buildUpgradeDeployment({ ...args, base: UPGRADED }), /es la versión 2 y el despliegue base está en la 2 \(se esperaba la 3\)/);
+  assert.throws(
+    () => buildUpgradeDeployment({ ...args, parsed: { ...parsedUpgrade(), packageVersion: 3 } }),
+    /se esperaba la 2/,
+  );
+  assert.throws(
+    () => buildUpgradeDeployment({ ...args, parsed: { ...parsedUpgrade(), upgradeCapId: ORIGINAL_PKG } }),
+    /UpgradeCap que avanzó el upgrade no es el upgradeCapId/,
+  );
+});
+
+// ----- validateDeployment: upgrades y typeOrigins -----
+
+const withFields = (changes) => ({ ...structuredClone(UPGRADED), ...changes });
+const errorsOf = (deployment) => validateDeployment(deployment).join(' | ');
+
+test('validateDeployment acepta el testnet.json actual (sin upgrades ni typeOrigins, packageVersion 1) y el json real del upgrade', () => {
+  const current = JSON.parse(readFileSync(new URL('../deployments/testnet.json', import.meta.url), 'utf8'));
+  assert.equal(current.packageVersion, 1);
+  assert.ok(!('upgrades' in current) && !('typeOrigins' in current));
+  assert.deepEqual(validateDeployment(current), []);
+  assert.deepEqual(validateDeployment(UPGRADED), []);
+  // Con packageVersion 1, los campos nuevos son opcionales: typeOrigins solo (todo en el original) y upgrades vacío valen.
+  const v1Origins = UPGRADE_BASE;
+  assert.deepEqual(validateDeployment({ ...v1Origins, upgrades: [] }), []);
+  const originalOnly = realTypeOrigins().map((o) => ({ ...o, definingId: ORIGINAL_PKG }));
+  assert.deepEqual(validateDeployment({ ...v1Origins, typeOrigins: originalOnly }), []);
+});
+
+test('validateDeployment: con packageVersion > 1, upgrades y typeOrigins son obligatorios', () => {
+  const noUpgrades = structuredClone(UPGRADED);
+  delete noUpgrades.upgrades;
+  assert.match(errorsOf(noUpgrades), /upgrades es obligatorio con packageVersion > 1 \(2\)/);
+  const noOrigins = structuredClone(UPGRADED);
+  delete noOrigins.typeOrigins;
+  assert.match(errorsOf(noOrigins), /typeOrigins es obligatorio con packageVersion > 1 \(2\)/);
+  assert.match(errorsOf(withFields({ upgrades: [] })), /upgrades vacío con packageVersion 2/);
+});
+
+test('validateDeployment rechaza upgrades mal formado', () => {
+  const entry = UPGRADED.upgrades[0];
+  const cases = [
+    ['no es un arreglo', {}, /upgrades inválido: debe ser un arreglo/],
+    ['entrada que no es objeto', [1], /upgrades\[0\] debe ser un objeto/],
+    ['clave desconocida', [{ ...entry, sender: '0x1' }], /clave desconocida sender/],
+    ['falta txDigest', [{ version: 2, packageId: UPGRADED_PKG }], /falta txDigest/],
+    ['version que no arranca en 2', [{ ...entry, version: 1 }], /upgrades\[0\]\.version debe ser 2/],
+    ['version no entera', [{ ...entry, version: '2' }], /upgrades\[0\]\.version debe ser 2/],
+    ['no consecutivo', [entry, { version: 4, packageId: PKG_V3, txDigest: DIGEST_V3 }], /upgrades\[1\]\.version debe ser 3/],
+    ['packageId corto', [{ ...entry, packageId: '0x2' }], /upgrades\[0\]\.packageId debe ser 0x \+ 64 hex/],
+    ['txDigest inválido', [{ ...entry, txDigest: 'no-es-digest' }], /upgrades\[0\]\.txDigest/],
+    ['packageId repetido', [entry, { version: 3, packageId: UPGRADED_PKG, txDigest: DIGEST_V3 }], /upgrades\[1\]\.packageId repetido/],
+  ];
+  for (const [name, upgrades, expected] of cases) assert.match(errorsOf(withFields({ upgrades })), expected, name);
+  assert.equal(validateUpgradesField(UPGRADED.upgrades), null);
+});
+
+test('validateDeployment rechaza typeOrigins mal formado', () => {
+  const entry = UPGRADED.typeOrigins[0];
+  const cases = [
+    ['no es un arreglo', 'x', /typeOrigins inválido: debe ser un arreglo/],
+    ['vacío', [], /no puede estar vacío/],
+    ['entrada que no es objeto', [null], /typeOrigins\[0\] debe ser un objeto/],
+    ['clave desconocida', [{ ...entry, owner: '0x1' }], /clave desconocida owner/],
+    ['falta definingId', [{ module: 'house', name: 'House' }], /falta definingId/],
+    ['módulo que no es identificador', [{ ...entry, module: 'a::b' }], /\.module debe ser un identificador/],
+    ['nombre vacío', [{ ...entry, name: '' }], /\.name debe ser un identificador/],
+    ['definingId sin normalizar', [{ ...entry, definingId: '0x2' }], /definingId debe ser 0x \+ 64 hex/],
+  ];
+  for (const [name, typeOrigins, expected] of cases) assert.match(errorsOf(withFields({ typeOrigins })), expected, name);
+  assert.equal(validateTypeOriginsField(UPGRADED.typeOrigins), null);
+});
+
+test('validateDeployment: un par (módulo, nombre) repetido rechaza; dos entradas del mismo módulo con definingId distintos se aceptan (S-2)', () => {
+  const origins = structuredClone(UPGRADED.typeOrigins);
+  const repeated = [...origins, { ...origins[0], definingId: UPGRADED_PKG }];
+  assert.match(errorsOf(withFields({ typeOrigins: repeated })), /el par \(módulo, nombre\) \w+::\w+ está repetido/);
+  const sameModule = [
+    ...origins,
+    { module: 'game', name: 'GameExtra', definingId: UPGRADED_PKG },
+  ];
+  assert.deepEqual(validateDeployment(withFields({ typeOrigins: sameModule })), []);
+  const game = sameModule.filter((o) => o.module === 'game');
+  assert.notEqual(new Set(game.map((o) => o.definingId)).size, 1);
+});
+
+test('validateDeployment: un definingId ajeno, o un tipo de house/game con otro ID, rechaza', () => {
+  const origins = structuredClone(UPGRADED.typeOrigins);
+  const replace = (module, name, definingId) =>
+    origins.map((o) => (o.module === module && o.name === name ? { ...o, definingId } : o));
+  assert.match(
+    errorsOf(withFields({ typeOrigins: replace('duel', 'Duel', `0x${'ee'.repeat(32)}`) })),
+    /typeOrigins duel::Duel: definingId .* no es el originalPackageId ni el de un upgrade/,
+  );
+  // Un ID de upgrade válido, pero en un tipo de house o de game que existe desde la v1: deben llevar el original.
+  assert.match(
+    errorsOf(withFields({ typeOrigins: replace('house', 'House', UPGRADED_PKG) })),
+    /typeOrigins house::House: los tipos de la v1 llevan el originalPackageId/,
+  );
+  assert.match(
+    errorsOf(withFields({ typeOrigins: replace('game', 'GameState', UPGRADED_PKG) })),
+    /typeOrigins game::GameState: los tipos de la v1 llevan el originalPackageId/,
+  );
+  // Un definingId que sí es un upgrade pero que el json no registra en upgrades.
+  assert.match(errorsOf(withFields({ upgrades: [{ version: 2, packageId: PKG_V3, txDigest: UPGRADED_DIGEST }], packageId: PKG_V3 })), /definingId/);
+  // Sin alguno de los 13 tipos de la v1 la tabla está truncada.
+  assert.match(errorsOf(withFields({ typeOrigins: origins.filter((o) => !(o.module === 'house' && o.name === 'House')) })), /typeOrigins sin house::House \(tipo de la v1\)/);
+  assert.match(errorsOf(withFields({ typeOrigins: origins.filter((o) => !(o.module === 'game' && o.name === 'GameState')) })), /typeOrigins sin game::GameState \(tipo de la v1\)/);
+});
+
+test('validateDeployment: upgrades no consecutivo, último packageId ≠ packageId o última versión ≠ packageVersion rechazan', () => {
+  assert.match(errorsOf(withFields({ packageId: PKG_V3 })), /el último upgrade \(0x14e0.*\) ≠ packageId/);
+  assert.match(errorsOf(withFields({ packageVersion: 3 })), /el último upgrade \(version 2\) ≠ packageVersion \(3\)/);
+  const gap = [UPGRADED.upgrades[0], { version: 4, packageId: PKG_V3, txDigest: DIGEST_V3 }];
+  assert.match(errorsOf(withFields({ upgrades: gap, packageId: PKG_V3, packageVersion: 4 })), /upgrades\[1\]\.version debe ser 3/);
+  // Con packageVersion 1 un upgrade registrado no coincide.
+  assert.match(errorsOf({ ...UPGRADE_BASE, upgrades: UPGRADED.upgrades }), /el último upgrade \(version 2\) ≠ packageVersion \(1\)/);
+  // El paquete de un upgrade no puede ser el original.
+  assert.match(
+    errorsOf(withFields({ upgrades: [{ ...UPGRADED.upgrades[0], packageId: ORIGINAL_PKG }], packageId: ORIGINAL_PKG })),
+    /un upgrade no puede tener el originalPackageId como packageId/,
+  );
+});
+
+// ----- Published.toml de un upgrade y pubfile efímero -----
+
+// `Published.toml` en el formato real de `sui client publish` (`[published.<red>]`), armado en memoria.
+const publishedTomlText = ({ network, chainId, publishedAt, originalId, version, toolchain, cap }) =>
+  [
+    '# Generated by Move',
+    '# This file contains metadata about published versions of this package in different environments',
+    '# This file SHOULD be committed to source control',
+    '',
+    `[published.${network}]`,
+    `chain-id = "${chainId}"`,
+    `published-at = "${publishedAt}"`,
+    `original-id = "${originalId}"`,
+    `version = ${version}`,
+    `toolchain-version = "${toolchain}"`,
+    'build-config = { flavor = "sui", edition = "2024" }',
+    `upgrade-capability = "${cap}"`,
+    '',
+  ].join('\n');
+
+test('checkConsistency_with_the_test_upgrade_shape: Published.toml de un upgrade (versión 2) coincide; el viejo no', () => {
+  // Forma de `test-upgrade` (la única medida): published-at, version y toolchain-version cambian; el resto no.
+  const before = parsePublishedToml(
+    publishedTomlText({
+      network: 'localnet', chainId: '13c5acea', publishedAt: ORIGINAL_PKG, originalId: ORIGINAL_PKG,
+      version: 1, toolchain: '1.83.0', cap: UPGRADED_CAP,
+    }),
+  ).get('localnet');
+  const after = parsePublishedToml(
+    publishedTomlText({
+      network: 'localnet', chainId: '13c5acea', publishedAt: UPGRADED_PKG, originalId: ORIGINAL_PKG,
+      version: 2, toolchain: '1.84.0', cap: UPGRADED_CAP,
+    }),
+  ).get('localnet');
+  assert.deepEqual(checkConsistency(UPGRADED, after), []);
+  assert.deepEqual(checkConsistency(UPGRADE_BASE, before), []);
+  // El json del upgrade contra el Published.toml viejo (la CLI no lo reescribió): packageId y version difieren.
+  const stale = checkConsistency(UPGRADED, before);
+  assert.equal(stale.length, 2, JSON.stringify(stale));
+  assert.ok(stale[0].startsWith('packageId ('));
+  assert.ok(stale[1].startsWith('packageVersion (2) ≠ version'));
+});
+
+test('parsePubfile_with_the_test_upgrade_shape: el pubfile efímero antes y después de test-upgrade', () => {
+  const before = parsePubfile(readFixture('Published.upgrade-before.localnet.toml'));
+  assert.equal(before.chainId, '7b8ba4f1');
+  assert.deepEqual(before.entries, [
+    {
+      sourceLocal: '<SMOKE_DIR>/v1/contracts',
+      publishedAt: '0xb622ea17e78ed309ca071bfde55c8ab5829871730660f5394e0b6f5c28bce152',
+      originalId: '0xb622ea17e78ed309ca071bfde55c8ab5829871730660f5394e0b6f5c28bce152',
+      version: 1,
+      upgradeCapability: '0x599718fb636381effbc379131907ab6c6facff02c4542206c41472369d713fbd',
+    },
+  ]);
+  const after = parsePubfile(readFixture('Published.upgrade.localnet.toml'));
+  assert.equal(after.entries.length, 1);
+  assert.equal(after.entries[0].version, 2);
+  assert.equal(after.entries[0].publishedAt, '0xc2e358707175dea52a29ca7e958e1c5738cc268fe874d9803a745c332882ccfa');
+  const copy = parsePubfile(readFixture('Published.upgrade-base.localnet.toml'));
+  assert.equal(copy.entries[0].sourceLocal, '<REPO>/contracts');
+  assert.equal(copy.entries[0].publishedAt, UPGRADE_BASE.packageId);
+  assert.equal(copy.entries[0].upgradeCapability, UPGRADE_BASE.upgradeCapId);
+  assert.equal(copy.chainId, UPGRADE_BASE.chainId);
+});
+
+test('parsePubfile rechaza una entrada incompleta o una línea que no entiende, con su número', () => {
+  const text = readFixture('Published.upgrade-base.localnet.toml');
+  assert.throws(() => parsePubfile(text.replace(/^upgrade-capability.*$/m, '')), /^Error: pubfile:8: \[\[published\]\] sin upgradeCapability$/);
+  assert.throws(() => parsePubfile(text.replace(/^source = .*$/m, 'source = { git = "x" }')), /sin sourceLocal/);
+  assert.throws(() => parsePubfile(`${text}\nbasura\n`), /^Error: pubfile:\d+: línea inesperada: basura$/);
+  assert.throws(() => parsePubfile(text.replace('version = 1', 'version = 1.0')), /version debe ser un entero/);
+  assert.throws(() => parsePubfile(text.replace('published-at = "', 'published-at = "x" "')), /published-at debe ser un texto entre comillas/);
+  assert.throws(() => parsePubfile(text.replace('chain-id = "13c5acea"', 'chain-id = 13c5acea')), /chain-id debe ser un texto/);
+  assert.deepEqual(parsePubfile('').entries, []);
+  assert.throws(() => parsePubfile(null), /se esperaba texto/);
 });

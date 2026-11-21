@@ -1,13 +1,15 @@
 import { Link } from 'react-router';
+import { acceptorOf, rowPlayerResult, type GameRow, type ListedRow } from '../hooks/gameRow';
 import { useAppConfig } from '../hooks/useAppConfig';
 import type { MyGamesSource } from '../hooks/useMyGames';
-import { playerResult } from '../sui/acceptGame';
 import { formatMist, shortAddress } from '../sui/format';
-import { resolutionAmounts, type Game } from '../sui/game';
+import { resolutionAmounts } from '../sui/game';
 import { sameAddress } from '../sui/ids';
-import { sectionFooter, type MyGameItem, type MyGamesSection as SectionKey } from '../sui/myGames';
+import { sectionFooter, type MyGamesSection as SectionKey } from '../sui/myGames';
 import { readErrorMessage } from '../sui/readErrors';
+import { controlText, expiredText, STATE_TEXT } from './gameTexts';
 import { GameActions } from './GameActions';
+import { GameStatus } from './GameStatus';
 import { CreatedAt, FloorSince } from './HistoryTime';
 import { ReadState } from './ReadState';
 
@@ -33,9 +35,10 @@ function Short({ address }: { address: string }) {
 }
 
 /** Contraparte de la fila según quién es la cuenta en la partida (leído del objeto). */
-function Counterpart({ game, address }: { game: Game; address: string }) {
+function Counterpart({ game, address }: { game: GameRow; address: string }) {
   if (!sameAddress(game.creator, address)) {
-    if (game.state.kind === 'resolved' && sameAddress(game.state.acceptor, address)) {
+    const acceptor = acceptorOf(game.state);
+    if (acceptor !== null && sameAddress(acceptor, address)) {
       return (
         <>
           Aceptaste la de <Short address={game.creator} />
@@ -56,7 +59,7 @@ function Counterpart({ game, address }: { game: Game; address: string }) {
   );
 }
 
-function stateLabel(game: Game): string {
+function stateLabel(game: GameRow): string {
   switch (game.state.kind) {
     case 'pending':
       return 'Pendiente';
@@ -64,15 +67,35 @@ function stateLabel(game: Game): string {
       return 'Cancelada';
     case 'resolved':
       return 'Resuelta';
+    case 'active':
+      return STATE_TEXT.active;
+    case 'timed_out':
+      return STATE_TEXT.timedOut;
+    case 'expired':
+      return STATE_TEXT.expired;
   }
 }
 
-/** Resultado de "Terminadas" leído del objeto (DL-14): ganaste o perdiste, con el pozo y el pago de la fórmula v1. */
-function FinishedResult({ game, address }: { game: Game; address: string }) {
+/**
+ * Resultado de "Terminadas" leído del objeto (DL-14): ganaste o perdiste, con el pozo y el pago de la fórmula v1. #73
+ * (TASK-8b): una partida ganada por tiempo dice "por tiempo" y muestra el mismo reparto; una en la que nadie movió, que cada
+ * jugador recuperó su apuesta, sin comisión.
+ */
+function FinishedResult({ game, address }: { game: GameRow; address: string }) {
   if (game.state.kind === 'cancelled') return <p className="my-game-result">Cancelada: la apuesta volvió a quien la creó</p>;
-  const result = playerResult(game, address);
-  if (result === null) return null;
+  if (game.state.kind === 'expired') return <p className="my-game-result">{expiredText(game)}</p>;
   const { pot, payout } = resolutionAmounts(game.bet, game.feeRate);
+  if (game.state.kind === 'timed_out') {
+    const won = sameAddress(game.state.winner, address);
+    return (
+      <p className="my-game-result">
+        {won ? 'Ganaste por tiempo' : 'Perdiste por tiempo'} · pozo {sui(pot)} · al ganador {sui(payout)}{' '}
+        <small>(según la fórmula del contrato)</small>
+      </p>
+    );
+  }
+  const result = rowPlayerResult(game, address);
+  if (result === null) return null;
   return (
     <p className="my-game-result">
       {result === 'won' ? 'Ganaste' : 'Perdiste'} · pozo {sui(pot)} · al ganador {sui(payout)} <small>(según la fórmula del contrato)</small>
@@ -83,9 +106,11 @@ function FinishedResult({ game, address }: { game: Game; address: string }) {
 /**
  * Una fila de "Mis partidas": contraparte, apuesta, estado, hora del evento que la trajo y "Ver partida". En "Terminadas",
  * el rol y el resultado del objeto; en las otras dos, las acciones de la fila (`GameActions` con `variant='row'`, una
- * `useTxTarget` por fila). Una partida ilegible no se muestra como sana (SEG-10).
+ * `useTxTarget` por fila). Una partida ilegible no se muestra como sana (SEG-10). La fila es neutral a la fuente (#73,
+ * TASK-8a). TASK-8b: una partida de la fuente nueva con reloj suma su control de tiempo, una `Active` suma su resumen
+ * (turno, plazo con cuenta regresiva y siguiente paso) y las acciones de tiempo, y cada terminal dice cómo terminó.
  */
-export function MyGameRow({ item, section, address }: { item: MyGameItem; section: SectionKey; address: string }) {
+export function MyGameRow({ item, section, address }: { item: ListedRow; section: SectionKey; address: string }) {
   if (item.kind === 'unreadable') {
     return (
       <li className="my-game-row unreadable" {...(item.gameId === null ? {} : { 'data-game-id': item.gameId })}>
@@ -101,14 +126,16 @@ export function MyGameRow({ item, section, address }: { item: MyGameItem; sectio
       </li>
     );
   }
-  const { game } = item;
+  const { row: game } = item;
   return (
     <li className="my-game-row" data-game-id={game.id}>
       <p>
         {section === 'finished' && <strong>{sameAddress(game.creator, address) ? 'Creaste' : 'Aceptaste'} · </strong>}
-        <Counterpart game={game} address={address} /> · {sui(game.bet)} · {stateLabel(game)} ·{' '}
+        <Counterpart game={game} address={address} /> · {sui(game.bet)}
+        {game.source === 'duel' && game.control.turnMs > 0n && <> · {controlText(game)}</>} · {stateLabel(game)} ·{' '}
         <CreatedAt txDigest={item.txDigest} className="my-game-time" /> · <Link to={`/game/${game.id}`}>Ver partida</Link>
       </p>
+      {game.state.kind === 'active' && <GameStatus game={game} account={address} compact />}
       {section === 'finished' ? <FinishedResult game={game} address={address} /> : <GameActions game={game} variant="row" />}
     </li>
   );
@@ -128,7 +155,7 @@ export function MyGamesSection({
   busy,
 }: {
   section: SectionKey;
-  items: readonly MyGameItem[];
+  items: readonly ListedRow[];
   source: MyGamesSource;
   address: string;
   /** Texto del botón de paginación de la fuente (con filas en la sección). */
@@ -177,7 +204,7 @@ export function MyGamesSection({
               {items.map((item, index) => (
                 <MyGameRow
                   // Dos ilegibles de la misma transacción sin ID (un PTB con varios eventos) no deben compartir key.
-                  key={item.kind === 'game' ? item.game.id : `${item.txDigest}:${item.gameId ?? `i${String(index)}`}`}
+                  key={item.kind === 'game' ? item.row.id : `${item.txDigest}:${item.gameId ?? `i${String(index)}`}`}
                   item={item}
                   section={section}
                   address={address}

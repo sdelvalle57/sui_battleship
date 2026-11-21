@@ -1,19 +1,23 @@
 import { useCurrentClient } from '@mysten/dapp-kit-react';
 import { skipToken, useQuery } from '@tanstack/react-query';
-import type { Game } from '../sui/game';
-import { fetchGame, gameRefetchInterval } from '../sui/gameDetail';
+import { fetchGameDetail, gameRefetchInterval, type GameDetailObject } from '../sui/gameDetail';
 import { parseObjectIdInput } from '../sui/ids';
 import { deriveReadStatus, type ReadStatus } from '../sui/readStatus';
 import { queryKeys } from './queryKeys';
 import { useAppConfig } from './useAppConfig';
+import { useGameRegistry } from './useGameRegistry';
 
-/** Resultado de `useGame`: ID inválido (sin consulta) o la lectura de la partida con su estado. */
+/**
+ * Resultado de `useGame`: ID inválido (sin consulta) o la lectura de la partida con su estado. #73 (TASK-8a): `detail` es la
+ * unión `Game` / `Duel` que decide el **tipo exacto del objeto** (`fetchGameDetail`); un objeto de otro tipo es un error
+ * definitivo (`NotAGameError`).
+ */
 export type UseGameResult =
   | { kind: 'invalid_id' }
   | {
       kind: 'read';
       id: string;
-      game: Game | null;
+      detail: GameDetailObject | null;
       previousTransaction: string | null;
       status: ReadStatus;
       /** La query está pidiendo: para deshabilitar "Reintentar". */
@@ -27,14 +31,12 @@ export type UseGameResult =
  */
 export function useGame(rawId: string): UseGameResult {
   const config = useAppConfig();
+  const registry = useGameRegistry();
   const client = useCurrentClient();
   const id = parseObjectIdInput(rawId);
   const query = useQuery({
     queryKey: queryKeys.game(config.network, id ?? ''),
-    queryFn:
-      id === null
-        ? skipToken
-        : ({ signal }) => fetchGame(client, { id, originalPackageId: config.originalPackageId, signal }),
+    queryFn: id === null ? skipToken : ({ signal }) => fetchGameDetail(client, { id, registry, signal }),
     // DL-7: cada 15 s salvo ante un error definitivo (no existe, no es una partida, ilegible).
     refetchInterval: (q) => gameRefetchInterval(q.state),
   });
@@ -42,7 +44,7 @@ export function useGame(rawId: string): UseGameResult {
   return {
     kind: 'read',
     id,
-    game: query.data?.game ?? null,
+    detail: query.data?.detail ?? null,
     previousTransaction: query.data?.previousTransaction ?? null,
     status: deriveReadStatus(query),
     isFetching: query.isFetching,

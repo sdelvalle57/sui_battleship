@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { ChainClockSampler } from '../components/ChainClockSampler';
+import { asActiveDuel } from '../components/gameTexts';
 import { MyGamesSection } from '../components/MyGamesSection';
 import { IN_FLIGHT_TEXT } from '../components/txNotice';
 import { useAccountTxBusy } from '../hooks/useAccountTxBusy';
@@ -64,9 +66,12 @@ function MyGamesView() {
   if (myGames.kind === 'no_account' || address === null) return <p>{NO_ACCOUNT_TEXT}</p>;
   const { sections, activity, invitations, unreadableEvents, isFetching } = myGames;
   const explorerUrl = explorerAccountUrl(network, address);
+  // TASK-8b: la hora de la cadena se lee una sola vez, y solo si alguna partida activa con reloj cuenta un plazo.
+  const hasClock = sections.pending.some((item) => item.kind === 'game' && asActiveDuel(item.row) !== null);
 
   return (
     <>
+      {hasClock && <ChainClockSampler />}
       <button type="button" onClick={myGames.refresh} disabled={isFetching}>
         Actualizar
       </button>

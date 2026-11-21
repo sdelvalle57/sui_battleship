@@ -29,12 +29,6 @@ export const DEPLOYMENT_FIELDS = Object.freeze([
   'frameworkRev',
 ]);
 
-/**
- * Campos opcionales registrados: `nombre → validador(valor) ⇒ mensaje de error | null`. Vacío en v1; existe para
- * que un campo posterior (p. ej. `packageTxDigest`) se agregue sin subir `schemaVersion` y sin aceptar claves libres.
- */
-export const OPTIONAL_FIELDS = Object.freeze({});
-
 /** Redes admitidas por el json y el script; mainnet está fuera de alcance sin decisión registrada. */
 export const NETWORKS = Object.freeze(['localnet', 'testnet']);
 const ID_RE = /^0x[0-9a-f]{64}$/;
@@ -42,9 +36,103 @@ const HEX_RE = /^[0-9a-fA-F]+$/;
 const CHAIN_ID_RE = /^[0-9a-f]{8}$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
 const DIGEST_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const ID_HEX_DIGITS = 64;
 const SUI_FRAMEWORK = '0x2';
 const ADDRESS_LIKE_RE = /\b(0x)?[0-9a-fA-F]{40,64}\b/g;
+/** Primera versión de un paquete que es un upgrade (la 1 es la publicación). */
+const FIRST_UPGRADE_VERSION = 2;
+/**
+ * Los 13 tipos de `house` y `game` que existen desde la v1 (plan §4.4, H-3): llevan siempre el `originalPackageId` y no
+ * pueden faltar (un upgrade compatible no borra tipos), así que su ausencia delata una tabla truncada. Un struct
+ * **agregado** a esos módulos en un upgrade posterior no está en la lista: tiene su propio `definingId` (S-2).
+ */
+const V1_TYPES = Object.freeze({
+  house: ['House', 'HouseCap', 'HOUSE', 'FeeRateUpdated', 'BetLimitsUpdated', 'FeesWithdrawn', 'HouseCapTransferred', 'HouseMigrated'],
+  game: ['Game', 'GameCreated', 'GameCancelled', 'GameResolved', 'GameState'],
+});
+const V1_TYPE_PAIRS = Object.freeze(Object.entries(V1_TYPES).flatMap(([module, names]) => names.map((name) => [module, name])));
+const UPGRADE_ENTRY_KEYS = Object.freeze(['version', 'packageId', 'txDigest']);
+const TYPE_ORIGIN_KEYS = Object.freeze(['module', 'name', 'definingId']);
+
+const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+// Claves de una entrada: exactamente `keys`, ni más ni menos (nada se cuela por descuido, como en el json raíz).
+function entryKeysError(entry, keys, label) {
+  const extra = Object.keys(entry).filter((k) => !keys.includes(k));
+  if (extra.length > 0) return `${label}: clave desconocida ${extra.join(', ')}`;
+  const missing = keys.filter((k) => !Object.hasOwn(entry, k));
+  return missing.length > 0 ? `${label}: falta ${missing.join(', ')}` : null;
+}
+
+/**
+ * Validador de forma de `upgrades` (#73, TASK-4): `[{ version, packageId, txDigest }]`, uno por upgrade, en orden
+ * ascendente y consecutivo desde la versión 2, con `packageId` distintos. Las reglas que cruzan con el resto del json
+ * (el último = `packageId`/`packageVersion`) las aplica `validateDeployment`.
+ * @param {unknown} value
+ * @returns {string|null} motivo del error, o `null` si es válido
+ */
+export function validateUpgradesField(value) {
+  if (!Array.isArray(value)) return 'debe ser un arreglo';
+  const seen = new Set();
+  for (const [i, entry] of value.entries()) {
+    const label = `upgrades[${i}]`;
+    if (!isPlainObject(entry)) return `${label} debe ser un objeto`;
+    const keysError = entryKeysError(entry, UPGRADE_ENTRY_KEYS, label);
+    if (keysError) return keysError;
+    if (!Number.isInteger(entry.version) || entry.version !== FIRST_UPGRADE_VERSION + i) {
+      return `${label}.version debe ser ${FIRST_UPGRADE_VERSION + i} (consecutivo desde ${FIRST_UPGRADE_VERSION})`;
+    }
+    if (typeof entry.packageId !== 'string' || !ID_RE.test(entry.packageId)) {
+      return `${label}.packageId debe ser 0x + 64 hex minúsculas`;
+    }
+    if (seen.has(entry.packageId)) return `${label}.packageId repetido`;
+    seen.add(entry.packageId);
+    if (typeof entry.txDigest !== 'string' || !DIGEST_RE.test(entry.txDigest)) {
+      return `${label}.txDigest debe ser un digest base58 de 32 a 44 caracteres`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Validador de forma de `typeOrigins` (#73, TASK-4): `[{ module, name, definingId }]`, la tabla de orígenes del objeto
+ * paquete. La clave es el **par** (módulo, nombre), nunca solo el módulo (S-2): un struct agregado a un módulo
+ * existente en un upgrade posterior tiene su propio `definingId`; un par repetido es un error.
+ * @param {unknown} value
+ * @returns {string|null} motivo del error, o `null` si es válido
+ */
+export function validateTypeOriginsField(value) {
+  if (!Array.isArray(value)) return 'debe ser un arreglo';
+  if (value.length === 0) return 'no puede estar vacío';
+  const seen = new Set();
+  for (const [i, entry] of value.entries()) {
+    const label = `typeOrigins[${i}]`;
+    if (!isPlainObject(entry)) return `${label} debe ser un objeto`;
+    const keysError = entryKeysError(entry, TYPE_ORIGIN_KEYS, label);
+    if (keysError) return keysError;
+    for (const key of ['module', 'name']) {
+      if (typeof entry[key] !== 'string' || !IDENTIFIER_RE.test(entry[key])) return `${label}.${key} debe ser un identificador`;
+    }
+    if (typeof entry.definingId !== 'string' || !ID_RE.test(entry.definingId)) {
+      return `${label}.definingId debe ser 0x + 64 hex minúsculas`;
+    }
+    const pair = `${entry.module}::${entry.name}`;
+    if (seen.has(pair)) return `${label}: el par (módulo, nombre) ${pair} está repetido`;
+    seen.add(pair);
+  }
+  return null;
+}
+
+/**
+ * Campos opcionales registrados: `nombre → validador(valor) ⇒ mensaje de error | null`. `upgrades` y `typeOrigins`
+ * (#73) se agregan sin subir `schemaVersion` (el `testnet.json` de hoy, sin ellos, sigue siendo válido) y sin aceptar
+ * claves libres; un campo posterior se registra aquí en el mismo PR que su fila de `contracts/README.md`.
+ */
+export const OPTIONAL_FIELDS = Object.freeze({
+  upgrades: validateUpgradesField,
+  typeOrigins: validateTypeOriginsField,
+});
 
 /**
  * Normaliza un ID de objeto o paquete a `0x` + 64 hex minúsculas. La CLI abrevia `0x2` y puede variar el caso;
@@ -195,6 +283,168 @@ export function buildDeployment({ network, chainId, parsed, sourceCommit, suiCli
   };
 }
 
+const UPGRADE_CAP_TYPE = Object.freeze({ address: normalizeId(SUI_FRAMEWORK), module: 'package', name: 'UpgradeCap' });
+
+// Cambios de paquete de un upgrade (real o simulado): el único `published` y el `0x2::package::UpgradeCap` mutado
+// (el upgrade no crea otro cap: lo avanza de versión). Devuelve los IDs y un error por cada cosa que falte o sobre.
+function extractUpgradedObjects(objectChanges) {
+  const errors = [];
+  const published = objectChanges.filter((c) => c?.type === 'published');
+  let packageId = null;
+  let packageVersion = null;
+  if (published.length !== 1) {
+    errors.push(`no trae el cambio de paquete: se esperaba exactamente un objeto published y hay ${published.length}`);
+  } else {
+    packageId = normalizeId(published[0].packageId);
+    packageVersion = Number(published[0].version);
+    if (!Number.isInteger(packageVersion) || packageVersion < FIRST_UPGRADE_VERSION) {
+      errors.push(`versión del paquete inválida para un upgrade (${published[0].version})`);
+    }
+  }
+  const caps = objectChanges.filter((c) => {
+    const type = c?.type === 'mutated' ? parseStructType(c.objectType) : null;
+    return (
+      type !== null &&
+      type.address === UPGRADE_CAP_TYPE.address &&
+      type.module === UPGRADE_CAP_TYPE.module &&
+      type.name === UPGRADE_CAP_TYPE.name
+    );
+  });
+  let upgradeCapId = null;
+  if (caps.length !== 1) errors.push(`se esperaba exactamente un 0x2::package::UpgradeCap mutado y hay ${caps.length}`);
+  else upgradeCapId = normalizeId(caps[0].objectId);
+  return { errors, packageId, packageVersion, upgradeCapId };
+}
+
+/**
+ * Interpreta la salida `sui client --json upgrade|test-upgrade`. Solo devuelve IDs y metadatos públicos (nunca
+ * `sender`/`owner`). Lanza si la transacción no terminó en success o si **no trae el cambio de paquete** (sin
+ * `published`: es lo que distingue un upgrade de cualquier otra transacción).
+ * **Forma de referencia: la de `test-upgrade`** (la única medida; `sui client upgrade` la corre solo el owner): el script
+ * toma el ID nuevo, la versión y el digest de esta salida, no de cómo la CLI reescribe `Published.toml` (V-11).
+ * @param {object} json salida ya parseada
+ * @returns {{ digest: string, timestampMs: string, packageId: string, packageVersion: number, upgradeCapId: string }}
+ */
+export function parseUpgradeOutput(json) {
+  if (!cliStatusSucceeded(json)) {
+    throw new Error(`la transacción no terminó en success (status: ${json.effects?.status?.status ?? 'ausente'})`);
+  }
+  if (typeof json.digest !== 'string' || !DIGEST_RE.test(json.digest)) throw new Error('falta el digest de la transacción');
+  if (typeof json.timestampMs !== 'string' || !/^\d+$/.test(json.timestampMs)) throw new Error('falta timestampMs');
+  const objects = extractUpgradedObjects(json.objectChanges);
+  if (objects.errors.length > 0) throw new Error(objects.errors.join('; '));
+  return {
+    digest: json.digest,
+    timestampMs: json.timestampMs,
+    packageId: objects.packageId,
+    packageVersion: objects.packageVersion,
+    upgradeCapId: objects.upgradeCapId,
+  };
+}
+
+/**
+ * Interpreta la salida `--json --dry-run` de un upgrade (sin `digest` ni `timestampMs`; el `packageId` es de la
+ * simulación). Como `parseDryRunOutput`: no lanza por un resultado malo, `ok` lo resume; sí lanza si la forma es inválida.
+ * @param {object} json salida ya parseada
+ * @returns {{ ok: boolean, gasEstimate: bigint, created: { packageId: string|null, packageVersion: number|null,
+ *   upgradeCapId: string|null } }}
+ */
+export function parseUpgradeDryRunOutput(json) {
+  const success = cliStatusSucceeded(json);
+  const gas = json.effects?.gasUsed;
+  if (!gas) throw new Error('salida de dry run inválida: falta effects.gasUsed');
+  const gasEstimate = BigInt(gas.computationCost) + BigInt(gas.storageCost) - BigInt(gas.storageRebate);
+  const objects = extractUpgradedObjects(json.objectChanges);
+  return {
+    ok: success && objects.errors.length === 0,
+    gasEstimate,
+    created: { packageId: objects.packageId, packageVersion: objects.packageVersion, upgradeCapId: objects.upgradeCapId },
+  };
+}
+
+const compareText = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Interpreta `sui client --json object <packageId>` y arma `typeOrigins`: fuente única de la tabla (V-6, H-f). Toma
+ * `content.Package.type_origin_table` (`module_name`, `datatype_name`, `package`) y devuelve
+ * `[{ module, name, definingId }]` con los IDs a `0x` + 64 hex, **ordenada por (módulo, nombre)** con comparación de
+ * texto (no por locale), para que el json quede determinista. Comprueba que el objeto leído es **el paquete pedido**
+ * (`objectId` y `content.Package.id`) y, si se indica, su `version`. Lanza con un mensaje claro ante una tabla vacía o
+ * ausente, un par (módulo, nombre) repetido o una entrada mal formada. Ignora `module_map` (el bytecode) y todo lo demás.
+ * No usa gRPC ni GraphQL: esas lecturas son la verificación **independiente** del owner (runbook).
+ * @param {object} json salida ya parseada
+ * @param {{ packageId: string, packageVersion?: number }} expected
+ * @returns {{ module: string, name: string, definingId: string }[]}
+ */
+export function parseTypeOriginsOutput(json, { packageId, packageVersion }) {
+  if (!isPlainObject(json) || json.objType !== 'package') throw new Error('la salida de object no es un paquete (objType ≠ package)');
+  const pkg = json.content?.Package;
+  if (!isPlainObject(pkg)) throw new Error('la salida de object no trae content.Package');
+  const wanted = normalizeId(packageId);
+  if (normalizeId(json.objectId) !== wanted || normalizeId(pkg.id) !== wanted) {
+    throw new Error('la salida de object es de otro paquete que el pedido');
+  }
+  if (packageVersion !== undefined && pkg.version !== packageVersion) {
+    throw new Error(`la versión del paquete leído (${pkg.version}) no es la esperada (${packageVersion})`);
+  }
+  const table = pkg.type_origin_table;
+  if (!Array.isArray(table) || table.length === 0) {
+    throw new Error('la salida de object no trae content.Package.type_origin_table (o está vacía): sin tabla de orígenes no se registra nada');
+  }
+  const seen = new Set();
+  const origins = table.map((entry, i) => {
+    if (!isPlainObject(entry) || typeof entry.module_name !== 'string' || typeof entry.datatype_name !== 'string') {
+      throw new Error(`type_origin_table[${i}] mal formada`);
+    }
+    const pair = `${entry.module_name}::${entry.datatype_name}`;
+    if (seen.has(pair)) throw new Error(`type_origin_table repite el par (módulo, nombre) ${pair}`);
+    seen.add(pair);
+    return { module: entry.module_name, name: entry.datatype_name, definingId: normalizeId(entry.package) };
+  });
+  const error = validateTypeOriginsField(origins);
+  if (error) throw new Error(`type_origin_table inválida: ${error}`);
+  return origins.toSorted((a, b) => compareText(a.module, b.module) || compareText(a.name, b.name));
+}
+
+/**
+ * Arma el json de un upgrade a partir del despliegue **base** (el `deployments/<red>.json` existente: la publicación
+ * original y, si hubo, los upgrades anteriores). Reescribe solo los campos de "versión vigente" (`packageId`,
+ * `packageVersion`, `sourceCommit`, `suiCliVersion`, `frameworkRev`), agrega el upgrade a `upgrades` y reemplaza
+ * `typeOrigins`; `publishTxDigest`, `publishTimestamp`, `originalPackageId`, `upgradeCapId`, `houseId`, `houseCapId`,
+ * `chainId` y `network` no cambian. Lanza si el upgrade no es la versión siguiente de la base o si avanzó un
+ * `UpgradeCap` distinto del registrado. No valida el resultado: eso es `validateDeployment`.
+ * @param {{ base: object, parsed: ReturnType<typeof parseUpgradeOutput>,
+ *   typeOrigins: ReturnType<typeof parseTypeOriginsOutput>, sourceCommit: string|null, suiCliVersion: string,
+ *   frameworkRev: string }} args
+ * @returns {object}
+ */
+export function buildUpgradeDeployment({ base, parsed, typeOrigins, sourceCommit, suiCliVersion, frameworkRev }) {
+  const expectedVersion = base.packageVersion + 1;
+  if (parsed.packageVersion !== expectedVersion) {
+    throw new Error(
+      `el upgrade es la versión ${parsed.packageVersion} y el despliegue base está en la ${base.packageVersion} ` +
+        `(se esperaba la ${expectedVersion}): no se registra`,
+    );
+  }
+  if (parsed.upgradeCapId !== base.upgradeCapId) {
+    throw new Error('el UpgradeCap que avanzó el upgrade no es el upgradeCapId del despliegue base: no se registra');
+  }
+  const current = {
+    packageId: parsed.packageId,
+    packageVersion: parsed.packageVersion,
+    sourceCommit,
+    suiCliVersion,
+    frameworkRev,
+  };
+  const deployment = Object.fromEntries(DEPLOYMENT_FIELDS.map((key) => [key, Object.hasOwn(current, key) ? current[key] : base[key]]));
+  deployment.upgrades = [
+    ...(base.upgrades ?? []),
+    { version: parsed.packageVersion, packageId: parsed.packageId, txDigest: parsed.digest },
+  ];
+  deployment.typeOrigins = typeOrigins;
+  return deployment;
+}
+
 /**
  * Regla única del chain id por red (json, guarda de red del script y `record`): 8 hex; testnet exige el suyo y una
  * localnet no puede reportar el de testnet ni el de mainnet (señal de que la CLI apunta a otra red).
@@ -259,6 +509,55 @@ export function validateDeployment(obj, { optionalFields = OPTIONAL_FIELDS } = {
     if (!has(key)) continue;
     const error = validate(obj[key]);
     if (error) errors.push(`${key} inválido: ${error}`);
+  }
+  errors.push(...upgradeInvariantErrors(obj));
+  return errors;
+}
+
+/**
+ * Invariantes de `upgrades` y `typeOrigins` que cruzan con el resto del json (plan §4.4, `check` de la CI): con
+ * `packageVersion > 1` los dos son obligatorios; `upgrades` termina en el `packageId` y la `packageVersion` vigentes;
+ * todo `definingId` es el `originalPackageId` o el `packageId` de un upgrade; los 13 tipos de la v1 de `house` y `game`
+ * están y llevan el original. Solo mira lo que ya pasó su validador de forma (los errores de forma ya están en la lista).
+ * @param {object} obj
+ * @returns {string[]}
+ */
+function upgradeInvariantErrors(obj) {
+  const errors = [];
+  const version = obj.packageVersion;
+  const hasUpgrades = Object.hasOwn(obj, 'upgrades');
+  const hasTypeOrigins = Object.hasOwn(obj, 'typeOrigins');
+  if (Number.isInteger(version) && version > 1) {
+    if (!hasUpgrades) errors.push(`upgrades es obligatorio con packageVersion > 1 (${version})`);
+    if (!hasTypeOrigins) errors.push(`typeOrigins es obligatorio con packageVersion > 1 (${version})`);
+  }
+  const upgradesOk = hasUpgrades && validateUpgradesField(obj.upgrades) === null;
+  if (upgradesOk) {
+    const last = obj.upgrades.at(-1);
+    if (last === undefined) {
+      if (Number.isInteger(version) && version > 1) errors.push(`upgrades vacío con packageVersion ${version}`);
+    } else {
+      if (last.version !== version) errors.push(`el último upgrade (version ${last.version}) ≠ packageVersion (${version})`);
+      if (last.packageId !== obj.packageId) errors.push(`el último upgrade (${last.packageId}) ≠ packageId (${obj.packageId})`);
+    }
+    if (obj.upgrades.some((u) => u.packageId === obj.originalPackageId)) {
+      errors.push('un upgrade no puede tener el originalPackageId como packageId');
+    }
+  }
+  if (hasTypeOrigins && validateTypeOriginsField(obj.typeOrigins) === null && ID_RE.test(String(obj.originalPackageId))) {
+    const allowed = new Set([obj.originalPackageId, ...(upgradesOk ? obj.upgrades.map((u) => u.packageId) : [])]);
+    for (const { module, name, definingId } of obj.typeOrigins) {
+      if (!allowed.has(definingId)) {
+        errors.push(`typeOrigins ${module}::${name}: definingId (${definingId}) no es el originalPackageId ni el de un upgrade`);
+      }
+    }
+    for (const [module, name] of V1_TYPE_PAIRS) {
+      const entry = obj.typeOrigins.find((t) => t.module === module && t.name === name);
+      if (!entry) errors.push(`typeOrigins sin ${module}::${name} (tipo de la v1)`);
+      else if (entry.definingId !== obj.originalPackageId) {
+        errors.push(`typeOrigins ${module}::${name}: los tipos de la v1 llevan el originalPackageId, no ${entry.definingId}`);
+      }
+    }
   }
   return errors;
 }
@@ -329,6 +628,75 @@ export function parsePublishedToml(text) {
   });
   finish();
   return result;
+}
+
+const PUBFILE_STRING_KEYS = Object.freeze({
+  'published-at': 'publishedAt',
+  'original-id': 'originalId',
+  'upgrade-capability': 'upgradeCapability',
+});
+const PUBFILE_SOURCE_RE = /^source\s*=\s*\{\s*local\s*=\s*"([^"]+)"\s*\}$/;
+
+/**
+ * Lee el pubfile **efímero** que escribe `sui client test-publish|test-upgrade` en localnet (`[[published]]`, indexado
+ * por la ruta del árbol publicado en `source.local`; cabecera "should not be committed"). No es el `Published.toml` de
+ * testnet (`[published.<red>]`, `parsePublishedToml`). Solo lo que la guarda del upgrade necesita: el `chain-id`
+ * de la cabecera y, por entrada `[[published]]`, `source.local`, `published-at`, `original-id`, `version` y
+ * `upgrade-capability`; el resto de las claves se ignora. Una entrada sin alguna de las cinco, o con una línea que no
+ * entiende dentro de las que sí lee, es un error con su número de línea.
+ * @param {string} text
+ * @returns {{ chainId: string|null, entries: { sourceLocal: string, publishedAt: string, originalId: string,
+ *   version: number, upgradeCapability: string }[] }}
+ */
+export function parsePubfile(text) {
+  if (typeof text !== 'string') throw new Error('pubfile: se esperaba texto');
+  let chainId = null;
+  const entries = [];
+  let current = null;
+  const fail = (n, msg) => {
+    throw new Error(`pubfile:${n}: ${msg}`);
+  };
+  const finish = () => {
+    if (!current) return;
+    for (const field of ['sourceLocal', 'publishedAt', 'originalId', 'version', 'upgradeCapability']) {
+      if (!(field in current.entry)) fail(current.line, `[[published]] sin ${field}`);
+    }
+    entries.push(current.entry);
+  };
+  text.split(/\r?\n/).forEach((raw, i) => {
+    const n = i + 1;
+    const line = raw.trim();
+    if (line === '' || line.startsWith('#')) return;
+    if (line === '[[published]]') {
+      finish();
+      current = { entry: {}, line: n };
+      return;
+    }
+    const kv = /^([A-Za-z0-9_-]+)\s*=\s*(.+)$/.exec(line);
+    if (!kv) fail(n, `línea inesperada: ${line}`);
+    const [, key, value] = kv;
+    if (!current) {
+      if (key === 'chain-id') {
+        const str = /^"([^"\\]*)"$/.exec(value);
+        if (!str) fail(n, 'chain-id debe ser un texto entre comillas');
+        chainId = str[1];
+      }
+      return;
+    }
+    if (key === 'source') {
+      const m = PUBFILE_SOURCE_RE.exec(line);
+      if (m) current.entry.sourceLocal = m[1];
+    } else if (Object.hasOwn(PUBFILE_STRING_KEYS, key)) {
+      const str = /^"([^"\\]*)"$/.exec(value);
+      if (!str) fail(n, `${key} debe ser un texto entre comillas`);
+      current.entry[PUBFILE_STRING_KEYS[key]] = str[1];
+    } else if (key === 'version') {
+      if (!/^\d+$/.test(value)) fail(n, 'version debe ser un entero');
+      current.entry.version = Number(value);
+    }
+  });
+  finish();
+  return { chainId, entries };
 }
 
 /**

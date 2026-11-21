@@ -7,6 +7,7 @@ import { b64, listRequest, makeScanClient, scanFrames, type ScanEvent } from '..
 import { gameEventType } from './events';
 import { eventTypeFilter } from './eventScan';
 import { gameType, type Game, type GameState } from './game';
+import { buildGameRegistry } from './gameRegistry';
 import { LOBBY_EVENTS_PER_REQUEST, LOBBY_MAX_REQUESTS_PER_PAGE, LOBBY_PAGE_TARGET } from './lobby';
 import {
   extendPins,
@@ -120,7 +121,9 @@ function resolvedEvent({ id, creator, acceptor, winner }: { id: string; creator:
 const objectsOf = (...objects: ReturnType<typeof gameObject>[]) => new Map<string, unknown>(objects.map((o) => [o.objectId, o]));
 const page = (events: ScanEvent[], reason: GrpcTypes.QueryEndReason, label: string) =>
   scanFrames(events, reason, label, { itemLimit: reason === QueryEndReason.ITEM_LIMIT });
-const sourceArgs = (before: string | null = null) => ({ originalPackageId: PKG, address: ME, publishCheckpoint: 59n, before });
+// Sin upgrades (`packageVersion` 1): el registro solo tiene la fuente `legacy`, como "Mis partidas" de antes de #73.
+const LEGACY_REGISTRY = buildGameRegistry({ originalPackageId: PKG });
+const sourceArgs = (before: string | null = null) => ({ registry: LEGACY_REGISTRY, address: ME, publishCheckpoint: 59n, before });
 
 // ---------- Ítems para las funciones puras ----------
 function item(spec: Spec, { role, version = 4n, tx = 'tx', cp = 100n }: { role: MyGameRole; version?: bigint; tx?: string; cp?: bigint | null }): MyGameItem {
@@ -143,7 +146,7 @@ describe('myActivityFilter', () => {
   it('is the exact DNF [sender ∧ GameCreated] ∨ [sender ∧ GameResolved] with the normalized sender', () => {
     const sender = { negated: false, predicate: { oneofKind: 'sender', sender: { address: ME } } };
     const type = (eventType: string) => ({ negated: false, predicate: { oneofKind: 'eventType', eventType: { eventType } } });
-    expect(myActivityFilter('0xb47', '0xA11CE')).toEqual({
+    expect(myActivityFilter(LEGACY_REGISTRY, '0xA11CE')).toEqual({
       terms: [{ literals: [sender, type(CREATED)] }, { literals: [sender, type(RESOLVED)] }],
     });
   });
@@ -171,7 +174,7 @@ describe('fetchMyActivityPage', () => {
     ]);
     expect(result).toMatchObject({ hasNextPage: false, end: 'bound', endCursor: b64('bound'), unreadableEvents: 0, lowerBound: { checkpoint: 59n, kind: 'publish' } });
     const req = listRequest(listEvents, 0);
-    expect(req.filter).toEqual(myActivityFilter(PKG, ME));
+    expect(req.filter).toEqual(myActivityFilter(LEGACY_REGISTRY, ME));
     expect(req.options.limit).toBe(MY_ACTIVITY_EVENTS_PER_REQUEST);
     expect(req.readMask.paths).not.toContain('sender');
     expect(getObjects).toHaveBeenCalledTimes(1);

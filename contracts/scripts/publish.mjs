@@ -1,13 +1,18 @@
-// Publicación del paquete y registro de `contracts/deployments/<red>.json` (#7, D-20261102-01 y D-20261102-03).
+// Publicación, upgrade y registro de `contracts/deployments/<red>.json` (#7 y #73, D-20261102-01 y D-20261102-03).
 // Uso (desde `contracts/`):
 //   node scripts/publish.mjs publish --network localnet|testnet [--pubfile-path <archivo>] [--out <ruta>, solo localnet]
 //                                     [--dry-run]
+//   node scripts/publish.mjs upgrade --network localnet|testnet [--pubfile-path <archivo>, obligatorio solo en localnet]
+//                                     [--out <ruta>, solo localnet] [--dry-run]
 //   node scripts/publish.mjs record --network <red> --from <salida.json> [--meta <meta.json>]
 //                                    [--source-commit <sha> --sui-cli-version <v> --framework-rev <sha> --chain-id <hex>]
 //                                    [--out <ruta>, solo localnet]
+//   node scripts/publish.mjs record --upgrade --network <red> --from <salida cruda del upgrade>
+//                                    --type-origins <salida cruda de `sui client --json object <paquete>`> [lo mismo]
 //   node scripts/publish.mjs check
 // Toda decisión vive en funciones puras exportadas (testeadas en `publish.test.mjs`); `main()` solo hace I/O. La única
-// llamada a la CLI es `runSui` y la única a git es `runGit`. Ningún agente corre el camino testnet (D-20261102-03).
+// llamada a la CLI es `runSui` y la única a git es `runGit`. Ningún agente corre el camino testnet (D-20261102-03):
+// `upgrade --network testnet` (con o sin `--dry-run`) es del owner con su `SUI_CONFIG_DIR` propio.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -19,11 +24,17 @@ import { parseArgs } from 'node:util';
 import {
   NETWORKS,
   buildDeployment,
+  buildUpgradeDeployment,
   chainIdError,
   checkConsistency,
+  normalizeId,
   parseDryRunOutput,
+  parsePubfile,
   parsePublishOutput,
   parsePublishedToml,
+  parseTypeOriginsOutput,
+  parseUpgradeDryRunOutput,
+  parseUpgradeOutput,
   readFrameworkRev,
   redactAddresses,
   validateDeployment,
@@ -47,6 +58,17 @@ const RETRY_ADVICE =
   'sui client --json tx-block <digest>` + `record` (README → Recuperación; si falta `Published.toml`, STOP de #8).';
 const MISSING_PUBLISHED_TOML_ADVICE =
   'Si `Published.toml` falta o no coincide con el json (testnet), es STOP de #8: no lo edites a mano.';
+// R-2 del plan de #73: un upgrade reintentado con el `Published.toml` (o el pubfile) viejo falla con `PackageIDDoesNotMatch`
+// y paga gas; el digest del primero se busca antes y el json se rearma offline con `record --upgrade`.
+const UPGRADE_RETRY_ADVICE =
+  "No reintentes el upgrade sin buscar antes el digest (con el Published.toml viejo falla con PackageIDDoesNotMatch y " +
+  "paga gas); si la transacción existe: `printf 'n\\n' | SUI_CONFIG_DIR=<tu dir> sui client --json tx-block <digest>` " +
+  'y `record --upgrade` (README → Upgrade → Recuperación).';
+const UPGRADE_PUBLISHED_TOML_STOP =
+  'Si Published.toml no cambió como se espera (published-at, version y toolchain-version), es STOP: no registres ni reintentes (README → Upgrade).';
+/** Texto de un error de la CLI de un upgrade fallido (la CLI lo escribe como texto por stdout, no como JSON). */
+const CLI_ERROR_TEXT_RE = /^Error executing transaction |PackageUpgradeError|TransactionNotFound|not found/i;
+const OBJECT_ID_RE = /^0x[0-9a-f]{64}$/;
 /** Comisión que el owner fija en testnet justo después de publicar (D-20261103-01 (3)). */
 const TESTNET_FEE_BPS = 200;
 // Prefijo de los comandos que imprime el resumen (#8, M-2): sin `SUI_CONFIG_DIR` exportado, `:?` aborta antes de invocar
@@ -58,7 +80,19 @@ export class UsageError extends Error {}
 
 const SUBCOMMAND_OPTIONS = Object.freeze({
   publish: ['network', 'pubfile-path', 'out', 'dry-run'],
-  record: ['network', 'from', 'meta', 'source-commit', 'sui-cli-version', 'framework-rev', 'chain-id', 'out'],
+  upgrade: ['network', 'pubfile-path', 'out', 'dry-run'],
+  record: [
+    'network',
+    'from',
+    'meta',
+    'source-commit',
+    'sui-cli-version',
+    'framework-rev',
+    'chain-id',
+    'out',
+    'upgrade',
+    'type-origins',
+  ],
   check: [],
 });
 const ARG_OPTIONS = Object.freeze({
@@ -72,6 +106,8 @@ const ARG_OPTIONS = Object.freeze({
   'sui-cli-version': { type: 'string' },
   'framework-rev': { type: 'string' },
   'chain-id': { type: 'string' },
+  upgrade: { type: 'boolean' },
+  'type-origins': { type: 'string' },
 });
 
 /**
@@ -89,30 +125,60 @@ export function parseCliArgs(argv) {
   }
   const [command, ...extra] = parsed.positionals;
   if (!Object.hasOwn(SUBCOMMAND_OPTIONS, command ?? '')) {
-    throw new UsageError(`subcomando inválido: ${command ?? '(ninguno)'} (publish | record | check)`);
+    throw new UsageError(`subcomando inválido: ${command ?? '(ninguno)'} (publish | upgrade | record | check)`);
   }
   if (extra.length > 0) throw new UsageError(`argumentos sobrantes: ${extra.join(' ')}`);
   for (const key of Object.keys(parsed.values)) {
     if (!SUBCOMMAND_OPTIONS[command].includes(key)) throw new UsageError(`--${key} no aplica a ${command}`);
   }
+  if (command === 'record' && parsed.values['type-origins'] !== undefined && parsed.values.upgrade !== true) {
+    throw new UsageError('--type-origins solo aplica a record --upgrade');
+  }
   return { command, values: parsed.values };
 }
 
-const FORBIDDEN_SUI_ARGS = Object.freeze(['-y', '--yes', '--client.config', '--client.env']);
+const FORBIDDEN_SUI_ARGS = Object.freeze([
+  '-y',
+  '--yes',
+  '--client.config',
+  '--client.env',
+  // Nunca se saltea la verificación local de compatibilidad (H-e, M-4 de #73): un error `EUC01009` es STOP del owner.
+  '--skip-verify-compatibility',
+]);
 const ALLOWED_SUI_VECTORS = Object.freeze([
   ['--version'],
   ['client', '--json', 'active-env'],
   ['client', '--json', 'chain-identifier'],
   ['client', '--json', 'publish'],
   ['client', '--json', 'publish', '--dry-run'],
+  // Upgrade de testnet (#73, TASK-4): **solo los corre el owner**; ningún test ni agente los ejecuta (spawns inyectados).
+  // Sin `--upgrade-capability` ni `--skip-verify-compatibility`: la CLI toma el UpgradeCap de `Published.toml` y verifica
+  // la compatibilidad localmente (H-e, M-4); un vector con esas banderas no está en la lista.
+  ['client', '--json', 'upgrade'],
+  ['client', '--json', 'upgrade', '--dry-run'],
 ]);
 const TEST_PUBLISH_PREFIX = Object.freeze(['client', '--json', 'test-publish', '--build-env', 'testnet', '--pubfile-path']);
+const TEST_UPGRADE_PREFIX = Object.freeze(['client', '--json', 'test-upgrade', '--build-env', 'testnet', '--pubfile-path']);
+const OBJECT_READ_PREFIX = Object.freeze(['client', '--json', 'object']);
 
 const sameVector = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 
+// `<prefijo> <ruta> [--dry-run]`: la ruta es un valor (no vacío ni una opción) y lo único que puede seguirle es `--dry-run`.
+function isPubfileVector(args, prefix) {
+  const [pubfile, ...rest] = args.slice(prefix.length);
+  return (
+    sameVector(args.slice(0, prefix.length), prefix) &&
+    typeof pubfile === 'string' &&
+    pubfile.length > 0 &&
+    !pubfile.startsWith('-') &&
+    (rest.length === 0 || sameVector(rest, ['--dry-run']))
+  );
+}
+
 /**
- * Lista blanca por vector completo (v2-3): solo lectura de env/chain id/versión y las publicaciones previstas. Rechaza
- * además de forma explícita las opciones que crean claves sin preguntar o cambian la config/env activos.
+ * Lista blanca por vector completo (v2-3): solo lectura de env/chain id/versión y las publicaciones y upgrades
+ * previstos (más la lectura `object <id>` de la tabla de orígenes, #73). Rechaza además de forma explícita las opciones
+ * que crean claves sin preguntar o cambian la config/env activos.
  * @param {unknown} args
  * @returns {boolean}
  */
@@ -123,15 +189,10 @@ export function isAllowedSuiArgs(args) {
   );
   if (forbidden) return false;
   if (ALLOWED_SUI_VECTORS.some((v) => sameVector(v, args))) return true;
-  const prefix = args.slice(0, TEST_PUBLISH_PREFIX.length);
-  const [pubfile, ...rest] = args.slice(TEST_PUBLISH_PREFIX.length);
-  return (
-    sameVector(prefix, TEST_PUBLISH_PREFIX) &&
-    typeof pubfile === 'string' &&
-    pubfile.length > 0 &&
-    !pubfile.startsWith('-') &&
-    (rest.length === 0 || sameVector(rest, ['--dry-run']))
-  );
+  if (args.length === OBJECT_READ_PREFIX.length + 1 && sameVector(args.slice(0, OBJECT_READ_PREFIX.length), OBJECT_READ_PREFIX)) {
+    return OBJECT_ID_RE.test(args.at(-1));
+  }
+  return isPubfileVector(args, TEST_PUBLISH_PREFIX) || isPubfileVector(args, TEST_UPGRADE_PREFIX);
 }
 
 /**
@@ -188,6 +249,18 @@ export function publishCliArgs({ network, pubfilePath, dryRun }) {
 }
 
 /**
+ * Argumentos de la CLI para el upgrade: en localnet `test-upgrade` con el pubfile (copia de la Receta U); en testnet
+ * `upgrade`, que lee el UpgradeCap y el paquete de `Published.toml` y reescribe `published-at`, `version` y
+ * `toolchain-version` (V-11). Nunca `--skip-verify-compatibility` ni `-c`.
+ * @param {{ network: string, pubfilePath?: string, dryRun: boolean }} args
+ * @returns {string[]}
+ */
+export function upgradeCliArgs({ network, pubfilePath, dryRun }) {
+  const base = network === 'testnet' ? ['client', '--json', 'upgrade'] : [...TEST_UPGRADE_PREFIX, pubfilePath];
+  return dryRun ? [...base, '--dry-run'] : base;
+}
+
+/**
  * Guarda de `--out` (#39): en testnet el json va siempre a `deployments/testnet.json`, el que `check` cruza con
  * `[published.testnet]`; con otra ruta el json canónico no se escribiría y la CI fallaría recién en `check`. Se
  * rechaza la presencia de la opción (también vacía). En localnet se admite (smokes, agents.md §3).
@@ -202,12 +275,18 @@ export function checkOutArg({ network, out }) {
 /**
  * Guarda 1: red válida y `--pubfile-path` obligatorio en localnet (un pubfile de otra génesis hace fallar a la CLI, C2)
  * y prohibido en testnet (`publish` lo rechaza, C3), y `--out` prohibido en testnet (#39).
+ * También la usa `upgrade` (`command: 'upgrade'`): las mismas reglas, con el pubfile de la Receta U en vez de uno nuevo.
  * @param {{ network: unknown, pubfilePath: unknown, out: unknown }} args
+ * @param {{ command?: 'publish'|'upgrade' }} [options]
  */
-export function checkPublishArgs({ network, pubfilePath, out }) {
+export function checkPublishArgs({ network, pubfilePath, out }, { command = 'publish' } = {}) {
   if (!NETWORKS.includes(network)) throw new Error(`--network inválida: ${network ?? '(falta)'} (localnet | testnet)`);
   if (network === 'localnet' && (typeof pubfilePath !== 'string' || pubfilePath.length === 0)) {
-    throw new Error('--pubfile-path es obligatorio en localnet (uno nuevo por génesis)');
+    throw new Error(
+      command === 'upgrade'
+        ? '--pubfile-path es obligatorio en localnet (la copia del pubfile con source.local = contracts/, Receta U)'
+        : '--pubfile-path es obligatorio en localnet (uno nuevo por génesis)',
+    );
   }
   if (network === 'testnet' && pubfilePath !== undefined) throw new Error('--pubfile-path no se admite en testnet');
   checkOutArg({ network, out });
@@ -389,17 +468,18 @@ export function confirmationRequired({ network, dryRun }) {
   return network === 'testnet' && !dryRun;
 }
 
-const CONFIRMATION_PROMPT =
-  'Freno contra accidentes; la autorización es la del owner (D-20261030-09). ' +
-  `Escribe "${CONFIRMATION_WORD}" para publicar: `;
+const confirmationPrompt = (action) =>
+  'Freno contra accidentes; la autorización es la del owner (D-20261030-09, DECISIONES.md). ' +
+  `Escribe "${CONFIRMATION_WORD}" para ${action}: `;
 
 /**
  * Guarda 7: freno contra accidentes, no control de seguridad (se puede simular una terminal, D-20261102-03). Sin TTY
- * aborta; con TTY exige escribir `testnet`. No existe opción ni variable que la omita.
- * @param {{ isTTY: unknown, answer: string|null }} args
+ * aborta; con TTY exige escribir `testnet`. No existe opción ni variable que la omita. `action` solo cambia el verbo
+ * del mensaje (`publicar` | `hacer el upgrade`).
+ * @param {{ isTTY: unknown, answer: string|null, action?: string }} args
  */
-export function checkConfirmation({ isTTY, answer }) {
-  if (isTTY !== true) throw new Error('publicar en testnet exige una terminal interactiva (sin TTY: abortado)');
+export function checkConfirmation({ isTTY, answer, action = 'publicar' }) {
+  if (isTTY !== true) throw new Error(`${action} en testnet exige una terminal interactiva (sin TTY: abortado)`);
   if (typeof answer !== 'string' || answer.trim() !== CONFIRMATION_WORD) throw new Error('confirmación no recibida: abortado');
 }
 
@@ -412,8 +492,9 @@ export function checkConfirmation({ isTTY, answer }) {
  * reintentar solo aplica tras invocar una publicación real (`afterPublish`): un dry run o `record` no envían
  * transacciones.
  * El stderr se reimprime con las direcciones y la ruta de la config (`configDirs`, #39) ocultas.
+ * `retryAdvice` es el consejo de después de una transacción real (por defecto el de la publicación; el upgrade pasa el suyo).
  * @param {{ reason: string, status?: number|null, stdout?: string, stderr: string, dir: string|null,
- *   outputPath: string, afterPublish?: boolean, configDirs?: unknown[] }} args
+ *   outputPath: string, afterPublish?: boolean, configDirs?: unknown[], retryAdvice?: string }} args
  * @returns {string}
  */
 export function formatCliFailure({
@@ -425,6 +506,7 @@ export function formatCliFailure({
   outputPath,
   afterPublish = false,
   configDirs = [],
+  retryAdvice = RETRY_ADVICE,
 }) {
   const lines = [`Error: ${reason}`, `Salida completa (sin mostrar): ${outputPath}`];
   if (dir) lines.push(`Directorio temporal: ${dir}`);
@@ -440,7 +522,7 @@ export function formatCliFailure({
       redactAddresses(redactConfigDir(stderr, configDirs)).trimEnd(),
     );
   }
-  if (afterPublish) lines.push(RETRY_ADVICE);
+  if (afterPublish) lines.push(retryAdvice);
   return lines.join('\n');
 }
 
@@ -468,10 +550,18 @@ export function formatPostPublishFailure({ reason, network, digest, dir, outputP
  * mensaje de `formatCliFailure`, que nunca incluye el stdout: se lo pasa solo para que, si la CLI falló, extraiga el
  * digest (H-1). `configDirs` se reenvía para ocultar la ruta de la config en el stderr (#39).
  * @param {{ result: { status: number|null, stdout: string, stderr: string }, parse: (json: object) => unknown,
- *   dir: string|null, outputPath: string, afterPublish?: boolean, configDirs?: unknown[] }} args
+ *   dir: string|null, outputPath: string, afterPublish?: boolean, configDirs?: unknown[], retryAdvice?: string }} args
  * @returns {{ value: unknown } | { error: string }}
  */
-export function interpretCliRun({ result, parse, dir, outputPath, afterPublish = false, configDirs = [] }) {
+export function interpretCliRun({
+  result,
+  parse,
+  dir,
+  outputPath,
+  afterPublish = false,
+  configDirs = [],
+  retryAdvice = RETRY_ADVICE,
+}) {
   const fail = (reason) => ({
     error: formatCliFailure({
       reason,
@@ -482,6 +572,7 @@ export function interpretCliRun({ result, parse, dir, outputPath, afterPublish =
       outputPath,
       afterPublish,
       configDirs,
+      retryAdvice,
     }),
   });
   if (result.status !== 0) return fail(`la CLI terminó con estado ${result.status}`);
@@ -520,6 +611,187 @@ export function formatSummary({ deployment, outPath, dir }) {
     `  ${OWNER_CLI_PREFIX} object ${deployment.houseId} --json   # campo content.fee_rate`,
   );
   return lines.join('\n');
+}
+
+/**
+ * Mensaje ante un error **después** de un upgrade exitoso (lectura de la tabla de orígenes, json inválido, `Published.toml`
+ * que no coincide): la transacción ya existe, así que se indica el directorio con la salida y cómo rearmar el json
+ * **offline** con `record --upgrade`, sin repetir el upgrade (R-2).
+ * @param {{ reason: string, network: string, digest: string, dir: string, outputPath: string }} args
+ * @returns {string}
+ */
+export function formatPostUpgradeFailure({ reason, network, digest, dir, outputPath }) {
+  return [
+    `Error: ${redactAddresses(reason)}`,
+    `El upgrade ya se ejecutó (digest ${digest}): no lo repitas.`,
+    `Salida completa (sin mostrar): ${outputPath}`,
+    `Directorio temporal: ${dir}`,
+    'Para rearmar el json sin repetir el upgrade (offline; usa el meta.json de ese directorio; la tabla de orígenes es la ' +
+      `salida de "sui client --json object <paquete nuevo>"): node scripts/publish.mjs record --upgrade --network ${network} ` +
+      `--from ${outputPath} --type-origins ${path.join(dir, 'object-output.json')}`,
+    UPGRADE_PUBLISHED_TOML_STOP,
+  ].join('\n');
+}
+
+/**
+ * Resumen propio del upgrade: lo que cambió respecto del despliegue base (IDs, versiones y digests públicos, sin
+ * direcciones de cuentas) y los pasos que siguen, que el script no ejecuta.
+ * @param {{ base: object, deployment: object, outPath: string, dir: string|null }} args
+ * @returns {string}
+ */
+export function formatUpgradeSummary({ base, deployment, outPath, dir }) {
+  const last = deployment.upgrades.at(-1);
+  const upgraded = deployment.typeOrigins.filter((t) => t.definingId !== deployment.originalPackageId).length;
+  const lines = [
+    `Upgrade registrado en ${outPath}:`,
+    `  packageVersion: ${base.packageVersion} → ${deployment.packageVersion}`,
+    `  packageId: ${base.packageId} → ${deployment.packageId}`,
+    `  upgrades[${deployment.upgrades.length - 1}]: version ${last.version}, packageId ${last.packageId}, txDigest ${last.txDigest}`,
+    `  typeOrigins: ${deployment.typeOrigins.length} tipos, ${upgraded} definidos en un upgrade`,
+    `  sourceCommit: ${deployment.sourceCommit}`,
+    `  suiCliVersion: ${deployment.suiCliVersion}`,
+    `  frameworkRev: ${deployment.frameworkRev}`,
+  ];
+  if (dir) lines.push(`Directorio temporal con la salida cruda: ${dir} (bórralo cuando termines)`);
+  lines.push(
+    'Siguiente (no lo ejecuta este script; README → Upgrade, pasos de registro y verificación):',
+    '  git diff -- contracts/Published.toml   # solo published-at, version y toolchain-version; si no, STOP',
+    '  node scripts/publish.mjs check',
+    '  verificación independiente de typeOrigins por gRPC o GraphQL público (no con la CLI que la produjo)',
+  );
+  return lines.join('\n');
+}
+
+/**
+ * El despliegue base de un upgrade (`deployments/<red>.json`: la publicación original y los upgrades anteriores) existe,
+ * es válido y es de la red pedida. Lo comparten `upgrade` y `record --upgrade`.
+ * @param {{ network: string, base: object|null }} args
+ */
+export function checkUpgradeBase({ network, base }) {
+  if (base === null) {
+    throw new Error(
+      `falta deployments/${network}.json: el upgrade parte de la publicación original y no la inventa ni publica ` +
+        '(testnet: lo commiteó #8; localnet: `record` sobre la salida de test-publish del v1)',
+    );
+  }
+  const errors = validateDeployment(base);
+  if (errors.length > 0) throw new Error(`deployments/${network}.json base inválido:\n  ${errors.join('\n  ')}`);
+  if (base.network !== network) throw new Error(`deployments/${network}.json es de ${base.network}, no de ${network}`);
+}
+
+/**
+ * Precondiciones del upgrade que no necesitan la CLI (se evalúan **antes** de invocar `sui`): existe el
+ * `deployments/<red>.json` base (la publicación original; el upgrade no la inventa ni publica) y es válido; en testnet
+ * además el árbol está limpio (el upgrade es exactamente un commit), existe `[published.testnet]` en `Published.toml` y el
+ * json base coincide con él (`checkConsistency`).
+ * @param {{ network: string, gitStatus: string, base: object|null, publishedTomlText: string|null }} args
+ */
+export function checkUpgradePreconditions({ network, gitStatus, base, publishedTomlText }) {
+  checkUpgradeBase({ network, base });
+  if (network !== 'testnet') return;
+  if (gitStatus.trim() !== '') throw new Error('el árbol git no está limpio (el upgrade de testnet es de un solo commit)');
+  if (publishedTomlText === null) throw new Error('falta Published.toml: el upgrade de testnet lo necesita (STOP de #8)');
+  const entry = parsePublishedToml(publishedTomlText).get('testnet');
+  if (!entry) throw new Error('Published.toml no tiene [published.testnet]: el upgrade de testnet lo necesita (STOP de #8)');
+  const differences = checkConsistency(base, entry);
+  if (differences.length > 0) {
+    throw new Error(`deployments/testnet.json base no coincide con Published.toml:\n  ${differences.join('\n  ')}`);
+  }
+}
+
+/**
+ * Guarda del pubfile de localnet (H-a, Receta U): `test-upgrade` indexa el pubfile por la ruta del árbol publicado
+ * (`source.local`). Si el `realpath` de ninguna entrada es el de `CONTRACTS_DIR`, aborta **sin invocar `sui`** con el
+ * mensaje de la Receta U (la copia del pubfile con la ruta correcta); el script **nunca edita** el pubfile. Además exige
+ * que esa entrada sea la del despliegue base (`published-at`, `original-id`, `version`, `upgrade-capability`): un pubfile
+ * de otra génesis, o ya avanzado por un upgrade que el json no registró, haría fallar al upgrade pagando gas
+ * (`PackageIDDoesNotMatch`, R-2).
+ * @param {{ pubfileText: string, contractsDir: string, realpath: (p: string) => string, base: object }} args
+ * @returns {{ chainId: string|null }} el `chain-id` del pubfile, para compararlo con el de la red
+ */
+export function checkPubfileGuard({ pubfileText, contractsDir, realpath, base }) {
+  let pubfile;
+  try {
+    pubfile = parsePubfile(pubfileText);
+  } catch (error) {
+    throw new Error(`--pubfile-path inválido: ${error.message}`);
+  }
+  const target = realpath(contractsDir);
+  const resolves = (p) => {
+    try {
+      return realpath(p) === target;
+    } catch {
+      return false;
+    }
+  };
+  const matching = pubfile.entries.filter((entry) => resolves(entry.sourceLocal));
+  if (matching.length === 0) {
+    throw new Error(
+      'el pubfile no corresponde al árbol que se upgradea: ningún source.local coincide con contracts/ ' +
+        '(Receta U de agents.md §3: haz una copia del pubfile con source.local = la ruta de contracts/; el script no edita el pubfile)',
+    );
+  }
+  if (matching.length > 1) throw new Error('el pubfile tiene más de una entrada para contracts/: ambiguo');
+  const [entry] = matching;
+  const same = (a, b) => {
+    try {
+      return normalizeId(a) === normalizeId(b);
+    } catch {
+      return false;
+    }
+  };
+  const differences = [
+    ['published-at', same(entry.publishedAt, base.packageId)],
+    ['original-id', same(entry.originalId, base.originalPackageId)],
+    ['version', entry.version === base.packageVersion],
+    ['upgrade-capability', same(entry.upgradeCapability, base.upgradeCapId)],
+  ]
+    .filter(([, equal]) => !equal)
+    .map(([key]) => key);
+  if (differences.length > 0) {
+    throw new Error(
+      `el pubfile no es el del despliegue base (${differences.join(', ')} difieren): otra génesis o un upgrade que el json no registró`,
+    );
+  }
+  return { chainId: pubfile.chainId };
+}
+
+/**
+ * Tras la guarda de red: el despliegue base es de **esta** cadena (su `chainId` es el del env activo) y, en localnet, el
+ * pubfile también (si no, la CLI haría fallar el upgrade o se upgradearía el paquete de otra génesis).
+ * @param {{ base: object, chainId: string, pubfileChainId?: string|null }} args
+ */
+export function checkUpgradeChain({ base, chainId, pubfileChainId }) {
+  if (base.chainId !== chainId) {
+    throw new Error(`el despliegue base es de otra cadena (chainId ${base.chainId}) que la del env activo (${chainId})`);
+  }
+  if (pubfileChainId !== undefined && pubfileChainId !== chainId) {
+    throw new Error(`el pubfile es de otra génesis (chain-id ${pubfileChainId}) que la del env activo (${chainId})`);
+  }
+}
+
+/**
+ * Interpreta la salida cruda de un upgrade guardada en un archivo (`record --upgrade --from`). "Digest inexistente" =
+ * la salida es un **error de la CLI** (texto, p. ej. `PackageIDDoesNotMatch` o transacción no encontrada) o **no trae el
+ * cambio de paquete** (sin `published`): falla con un mensaje claro y sin escribir nada. El mensaje nunca cita la salida.
+ * @param {string} text
+ * @returns {ReturnType<typeof parseUpgradeOutput>}
+ */
+export function parseUpgradeRaw(text) {
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    if (CLI_ERROR_TEXT_RE.test(text.trim())) {
+      throw new Error('la salida cruda es un error de la CLI (la transacción de upgrade falló o no existe): no hay upgrade que registrar');
+    }
+    throw new Error('la salida cruda no es JSON ni un error de la CLI reconocido');
+  }
+  try {
+    return parseUpgradeOutput(json);
+  } catch (error) {
+    throw new Error(`la salida cruda no es un upgrade registrable: ${redactAddresses(error.message)}`);
+  }
 }
 
 /**
@@ -626,20 +898,30 @@ function validatedOrThrow(deployment) {
 }
 
 // Ejecuta la CLI y guarda stdout/stderr crudos (0600) antes de interpretarlos, para no perder nunca una salida.
-function runAndKeep({ sui, args, dir, prefix, parse, afterPublish, configDirs }) {
+function runAndKeep({
+  sui,
+  args,
+  dir,
+  prefix,
+  parse,
+  afterPublish,
+  configDirs,
+  retryAdvice = RETRY_ADVICE,
+  keep = writePrivate,
+}) {
   const result = sui(args);
   const outputPath = path.join(dir, `${prefix}-output.json`);
-  writePrivate(outputPath, result.stdout);
-  writePrivate(path.join(dir, `${prefix}-stderr.txt`), result.stderr);
-  const interpreted = interpretCliRun({ result, parse, dir, outputPath, afterPublish, configDirs });
+  keep(outputPath, result.stdout);
+  keep(path.join(dir, `${prefix}-stderr.txt`), result.stderr);
+  const interpreted = interpretCliRun({ result, parse, dir, outputPath, afterPublish, configDirs, retryAdvice });
   if ('error' in interpreted) throw new Error(interpreted.error);
   return { value: interpreted.value, outputPath };
 }
 
-async function askConfirmation() {
+async function askConfirmation(action = 'publicar') {
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   try {
-    return await rl.question(CONFIRMATION_PROMPT);
+    return await rl.question(confirmationPrompt(action));
   } finally {
     rl.close();
   }
@@ -761,7 +1043,282 @@ async function commandPublish(values) {
   }
 }
 
+/**
+ * Dependencias de I/O de `upgrade` y `record --upgrade`, inyectables: los tests pasan un `spawn` y archivos falsos, así que
+ * ningún test invoca `sui` ni git de verdad, ni escribe, ni llega nunca a `sui client upgrade` de testnet.
+ * @returns {{ env: NodeJS.ProcessEnv, homes: string[], contractsDir: string, spawn: typeof spawnSync,
+ *   isTTY: unknown, ask: (action: string) => Promise<string>, fsProbes: object, realpath: (p: string) => string,
+ *   readText: (file: string) => string|null, makeTempDir: () => string, keep: (file: string, text: string) => void,
+ *   writeDeployment: (file: string, deployment: object) => void, info: (text: string) => void,
+ *   warn: (text: string) => void }}
+ */
+function defaultIo() {
+  return {
+    env: process.env,
+    homes: [os.homedir(), os.userInfo().homedir],
+    contractsDir: CONTRACTS_DIR,
+    spawn: spawnSync,
+    isTTY: process.stdin.isTTY,
+    ask: askConfirmation,
+    fsProbes: {
+      isAbsolute: path.isAbsolute,
+      exists: fs.existsSync,
+      isDir: (p) => fs.statSync(p).isDirectory(),
+      hasClientYaml: (dir) => fs.existsSync(path.join(dir, 'client.yaml')),
+      realpath: fs.realpathSync,
+    },
+    realpath: fs.realpathSync,
+    readText: readTextOrNull,
+    makeTempDir: () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'battleship-upgrade-'));
+      fs.chmodSync(dir, DIR_MODE);
+      return dir;
+    },
+    keep: writePrivate,
+    writeDeployment,
+    info,
+    warn,
+  };
+}
+
+// Lee `deployments/<red>.json` (el despliegue base de un upgrade): `null` si no existe; un json roto es un error claro.
+function readBaseDeployment(io, network) {
+  const text = io.readText(path.join(io.contractsDir, 'deployments', `${network}.json`));
+  if (text === null) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`deployments/${network}.json no es JSON válido`);
+  }
+}
+
+/**
+ * Subcomando `upgrade` (#73, TASK-4): mismas guardas que `publish` (Node, config fuera de `~/.sui`, red y chain id, CLI =
+ * `ci.yml`, árbol limpio, `Move.lock` sin delta, confirmación escrita en una terminal para testnet sin forma de
+ * saltarla) más las propias (despliegue base, `Published.toml`/pubfile). Testnet: `sui client upgrade`; localnet:
+ * `sui client test-upgrade --pubfile-path …`. Un solo PTB (V-10). **Ningún agente corre el camino testnet.**
+ * El orden importa: todo lo que no necesita la CLI (argumentos, config, json base, git, `Published.toml`, pubfile) se
+ * comprueba **antes** de la primera llamada a `sui`; la transacción real va **siempre** después de la confirmación.
+ * @param {Record<string, string|boolean|undefined>} values
+ * @param {ReturnType<typeof defaultIo>} [io]
+ */
+export async function commandUpgrade(values, io = defaultIo()) {
+  const network = values.network;
+  const dryRun = values['dry-run'] === true;
+  checkPublishArgs({ network, pubfilePath: values['pubfile-path'], out: values.out }, { command: 'upgrade' });
+  const pubfilePath = network === 'localnet' ? path.resolve(values['pubfile-path']) : undefined;
+  const outPath = path.resolve(values.out ?? path.join(io.contractsDir, 'deployments', `${network}.json`));
+
+  const configDir = checkConfigDirGuard({ value: io.env.SUI_CONFIG_DIR, ...io.fsProbes, homes: io.homes });
+  const configDirs = [configDir, io.env.SUI_CONFIG_DIR];
+  const sui = (args) => runSui(args, { spawn: io.spawn, configDir });
+
+  const base = readBaseDeployment(io, network);
+  const gitStatus = runGit(['status', '--porcelain'], { spawn: io.spawn });
+  const publishedTomlPath = path.join(io.contractsDir, 'Published.toml');
+  checkUpgradePreconditions({ network, gitStatus, base, publishedTomlText: io.readText(publishedTomlPath) });
+  let pubfileChainId;
+  if (network === 'localnet') {
+    const pubfileText = io.readText(pubfilePath);
+    if (pubfileText === null) throw new Error('--pubfile-path no existe');
+    ({ chainId: pubfileChainId } = checkPubfileGuard({
+      pubfileText,
+      contractsDir: io.contractsDir,
+      realpath: io.realpath,
+      base,
+    }));
+  }
+
+  const chainId = checkNetworkGuard({
+    network,
+    activeEnv: readCliJson(sui(['client', '--json', 'active-env']), 'active-env', configDirs),
+    readChainId: () =>
+      chainIdFromCli(readCliJson(sui(['client', '--json', 'chain-identifier']), 'chain-identifier', configDirs)),
+  });
+  checkUpgradeChain({ base, chainId, pubfileChainId });
+
+  const versionResult = sui(['--version']);
+  if (versionResult.status !== 0) throw new Error('sui --version falló');
+  const ciYamlText = io.readText(path.join(io.contractsDir, '..', '.github', 'workflows', 'ci.yml'));
+  const { suiCliVersion, warning: cliWarning } = checkCliVersion({
+    network,
+    versionOutput: versionResult.stdout,
+    ciYamlText: ciYamlText ?? '',
+  });
+  if (cliWarning) io.warn(cliWarning);
+
+  const lockPath = path.join(io.contractsDir, 'Move.lock');
+  const lockBefore = io.readText(lockPath) ?? '';
+  const meta = {
+    network,
+    chainId,
+    sourceCommit: gitStatus.trim() === '' ? runGit(['rev-parse', 'HEAD'], { spawn: io.spawn }).trim() : null,
+    suiCliVersion,
+    frameworkRev: readFrameworkRev(lockBefore),
+  };
+  const dir = io.makeTempDir();
+  io.keep(path.join(dir, 'meta.json'), `${JSON.stringify(meta, null, 2)}\n`);
+  const expectedVersion = base.packageVersion + 1;
+  const run = (args, prefix, parse, afterPublish) =>
+    runAndKeep({
+      sui,
+      args,
+      dir,
+      prefix,
+      parse,
+      afterPublish,
+      configDirs,
+      retryAdvice: UPGRADE_RETRY_ADVICE,
+      keep: io.keep,
+    });
+
+  if (network === 'testnet' || dryRun) {
+    const { value: dry } = run(upgradeCliArgs({ network, pubfilePath, dryRun: true }), 'dry-run', parseUpgradeDryRunOutput, false);
+    if (!dry.ok) {
+      throw new Error(`el dry run no dio success con un paquete nuevo y el UpgradeCap avanzado (${dir}); un error de compatibilidad es STOP, nunca --skip-verify-compatibility`);
+    }
+    if (dry.created.packageVersion !== expectedVersion || dry.created.upgradeCapId !== base.upgradeCapId) {
+      throw new Error(
+        `el dry run daría la versión ${dry.created.packageVersion} (se esperaba la ${expectedVersion}) o avanzaría otro UpgradeCap: ` +
+          `el despliegue base no es el estado actual de la cadena (¿ya se hizo este upgrade?); no se sigue (${dir})`,
+      );
+    }
+    const lockWarning = checkLockUnchanged({ network, before: lockBefore, after: io.readText(lockPath) ?? '' });
+    if (lockWarning) io.warn(lockWarning);
+    io.info(`Dry run ok. Gas estimado: ${dry.gasEstimate} MIST.`);
+    if (dryRun) {
+      io.info(`Directorio temporal: ${dir} (bórralo cuando termines)`);
+      return;
+    }
+  }
+
+  // La transacción real va siempre después de esta guarda (solo testnet): sin terminal o sin escribir `testnet`, aborta.
+  if (confirmationRequired({ network, dryRun })) {
+    checkConfirmation({
+      isTTY: io.isTTY,
+      answer: io.isTTY === true ? await io.ask('hacer el upgrade') : null,
+      action: 'hacer el upgrade',
+    });
+  }
+
+  const lockBeforeUpgrade = io.readText(lockPath) ?? '';
+  const { value: parsed, outputPath } = run(upgradeCliArgs({ network, pubfilePath, dryRun: false }), 'upgrade', parseUpgradeOutput, true);
+  // Desde aquí la transacción ya existe: todo error indica el directorio y cómo rearmar el json con `record --upgrade`.
+  try {
+    const { value: typeOrigins } = run(
+      ['client', '--json', 'object', parsed.packageId],
+      'object',
+      (json) => parseTypeOriginsOutput(json, { packageId: parsed.packageId, packageVersion: parsed.packageVersion }),
+      false,
+    );
+    const deployment = validatedOrThrow(
+      buildUpgradeDeployment({
+        base,
+        parsed,
+        typeOrigins,
+        sourceCommit: meta.sourceCommit,
+        suiCliVersion,
+        frameworkRev: meta.frameworkRev,
+      }),
+    );
+    if (network === 'testnet') {
+      const entry = parsePublishedToml(io.readText(publishedTomlPath) ?? '').get('testnet');
+      if (!entry) throw new Error('falta [published.testnet] en Published.toml (no se escribió el json)');
+      const differences = checkConsistency(deployment, entry);
+      if (differences.length > 0) {
+        throw new Error(`el json armado no coincide con Published.toml (no se escribió el json):\n  ${differences.join('\n  ')}`);
+      }
+    } else {
+      const lockWarning = checkLockUnchanged({ network, before: lockBeforeUpgrade, after: io.readText(lockPath) ?? '' });
+      if (lockWarning) io.warn(lockWarning);
+    }
+    io.writeDeployment(outPath, deployment);
+    io.info(formatUpgradeSummary({ base, deployment, outPath, dir }));
+  } catch (error) {
+    throw new Error(formatPostUpgradeFailure({ reason: error.message, network, digest: parsed.digest, dir, outputPath }));
+  }
+}
+
+/**
+ * `record --upgrade` (#73, hueco 2): rearma el json de un upgrade **sin repetirlo y sin tocar la red**: lee el
+ * `deployments/<red>.json` base, la salida cruda del upgrade (`--from`) y la de `sui client --json object <paquete>`
+ * (`--type-origins`); no invoca `sui` ni git. El ID nuevo, la versión y el digest salen de la salida de la CLI, no de
+ * `Published.toml` (V-11); en testnet el json solo se escribe si coincide con el `Published.toml` ya existente.
+ * @param {Record<string, string|boolean|undefined>} values
+ * @param {ReturnType<typeof defaultIo>} [io]
+ */
+export function commandRecordUpgrade(values, io = defaultIo()) {
+  checkOutArg({ network: values.network, out: values.out });
+  if (!values.from) throw new Error('--from es obligatorio');
+  if (!values['type-origins']) {
+    throw new Error('--type-origins es obligatorio con --upgrade (la salida cruda de `sui client --json object <paquete nuevo>`)');
+  }
+  const fromPath = path.resolve(values.from);
+  const typeOriginsPath = path.resolve(values['type-origins']);
+  const metaPath = path.resolve(values.meta ?? path.join(path.dirname(fromPath), 'meta.json'));
+  if (values.meta && io.readText(metaPath) === null) throw new Error('--meta no existe');
+  const metaText = io.readText(metaPath);
+  let metaJson = null;
+  if (metaText !== null) {
+    try {
+      metaJson = JSON.parse(metaText);
+    } catch {
+      throw new Error(`meta.json no es JSON válido: ${metaPath}`);
+    }
+  }
+  const meta = resolveRecordMeta({
+    metaJson,
+    flags: {
+      sourceCommit: values['source-commit'],
+      suiCliVersion: values['sui-cli-version'],
+      frameworkRev: values['framework-rev'],
+      chainId: values['chain-id'],
+    },
+    network: values.network,
+  });
+  const base = readBaseDeployment(io, meta.network);
+  checkUpgradeBase({ network: meta.network, base });
+  if (base.chainId !== meta.chainId) {
+    throw new Error(`el despliegue base es de otra cadena (chainId ${base.chainId}) que la de los metadatos (${meta.chainId})`);
+  }
+  const fromText = io.readText(fromPath);
+  if (fromText === null) throw new Error('--from no existe');
+  const typeOriginsText = io.readText(typeOriginsPath);
+  if (typeOriginsText === null) throw new Error('--type-origins no existe');
+  const parsed = parseUpgradeRaw(fromText);
+  let typeOriginsJson;
+  try {
+    typeOriginsJson = JSON.parse(typeOriginsText);
+  } catch {
+    throw new Error('--type-origins no es JSON válido (la salida cruda de `sui client --json object <paquete nuevo>`)');
+  }
+  const typeOrigins = parseTypeOriginsOutput(typeOriginsJson, { packageId: parsed.packageId, packageVersion: parsed.packageVersion });
+  const deployment = validatedOrThrow(
+    buildUpgradeDeployment({
+      base,
+      parsed,
+      typeOrigins,
+      sourceCommit: meta.sourceCommit,
+      suiCliVersion: meta.suiCliVersion,
+      frameworkRev: meta.frameworkRev,
+    }),
+  );
+  if (meta.network === 'testnet') {
+    const publishedTomlText = io.readText(path.join(io.contractsDir, 'Published.toml'));
+    const entry = parsePublishedToml(publishedTomlText ?? '').get('testnet');
+    if (!entry) throw new Error('falta [published.testnet] en Published.toml: STOP, no se registra (README → Upgrade)');
+    const differences = checkConsistency(deployment, entry);
+    if (differences.length > 0) {
+      throw new Error(`el json armado no coincide con Published.toml: STOP, no se registra ni se reintenta:\n  ${differences.join('\n  ')}`);
+    }
+  }
+  const outPath = path.resolve(values.out ?? path.join(io.contractsDir, 'deployments', `${meta.network}.json`));
+  io.writeDeployment(outPath, deployment);
+  io.info(formatUpgradeSummary({ base, deployment, outPath, dir: null }));
+}
+
 function commandRecord(values) {
+  if (values.upgrade === true) return commandRecordUpgrade(values);
   checkOutArg({ network: values.network, out: values.out });
   if (!values.from) throw new Error('--from es obligatorio');
   const fromPath = path.resolve(values.from);
@@ -821,6 +1378,7 @@ export async function main(argv, { nodeVersion = process.versions.node } = {}) {
     checkNodeVersion({ nodeVersion, nvmrcText: readTextOrNull(path.join(CONTRACTS_DIR, '..', '.nvmrc')) });
     const { command, values } = parseCliArgs(argv);
     if (command === 'publish') await commandPublish(values);
+    else if (command === 'upgrade') await commandUpgrade(values);
     else if (command === 'record') commandRecord(values);
     else commandCheck();
     return EXIT.OK;

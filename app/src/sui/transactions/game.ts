@@ -1,6 +1,6 @@
 import { Transaction } from '@mysten/sui/transactions';
-import { isValidSuiAddress, isValidSuiObjectId } from '@mysten/sui/utils';
-import { U64_MAX } from '../format';
+import { isValidSuiAddress } from '@mysten/sui/utils';
+import { assertBet, assertObjectId } from './validate';
 
 /**
  * Builders puros de las transacciones de `battleship::game` (DL-1). Reciben IDs ya validados por `config.ts`/`ids.ts`
@@ -8,10 +8,6 @@ import { U64_MAX } from '../format';
  * pone la preflight (copia) y la wallet. El target usa el `packageId` vigente; `tx.object(id)` va sin versión porque el
  * resolver del SDK trae la versión compartida inicial y la mutabilidad desde la firma Move.
  */
-
-function assertObjectId(name: string, value: string): void {
-  if (!isValidSuiObjectId(value)) throw new Error(`${name} inválido: ${value}`);
-}
 
 function moveTarget(
   packageId: string,
@@ -38,7 +34,7 @@ export function buildCreateGameTx({
   assertObjectId('packageId', packageId);
   assertObjectId('houseId', houseId);
   if (opponent !== null && !isValidSuiAddress(opponent)) throw new Error('opponent inválido: no es una dirección de Sui');
-  if (bet <= 0n || bet > U64_MAX) throw new Error(`bet fuera de rango (1..U64_MAX): ${String(bet)}`);
+  assertBet(bet);
   const tx = new Transaction();
   const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(bet)]);
   tx.moveCall({
@@ -87,7 +83,7 @@ export function buildAcceptGameTx({
   assertObjectId('packageId', packageId);
   assertObjectId('houseId', houseId);
   assertObjectId('gameId', gameId);
-  if (bet <= 0n || bet > U64_MAX) throw new Error(`bet fuera de rango (1..U64_MAX): ${String(bet)}`);
+  assertBet(bet);
   const tx = new Transaction();
   const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(bet)]);
   tx.moveCall({

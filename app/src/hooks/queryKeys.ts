@@ -1,7 +1,13 @@
 import { normalizeSuiAddress, normalizeSuiObjectId } from '@mysten/sui/utils';
 import type { QueryKey } from '@tanstack/react-query';
+import type { GameSelection } from '../sui/gameRegistry';
 import type { Network } from '../sui/networks';
 import type { TxTarget } from './txSession';
+
+/** La dimensión del juego de una clave de lista: "Todos" no suma nada (es la clave base y el prefijo del resto). */
+function withGames(base: readonly string[], games: GameSelection): readonly string[] {
+  return games === 'all' ? base : [...base, games];
+}
 
 /**
  * Claves de TanStack Query de toda la app (DL-13): `'sui'`, la red y el recurso. Así una clave nunca mezcla datos de dos
@@ -11,8 +17,13 @@ import type { TxTarget } from './txSession';
 export const queryKeys = {
   /** Estado del nodo para el indicador de red. */
   nodeInfo: (network: Network) => ['sui', network, 'nodeInfo'] as const,
-  /** Páginas del lobby de partidas abiertas del paquete. */
-  lobby: (network: Network, originalPackageId: string) => ['sui', network, 'lobby', originalPackageId] as const,
+  /**
+   * Páginas del lobby de partidas abiertas del paquete (#73: con la dimensión del juego). Sin `games` o con `'all'` es la
+   * clave de "Todos" y a la vez el **prefijo** de todas las del lobby: `resetQueries`/`invalidateQueries` con ella alcanzan
+   * cualquier filtro por juego; con un juego, `[...prefijo, <juego>]`.
+   */
+  lobby: (network: Network, originalPackageId: string, games: GameSelection = 'all') =>
+    withGames(['sui', network, 'lobby', originalPackageId], games),
   /** Detalle de una partida por ID normalizado. */
   game: (network: Network, id: string) => ['sui', network, 'game', id] as const,
   /** Hora y checkpoint de una transacción (inmutable). */
@@ -38,15 +49,24 @@ export const queryKeys = {
    */
   myGames: (network: Network, originalPackageId: string, address: string) =>
     ['sui', network, 'myGames', originalPackageId, normalizeSuiAddress(address)] as const,
-  /** Páginas de la actividad propia de una cuenta (DL-1 (A)). */
-  myActivity: (network: Network, originalPackageId: string, address: string) =>
-    [...queryKeys.myGames(network, originalPackageId, address), 'activity'] as const,
-  /** Páginas del escaneo de invitaciones a una cuenta (DL-1 (B)). */
-  myInvitations: (network: Network, originalPackageId: string, address: string) =>
-    [...queryKeys.myGames(network, originalPackageId, address), 'invitations'] as const,
+  /**
+   * Páginas de la actividad propia de una cuenta (DL-1 (A)); #73: con la dimensión del juego (sin `games` o con `'all'`, la
+   * de "Todos"; con un juego, se le suma al final). Siempre bajo el prefijo `myGames`.
+   */
+  myActivity: (network: Network, originalPackageId: string, address: string, games: GameSelection = 'all') =>
+    withGames([...queryKeys.myGames(network, originalPackageId, address), 'activity'], games),
+  /** Páginas del escaneo de invitaciones a una cuenta (DL-1 (B)); #73: con la dimensión del juego, como `myActivity`. */
+  myInvitations: (network: Network, originalPackageId: string, address: string, games: GameSelection = 'all') =>
+    withGames([...queryKeys.myGames(network, originalPackageId, address), 'invitations'], games),
   /** Hora de un checkpoint por número (inmutable). */
   checkpointTime: (network: Network, sequenceNumber: bigint) =>
     ['sui', network, 'checkpointTime', sequenceNumber.toString()] as const,
+  /**
+   * Muestra de la hora de la cadena para la cuenta regresiva (#73, TASK-8b): el timestamp del último checkpoint que informó
+   * el indicador de red. Clave propia y no `checkpointTime`: su `queryFn` además anota la muestra en el reloj de pantalla, y
+   * compartir la clave dejaría una muestra sin anotar si otra pantalla ya cacheó ese checkpoint.
+   */
+  chainClock: (network: Network, sequenceNumber: bigint) => ['sui', network, 'chainClock', sequenceNumber.toString()] as const,
   /**
    * Clave de **mutación** de todas las transacciones de una cuenta (DL-7 de #12): el candado global (`isMutating` con
    * esta clave parcial) y el "en curso" de cualquier objetivo. Sin cuenta, `'none'`.

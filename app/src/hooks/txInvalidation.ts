@@ -14,6 +14,12 @@ export type TxInvalidations = { reset: QueryKey[]; invalidate: QueryKey[] };
  * House (H-5 de #14) no reinician nada y no tocan partidas: comisión y límites invalidan la House y el `HouseCap` de la
  * cuenta; el retiro, además, el saldo (recibió el `Coin`). Nunca claves inmutables (`txInfo`, `publishCheckpoint`,
  * `checkpointTime`) ni ajenas (`nodeInfo`). Sin cuenta, no hay saldo, "Mis partidas" ni `HouseCap` que invalidar.
+ *
+ * #73: reclamar por tiempo (`claim`) y reembolsar (`refundStalled`), acciones de `TxAction` desde TASK-8a, se invalidan como
+ * aceptar (plan §8.3): la partida, el saldo de quien llama, la House (el reclamo cobra comisión; el reembolso no toca la
+ * House, pero invalidarla de más es inocuo) y "Mis partidas". Las claves de lista llevan la dimensión del juego
+ * (`queryKeys`): el reinicio del lobby usa la clave base, que es el prefijo de las de cada juego, así que alcanza todos los
+ * filtros.
  */
 export function transactionInvalidations(
   action: TxAction,
@@ -31,6 +37,8 @@ export function transactionInvalidations(
     case 'reject':
       return { reset, invalidate: [queryKeys.game(ctx.network, action.gameId), ...balance, ...myGames] };
     case 'accept':
+    case 'claim':
+    case 'refundStalled':
       return {
         reset,
         invalidate: [queryKeys.game(ctx.network, action.gameId), ...balance, house, ...myGames],

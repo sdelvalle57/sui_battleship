@@ -2,20 +2,23 @@ import { useState } from 'react';
 import { Navigate } from 'react-router';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { useCreateGame } from '../hooks/useCreateGame';
+import { useGameCatalog } from '../hooks/useGameCatalog';
 import { useHouse } from '../hooks/useHouse';
 import { useSuiBalance } from '../hooks/useSuiBalance';
 import { useTxTarget } from '../hooks/useTxTarget';
 import { useWalletAccount } from '../hooks/useWalletAccount';
 import {
   CREATE_GAS_RESERVE_MIST,
-  GAME_STORAGE_DEPOSIT_MIST,
+  storageDepositFor,
   validateCreateGame,
   type CreateAmountError,
   type CreateOpponentError,
+  type CreateSourceKind,
   type HouseTerms,
 } from '../sui/createGame';
 import { formatBps, formatMist } from '../sui/format';
 import { resolutionAmounts } from '../sui/game';
+import { timeControlById, type GameDef, type GameKey } from '../sui/gameRegistry';
 import type { House } from '../sui/house';
 import { createdNoticeState } from './createdNotice';
 import { ReadState } from './ReadState';
@@ -45,10 +48,22 @@ function opponentErrorText(reason: CreateOpponentError): string {
   return reason === 'invalid' ? 'Dirección inválida' : 'No puedes invitarte a ti mismo';
 }
 
-const STORAGE_NOTE =
-  `Además del gas, crear la partida deja un depósito de almacenamiento (≈ ${sui(GAME_STORAGE_DEPOSIT_MIST.open)} abierta, ` +
-  `≈ ${sui(GAME_STORAGE_DEPOSIT_MIST.invitation)} con invitación, al precio actual de testnet) que no se recupera. ` +
-  `El saldo tiene que cubrir la apuesta más ≈ ${sui(CREATE_GAS_RESERVE_MIST)} de reserva para el gas.`;
+/**
+ * Nota de costo de crear (DL-13): el depósito de almacenamiento de la **fuente a la que va "crear"** (`GameDef.createSource`;
+ * el selector puro `storageDepositFor` decide la cifra: el componente no ramifica por fuente, ARQ-1). Con la fuente anterior
+ * es el texto de siempre.
+ */
+function storageNote(createSource: CreateSourceKind): string {
+  const deposit = storageDepositFor(createSource);
+  return (
+    `Además del gas, crear la partida deja un depósito de almacenamiento (≈ ${sui(deposit.open)} abierta, ` +
+    `≈ ${sui(deposit.invitation)} con invitación, al precio actual de testnet) que no se recupera. ` +
+    `El saldo tiene que cubrir la apuesta más ≈ ${sui(CREATE_GAS_RESERVE_MIST)} de reserva para el gas.`
+  );
+}
+
+/** Por qué no se puede crear una partida de un juego con reloj desde la app todavía (UX-9). */
+const CLOCK_GAME_NOT_CREATABLE_TEXT = 'Este juego todavía no se puede crear desde la app';
 
 /** Campos sin cuenta: visibles pero deshabilitados, con el motivo (DL-8). */
 function DisconnectedForm() {
@@ -72,11 +87,23 @@ function DisconnectedForm() {
 function ConnectedForm({ account, house }: { account: string; house: House }) {
   const { network } = useAppConfig();
   const balance = useSuiBalance();
+  const catalog = useGameCatalog();
   const target = useTxTarget({ kind: 'create' });
-  const tx = useCreateGame(target.view);
   const [amountText, setAmountText] = useState('');
   const [opponentText, setOpponentText] = useState('');
   const [touched, setTouched] = useState(false);
+  // #73 (TASK-8b): el juego a crear (el selector solo existe con más de uno creable) y su control de tiempo (solo un juego
+  // con reloj ofrece los 7; el coinflip crea con el control 0 y no muestra ninguna opción).
+  const [gameKey, setGameKey] = useState<GameKey | null>(null);
+  const [controlId, setControlId] = useState<number | null>(null);
+  const def: GameDef | undefined = catalog.creatable.find((game) => game.key === gameKey) ?? catalog.creatable[0];
+  const tx = useCreateGame(target.view, def?.key);
+  const controls = def?.usesClock === true ? def.controlIds.flatMap((id) => timeControlById(id) ?? []) : [];
+  const defaultControl = controls[0];
+  const selectedControl = controlId ?? defaultControl?.id ?? null;
+  // Un juego con reloj necesita su propio constructor de la creación (lo agrega el juego que lo use, #18): hasta entonces no
+  // se ofrece crearlo, en vez de ofrecer un control de tiempo que no viaja a la transacción.
+  const clockBlocked = def?.usesClock === true;
 
   const shown: HouseTerms = { feeRate: house.feeRate, minBet: house.minBet, maxBet: house.maxBet };
   const validation = validateCreateGame({ amountText, opponentText, house: shown, balance: balance.balance, account });
@@ -122,6 +149,24 @@ function ConnectedForm({ account, house }: { account: string; house: House }) {
       ) : (
         <p>Saldo: leyendo…</p>
       )}
+      {catalog.creatable.length > 1 && (
+        <label>
+          Juego{' '}
+          <select
+            className="duel-select"
+            value={def?.key ?? ''}
+            onChange={(event) => {
+              setGameKey(catalog.creatable.find((game) => game.key === event.target.value)?.key ?? null);
+            }}
+          >
+            {catalog.creatable.map((game) => (
+              <option key={game.key} value={game.key}>
+                {game.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label>
         Apuesta (SUI){' '}
         <input
@@ -146,15 +191,47 @@ function ConnectedForm({ account, house }: { account: string; house: House }) {
         />
       </label>
       {opponentError !== undefined && <p className="field-error">{opponentErrorText(opponentError)}</p>}
+      {controls.length > 0 && (
+        <fieldset className="duel-controls">
+          <legend>Tiempo por jugada</legend>
+          {controls.map((control) => (
+            <label key={control.id} className="duel-radio">
+              <input
+                type="radio"
+                name="time-control"
+                value={control.id}
+                checked={selectedControl === control.id}
+                onChange={() => {
+                  setControlId(control.id);
+                }}
+              />{' '}
+              {control.label}
+            </label>
+          ))}
+          <p className="hint">
+            Por defecto: {defaultControl?.label}. Quien no mueve antes de que venza su plazo pierde: su rival puede reclamar la
+            partida.
+          </p>
+        </fieldset>
+      )}
       {estimate !== null && (
         <p className="game-estimate">
           Si alguien acepta: pozo {sui(estimate.pot)} · comisión {sui(estimate.fee)} · al ganador {sui(estimate.payout)}
         </p>
       )}
-      <p className="hint">{STORAGE_NOTE}</p>
-      <button type="submit" disabled={!validation.ok || blocked}>
+      <p className="hint">{storageNote(def?.createSource ?? 'legacy')}</p>
+      <button
+        type="submit"
+        disabled={!validation.ok || blocked || clockBlocked}
+        aria-describedby={clockBlocked ? 'create-blocked-reason' : undefined}
+      >
         Crear partida
       </button>
+      {clockBlocked && (
+        <p id="create-blocked-reason" className="duel-reason">
+          {CLOCK_GAME_NOT_CREATABLE_TEXT}
+        </p>
+      )}
       {target.notice?.kind === 'in_flight' && <p role="status">{IN_FLIGHT_TEXT}</p>}
       <TransactionStatus
         stage={tx.stage}
@@ -186,7 +263,9 @@ function ConnectedForm({ account, house }: { account: string; house: House }) {
  * Formulario de creación en la portada (DL-8, DL-13, M-2). Sin cuenta, deshabilitado. Con cuenta, muestra límites y
  * comisión de la House, saldo, estimación del reparto y la nota de costo; valida con `validateCreateGame` y crea con
  * `useCreateGame`, pasando los términos que se están mostrando. Con la partida identificada navega al detalle con el
- * aviso en el `state` del router (DL-14); sin identificarla, se queda con "Partida creada" y el digest (DL-9).
+ * aviso en el `state` del router (DL-14); sin identificarla, se queda con "Partida creada" y el digest (DL-9). TASK-8b: la
+ * nota de costo usa el depósito de la fuente a la que va "crear"; el selector de juego aparece solo con más de uno creable;
+ * un juego con reloj ofrece sus controles de tiempo (`fieldset` con `legend` y radios) y el coinflip no muestra ninguno.
  */
 export function CreateGameForm() {
   const { address } = useWalletAccount();

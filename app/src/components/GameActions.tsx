@@ -1,3 +1,4 @@
+import { rowAcceptState, rowCanCancel, rowCanReject, type GameRow } from '../hooks/gameRow';
 import type { AdoptedTx, TxOutcome } from '../hooks/txSession';
 import { useAcceptGame } from '../hooks/useAcceptGame';
 import { useAppConfig } from '../hooks/useAppConfig';
@@ -7,10 +8,11 @@ import { useSuiBalance } from '../hooks/useSuiBalance';
 import { useTxTarget } from '../hooks/useTxTarget';
 import { useWalletAccount } from '../hooks/useWalletAccount';
 import { ACCEPT_GAS_RESERVE_MIST, acceptBalanceCheck, wonBy } from '../sui/acceptGame';
-import type { GameResolvedEvent } from '../sui/events';
 import { formatMist } from '../sui/format';
-import type { Game } from '../sui/game';
-import { acceptState, canCancel, canReject, NOT_INVITED_HINT } from '../sui/gameActions';
+import { NOT_INVITED_HINT } from '../sui/gameActions';
+import type { ResolvedGame } from '../sui/gameTx';
+import { ACTION_TEXT, asActiveDuel, claimedText, refundedText } from './gameTexts';
+import { TimeoutActions } from './TimeoutActions';
 import { TransactionStatus } from './TransactionStatus';
 import { IN_FLIGHT_TEXT } from './txNotice';
 
@@ -26,7 +28,7 @@ function rejectedText(refund: bigint | null): string {
  * Resultado de una aceptación (DL-5, SEG-10): solo con el `GameResolved` de la confirmación del nodo, con sus montos;
  * sin evento, un éxito honesto que remite al detalle.
  */
-function acceptedText(event: GameResolvedEvent | null, address: string | null): string {
+function acceptedText(event: ResolvedGame | null, address: string | null): string {
   if (event === null) return 'Partida aceptada; no se pudo leer el resultado de la transacción: el detalle muestra el ganador';
   const amounts = `(pozo ${sui(event.pot)} − comisión ${sui(event.fee)})`;
   return address !== null && wonBy(event, address)
@@ -43,6 +45,10 @@ function adoptedStatus(adopted: AdoptedTx, address: string | null): { outcome: T
       return { outcome: adopted.outcome, text: rejectedText(adopted.outcome.kind === 'success' ? adopted.outcome.value : null) };
     case 'accept':
       return { outcome: adopted.outcome, text: acceptedText(adopted.outcome.kind === 'success' ? adopted.outcome.value : null, address) };
+    case 'claim':
+      return { outcome: adopted.outcome, text: claimedText(adopted.outcome.kind === 'success' ? adopted.outcome.value : null, address) };
+    case 'refundStalled':
+      return { outcome: adopted.outcome, text: refundedText(adopted.outcome.kind === 'success' ? adopted.outcome.value : null) };
     case 'create':
     case 'updateFeeRate':
     case 'updateBetLimits':
@@ -80,7 +86,7 @@ function AcceptBlock({ bet, disabled, onAccept }: { bet: bigint; disabled: boole
           onAccept();
         }}
       >
-        Aceptar
+        {ACTION_TEXT.accept}
       </button>
     </div>
   );
@@ -98,19 +104,25 @@ function AcceptBlock({ bet, disabled, onAccept }: { bet: bigint; disabled: boole
  * aviso "en curso" (la página lo muestra una sola vez). Con un `success` propio o adoptado en la fila (H-3), tampoco
  * ofrece "Aceptar", "Cancelar" ni "Rechazar": las tres dejan la partida terminal, aunque el objeto leído siga viejo. Los
  * estados de transacción y la alerta "sin confirmar" se mantienen. `variant='detail'` es el detalle de siempre.
+ *
+ * #73 (TASK-8a): recibe la fila neutral a la fuente (`GameRow`) y los hooks enrutan por su fuente; el marcado es el mismo
+ * para una partida anterior y una nueva. Un estado que no es `Pending` no ofrece ninguna de las tres. TASK-8b: una partida
+ * `Active` de la fuente nueva suma las acciones de tiempo (`TimeoutActions`: "Reclamar victoria" y "Reembolsar", con lo que
+ * pasará con los fondos y el motivo cuando no están disponibles), y el resultado adoptado de un reclamo o un reembolso
+ * (otra pestaña, la fila de "Mis partidas") se muestra con su texto.
  */
-export function GameActions({ game, variant = 'detail' }: { game: Game; variant?: 'detail' | 'row' }) {
+export function GameActions({ game, variant = 'detail' }: { game: GameRow; variant?: 'detail' | 'row' }) {
   const { network } = useAppConfig();
   const { address } = useWalletAccount();
   const target = useTxTarget({ kind: 'game', gameId: game.id });
-  const cancel = useCancelGame(target.view);
-  const reject = useRejectGame(target.view);
+  const cancel = useCancelGame(target.view, game);
+  const reject = useRejectGame(target.view, game);
   const accept = useAcceptGame(target.view, game);
   const busy = target.busy || target.unconfirmed !== null;
   const adopted = target.notice?.kind === 'adopted' ? adoptedStatus(target.notice.adopted, address) : null;
-  const accepting = acceptState(game, address);
-  const showCancel = canCancel(game, address);
-  const showReject = canReject(game, address);
+  const accepting = rowAcceptState(game, address);
+  const showCancel = rowCanCancel(game, address);
+  const showReject = rowCanReject(game, address);
   const cancelValue = cancel.outcome?.kind === 'success' ? cancel.outcome.value : null;
   const rejectValue = reject.outcome?.kind === 'success' ? reject.outcome.value : null;
   const acceptValue = accept.outcome?.kind === 'success' ? accept.outcome.value : null;
@@ -120,6 +132,11 @@ export function GameActions({ game, variant = 'detail' }: { game: Game; variant?
     ([accept.outcome, cancel.outcome, reject.outcome].some((outcome) => outcome?.kind === 'success') ||
       adopted?.outcome.kind === 'success');
   const offer = !settled;
+  // #73 (TASK-8b): una partida activa con reloj suma las acciones de tiempo (reclamar y reembolsar).
+  const active = asActiveDuel(game);
+  const adoptedTx = target.notice?.kind === 'adopted' ? target.notice.adopted : null;
+  const adoptedTimeDone =
+    adoptedTx !== null && (adoptedTx.action === 'claim' || adoptedTx.action === 'refundStalled') && adoptedTx.outcome.kind === 'success';
 
   return (
     <div className="game-actions">
@@ -136,7 +153,7 @@ export function GameActions({ game, variant = 'detail' }: { game: Game; variant?
             cancel.cancel();
           }}
         >
-          Cancelar
+          {ACTION_TEXT.cancel}
         </button>
       )}
       {showReject && offer && (
@@ -147,8 +164,19 @@ export function GameActions({ game, variant = 'detail' }: { game: Game; variant?
             reject.reject();
           }}
         >
-          Rechazar
+          {ACTION_TEXT.reject}
         </button>
+      )}
+      {active !== null && (
+        <TimeoutActions
+          game={active}
+          view={target.view}
+          address={address}
+          busy={target.busy}
+          unconfirmed={target.unconfirmed !== null}
+          adoptedDone={adoptedTimeDone}
+          variant={variant}
+        />
       )}
       <TransactionStatus stage={accept.stage} outcome={accept.outcome} network={network} successText={acceptedText(acceptValue, address)} />
       <TransactionStatus stage={cancel.stage} outcome={cancel.outcome} network={network} successText={cancelledText(cancelValue)} />
