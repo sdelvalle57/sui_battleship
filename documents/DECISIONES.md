@@ -10,6 +10,14 @@
 
 ---
 
+### D-20261120-04 — #77 como tarea aparte antes de TASK-8b de #73, y diseño D1..D9 del parámetro `VITE_LOCALNET_URL`
+- **Decisión:** ante el STOP del smoke con navegador de TASK-8b de #73 (el navegador solo alcanzaba la localnet del puerto 9000, que ocupa un servicio de otro proyecto del host y que no se toca), el owner eligió la opción **"Tarea chica aparte"**: #77 se hace antes, con issue y PR propios desde `master` (mismo molde que PRE-1 = #75) y después se integra `master` en la branch de #73. Diseño (no se reabre): **(D1)** parámetro `VITE_LOCALNET_URL` que solo existe para `VITE_SUI_NETWORK=localnet` y que testnet ignora por construcción, en dos capas, sin embeber el valor en el bundle (`import.meta.env` se lee solo por propiedad, nunca como objeto); **(D2)** una sola regla de validación compartida (`app/src/sui/localnetUrl.mjs`), `http://127.0.0.1:<puerto 1024-65535>` y nada más, importada por la app y re-exportada por la guarda de las capturas; **(D3)** un valor definido pero inválido, incluso vacío, es error de configuración claro, nunca un retorno silencioso al 9000; **(D4)** mensaje de error fijo; **(D5)** la validación va antes de buscar el json de despliegue; **(D6)** `NETWORKS.localnet.grpcUrl` queda como el valor por defecto y solo `config.ts` lo lee; **(D7)** sin cambios de UI (la defensa contra un nodo equivocado sigue siendo el chain id); **(D8)** el valor es público (SEG-3); **(D9)** vale para `npm run dev` y para un build o preview de localnet. Criterio del bundle de testnet (v1.2, ratificado por el MAYOR): el **valor** no aparece, el nombre solo como texto estático, `VITE_LOCALNET_URL:void 0`, `BASE_URL` 0 y builds idénticos con y sin la variable. Entregado en PR #81 (`440f44e`); la guarda de `wrong_chain` queda como seguimiento (#82).
+- **Alternativa descartada:** liberar el 9000 del host o probar con el puerto fijo (toca un servicio ajeno); ampliar el parámetro a otros hosts o redes; resolverlo dentro de la branch de #73 (mezcla un cambio de seguridad de la app con la plataforma multijuego).
+- **Motivo:** mantener una superficie de seguridad pequeña, revisada y mergeada por separado, con la misma regla de loopback que ya usan las capturas, sin efecto sobre testnet ni sobre la imagen de producción.
+- **Aprobado por:** usuario, 2026-11-20 (respuesta "Tarea chica aparte (Recomendada)" a la pregunta del orquestador sobre el STOP del puerto en TASK-8b). **Fecha:** 2026-11-20.
+
+---
+
 ### D-20261119-04 — Tag `v0.1.0` del MVP (N-5)
 - **Decisión:** al cerrar el MVP (#17), el orquestador crea el tag anotado `v0.1.0` sobre el merge commit del PR de #17 en `master` y lo pushea. Sin GitHub Release, salvo que el owner la pida (si la pide, el MID redacta las notas).
 - **Alternativa descartada:** taggear antes del merge (el tag no incluiría el acta del smoke ni el cierre de docs); que el owner lo cree a mano.
