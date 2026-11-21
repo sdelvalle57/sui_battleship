@@ -76,8 +76,8 @@ reporte, `grep` de rastros de ejecución accidental): `agents.md` §3, paso 8. E
 
 **Alcance de la regla (P-2/C-13, #73 y #77).** Vale para **todo texto que se escribe en un archivo** (reportes, borradores, scripts, sondas, código, ediciones de
 documentación), con o sin `sui`, y tampoco se usa un heredoc **vacío** ni dirigido a `/dev/null` (ni `: > /dev/null`): no escriben nada, pero son el patrón que
-el orquestador audita mecánicamente en la transcripción (`audit_dev.sh`: cuenta `<<`, `echo`, `printf`, `sed -i`, `tee` y `cat >`). **Excepciones:** (i) `echo $$ >
-<SMOKE_DIR>/<nombre>.pid` de la Receta P (guarda un PID); (ii) `sed` **sin** `-i` sobre una **salida** de comando hacia un archivo **nuevo** del scratchpad;
+el orquestador audita mecánicamente en la transcripción (`audit_dev.sh`: cuenta `<<`, `echo`, `printf`, `sed -i`, `tee` y `cat >`). **Excepciones:** (i) el comando exacto
+`echo $$ > "$SMOKE_DIR/sui.pid"` de la Receta P (guarda un PID); (ii) `sed` **sin** `-i` sobre una **salida** de comando hacia un archivo **nuevo** del scratchpad;
 (iii) `printf 'n\n' |` como entrada de `sui`; (iv) `>>` a un archivo de entorno de `<SMOKE_DIR>` solo con IDs que salen de la salida de un comando. Para descartar una
 salida se redirige con `> /dev/null` en la misma línea del comando.
 
